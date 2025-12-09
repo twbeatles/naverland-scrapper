@@ -40,11 +40,11 @@ Claude Opus 4.5, Gemini 3.0 Pro 를 이용하여 제작 및 지속 개선중입�
 ### **2\. 라이브러리 설치**
 
 터미널(CMD)에서 아래 명령어를 입력하여 필수 라이브러리를 설치하세요.  
-pip install PyQt6 undetected-chromedriver beautifulsoup4 openpyxl plyer
+pip install PyQt6 undetected-chromedriver beautifulsoup4 openpyxl plyer matplotlib
 
 ### **3\. 프로그램 실행**
 
-python "부동산 매물 크롤러 v7.3 claude.py"
+python "부동산 매물 크롤러 v10.0 claude.py"
 
 ## **📖 사용 가이드**
 
