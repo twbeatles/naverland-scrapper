@@ -28,12 +28,16 @@ v7.1 개선사항:
 """
 
 import sys, os, re, json, csv, time, random, shutil, logging, sqlite3, webbrowser
-from queue import Queue
+from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from pathlib import Path
 from datetime import datetime
 from threading import Lock
 from typing import Optional, List, Dict, Any, Tuple
 from logging.handlers import RotatingFileHandler
+from json import JSONDecodeError
+from urllib.error import URLError, HTTPError
+from urllib.request import urlopen, Request
+from socket import timeout as SocketTimeout
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -169,18 +173,18 @@ class PriceConverter:
         if "억" in price_str:
             parts = price_str.split("억")
             try: total += int(float(parts[0])) * 10000
-            except: pass
+            except (ValueError, TypeError): pass
             if len(parts) > 1 and parts[1]:
                 remain = parts[1].replace("만", "").strip()
                 if remain:
                     try: total += int(float(remain))
-                    except: pass
+                    except (ValueError, TypeError): pass
         elif "만" in price_str:
             try: total = int(float(price_str.replace("만", "").strip()))
-            except: pass
+            except (ValueError, TypeError): pass
         else:
             try: total = int(float(price_str))
-            except: pass
+            except (ValueError, TypeError): pass
         return total
     
     @staticmethod
@@ -261,7 +265,8 @@ class NaverURLParser:
             with urllib.request.urlopen(req, timeout=5) as response:
                 data = json.loads(response.read().decode('utf-8'))
                 return data.get('complexDetail', {}).get('complexName', f'단지_{complex_id}')
-        except:
+        except (URLError, HTTPError, SocketTimeout, JSONDecodeError) as e:
+            get_logger('NaverURLParser').debug(f"단지명 조회 실패 ({complex_id}): {e}")
             return f'단지_{complex_id}'
 
 class ExcelTemplate:
@@ -326,12 +331,14 @@ class SettingsManager:
             try:
                 with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
                     self._settings.update(json.load(f))
-            except: pass
+            except (OSError, JSONDecodeError) as e:
+                get_logger('SettingsManager').warning(f"설정 로드 실패: {e}")
     def _save(self):
         try:
             with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
                 json.dump(self._settings, f, ensure_ascii=False, indent=2)
-        except: pass
+        except OSError as e:
+            get_logger('SettingsManager').warning(f"설정 저장 실패: {e}")
     def get(self, key, default=None): return self._settings.get(key, default)
     def set(self, key, value): self._settings[key] = value; self._save()
     def update(self, data): self._settings.update(data); self._save()
@@ -345,12 +352,14 @@ class FilterPresetManager:
             try:
                 with open(PRESETS_PATH, 'r', encoding='utf-8') as f:
                     self._presets = json.load(f)
-            except: pass
+            except (OSError, JSONDecodeError) as e:
+                get_logger('FilterPresetManager').warning(f"프리셋 로드 실패: {e}")
     def _save(self):
         try:
             with open(PRESETS_PATH, 'w', encoding='utf-8') as f:
                 json.dump(self._presets, f, ensure_ascii=False, indent=2)
-        except: pass
+        except OSError as e:
+            get_logger('FilterPresetManager').warning(f"프리셋 저장 실패: {e}")
     def add(self, name, config): self._presets[name] = config; self._save(); return True
     def get(self, name): return self._presets.get(name)
     def delete(self, name):
@@ -370,13 +379,15 @@ class SearchHistoryManager:
             try:
                 with open(HISTORY_PATH, 'r', encoding='utf-8') as f:
                     self._history = json.load(f)
-            except: pass
+            except (OSError, JSONDecodeError) as e:
+                get_logger('SearchHistoryManager').warning(f"검색 기록 로드 실패: {e}")
     
     def _save(self):
         try:
             with open(HISTORY_PATH, 'w', encoding='utf-8') as f:
                 json.dump(self._history[:self.max_items], f, ensure_ascii=False, indent=2)
-        except: pass
+        except OSError as e:
+            get_logger('SearchHistoryManager').warning(f"검색 기록 저장 실패: {e}")
     
     def add(self, search_info):
         """검색 기록 추가"""
@@ -437,11 +448,11 @@ class ConnectionPool:
             return
         try:
             self._pool.put_nowait(conn)
-        except:
+        except QueueFull:
             try:
                 conn.close()
-            except:
-                pass
+            except Exception as e:
+                get_logger('ConnectionPool').debug(f"연결 종료 중 오류: {e}")
     
     def close_all(self):
         """모든 연결 안전하게 종료"""
@@ -463,7 +474,7 @@ class ConnectionPool:
                 except Exception as e:
                     print(f"[DB WARN] 연결 종료 실패: {e}")
                     error_count += 1
-            except:
+            except QueueEmpty:
                 # 큐가 비었음
                 break
         
@@ -775,7 +786,8 @@ class ComplexDatabase:
                     p_val = float(pyeong.replace("평", ""))
                     sql += ' AND pyeong = ?'
                     params.append(p_val)
-                except: pass
+                except (ValueError, TypeError):
+                    pass
                 
             sql += ' ORDER BY snapshot_date DESC, pyeong'
             
@@ -1204,8 +1216,11 @@ class CrawlerThread(QThread):
             self.error_signal.emit(str(e))
         finally:
             if driver:
-                try: driver.quit()
-                except: pass
+                try:
+                    driver.quit()
+                    self.log("✅ Chrome 드라이버 종료 완료")
+                except Exception as e:
+                    self.log(f"⚠️ Chrome 드라이버 종료 중 오류: {e}", 30)
             self.finished_signal.emit(self.collected_data)
     
     def _crawl(self, driver, name, cid, ttype):
@@ -1220,7 +1235,8 @@ class CrawlerThread(QThread):
             article_tab = driver.find_element("css selector", "a[href*='articleList'], .tab_item[data-tab='article']")
             article_tab.click()
             time.sleep(2)
-        except: pass
+        except Exception:
+            pass  # 탭 클릭 실패은 정상적인 상황 (탭이 없는 경우)
         
         self._scroll(driver)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -1293,7 +1309,8 @@ class CrawlerThread(QThread):
                         self.stats_signal.emit(self.stats)
                     else:
                         skipped_type += 1
-            except: pass
+            except Exception as e:
+                self.log(f"   ⚠️ 항목 파싱 중 오류: {e}", 30)
         
         if skipped_type > 0:
             self.log(f"   ℹ️ 다른 거래유형 {skipped_type}건 제외 (요청: {ttype})")
@@ -1777,7 +1794,8 @@ class SortableTableWidgetItem(QTableWidgetItem):
             if "/" in text: text = text.split("/")[0]
             if "억" in text or "만" in text: return float(PriceConverter.to_int(text))
             return None
-        except: return None
+        except (ValueError, TypeError, AttributeError):
+            return None
 
 class SearchBar(QWidget):
     search_changed = pyqtSignal(str)
@@ -3567,6 +3585,12 @@ class RealEstateApp(QMainWindow):
                 break
     
     def _start_crawling(self):
+        # 이전 크롤러 스레드가 실행 중이면 안전하게 종료
+        if self.crawler_thread and self.crawler_thread.isRunning():
+            get_logger('RealEstateApp').warning("이전 크롤러가 실행 중, 종료 대기...")
+            self.crawler_thread.stop()
+            self.crawler_thread.wait(3000)  # 최대 3초 대기
+        
         tgs = [(self.table_list.item(r, 0).text(), self.table_list.item(r, 1).text()) for r in range(self.table_list.rowCount())]
         if not tgs:
             QMessageBox.warning(self, "알림", "단지를 추가해주세요.")
@@ -3764,13 +3788,15 @@ class RealEstateApp(QMainWindow):
                     message=f"총 {len(self.collected_data)}건 수집 완료!",
                     timeout=5
                 )
-            except: pass
+            except Exception as e:
+                get_logger('RealEstateApp').debug(f"알림 표시 실패: {e}")
         
         # 완료 사운드
         if settings.get("play_sound_on_complete"):
             try:
                 QApplication.beep()
-            except: pass
+            except Exception as e:
+                get_logger('RealEstateApp').debug(f"완료 사운드 실패: {e}")
     
     def _save_price_snapshots(self):
         """크롤링 결과를 가격 스냅샷으로 저장"""
@@ -4073,7 +4099,7 @@ class RealEstateApp(QMainWindow):
             
             for r in rows:
                 self.stats_pyeong_combo.addItem(f"{r[0]}평")
-        except: pass
+        except Exception as e: get_logger('RealEstateApp').debug(f"평형 목록 조회 실패: {e}")
         
         # 이전 선택 유지 시도
         idx = self.stats_pyeong_combo.findText(current_pyeong)
@@ -4188,7 +4214,7 @@ class RealEstateApp(QMainWindow):
                             show = False
                         if f['area_max'] < 500 and area > f['area_max']:
                             show = False
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             # 층수 필터
@@ -4371,8 +4397,29 @@ class RealEstateApp(QMainWindow):
         if settings.get("confirm_before_close"):
             if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
                 return
+        
+        # 스레드 안전 종료
+        if self.crawler_thread and self.crawler_thread.isRunning():
+            get_logger('RealEstateApp').info("크롤러 스레드 종료 중...")
+            self.crawler_thread.stop()
+            if not self.crawler_thread.wait(5000):  # 5초 대기
+                get_logger('RealEstateApp').warning("크롤러 스레드 강제 종료")
+        
+        # 타이머 정리
+        if hasattr(self, 'schedule_timer') and self.schedule_timer:
+            self.schedule_timer.stop()
+            get_logger('RealEstateApp').debug("예약 타이머 종료")
+        
+        # DB 연결 정리
+        if hasattr(self, 'db') and self.db:
+            try:
+                self.db._pool.close_all()
+            except Exception as e:
+                get_logger('RealEstateApp').warning(f"DB 연결 풀 종료 중 오류: {e}")
+        
         # 설정 저장
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])
+        get_logger('RealEstateApp').info("프로그램 종료")
         QApplication.quit()
     
     def closeEvent(self, event):
@@ -4380,6 +4427,7 @@ class RealEstateApp(QMainWindow):
             event.ignore()
             self._minimize_to_tray()
         else:
+            event.accept()
             self._quit_app()
 
 # ============ MAIN ============
