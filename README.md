@@ -52,7 +52,7 @@ pip install PyQt6 undetected-chromedriver beautifulsoup4 openpyxl plyer matplotl
 
 ### **3\. 프로그램 실행**
 
-python "부동산 매물 크롤러 v10.0 claude.py"
+python "부동산 매물 크롤러 v10.5.py"
 
 ## **📖 사용 가이드**
 
