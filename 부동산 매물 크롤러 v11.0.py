@@ -3709,12 +3709,13 @@ class RealEstateApp(QMainWindow):
         layout = QHBoxLayout(tab)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Left panel
+        # Left panel - v11.0: 동적 크기 조정
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(420)
-        scroll.setMaximumWidth(500)
+        scroll.setMinimumWidth(380)  # 최소 너비 감소
+        # 최대 너비 제한 제거하여 해상도에 따라 유연하게 조정
+        scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
         left.setSpacing(10)
@@ -5291,6 +5292,20 @@ def main():
     import multiprocessing
     multiprocessing.freeze_support()
     
+    # v11.0: Windows 콘솔 UTF-8 인코딩 설정 (이모지 출력용)
+    import sys
+    import io
+    if sys.platform == 'win32':
+        # IDE 환경에서는 이미 래핑되어 있을 수 있으므로 buffer 속성 확인
+        try:
+            if hasattr(sys.stdout, 'buffer'):
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+            if hasattr(sys.stderr, 'buffer'):
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+        except (AttributeError, OSError) as e:
+            # 이미 UTF-8로 설정되어 있거나 래핑할 수 없는 환경
+            pass
+    
     print(f"\n{'='*60}")
     print(f"  {APP_TITLE}")
     print(f"{'='*60}")
@@ -5305,9 +5320,8 @@ def main():
     
     app = QApplication(sys.argv)
     
-    # v11.0: HiDPI 지원
-    app.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-    app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    # v11.0: PyQt6에서는 HiDPI가 기본 활성화되어 있음
+    # Qt6에서 AA_EnableHighDpiScaling은 deprecated됨
     
     app.setStyle("Fusion")
     
