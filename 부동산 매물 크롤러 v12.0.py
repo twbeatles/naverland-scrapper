@@ -76,8 +76,10 @@ except ImportError:
     NOTIFICATION_AVAILABLE = False
 
 try:
+    import matplotlib
+    matplotlib.use('QtAgg')  # PyQt6 호환 백엔드
     import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.figure import Figure
     import matplotlib.dates as mdates
     MATPLOTLIB_AVAILABLE = True
