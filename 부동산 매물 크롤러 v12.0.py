@@ -731,7 +731,25 @@ class ComplexDatabase:
             # 인덱스 추가
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
+            
+            # v12.0 마이그레이션: 기존 테이블에 status 컬럼 없을 경우 추가
+            try:
+                c.execute("SELECT status FROM article_history LIMIT 1")
+            except Exception:
+                print("[DB] 마이그레이션: article_history 테이블에 status 컬럼 추가...")
+                try:
+                    c.execute("ALTER TABLE article_history ADD COLUMN status TEXT DEFAULT 'active'")
+                    conn.commit()
+                    print("[DB] 마이그레이션 완료: status 컬럼 추가됨")
+                except Exception as me:
+                    print(f"[DB] 마이그레이션 오류 (무시): {me}")
+            
+            # status 컬럼 인덱스 생성 (마이그레이션 후)
+            try:
+                c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
+            except Exception:
+                pass  # 인덱스 생성 실패해도 무시
+            
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
             conn.commit()
             print("[DB] 테이블 초기화 완료")
@@ -4276,6 +4294,7 @@ class RealEstateApp(QMainWindow):
         rl.setContentsMargins(0, 5, 0, 0)
         
         # v12.0: 확장된 컬럼 (평당가, 신규, 변동 추가)
+        # HiDPI 스크롤 문제 수정: Stretch 모드 대신 Interactive 사용
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(13)
         self.result_table.setHorizontalHeaderLabels([
@@ -4284,13 +4303,32 @@ class RealEstateApp(QMainWindow):
         ])
         self.result_table.setColumnHidden(11, True)  # URL 컬럼 숨김
         self.result_table.setColumnHidden(12, True)  # 가격 숫자 컬럼 숨김 (정렬용)
-        self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.result_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
-        self.result_table.horizontalHeader().setSectionResizeMode(10, QHeaderView.ResizeMode.Fixed)
-        self.result_table.setColumnWidth(4, 90)   # 평당가
-        self.result_table.setColumnWidth(7, 40)   # 신규
-        self.result_table.setColumnWidth(8, 80)   # 변동
-        self.result_table.setColumnWidth(10, 80)  # 링크
+        
+        # HiDPI 호환: Stretch 대신 Interactive 모드로 모든 컬럼 설정
+        header = self.result_table.horizontalHeader()
+        header.setStretchLastSection(False)  # 마지막 컬럼 자동 확장 비활성화
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # 기본값: 사용자 조정 가능
+        
+        # DPI 스케일 적용된 컬럼 너비 설정
+        dpi_scale = QApplication.primaryScreen().logicalDotsPerInch() / 96.0 if QApplication.primaryScreen() else 1.0
+        
+        # 컬럼별 너비 설정 (DPI 스케일 적용)
+        col_widths = [
+            150,  # 0: 단지명
+            50,   # 1: 거래
+            80,   # 2: 가격
+            60,   # 3: 면적
+            90,   # 4: 평당가
+            100,  # 5: 층/방향
+            150,  # 6: 특징
+            40,   # 7: 신규
+            80,   # 8: 변동
+            70,   # 9: 시각
+            80,   # 10: 링크
+        ]
+        for col, width in enumerate(col_widths):
+            self.result_table.setColumnWidth(col, int(width * dpi_scale))
+        
         self.result_table.setSortingEnabled(True)
         self.result_table.setAlternatingRowColors(True)
         self.result_table.setToolTip("더블클릭하면 해당 매물 페이지를 엽니다")
