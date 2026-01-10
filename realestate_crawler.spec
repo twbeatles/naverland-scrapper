@@ -1,26 +1,43 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for 네이버 부동산 크롤러 Pro Plus v12.0
+PyInstaller spec file for 네이버 부동산 크롤러 Pro Plus v13.0
 Build command: pyinstaller realestate_crawler.spec --clean
+
+v13.0: 모듈화된 구조 지원 (src/ 패키지)
 """
 
 import sys
 from pathlib import Path
 
 # collect_all을 사용하여 동적 모듈 수집
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, collect_data_files
 
 block_cipher = None
 
-# 메인 스크립트 경로
-SCRIPT_PATH = '부동산 매물 크롤러 v12.0.py'
+# =============================================================================
+# v13.0: 메인 엔트리포인트 변경 (모듈화된 구조)
+# =============================================================================
+SCRIPT_PATH = 'src/main.py'
 
 # 추가 데이터/바이너리/hiddenimports 수집
 datas = []
 binaries = []
 hiddenimports_extra = []
 
+# =============================================================================
+# src 패키지 전체를 데이터로 포함 (모듈 구조 유지)
+# =============================================================================
+datas += [
+    ('src', 'src'),  # src 폴더 전체를 포함
+]
+
+# data 폴더가 있다면 포함 (설정 파일 등)
+if Path('data').exists():
+    datas += [('data', 'data')]
+
+# =============================================================================
 # 동적 모듈이 많은 패키지들 자동 수집
+# =============================================================================
 for pkg in ['undetected_chromedriver', 'selenium', 'openpyxl', 'plyer', 'bs4']:
     try:
         d, b, h = collect_all(pkg)
@@ -38,18 +55,59 @@ except Exception as e:
 
 a = Analysis(
     [SCRIPT_PATH],
-    pathex=[],
+    pathex=['.'],  # 현재 디렉토리를 경로에 추가
     binaries=binaries,
     datas=datas,
     hiddenimports=[
+        # =================================================================
+        # v13.0: src 패키지 내부 모듈들 (모듈화된 구조)
+        # =================================================================
+        'src',
+        'src.config',
+        'src.main',
+        
+        # src.crawler 모듈
+        'src.crawler',
+        'src.crawler.worker',
+        'src.crawler.driver',
+        'src.crawler.parser',
+        'src.crawler.cache',
+        'src.crawler.handler',
+        
+        # src.database 모듈
+        'src.database',
+        'src.database.connection',
+        'src.database.manager',
+        
+        # src.ui 모듈
+        'src.ui',
+        'src.ui.window',
+        'src.ui.dialogs',
+        'src.ui.widgets',
+        'src.ui.styles',
+        'src.ui.animations',
+        
+        # src.utils 모듈
+        'src.utils',
+        'src.utils.logger',
+        'src.utils.helpers',
+        'src.utils.managers',
+        'src.utils.analytics',
+        'src.utils.converters',
+        'src.utils.paths',
+        
+        # =================================================================
         # PyQt6 핵심
+        # =================================================================
         'PyQt6',
         'PyQt6.QtCore',
         'PyQt6.QtGui',
         'PyQt6.QtWidgets',
         'PyQt6.sip',
         
+        # =================================================================
         # Selenium / undetected_chromedriver 및 의존성
+        # =================================================================
         'selenium',
         'selenium.webdriver',
         'selenium.webdriver.chrome',
@@ -74,7 +132,9 @@ a = Analysis(
         'idna',
         'websockets',
         
+        # =================================================================
         # BeautifulSoup
+        # =================================================================
         'bs4',
         'bs4.builder',
         'bs4.builder._html5lib',
@@ -82,7 +142,9 @@ a = Analysis(
         'bs4.builder._lxml',
         'soupsieve',
         
+        # =================================================================
         # openpyxl 전체
+        # =================================================================
         'openpyxl',
         'openpyxl.cell',
         'openpyxl.cell.cell',
@@ -100,7 +162,9 @@ a = Analysis(
         'openpyxl.writer.excel',
         'et_xmlfile',
         
+        # =================================================================
         # matplotlib (PyQt6 호환 백엔드)
+        # =================================================================
         'matplotlib',
         'matplotlib.pyplot',
         'matplotlib.backends',
@@ -110,7 +174,9 @@ a = Analysis(
         'matplotlib.figure',
         'matplotlib.dates',
         
+        # =================================================================
         # plyer Windows 알림
+        # =================================================================
         'plyer',
         'plyer.facades',
         'plyer.facades.notification',
@@ -118,7 +184,9 @@ a = Analysis(
         'plyer.platforms.win',
         'plyer.platforms.win.notification',
         
+        # =================================================================
         # 표준 라이브러리 (일부 동적 로드)
+        # =================================================================
         'sqlite3',
         'json',
         'csv',
@@ -135,12 +203,19 @@ a = Analysis(
         'urllib.error',
         'html.parser',
         'xml.etree.ElementTree',
+        'multiprocessing',
+        'io',
+        'traceback',
+        'random',
+        're',
+        'datetime',
+        'time',
     ] + hiddenimports_extra,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # 불필요한 모듈 제외 (distutils는 hook 충돌로 제외하지 않음)
+        # 불필요한 모듈 제외
         'tkinter',
         'unittest',
         'test',
@@ -162,7 +237,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='NaverRealEstateCrawler_v12',
+    name='NaverRealEstateCrawler_v13',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -175,12 +250,14 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # 아이콘 없음 (필요시 .ico 파일 경로 지정)
+    icon=None,  # 아이콘 없음 (필요시 icon.ico 경로 지정)
     version=None,
     uac_admin=False,
 )
 
+# =============================================================================
 # onedir 빌드용 (디버깅/개발용) - 필요시 주석 해제
+# =============================================================================
 # coll = COLLECT(
 #     exe,
 #     a.binaries,
@@ -189,5 +266,5 @@ exe = EXE(
 #     strip=False,
 #     upx=True,
 #     upx_exclude=[],
-#     name='NaverRealEstateCrawler_v12',
+#     name='NaverRealEstateCrawler_v13',
 # )
