@@ -1368,7 +1368,11 @@ class RealEstateApp(QMainWindow):
         pyeong_text = self.stats_pyeong_combo.currentText()
         pyeong = None
         if pyeong_text != "전체":
-            pyeong = int(pyeong_text.replace("평", ""))
+            try:
+                pyeong = float(pyeong_text.replace("평", ""))
+            except ValueError:
+                print(f"[UI WARN] 평형 파싱 실패: {pyeong_text}")
+                pyeong = None
         
         snapshots = self.db.get_price_snapshots(cid, ttype)
         if pyeong:
