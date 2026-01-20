@@ -448,6 +448,32 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
     
+    def get_price_snapshots(self, complex_id, trade_type=None):
+        """가격 스냅샷 조회 (통계용)"""
+        conn = self._pool.get_connection()
+        try:
+            sql = '''
+                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count
+                FROM price_snapshots 
+                WHERE complex_id = ?
+            '''
+            params = [complex_id]
+            
+            if trade_type and trade_type != "전체":
+                sql += ' AND trade_type = ?'
+                params.append(trade_type)
+            
+            sql += ' ORDER BY snapshot_date DESC, trade_type, pyeong'
+            
+            result = conn.cursor().execute(sql, params).fetchall()
+            print(f"[DB] 가격 스냅샷 조회: {len(result)}개")
+            return result
+        except Exception as e:
+            print(f"[DB ERROR] 가격 스냅샷 조회 실패: {e}")
+            return []
+        finally:
+            self._pool.return_connection(conn)
+    
     def add_alert_setting(self, cid, name, ttype, amin, amax, pmin, pmax):
         conn = self._pool.get_connection()
         try:
