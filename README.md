@@ -30,6 +30,7 @@
 - **자동 재시도**: 네트워크 오류 시 지수 백오프 (RetryHandler)
 - **Rate Limit 감지**: 차단 방지 자동 대기
 - **드라이버 자동 재시작**: 메모리 누수 방지 (500MB 임계치)
+- **Chrome 버전 자동 감지**: 설치된 Chrome 버전 감지 및 호환 드라이버 사용
 - **Connection Pool**: 스레드 안전한 SQLite 연결 관리
 
 ### 💡 핵심 기능
@@ -101,6 +102,9 @@ naverland-scrapper/
 │   │       ├── toast.py            # ToastWidget (애니메이션 알림)
 │   │       ├── chart.py            # ChartWidget (matplotlib)
 │   │       ├── tabs.py             # 탭 관련 위젯
+│   │       ├── crawler_tab.py      # CrawlerTab (데이터 수집 탭)
+│   │       ├── database_tab.py     # DatabaseTab (DB 관리 탭)
+│   │       ├── group_tab.py        # GroupTab (그룹 관리 탭)
 │   │       └── dialogs.py          # 위젯 수준 다이얼로그
 │   │
 │   └── utils/                      # 유틸리티
@@ -281,6 +285,7 @@ naverland-scrapper/
 
 | 버전 | 주요 변경사항 |
 |:-----|:-------------|
+| v14.1 | Chrome 버전 자동 감지 (버전 불일치 오류 해결), 안정성 강화 |
 | v14.0 | UI/UX 전면 개편 (Glassmorphism, Light 테마, Toast 애니메이션), 모듈화 아키텍처, 메모리 최적화 |
 | v13.0 | 대시보드, 카드뷰, 즐겨찾기, 재시도 핸들러, Connection Pool |
 | v12.0 | 크롤링 캐시, 평당가 표시, 매물 소멸 추적 |

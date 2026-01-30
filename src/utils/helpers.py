@@ -1,4 +1,6 @@
 from datetime import datetime
+import winreg
+import re
 
 class PriceConverter:
     @staticmethod
@@ -69,3 +71,31 @@ def get_complex_url(complex_id):
 def get_article_url(complex_id, article_id):
     """매물상세 URL 생성"""
     return f"https://new.land.naver.com/complexes/{complex_id}?articleId={article_id}"
+
+class ChromeParamHelper:
+    @staticmethod
+    def get_chrome_major_version():
+        """레지스트리에서 설치된 Chrome의 메이저 버전을 가져옵니다."""
+        try:
+            # 윈도우 레지스트리 경로
+            key_path = r"SOFTWARE\Google\Chrome\BLBeacon"
+            
+            # 레지스트리 열기 (HKEY_CURRENT_USER 우선 확인)
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path)
+            except FileNotFoundError:
+                # 없으면 HKEY_LOCAL_MACHINE 확인
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path)
+            
+            # 버전 값 읽기
+            version, _ = winreg.QueryValueEx(key, "version")
+            winreg.CloseKey(key)
+            
+            # 메이저 버전 추출
+            major_version = int(version.split('.')[0])
+            return major_version
+        except Exception as e:
+            # 실패 시 로그 출력 또는 None 반환 (호출 측에서 처리)
+            # print(f"Chrome version detection failed: {e}")
+            return None
+

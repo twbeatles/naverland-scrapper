@@ -27,7 +27,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from src.utils.constants import CRAWL_SPEED_PRESETS
-from src.utils.helpers import AreaConverter, PriceConverter, PricePerPyeongCalculator, DateTimeHelper
+from src.utils.helpers import AreaConverter, PriceConverter, PricePerPyeongCalculator, DateTimeHelper, ChromeParamHelper
 from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryHandler
 
@@ -65,7 +65,11 @@ class CrawlerThread(QThread):
     
     def _init_driver(self):
         """Chrome 드라이버 초기화 및 설정"""
-        self.log("🔧 Chrome 드라이버 초기화 중...")
+        
+        # Chrome 버전 자동 감지
+        detected_version = ChromeParamHelper.get_chrome_major_version()
+        version_msg = f" (감지된 버전: {detected_version})" if detected_version else " (버전 자동 감지)"
+        self.log(f"🔧 Chrome 드라이버 초기화 중...{version_msg}")
         
         options = uc.ChromeOptions()
         options.add_argument("--headless=new")
@@ -80,7 +84,8 @@ class CrawlerThread(QThread):
         
         driver = None
         try:
-            driver = uc.Chrome(options=options, version_main=None)
+            # 감지된 버전이 있으면 해당 버전 사용, 없으면 None (최신/자동)
+            driver = uc.Chrome(options=options, version_main=detected_version)
             self.log("✅ Chrome 드라이버 초기화 성공")
         except Exception as e:
             self.log(f"⚠️ Headless 실패, 일반 모드 시도... ({e})", 30)
@@ -90,7 +95,7 @@ class CrawlerThread(QThread):
             options2.add_argument("--disable-gpu")
             options2.add_argument("--window-size=1920,1080")
             options2.add_argument("--start-minimized")
-            driver = uc.Chrome(options=options2, version_main=None)
+            driver = uc.Chrome(options=options2, version_main=detected_version)
             self.log("✅ Chrome 드라이버 초기화 성공 (일반 모드)")
         
         if driver:
