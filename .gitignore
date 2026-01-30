@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Build
+build/
+dist/
+*.spec
+
+# Logs
+logs/
+*.log
+
+# Data (Scraped data, DBs)
+data/
+*.db
+*.json
+*.csv
+*.xlsx
+
+# Backups
+backup/
+*.bak
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+venv/
+.venv/
+env/
