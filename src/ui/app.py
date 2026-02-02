@@ -31,26 +31,20 @@ except ImportError:
 
 from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
 from src.utils.logger import get_logger
-from src.utils.helpers import PriceConverter, DateTimeHelper, get_complex_url, get_article_url
-from src.core.database import ComplexDatabase
-from src.core.crawler import CrawlerThread
-from src.core.export import DataExporter
-from src.core.managers import SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
-from src.core.cache import CrawlCache
-from src.utils.retry_handler import RetryHandler
-from src.ui.styles import get_stylesheet
-from src.ui.widgets.components import (
-    SearchBar, SpeedSlider, LinkButton, ProgressWidget, ColoredTableWidgetItem, SummaryCard, SortableTableWidgetItem
-)
-from src.ui.widgets.dashboard import DashboardWidget, CardViewWidget
+from src.core.db import DatabaseManager
+from src.core.managers import SettingsManager
+from src.utils.logger import get_logger, set_log_level
+from src.utils.styles import get_stylesheet
+from src.utils.helpers import DateTimeHelper
+from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
+
+from src.ui.widgets.crawler_tab import CrawlerTab
+from src.ui.widgets.database_tab import DatabaseTab
+from src.ui.widgets.group_tab import GroupTab
 from src.ui.widgets.tabs import FavoritesTab
-from src.ui.widgets.chart import ChartWidget
-from src.ui.widgets.toast import ToastWidget
-from src.ui.widgets.dialogs import (
-    PresetDialog, AlertSettingDialog, AdvancedFilterDialog, URLBatchDialog,
-    ExcelTemplateDialog, SettingsDialog, ShortcutsDialog, AboutDialog,
-    RecentSearchDialog, MultiSelectDialog
-)
+
+from src.ui.widgets.dashboard import DashboardWidget
+from src.ui.widgets.dialogs import SettingsDialog, ShortcutsDialog, AboutDialog, ToastWidget
 
 settings = SettingsManager()
 ui_logger = get_logger("UI")
@@ -64,41 +58,25 @@ class RealEstateApp(QMainWindow):
         if geo: self.setGeometry(*geo)
         else: self.setGeometry(100, 100, 1500, 950)
         
-        self.db = ComplexDatabase()
-        self.preset_manager = FilterPresetManager()
-        self.history_manager = SearchHistoryManager()
-        self.crawler_thread = None
-        self.collected_data = []
-        self.grouped_rows = {}
-        self.is_scheduled_run = False
-        self.current_theme = settings.get("theme", "dark")
-        self.tray_icon = None
-        self.crawl_stats = {"매매": 0, "전세": 0, "월세": 0, "new": 0, "price_up": 0, "price_down": 0}
-        self.last_crawl_stats = {"total_found": 0, "filtered_out": 0}
-        self.favorite_keys = set()
-        self.advanced_filters = None  # v7.3: 고급 필터
+        self.settings_manager = SettingsManager()
+        self.db = DatabaseManager()
         
         # v11.0: Toast 알림 시스템
         self.toast_widgets: List[ToastWidget] = []
         
-        # v12.0: 크롤링 캐시
-        self.crawl_cache = CrawlCache(ttl_minutes=settings.get("cache_ttl_minutes", 30))
-        
-        # v13.0: 신규 기능
-        self.recently_viewed = RecentlyViewedManager()
-        self.view_mode = settings.get("view_mode", "table")  # table | card
-        self.retry_handler = RetryHandler(
-            max_retries=settings.get("max_retry_count", 3)
-        ) if settings.get("retry_on_error", True) else None
-        
+        self.current_theme = settings.get("theme", "dark")
         self.setStyleSheet(get_stylesheet(self.current_theme))
+        
+        # UI 초기화
         self._init_ui()
         self._init_menu()
         self._init_shortcuts()
         self._init_tray()
-        self._init_timers()
-        self._load_initial_data()
-        self.status_bar.showMessage(f"✨ {APP_TITLE} 준비 완료")
+        
+        # 윈도우 설정
+        self._restore_window_geometry()
+        
+        self.show_toast(f"환영합니다! {APP_TITLE} {APP_VERSION}입니다.")
     
     def _init_ui(self):
         main_widget = QWidget()
@@ -107,447 +85,35 @@ class RealEstateApp(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
-        self._setup_crawler_tab()
-        self._setup_db_tab()
-        self._setup_groups_tab()
+        
+        # 1. 수집기 탭
+        self.crawler_tab = CrawlerTab(self.db)
+        self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
+        
+        # 2. 단지 DB 탭
+        self.db_tab = DatabaseTab(self.db)
+        self.tabs.addTab(self.db_tab, "💾 단지 DB")
+        
+        # 3. 그룹 관리 탭
+        self.group_tab = GroupTab(self.db)
+        self.tabs.addTab(self.group_tab, "📁 그룹 관리")
+        
         self._setup_schedule_tab()
         self._setup_history_tab()
         self._setup_stats_tab()
-        self._setup_dashboard_tab()  # v13.0
-        self._setup_favorites_tab()  # v13.0
+        self._setup_dashboard_tab()
+        self._setup_favorites_tab()
         self._setup_guide_tab()
+        
         self.status_bar = self.statusBar()
-    
-    def _setup_crawler_tab(self):
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Left panel - v11.0: 동적 크기 조정
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(380)  # 최소 너비 감소
-        scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        scroll_content = QWidget()
-        left = QVBoxLayout(scroll_content)
-        left.setSpacing(10)
-        
-        # 1. 거래유형
-        tg = QGroupBox("1️⃣ 거래 유형")
-        tl = QHBoxLayout()
-        self.check_trade = QCheckBox("매매")
-        self.check_trade.setChecked(True)
-        self.check_trade.setToolTip("아파트 매매 매물을 검색합니다")
-        self.check_jeonse = QCheckBox("전세")
-        self.check_jeonse.setChecked(True)
-        self.check_jeonse.setToolTip("전세 매물을 검색합니다")
-        self.check_monthly = QCheckBox("월세")
-        self.check_monthly.setToolTip("월세 매물을 검색합니다")
-        tl.addWidget(self.check_trade)
-        tl.addWidget(self.check_jeonse)
-        tl.addWidget(self.check_monthly)
-        tl.addStretch()
-        tg.setLayout(tl)
-        left.addWidget(tg)
-        
-        # 2. 면적 필터
-        ag = QGroupBox("2️⃣ 면적 필터")
-        al = QVBoxLayout()
-        self.check_area_filter = QCheckBox("면적 필터 사용")
-        self.check_area_filter.stateChanged.connect(self._toggle_area_filter)
-        al.addWidget(self.check_area_filter)
-        area_input = QHBoxLayout()
-        self.spin_area_min = QSpinBox()
-        self.spin_area_min.setRange(0, 300)
-        self.spin_area_min.setEnabled(False)
-        self.spin_area_min.setToolTip("최소 면적 (㎡)")
-        self.spin_area_max = QSpinBox()
-        self.spin_area_max.setRange(0, 300)
-        self.spin_area_max.setValue(200)
-        self.spin_area_max.setEnabled(False)
-        self.spin_area_max.setToolTip("최대 면적 (㎡)")
-        area_input.addWidget(QLabel("최소:"))
-        area_input.addWidget(self.spin_area_min)
-        area_input.addWidget(QLabel("㎡  ~  최대:"))
-        area_input.addWidget(self.spin_area_max)
-        area_input.addWidget(QLabel("㎡"))
-        al.addLayout(area_input)
-        ag.setLayout(al)
-        left.addWidget(ag)
-        
-        # 3. 가격 필터
-        pg = QGroupBox("3️⃣ 가격 필터")
-        pl = QVBoxLayout()
-        self.check_price_filter = QCheckBox("가격 필터 사용")
-        self.check_price_filter.stateChanged.connect(self._toggle_price_filter)
-        pl.addWidget(self.check_price_filter)
-        
-        price_grid = QGridLayout()
-        # 매매
-        price_grid.addWidget(QLabel("매매:"), 0, 0)
-        self.spin_trade_min = QSpinBox()
-        self.spin_trade_min.setRange(0, 999999)
-        self.spin_trade_min.setSingleStep(1000)
-        self.spin_trade_min.setEnabled(False)
-        self.spin_trade_min.setToolTip("매매 최소 가격 (만원)")
-        price_grid.addWidget(self.spin_trade_min, 0, 1)
-        price_grid.addWidget(QLabel("~"), 0, 2)
-        self.spin_trade_max = QSpinBox()
-        self.spin_trade_max.setRange(0, 999999)
-        self.spin_trade_max.setValue(100000)
-        self.spin_trade_max.setSingleStep(1000)
-        self.spin_trade_max.setEnabled(False)
-        self.spin_trade_max.setToolTip("매매 최대 가격 (만원)")
-        price_grid.addWidget(self.spin_trade_max, 0, 3)
-        price_grid.addWidget(QLabel("만원"), 0, 4)
-        
-        # 전세
-        price_grid.addWidget(QLabel("전세:"), 1, 0)
-        self.spin_jeonse_min = QSpinBox()
-        self.spin_jeonse_min.setRange(0, 999999)
-        self.spin_jeonse_min.setSingleStep(1000)
-        self.spin_jeonse_min.setEnabled(False)
-        price_grid.addWidget(self.spin_jeonse_min, 1, 1)
-        price_grid.addWidget(QLabel("~"), 1, 2)
-        self.spin_jeonse_max = QSpinBox()
-        self.spin_jeonse_max.setRange(0, 999999)
-        self.spin_jeonse_max.setValue(50000)
-        self.spin_jeonse_max.setSingleStep(1000)
-        self.spin_jeonse_max.setEnabled(False)
-        price_grid.addWidget(self.spin_jeonse_max, 1, 3)
-        price_grid.addWidget(QLabel("만원"), 1, 4)
-        
-        # 월세
-        price_grid.addWidget(QLabel("월세:"), 2, 0)
-        self.spin_monthly_min = QSpinBox()
-        self.spin_monthly_min.setRange(0, 999999)
-        self.spin_monthly_min.setSingleStep(100)
-        self.spin_monthly_min.setEnabled(False)
-        price_grid.addWidget(self.spin_monthly_min, 2, 1)
-        price_grid.addWidget(QLabel("~"), 2, 2)
-        self.spin_monthly_max = QSpinBox()
-        self.spin_monthly_max.setRange(0, 999999)
-        self.spin_monthly_max.setValue(5000)
-        self.spin_monthly_max.setSingleStep(100)
-        self.spin_monthly_max.setEnabled(False)
-        price_grid.addWidget(self.spin_monthly_max, 2, 3)
-        price_grid.addWidget(QLabel("만원"), 2, 4)
-        
-        pl.addLayout(price_grid)
-        pg.setLayout(pl)
-        left.addWidget(pg)
-        
-        # 4. 단지 목록
-        cg = QGroupBox("4️⃣ 단지 목록")
-        cl = QVBoxLayout()
-        load_btn = QHBoxLayout()
-        btn_db = QPushButton("💾 DB에서")
-        btn_db.setToolTip("저장된 단지 DB에서 불러오기")
-        btn_db.clicked.connect(self._show_db_load_dialog)
-        btn_grp = QPushButton("📁 그룹에서")
-        btn_grp.setToolTip("저장된 그룹에서 불러오기")
-        btn_grp.clicked.connect(self._show_group_load_dialog)
-        btn_history = QPushButton("🕐 최근검색")
-        btn_history.setToolTip("최근 검색 기록에서 불러오기")
-        btn_history.clicked.connect(self._show_history_dialog)
-        load_btn.addWidget(btn_db)
-        load_btn.addWidget(btn_grp)
-        load_btn.addWidget(btn_history)
-        cl.addLayout(load_btn)
-        
-        input_layout = QHBoxLayout()
-        self.input_name = QLineEdit()
-        self.input_name.setPlaceholderText("단지명")
-        self.input_name.setToolTip("아파트 단지명을 입력하세요")
-        self.input_id = QLineEdit()
-        self.input_id.setPlaceholderText("단지 ID")
-        self.input_id.setToolTip("네이버 부동산 URL에서 단지 ID를 확인할 수 있습니다")
-        btn_add = QPushButton("➕")
-        btn_add.setMaximumWidth(45)
-        btn_add.setToolTip("단지 추가")
-        btn_add.clicked.connect(self._add_complex)
-        input_layout.addWidget(self.input_name, 2)
-        input_layout.addWidget(self.input_id, 1)
-        input_layout.addWidget(btn_add)
-        cl.addLayout(input_layout)
-        
-        self.table_list = QTableWidget()
-        self.table_list.setColumnCount(2)
-        self.table_list.setHorizontalHeaderLabels(["단지명", "ID"])
-        self.table_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table_list.setMinimumHeight(130)
-        self.table_list.setAlternatingRowColors(True)
-        self.table_list.setToolTip("더블클릭하면 네이버 부동산 페이지를 엽니다")
-        self.table_list.doubleClicked.connect(self._open_complex_url)
-        cl.addWidget(self.table_list)
-        
-        manage_btn = QHBoxLayout()
-        btn_del = QPushButton("🗑️ 삭제")
-        btn_del.clicked.connect(self._delete_complex)
-        btn_clr = QPushButton("🧹 초기화")
-        btn_clr.clicked.connect(self._clear_list)
-        btn_sv = QPushButton("💾 DB저장")
-        btn_sv.clicked.connect(self._save_to_db)
-        # v7.3: URL 일괄 등록
-        btn_url = QPushButton("🔗 URL등록")
-        btn_url.setToolTip("URL 또는 단지ID 일괄 등록")
-        btn_url.clicked.connect(self._show_url_batch_dialog)
-        manage_btn.addWidget(btn_del)
-        manage_btn.addWidget(btn_clr)
-        manage_btn.addWidget(btn_sv)
-        manage_btn.addWidget(btn_url)
-        cl.addLayout(manage_btn)
-        cg.setLayout(cl)
-        left.addWidget(cg)
-        
-        # 5. 속도
-        spg = QGroupBox("5️⃣ 크롤링 속도")
-        spl = QVBoxLayout()
-        self.speed_slider = SpeedSlider()
-        self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
-        spl.addWidget(self.speed_slider)
-        spg.setLayout(spl)
-        left.addWidget(spg)
-        
-        # 6. 실행
-        eg = QGroupBox("6️⃣ 실행")
-        el = QHBoxLayout()
-        self.btn_start = QPushButton("▶️ 크롤링 시작")
-        self.btn_start.setObjectName("startButton")
-        self.btn_start.setMinimumHeight(45)
-        self.btn_start.setToolTip(f"크롤링 시작 ({SHORTCUTS['start_crawl']})")
-        self.btn_start.clicked.connect(self._start_crawling)
-        self.btn_stop = QPushButton("⏹️ 중지")
-        self.btn_stop.setObjectName("stopButton")
-        self.btn_stop.setEnabled(False)
-        self.btn_stop.setToolTip(f"크롤링 중지 ({SHORTCUTS['stop_crawl']})")
-        self.btn_stop.clicked.connect(self._stop_crawling)
-        self.btn_save = QPushButton("💾 저장")
-        self.btn_save.setObjectName("saveButton")
-        self.btn_save.setEnabled(False)
-        self.btn_save.setToolTip("결과 저장 (Excel, CSV, JSON)")
-        self.btn_save.clicked.connect(self._show_save_menu)
-        el.addWidget(self.btn_start, 2)
-        el.addWidget(self.btn_stop, 1)
-        el.addWidget(self.btn_save, 1)
-        eg.setLayout(el)
-        left.addWidget(eg)
-        
-        left.addStretch()
-        scroll.setWidget(scroll_content)
-        splitter.addWidget(scroll)
-        
-        # Right panel
-        right_w = QWidget()
-        right = QVBoxLayout(right_w)
-        right.setSpacing(8)
-        
-        # 요약 카드
-        self.summary_card = SummaryCard(theme=self.current_theme)
-        right.addWidget(self.summary_card)
-        
-        # 검색 및 정렬
-        search_sort = QHBoxLayout()
-        self.result_search = SearchBar("결과 검색...")
-        self.result_search.search_changed.connect(self._filter_results)
-        search_sort.addWidget(self.result_search, 3)
-        
-        # v7.3: 고급 필터 버튼
-        btn_adv_filter = QPushButton("🔍 고급 필터")
-        btn_adv_filter.setToolTip("가격, 면적, 층수 등 상세 필터")
-        btn_adv_filter.clicked.connect(self._show_advanced_filter)
-        search_sort.addWidget(btn_adv_filter)
-        
-        search_sort.addWidget(QLabel("정렬:"))
-        self.combo_sort = QComboBox()
-        self.combo_sort.addItems(["가격 ↑", "가격 ↓", "면적 ↑", "면적 ↓", "단지명 ↑", "단지명 ↓"])
-        self.combo_sort.setToolTip("결과 정렬 기준")
-        self.combo_sort.currentTextChanged.connect(self._sort_results)
-        search_sort.addWidget(self.combo_sort, 1)
-        
-        # v13.0: 뷰 모드 전환 버튼
-        self.btn_view_mode = QPushButton("🃏 카드뷰" if self.view_mode != "card" else "📄 테이블")
-        self.btn_view_mode.setCheckable(True)
-        self.btn_view_mode.setChecked(self.view_mode == "card")
-        self.btn_view_mode.clicked.connect(self._toggle_view_mode)
-        search_sort.addWidget(self.btn_view_mode)
-        
-        right.addLayout(search_sort)
-        
-        # 결과 탭
-        result_tabs = QTabWidget()
-        result_tab = QWidget()
-        rl = QVBoxLayout(result_tab)
-        rl.setContentsMargins(0, 5, 0, 0)
-        
-        # v12.0: 확장된 컬럼 (평당가, 신규, 변동 추가)
-        self.result_table = QTableWidget()
-        self.result_table.setColumnCount(13)
-        self.result_table.setHorizontalHeaderLabels([
-            "단지명", "거래", "가격", "면적", "평당가", "층/방향", "특징", 
-            "🆕", "📊 변동", "시각", "링크", "URL", "가격(숫자)"
-        ])
-        self.result_table.setColumnHidden(11, True)
-        self.result_table.setColumnHidden(12, True)
-        
-        header = self.result_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        
-        # DPI 스케일 적용된 컬럼 너비 설정
-        dpi_scale = QApplication.primaryScreen().logicalDotsPerInch() / 96.0 if QApplication.primaryScreen() else 1.0
-        
-        col_widths = [150, 50, 80, 60, 90, 100, 150, 40, 80, 70, 80]
-        for col, width in enumerate(col_widths):
-            self.result_table.setColumnWidth(col, int(width * dpi_scale))
-        
-        self.result_table.setSortingEnabled(True)
-        self.result_table.setAlternatingRowColors(True)
-        self.result_table.setToolTip("더블클릭하면 해당 매물 페이지를 엽니다")
-        self.result_table.doubleClicked.connect(self._open_article_url)
-        
-        # v13.0: 카드 뷰 추가
-        self.view_stack = QStackedWidget()
-        self.view_stack.addWidget(self.result_table)
-        
-        self.card_view = CardViewWidget(is_dark=(self.current_theme=="dark"))
-        self.card_view.article_clicked.connect(lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"))))
-        self.card_view.favorite_toggled.connect(self._on_favorite_toggled)
-        self.view_stack.addWidget(self.card_view)
-        
-        # 초기 뷰 설정
-        if self.view_mode == "card":
-             self.view_stack.setCurrentWidget(self.card_view)
-        
-        rl.addWidget(self.view_stack)
-        result_tabs.addTab(result_tab, "📊 결과")
-        
-        log_tab = QWidget()
-        ll = QVBoxLayout(log_tab)
-        ll.setContentsMargins(0, 5, 0, 0)
-        self.log_browser = QTextBrowser()
-        self.log_browser.setMinimumHeight(150)
-        ll.addWidget(self.log_browser)
-        result_tabs.addTab(log_tab, "📝 로그")
-        right.addWidget(result_tabs)
-        
-        # 진행 상태
-        self.progress_widget = ProgressWidget()
-        right.addWidget(self.progress_widget)
-        
-        splitter.addWidget(right_w)
-        splitter.setSizes([450, 900])
-        layout.addWidget(splitter)
-        self.tabs.addTab(tab, "🏘️ 데이터 수집")
-    
-    def _setup_db_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        bl = QHBoxLayout()
-        btn_rf = QPushButton("🔄 새로고침")
-        btn_rf.clicked.connect(self._load_db_complexes)
-        btn_dl = QPushButton("🗑️ 선택 삭제")
-        btn_dl.clicked.connect(self._delete_db_complex)
-        btn_dlm = QPushButton("🗑️ 다중 삭제")
-        btn_dlm.clicked.connect(self._delete_db_complexes_multi)
-        btn_memo = QPushButton("✏️ 메모 수정")
-        btn_memo.clicked.connect(self._edit_memo)
-        self.db_btn_delete = btn_dl
-        self.db_btn_delete_multi = btn_dlm
-        self.db_btn_memo = btn_memo
-        bl.addWidget(btn_rf)
-        bl.addWidget(btn_dl)
-        bl.addWidget(btn_dlm)
-        bl.addWidget(btn_memo)
-        bl.addStretch()
-        layout.addLayout(bl)
-        self.db_search = SearchBar("단지 검색...")
-        self.db_search.search_changed.connect(self._filter_db_table)
-        layout.addWidget(self.db_search)
-        self.db_table = QTableWidget()
-        self.db_table.setColumnCount(4)
-        self.db_table.setHorizontalHeaderLabels(["ID", "단지명", "단지ID", "메모"])
-        self.db_table.setColumnHidden(0, True)
-        self.db_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.db_table.setAlternatingRowColors(True)
-        self.db_table.doubleClicked.connect(self._open_db_complex_url)
-        self.db_table.itemSelectionChanged.connect(self._update_db_action_state)
-        layout.addWidget(self.db_table)
+        self.tabs.currentChanged.connect(self._refresh_tab)
 
-        self.db_empty_label = QLabel("등록된 단지가 없습니다.\n크롤러 탭에서 단지를 추가한 뒤 DB에 저장하세요.")
-        self.db_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.db_empty_label.setStyleSheet("color: #888; padding: 30px;")
-        self.db_empty_label.hide()
-        layout.addWidget(self.db_empty_label)
-        self.tabs.addTab(tab, "💾 단지 DB")
     
-    def _setup_groups_tab(self):
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # 그룹 목록
-        left_w = QWidget()
-        left_l = QVBoxLayout(left_w)
-        left_l.addWidget(QLabel("📁 그룹 목록"))
-        gl = QHBoxLayout()
-        btn_new = QPushButton("➕ 새 그룹")
-        btn_new.clicked.connect(self._create_group)
-        btn_del = QPushButton("🗑️ 삭제")
-        btn_del.clicked.connect(self._delete_group)
-        self.group_btn_delete = btn_del
-        gl.addWidget(btn_new)
-        gl.addWidget(btn_del)
-        left_l.addLayout(gl)
-        self.group_list = QListWidget()
-        self.group_list.setAlternatingRowColors(True)
-        self.group_list.itemClicked.connect(self._load_group_complexes)
-        self.group_list.itemSelectionChanged.connect(self._update_group_action_state)
-        left_l.addWidget(self.group_list)
-        self.group_empty_label = QLabel("그룹이 없습니다.\n'새 그룹' 버튼으로 추가하세요.")
-        self.group_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.group_empty_label.setStyleSheet("color: #888; padding: 20px;")
-        self.group_empty_label.hide()
-        left_l.addWidget(self.group_empty_label)
-        splitter.addWidget(left_w)
-        
-        # 그룹 내 단지
-        right_w = QWidget()
-        right_l = QVBoxLayout(right_w)
-        right_l.addWidget(QLabel("📋 그룹 내 단지"))
-        rl = QHBoxLayout()
-        btn_add = QPushButton("➕ 단지 추가")
-        btn_add.clicked.connect(self._add_to_group)
-        btn_add_multi = QPushButton("➕ 다중 추가")
-        btn_add_multi.clicked.connect(self._add_to_group_multi)
-        btn_rm = QPushButton("➖ 제거")
-        btn_rm.clicked.connect(self._remove_from_group)
-        self.group_btn_add = btn_add
-        self.group_btn_add_multi = btn_add_multi
-        self.group_btn_remove = btn_rm
-        rl.addWidget(btn_add)
-        rl.addWidget(btn_add_multi)
-        rl.addWidget(btn_rm)
-        right_l.addLayout(rl)
-        self.group_complex_table = QTableWidget()
-        self.group_complex_table.setColumnCount(4)
-        self.group_complex_table.setHorizontalHeaderLabels(["ID", "단지명", "단지ID", "메모"])
-        self.group_complex_table.setColumnHidden(0, True)
-        self.group_complex_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.group_complex_table.setAlternatingRowColors(True)
-        self.group_complex_table.itemSelectionChanged.connect(self._update_group_complex_action_state)
-        right_l.addWidget(self.group_complex_table)
-        self.group_complex_empty_label = QLabel("선택된 그룹에 단지가 없습니다.\n'단지 추가'로 등록하세요.")
-        self.group_complex_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.group_complex_empty_label.setStyleSheet("color: #888; padding: 20px;")
-        self.group_complex_empty_label.hide()
-        right_l.addWidget(self.group_complex_empty_label)
-        splitter.addWidget(right_w)
-        
-        splitter.setSizes([300, 700])
-        layout.addWidget(splitter)
-        self.tabs.addTab(tab, "📁 그룹 관리")
+    
+    # Obsolete setup methods removed (replaced by modular widgets)
+    # _setup_crawler_tab, _setup_db_tab, _setup_groups_tab removed
+
     
     def _setup_schedule_tab(self):
         tab = QWidget()
@@ -753,664 +319,30 @@ class RealEstateApp(QMainWindow):
         self.schedule_timer.start(60000)
     
     def _load_initial_data(self):
-        self._load_db_complexes()
-        self._load_all_groups()
+        # self._load_db_complexes() - Handled by DatabaseTab
+        # self._load_all_groups() - Handled by GroupTab
+        if hasattr(self, 'db_tab'): self.db_tab.load_data()
+        if hasattr(self, 'group_tab'): self.group_tab.load_groups()
+        
         self._load_history()
         self._load_stats_complexes()
         self._load_schedule_groups()
-        self._refresh_favorite_keys()
+        # self._refresh_favorite_keys() - Obsolete
         
         # Connect signals after loading
         self.stats_complex_combo.currentIndexChanged.connect(self._on_stats_complex_changed)
     
     # Event handlers
-    def _toggle_area_filter(self, state):
-        enabled = state == Qt.CheckState.Checked.value
-        self.spin_area_min.setEnabled(enabled)
-        self.spin_area_max.setEnabled(enabled)
-    
-    def _toggle_price_filter(self, state):
-        enabled = state == Qt.CheckState.Checked.value
-        for w in [self.spin_trade_min, self.spin_trade_max, self.spin_jeonse_min, 
-                  self.spin_jeonse_max, self.spin_monthly_min, self.spin_monthly_max]:
-            w.setEnabled(enabled)
-    
-    def _add_complex(self):
-        name = self.input_name.text().strip()
-        cid = self.input_id.text().strip()
-        if name and cid:
-            self._add_row(name, cid)
-            self.input_name.clear()
-            self.input_id.clear()
-    
-    def _add_row(self, name, cid):
-        row = self.table_list.rowCount()
-        self.table_list.insertRow(row)
-        self.table_list.setItem(row, 0, QTableWidgetItem(name))
-        self.table_list.setItem(row, 1, QTableWidgetItem(cid))
-    
-    def _delete_complex(self):
-        row = self.table_list.currentRow()
-        if row >= 0:
-            self.table_list.removeRow(row)
-    
-    def _clear_list(self):
-        self.table_list.setRowCount(0)
-    
-    def _save_to_db(self):
-        """단지를 DB에 저장 - 디버깅 강화"""
-        count = 0
-        total = self.table_list.rowCount()
-        ui_logger.info(f"DB 저장 시작: {total}개 단지")
-        
-        for r in range(total):
-            name_item = self.table_list.item(r, 0)
-            cid_item = self.table_list.item(r, 1)
-            
-            if not name_item or not cid_item:
-                ui_logger.warning(f"행 {r}: 데이터 없음")
-                continue
-            
-            name = name_item.text().strip()
-            cid = cid_item.text().strip()
-            
-            if not name or not cid:
-                ui_logger.warning(f"행 {r}: 빈 데이터")
-                continue
-            
-            ui_logger.debug(f"저장 시도: {name} ({cid})")
-            if self.db.add_complex(name, cid):
-                count += 1
-        
-        ui_logger.info(f"DB 저장 완료: {count}/{total}개")
-        QMessageBox.information(self, "저장 완료", f"{count}개 단지가 DB에 저장되었습니다.\n\nDB 경로: {self.db.db_path}")
-        self._load_db_complexes()
-        self._load_stats_complexes()  # 통계 탭도 갱신
-    
-    def _show_db_load_dialog(self):
-        complexes = self.db.get_all_complexes()
-        if not complexes:
-            QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
-            return
-        items = [(f"{name} ({cid})", (name, cid)) for _, name, cid, _ in complexes]
-        dlg = MultiSelectDialog("DB에서 불러오기", items, self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            for name, cid in dlg.selected_items():
-                self._add_row(name, cid)
-    
-    def _show_group_load_dialog(self):
-        groups = self.db.get_all_groups()
-        if not groups:
-            QMessageBox.information(self, "알림", "저장된 그룹이 없습니다.")
-            return
-        items = [(name, gid) for gid, name, _ in groups]
-        dlg = MultiSelectDialog("그룹에서 불러오기", items, self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            for gid in dlg.selected_items():
-                for _, name, cid, _ in self.db.get_complexes_in_group(gid):
-                    self._add_row(name, cid)
-    
-    def _show_history_dialog(self):
-        dlg = RecentSearchDialog(self, self.history_manager)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_search:
-            search = dlg.selected_search
-            self._clear_list()
-            for name, cid in search.get('complexes', []):
-                self._add_row(name, cid)
-            # 거래유형 복원
-            types = search.get('trade_types', [])
-            self.check_trade.setChecked("매매" in types)
-            self.check_jeonse.setChecked("전세" in types)
-            self.check_monthly.setChecked("월세" in types)
-    
-    def _open_complex_url(self):
-        row = self.table_list.currentRow()
-        if row >= 0:
-            cid = self.table_list.item(row, 1).text()
-            webbrowser.open(get_complex_url(cid))
-    
-    def _open_db_complex_url(self):
-        row = self.db_table.currentRow()
-        if row >= 0:
-            cid = self.db_table.item(row, 2).text()
-            webbrowser.open(get_complex_url(cid))
-    
-    def _open_article_url(self):
-        """결과 테이블에서 더블클릭 시 매물 URL 열기"""
-        row = self.result_table.currentRow()
-        if row >= 0:
-            # v13.0: 최근 본 매물 저장
-            item = self.result_table.item(row, 0)
-            if item:
-                data = item.data(Qt.ItemDataRole.UserRole)
-                if data:
-                    self.recently_viewed.add(data)
+    # Obsolete helpers removed (replaced by widgets: CrawlerTab, DatabaseTab, GroupTab)
+    # _toggle_area_filter, _toggle_price_filter, _add_complex, _add_row, _delete_complex, _clear_list,
+    # _save_to_db, _show_db_load_dialog, _show_group_load_dialog, _show_history_dialog, _open_complex_url,
+    # _open_db_complex_url, _open_article_url, _filter_results, _filter_db_table, _sort_results,
+    # _start_crawling, _stop_crawling, _update_log, _update_progress, _add_result, _update_stats,
+    # _on_complex_done, _crawling_done, _save_price_snapshots, _crawling_error, _show_save_menu,
+    # _save_excel, _save_csv, _save_json, _load_db_complexes, _delete_db_complex, _delete_db_complexes_multi,
+    # _edit_memo, _update_db_empty_state, _update_db_action_state, _load_all_groups, _create_group,
+    # _delete_group, _load_group_complexes, _add_to_group, _add_to_group_multi, _remove_from_group
 
-            # URL은 인덱스 11에 저장됨 (숨겨진 컬럼)
-            url_item = self.result_table.item(row, 11)
-            if url_item and url_item.text():
-                webbrowser.open(url_item.text())
-    
-    def _filter_results(self, text):
-        # 테이블 필터링
-        for r in range(self.result_table.rowCount()):
-            match = any(text.lower() in (self.result_table.item(r, c).text().lower() if self.result_table.item(r, c) else "") for c in range(7))
-            self.result_table.setRowHidden(r, not match)
-            
-        # 카드 뷰 필터링
-        if hasattr(self, 'card_view'):
-            self.card_view.filter_cards(text)
-    
-    def _filter_db_table(self, text):
-        for r in range(self.db_table.rowCount()):
-            match = any(text.lower() in (self.db_table.item(r, c).text().lower() if self.db_table.item(r, c) else "") for c in range(4))
-            self.db_table.setRowHidden(r, not match)
-    
-    def _sort_results(self, sort_text):
-        col_map = {"가격": 2, "면적": 3, "단지명": 0}
-        for key, col in col_map.items():
-            if key in sort_text:
-                order = Qt.SortOrder.AscendingOrder if "↑" in sort_text else Qt.SortOrder.DescendingOrder
-                self.result_table.sortItems(col, order)
-                break
-    
-    def _start_crawling(self):
-        # 이전 크롤러 스레드가 실행 중이면 안전하게 종료
-        if self.crawler_thread and self.crawler_thread.isRunning():
-            get_logger('RealEstateApp').warning("이전 크롤러가 실행 중, 종료 대기...")
-            self.crawler_thread.stop()
-            self.crawler_thread.wait(3000)  # 최대 3초 대기
-        
-        tgs = [(self.table_list.item(r, 0).text(), self.table_list.item(r, 1).text()) for r in range(self.table_list.rowCount())]
-        if not tgs:
-            QMessageBox.warning(self, "알림", "단지를 추가해주세요.")
-            return
-        tts = []
-        if self.check_trade.isChecked(): tts.append("매매")
-        if self.check_jeonse.isChecked(): tts.append("전세")
-        if self.check_monthly.isChecked(): tts.append("월세")
-        if not tts:
-            QMessageBox.warning(self, "알림", "거래유형을 선택해주세요.")
-            return
-
-        self._refresh_favorite_keys()
-        
-        # 검색 기록 저장
-        self.history_manager.add({
-            'complexes': tgs,
-            'trade_types': tts
-        })
-        
-        af = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
-        pf = {"enabled": self.check_price_filter.isChecked(), 
-              "매매": {"min": self.spin_trade_min.value(), "max": self.spin_trade_max.value()}, 
-              "전세": {"min": self.spin_jeonse_min.value(), "max": self.spin_jeonse_max.value()}, 
-              "월세": {"min": self.spin_monthly_min.value(), "max": self.spin_monthly_max.value()}}
-        
-        self.btn_start.setEnabled(False)
-        self.btn_stop.setEnabled(True)
-        self.btn_save.setEnabled(False)
-        self.log_browser.clear()
-        self.result_table.setRowCount(0)
-        self.progress_widget.reset()
-        self.summary_card.reset()
-        self.grouped_rows.clear()
-        self.collected_data.clear()
-        self.crawl_stats = {"매매": 0, "전세": 0, "월세": 0, "new": 0, "price_up": 0, "price_down": 0}
-        self.advanced_filters = None  # 필터 초기화
-        
-        cache = self.crawl_cache if settings.get("cache_enabled", True) else None
-        self.crawler_thread = CrawlerThread(
-            tgs, tts, af, pf, self.db, self.speed_slider.current_speed(), cache=cache
-        )
-        self.crawler_thread.log_signal.connect(self._update_log)
-        self.crawler_thread.progress_signal.connect(self._update_progress)
-        self.crawler_thread.item_signal.connect(self._add_result)
-        self.crawler_thread.stats_signal.connect(self._update_stats)
-        self.crawler_thread.complex_finished_signal.connect(self._on_complex_done)
-        self.crawler_thread.finished_signal.connect(self._crawling_done)
-        self.crawler_thread.error_signal.connect(self._crawling_error)
-        self.crawler_thread.start()
-        self.status_bar.showMessage("🚀 크롤링 진행 중...")
-    
-    def _stop_crawling(self):
-        if self.crawler_thread:
-            self.crawler_thread.stop()
-            self.log_browser.append("\n⏹️ 사용자에 의해 중지됨")
-        self.btn_stop.setEnabled(False)
-    
-    def _update_log(self, msg, level=20):
-        c = "#ff6b6b" if level >= 40 else "#f39c12" if level >= 30 else "#00ff00"
-        self.log_browser.append(f"<span style='color: {c};'>{msg}</span>")
-        self.log_browser.verticalScrollBar().setValue(self.log_browser.verticalScrollBar().maximum())
-    
-    def _update_progress(self, percent, current_name, remaining):
-        self.progress_widget.update_progress(percent, current_name, remaining)
-    
-    def _add_result(self, d, render_only=False):
-        tt = d["거래유형"]
-        pv = d["매매가"] if tt == "매매" else d["보증금"] if tt == "전세" else f"{d['보증금']}/{d['월세']}"
-        gk = (d["단지명"], tt, pv, d["면적(평)"])
-
-        # 기본 데이터
-        article_id = d.get("매물ID", "")
-        complex_id = d.get("단지ID", "")
-        if article_id and complex_id:
-            d.setdefault("is_favorite", (article_id, complex_id) in self.favorite_keys)
-
-        is_new = d.get("is_new", d.get("신규여부", False))
-        price_change = d.get("price_change", d.get("가격변동", 0))
-
-        if isinstance(price_change, str):
-            try:
-                price_change = PriceConverter.to_int(price_change)
-            except Exception:
-                price_change = 0
-
-        # 가격을 숫자로 변환
-        current_price = d.get("price_int")
-        if current_price is None:
-            if tt == "매매":
-                current_price = PriceConverter.to_int(d.get("매매가", "0"))
-            else:
-                current_price = PriceConverter.to_int(d.get("보증금", "0"))
-
-        price_change_text = ""
-
-        if not render_only:
-            # 통계 업데이트
-            self.crawl_stats[tt] = self.crawl_stats.get(tt, 0) + 1
-
-            # v7.3: 신규/가격변동 체크
-            if article_id and complex_id:
-                is_new, price_change, prev_price = self.db.check_article_history(
-                    article_id, complex_id, current_price
-                )
-
-                # 매물 히스토리 업데이트
-                self.db.update_article_history(
-                    article_id, complex_id, d["단지명"], tt,
-                    current_price, pv, d["면적(평)"],
-                    d.get("층/방향", ""), d.get("타입/특징", "")
-                )
-
-                # 가격 변동 텍스트 및 통계
-                if price_change > 0:
-                    price_change_text = f"📈 +{PriceConverter.to_string(price_change)}"
-                    self.crawl_stats['price_up'] = self.crawl_stats.get('price_up', 0) + 1
-                elif price_change < 0:
-                    price_change_text = f"📉 {PriceConverter.to_string(price_change)}"
-                    self.crawl_stats['price_down'] = self.crawl_stats.get('price_down', 0) + 1
-
-                if is_new:
-                    self.crawl_stats['new'] = self.crawl_stats.get('new', 0) + 1
-        else:
-            if price_change > 0:
-                price_change_text = f"📈 +{PriceConverter.to_string(price_change)}"
-            elif price_change < 0:
-                price_change_text = f"📉 {PriceConverter.to_string(price_change)}"
-
-        # 데이터에 추가 정보 저장
-        d.setdefault('is_new', is_new)
-        d.setdefault('price_change', price_change)
-        d.setdefault('price_int', current_price)
-        
-        if gk in self.grouped_rows:
-            ri = self.grouped_rows[gk]
-            cur = self.result_table.item(ri, 2).text()
-            m = re.search(r'\((\d+)건\)', cur)
-            cnt = int(m.group(1)) + 1 if m else 2
-            self.result_table.setItem(ri, 2, SortableTableWidgetItem(f"{pv} ({cnt}건)"))
-        else:
-            row = self.result_table.rowCount()
-            self.result_table.insertRow(row)
-            self.result_table.setRowHeight(row, 32)  # 행 높이 고정
-            self.grouped_rows[gk] = row
-            
-            is_dark = self.current_theme == "dark"
-            
-            # v13.0: 전체 데이터 저장 (UserRole)
-            item_name = QTableWidgetItem(d["단지명"])
-            item_name.setData(Qt.ItemDataRole.UserRole, d)
-            self.result_table.setItem(row, 0, item_name)
-            
-            self.result_table.setItem(row, 1, ColoredTableWidgetItem(tt, tt, is_dark))
-            self.result_table.setItem(row, 2, SortableTableWidgetItem(str(pv)))
-            self.result_table.setItem(row, 3, SortableTableWidgetItem(f"{d['면적(평)']}평"))
-            # v12.0: 평당가 컬럼 추가
-            self.result_table.setItem(row, 4, SortableTableWidgetItem(d.get('평당가_표시', '-')))
-            self.result_table.setItem(row, 5, QTableWidgetItem(d["층/방향"]))
-            self.result_table.setItem(row, 6, QTableWidgetItem(d["타입/특징"]))
-            
-            # v7.3: 신규 배지
-            new_item = QTableWidgetItem("🆕" if is_new else "")
-            if is_new:
-                new_item.setBackground(QColor("#f39c12") if is_dark else QColor("#ffeaa7"))
-            self.result_table.setItem(row, 7, new_item)
-            
-            # v7.3: 가격 변동
-            change_item = QTableWidgetItem(price_change_text)
-            if price_change > 0:
-                change_item.setForeground(QColor("#e74c3c"))
-            elif price_change < 0:
-                change_item.setForeground(QColor("#27ae60"))
-            self.result_table.setItem(row, 8, change_item)
-            
-            # 시각
-            self.result_table.setItem(row, 9, QTableWidgetItem(
-                d["수집시각"].split()[1] if " " in d["수집시각"] else d["수집시각"]
-            ))
-            
-            # 링크 버튼
-            url = get_article_url(d["단지ID"], d.get("매물ID", "")) if d.get("매물ID") else get_complex_url(d["단지ID"])
-            link_btn = LinkButton(url)
-            self.result_table.setCellWidget(row, 10, link_btn)
-            self.result_table.setItem(row, 11, QTableWidgetItem(url))
-            
-            # 가격 숫자 (정렬용)
-            self.result_table.setItem(row, 12, SortableTableWidgetItem(str(current_price)))
-        
-        if not render_only:
-            self.collected_data.append(d)
-    
-    def _update_stats(self, s):
-        self.last_crawl_stats = s or {}
-        total = s.get('total_found', 0)
-        filtered = s.get('filtered_out', 0)
-        self.summary_card.update_stats(
-            total, 
-            self.crawl_stats.get("매매", 0),
-            self.crawl_stats.get("전세", 0),
-            self.crawl_stats.get("월세", 0),
-            filtered,
-            self.crawl_stats.get("new", 0),
-            self.crawl_stats.get("price_up", 0),
-            self.crawl_stats.get("price_down", 0)
-        )
-        self.status_bar.showMessage(f"📊 수집: {total}건 | 🆕 신규: {self.crawl_stats.get('new', 0)}건 | 필터 제외: {filtered}건")
-    
-    def _on_complex_done(self, n, c, t, cnt):
-        self.db.add_crawl_history(n, c, t, cnt)
-    
-    def _crawling_done(self, data):
-        # 시그널 연결 해제 (메모리 누수 방지)
-        if self.crawler_thread:
-            try:
-                self.crawler_thread.log_signal.disconnect()
-                self.crawler_thread.progress_signal.disconnect()
-                self.crawler_thread.item_signal.disconnect()
-                self.crawler_thread.stats_signal.disconnect()
-                self.crawler_thread.complex_finished_signal.disconnect()
-                self.crawler_thread.finished_signal.disconnect()
-                self.crawler_thread.error_signal.disconnect()
-            except (TypeError, RuntimeError) as e:
-                ui_logger.debug(f"시그널 연결 해제 실패 (무시): {e}")
-        
-        self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
-        self.btn_save.setEnabled(len(self.collected_data) > 0)
-        self.progress_widget.complete()
-        if not self.collected_data:
-            self.status_bar.showMessage("✅ 완료! 결과 없음")
-            self.show_toast("조건에 맞는 매물이 없습니다")
-        else:
-            self.status_bar.showMessage(f"✅ 완료! 총 {len(self.collected_data)}건 수집")
-        self._load_history()
-        
-        # 가격 스냅샷 저장 (통계용)
-        self._save_price_snapshots()
-        self._load_stats_complexes()
-
-        # 매물 소멸 추적
-        if settings.get("track_disappeared", True):
-            try:
-                disappeared = self.db.mark_disappeared_articles()
-                if disappeared > 0:
-                    self.show_toast(f"👻 소멸 매물 {disappeared}건 감지")
-            except Exception as e:
-                ui_logger.debug(f"소멸 매물 처리 실패 (무시): {e}")
-        
-        # v13.0: 대시보드 업데이트
-        if hasattr(self, 'dashboard_widget') and self.collected_data:
-            self.dashboard_widget.set_data(self.collected_data)
-            
-        # v13.0: 카드 뷰 업데이트
-        if hasattr(self, 'card_view') and self.collected_data:
-            self.card_view.set_data(self.collected_data)
-        
-        # v13.0: 즐겨찾기 탭 새로고침
-        if hasattr(self, 'favorites_tab'):
-            self.favorites_tab.refresh()
-        
-        # 완료 알림
-        if settings.get("show_notifications") and NOTIFICATION_AVAILABLE:
-            try:
-                notification.notify(
-                    title="크롤링 완료",
-                    message=f"총 {len(self.collected_data)}건 수집 완료!",
-                    timeout=5
-                )
-            except Exception as e:
-                get_logger('RealEstateApp').debug(f"알림 표시 실패: {e}")
-        
-        # 완료 사운드
-        if settings.get("play_sound_on_complete"):
-            try:
-                QApplication.beep()
-            except Exception as e:
-                get_logger('RealEstateApp').debug(f"완료 사운드 실패: {e}")
-    
-    def _save_price_snapshots(self):
-        """크롤링 결과를 가격 스냅샷으로 저장"""
-        if not self.collected_data:
-            return
-        
-        # 단지별, 거래유형별, 평형별로 그룹화
-        from collections import defaultdict
-        grouped = defaultdict(list)
-        
-        for item in self.collected_data:
-            cid = item.get("단지ID", "")
-            ttype = item.get("거래유형", "")
-            pyeong = item.get("면적(평)", 0)
-            
-            # 가격 추출
-            if ttype == "매매":
-                price = PriceConverter.to_int(item.get("매매가", "0"))
-            else:
-                price = PriceConverter.to_int(item.get("보증금", "0"))
-            
-            if cid and ttype and price > 0 and pyeong > 0:
-                # 평형 그룹화 (5평 단위)
-                pyeong_group = round(pyeong / 5) * 5
-                key = (cid, ttype, pyeong_group)
-                grouped[key].append(price)
-        
-        # 스냅샷 저장
-        saved = 0
-        for (cid, ttype, pyeong), prices in grouped.items():
-            if prices:
-                min_price = min(prices)
-                max_price = max(prices)
-                avg_price = sum(prices) // len(prices)
-                
-                if self.db.add_price_snapshot(cid, ttype, pyeong, min_price, max_price, avg_price, len(prices)):
-                    saved += 1
-        
-        ui_logger.info(f"가격 스냅샷 저장: {saved}건")
-    
-    def _crawling_error(self, err):
-        self.btn_start.setEnabled(True)
-        self.btn_stop.setEnabled(False)
-        QMessageBox.critical(self, "오류", f"크롤링 중 오류 발생:\n{err}")
-    
-    def _show_save_menu(self):
-        menu = QMenu(self)
-        menu.addAction("📊 Excel로 저장", self._save_excel)
-        menu.addAction("📄 CSV로 저장", self._save_csv)
-        menu.addAction("📋 JSON으로 저장", self._save_json)
-        menu.addSeparator()
-        menu.addAction("⚙️ 엑셀 템플릿 설정", self._show_excel_template_dialog)
-        menu.exec(self.btn_save.mapToGlobal(self.btn_save.rect().bottomLeft()))
-    
-    def _save_excel(self):
-        if not self.collected_data: return
-        path, _ = QFileDialog.getSaveFileName(self, "Excel 저장", f"부동산_{DateTimeHelper.file_timestamp()}.xlsx", "Excel (*.xlsx)")
-        if path:
-            # v7.3: 템플릿 적용
-            template = settings.get("excel_template")
-            if DataExporter(self.collected_data).to_excel(Path(path), template):
-                QMessageBox.information(self, "저장 완료", f"Excel 파일 저장 완료!\n{path}")
-    
-    def _save_csv(self):
-        if not self.collected_data: return
-        path, _ = QFileDialog.getSaveFileName(self, "CSV 저장", f"부동산_{DateTimeHelper.file_timestamp()}.csv", "CSV (*.csv)")
-        if path:
-            template = settings.get("excel_template")
-            if DataExporter(self.collected_data).to_csv(Path(path), template):
-                QMessageBox.information(self, "저장 완료", f"CSV 파일 저장 완료!\n{path}")
-    
-    def _save_json(self):
-        if not self.collected_data: return
-        path, _ = QFileDialog.getSaveFileName(self, "JSON 저장", f"부동산_{DateTimeHelper.file_timestamp()}.json", "JSON (*.json)")
-        if path:
-            if DataExporter(self.collected_data).to_json(Path(path)):
-                QMessageBox.information(self, "저장 완료", f"JSON 파일 저장 완료!\n{path}")
-    
-    # DB Tab handlers
-    def _load_db_complexes(self):
-        """DB에서 단지 목록 로드 - 디버깅 강화"""
-        ui_logger.info("DB 단지 로드 시작...")
-        self.db_table.setRowCount(0)
-        try:
-            complexes = self.db.get_all_complexes()
-            ui_logger.debug(f"로드된 단지: {len(complexes)}개")
-            
-            for db_id, name, cid, memo in complexes:
-                row = self.db_table.rowCount()
-                self.db_table.insertRow(row)
-                self.db_table.setItem(row, 0, QTableWidgetItem(str(db_id)))
-                self.db_table.setItem(row, 1, QTableWidgetItem(str(name)))
-                self.db_table.setItem(row, 2, QTableWidgetItem(str(cid)))
-                self.db_table.setItem(row, 3, QTableWidgetItem(str(memo) if memo else ""))
-            
-            ui_logger.debug(f"DB 테이블 갱신 완료: {self.db_table.rowCount()}행")
-            self._update_db_empty_state(self.db_table.rowCount())
-        except Exception as e:
-            ui_logger.error(f"DB 단지 로드 실패: {e}")
-            import traceback
-            traceback.print_exc()
-            self._update_db_empty_state(0)
-        self._update_db_action_state()
-    
-    def _delete_db_complex(self):
-        row = self.db_table.currentRow()
-        if row >= 0:
-            db_id = int(self.db_table.item(row, 0).text())
-            if self.db.delete_complex(db_id):
-                self._load_db_complexes()
-    
-    def _delete_db_complexes_multi(self):
-        rows = set(item.row() for item in self.db_table.selectedItems())
-        if rows:
-            ids = [int(self.db_table.item(r, 0).text()) for r in rows]
-            cnt = self.db.delete_complexes_bulk(ids)
-            QMessageBox.information(self, "삭제 완료", f"{cnt}개 단지 삭제됨")
-            self._load_db_complexes()
-    
-    def _edit_memo(self):
-        row = self.db_table.currentRow()
-        if row >= 0:
-            db_id = int(self.db_table.item(row, 0).text())
-            old = self.db_table.item(row, 3).text()
-            new, ok = QInputDialog.getText(self, "메모 수정", "메모:", text=old)
-            if ok:
-                self.db.update_complex_memo(db_id, new)
-                self._load_db_complexes()
-
-    def _update_db_empty_state(self, count):
-        if hasattr(self, "db_empty_label"):
-            is_empty = count == 0
-            self.db_empty_label.setVisible(is_empty)
-            self.db_table.setEnabled(not is_empty)
-
-    def _update_db_action_state(self):
-        if not hasattr(self, "db_btn_delete"):
-            return
-        has_selection = self.db_table.currentRow() >= 0
-        has_rows = self.db_table.rowCount() > 0
-        self.db_btn_delete.setEnabled(has_selection)
-        self.db_btn_memo.setEnabled(has_selection)
-        self.db_btn_delete_multi.setEnabled(has_rows)
-    
-    # Group Tab handlers
-    def _load_all_groups(self):
-        self.group_list.clear()
-        for gid, name, desc in self.db.get_all_groups():
-            item = QListWidgetItem(f"{name} ({desc})" if desc else name)
-            item.setData(Qt.ItemDataRole.UserRole, gid)
-            self.group_list.addItem(item)
-        self._update_group_empty_state()
-        self._update_group_action_state()
-    
-    def _create_group(self):
-        name, ok = QInputDialog.getText(self, "새 그룹", "그룹 이름:")
-        if ok and name:
-            if self.db.create_group(name):
-                self._load_all_groups()
-                self._load_schedule_groups()
-    
-    def _delete_group(self):
-        item = self.group_list.currentItem()
-        if item:
-            gid = item.data(Qt.ItemDataRole.UserRole)
-            if self.db.delete_group(gid):
-                self._load_all_groups()
-                self._load_schedule_groups()
-                self.group_complex_table.setRowCount(0)
-                self._update_group_complex_empty_state(0)
-    
-    def _load_group_complexes(self, item):
-        gid = item.data(Qt.ItemDataRole.UserRole)
-        self.group_complex_table.setRowCount(0)
-        for db_id, name, cid, memo in self.db.get_complexes_in_group(gid):
-            row = self.group_complex_table.rowCount()
-            self.group_complex_table.insertRow(row)
-            self.group_complex_table.setItem(row, 0, QTableWidgetItem(str(db_id)))
-            self.group_complex_table.setItem(row, 1, QTableWidgetItem(name))
-            self.group_complex_table.setItem(row, 2, QTableWidgetItem(cid))
-            self.group_complex_table.setItem(row, 3, QTableWidgetItem(memo or ""))
-        self._update_group_complex_empty_state(self.group_complex_table.rowCount())
-        self._update_group_complex_action_state()
-    
-    def _add_to_group(self):
-        group_item = self.group_list.currentItem()
-        if not group_item:
-            QMessageBox.warning(self, "알림", "그룹을 선택해주세요.")
-            return
-        gid = group_item.data(Qt.ItemDataRole.UserRole)
-        complexes = self.db.get_all_complexes()
-        if not complexes:
-            QMessageBox.information(self, "알림", "DB에 저장된 단지가 없습니다.")
-            return
-        items = [(f"{name} ({cid})", db_id) for db_id, name, cid, _ in complexes]
-        dlg = MultiSelectDialog("단지 추가", items, self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.db.add_complexes_to_group(gid, dlg.selected_items())
-            self._load_group_complexes(group_item)
-    
-    def _add_to_group_multi(self):
-        self._add_to_group()  # 같은 기능
-    
-    def _remove_from_group(self):
-        group_item = self.group_list.currentItem()
-        if not group_item: return
-        gid = group_item.data(Qt.ItemDataRole.UserRole)
-        row = self.group_complex_table.currentRow()
-        if row >= 0:
-            db_id = int(self.group_complex_table.item(row, 0).text())
-            self.db.remove_complex_from_group(gid, db_id)
-            self._load_group_complexes(group_item)
     
     def _load_schedule_groups(self):
         self.schedule_group_combo.clear()
@@ -1435,11 +367,19 @@ class RealEstateApp(QMainWindow):
     def _run_scheduled(self):
         gid = self.schedule_group_combo.currentData()
         if gid:
-            # 그룹 복원 로직
-            self._clear_list()
-            for _, name, cid, _ in self.db.get_complexes_in_group(gid):
-                self._add_row(name, cid)
-            self._start_crawling()
+            if hasattr(self, 'crawler_tab'):
+                # 탭 전환
+                self.tabs.setCurrentWidget(self.crawler_tab)
+                
+                # CrawlerTab 초기화 및 데이터 로드
+                self.crawler_tab.clear_tasks()
+                for _, name, cid, _ in self.db.get_complexes_in_group(gid):
+                    self.crawler_tab.add_task(name, cid)
+                
+                # 크롤링 시작
+                self.crawler_tab.start_crawling()
+                self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
+
 
     def _update_group_empty_state(self):
         has_groups = self.group_list.count() > 0
@@ -1642,6 +582,13 @@ class RealEstateApp(QMainWindow):
                 self.action_theme_light.setChecked(new_theme == "light")
             
             self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")
+            
+            # 위젯 테마 업데이트
+            if hasattr(self, 'crawler_tab'):
+                # CrawlerTab doesn't have explicit set_theme yet but standard widgets style updates automatically
+                # If specialized manual update is needed, invoke here
+                pass
+
         
         # 속도값 갱신은 슬라이더에서 처리됨
         # 알림 설정 등은 즉시 반영됨
@@ -2025,13 +972,15 @@ class RealEstateApp(QMainWindow):
 
     def _refresh_tab(self):
         idx = self.tabs.currentIndex()
-        if idx == 1: self._load_db_complexes()
+        if idx == 1: self.db_tab.load_data()
+        elif idx == 2: self.group_tab.load_groups()
         elif idx == 4: self._load_history()
         elif idx == 5: self._load_stats()
         elif idx == 6: 
              if hasattr(self, 'dashboard_widget'): self.dashboard_widget.refresh()
         elif idx == 7:
              if hasattr(self, 'favorites_tab'): self.favorites_tab.refresh()
+
 
     def _focus_search(self):
         self.result_search.setFocus()
@@ -2055,12 +1004,9 @@ class RealEstateApp(QMainWindow):
             if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
                 return
         
-        # 스레드 안전 종료
-        if self.crawler_thread and self.crawler_thread.isRunning():
-            get_logger('RealEstateApp').info("크롤러 스레드 종료 중...")
-            self.crawler_thread.stop()
-            if not self.crawler_thread.wait(5000):  # 5초 대기
-                get_logger('RealEstateApp').warning("크롤러 스레드 강제 종료")
+        # 스레드 안전 종료 - CrawlerTab이 관리
+        if hasattr(self, 'crawler_tab'):
+            self.crawler_tab.stop_crawling()
         
         # 타이머 정리
         if hasattr(self, 'schedule_timer') and self.schedule_timer:
@@ -2106,12 +1052,27 @@ class RealEstateApp(QMainWindow):
         QTimer.singleShot(duration + 500, self._reposition_toasts)
 
     def _reposition_toasts(self):
+        # 유효하지 않은 위젯 제거
+        try:
+            import sip
+            self.toast_widgets = [t for t in self.toast_widgets if not sip.isdeleted(t)]
+        except ImportError:
+            # sip을 임포트할 수 없는 경우 (PySide6 등) 예외 처리
+            pass
+        except Exception:
+            pass
+
         margin = 20
         y = self.height() - margin
+        
+        # 위치 재조정
         for t in reversed(self.toast_widgets):
-            y -= t.height()
-            t.move(self.width() - margin - t.width(), y)
-            y -= 10
+            try:
+                y -= t.height()
+                t.move(self.width() - margin - t.width(), y)
+                y -= 10
+            except RuntimeError:
+                continue
 
 
 

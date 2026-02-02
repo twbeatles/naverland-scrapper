@@ -1,9 +1,12 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, 
-    QLineEdit, QComboBox, QSpinBox, QCheckBox, QTableWidget, QTableWidgetItem, 
-    QGroupBox, QSplitter, QScrollArea, QFrame, QHeaderView, QTabWidget, 
-    QStackedWidget, QTextBrowser, QDialog, QMessageBox, QFileDialog, QSizePolicy, QStyle, QApplication
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, 
+    QTableWidgetItem, QCheckBox, QAbstractItemView, QHeaderView, QTabWidget, 
+    QGroupBox, QSplitter, QScrollArea, QFrame, QStackedWidget, QTextBrowser, 
+    QDialog, QMessageBox, QFileDialog, QSizePolicy, QStyle, QApplication, QMenu,
+    QSpinBox, QDoubleSpinBox, QLineEdit
 )
+
+
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 import webbrowser
 import logging
@@ -13,11 +16,12 @@ from src.utils.constants import SHORTCUTS, CRAWL_SPEED_PRESETS
 from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url
 from src.core.managers import SettingsManager
 from src.core.crawler import CrawlerThread
+from src.core.export import DataExporter
 from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard
 )
 from src.ui.widgets.dashboard import CardViewWidget
-from src.ui.widgets.dialogs import MultiSelectDialog, URLBatchDialog, RecentSearchDialog
+from src.ui.widgets.dialogs import MultiSelectDialog, URLBatchDialog, RecentSearchDialog, ExcelTemplateDialog
 from src.ui.styles import COLORS
 from src.utils.logger import get_logger
 
@@ -270,13 +274,15 @@ class CrawlerTab(QWidget):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_crawling)
         
-        # self.btn_save = QPushButton("💾 저장") # Save logic handled by App or separate Exporter
-        # self.btn_save.setObjectName("saveButton")
-        # self.btn_save.setEnabled(False)
+        self.btn_save = QPushButton("💾 저장")
+        self.btn_save.setObjectName("saveButton")
+        self.btn_save.setEnabled(False)
+        self.btn_save.clicked.connect(self.show_save_menu)
         
         el.addWidget(self.btn_start, 2)
         el.addWidget(self.btn_stop, 1)
-        # el.addWidget(self.btn_save, 1)
+        el.addWidget(self.btn_save, 1)
+
         eg.setLayout(el)
         layout.addWidget(eg)
 
@@ -558,6 +564,7 @@ class CrawlerTab(QWidget):
         try:
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
+            self.btn_save.setEnabled(True)
             self.progress_widget.complete()
             self.append_log(f"✅ 크롤링 완료: 총 {len(data)}건 수집")
             
@@ -719,6 +726,59 @@ class CrawlerTab(QWidget):
             self.spin_area_min.setValue(area.get("min", 0))
             self.spin_area_max.setValue(area.get("max", 0))
         # Handle other fields...
+        
+    def show_save_menu(self):
+        menu = QMenu(self)
+        menu.addAction("📊 Excel로 저장", self.save_excel)
+        menu.addAction("📄 CSV로 저장", self.save_csv)
+        menu.addAction("📋 JSON으로 저장", self.save_json)
+        menu.addSeparator()
+        menu.addAction("⚙️ 엑셀 템플릿 설정", self._show_excel_template_dialog)
+        menu.exec(self.btn_save.mapToGlobal(self.btn_save.rect().bottomLeft()))
+
+    def save_excel(self):
+        if not self.collected_data: return
+        path, _ = QFileDialog.getSaveFileName(self, "Excel 저장", f"부동산_{DateTimeHelper.file_timestamp()}.xlsx", "Excel (*.xlsx)")
+        if path:
+            from pathlib import Path
+            template = settings.get("excel_template")
+            try:
+                if DataExporter(self.collected_data).to_excel(Path(path), template):
+                    QMessageBox.information(self, "저장 완료", f"Excel 파일 저장 완료!\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "저장 실패", f"Excel 저장 중 오류가 발생했습니다:\n{e}")
+                logger.error(f"Excel Save Error: {e}")
+
+    def save_csv(self):
+        if not self.collected_data: return
+        path, _ = QFileDialog.getSaveFileName(self, "CSV 저장", f"부동산_{DateTimeHelper.file_timestamp()}.csv", "CSV (*.csv)")
+        if path:
+            from pathlib import Path
+            template = settings.get("excel_template")
+            try:
+                if DataExporter(self.collected_data).to_csv(Path(path), template):
+                    QMessageBox.information(self, "저장 완료", f"CSV 파일 저장 완료!\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "저장 실패", f"CSV 저장 중 오류가 발생했습니다:\n{e}")
+                logger.error(f"CSV Save Error: {e}")
+
+    def save_json(self):
+        if not self.collected_data: return
+        path, _ = QFileDialog.getSaveFileName(self, "JSON 저장", f"부동산_{DateTimeHelper.file_timestamp()}.json", "JSON (*.json)")
+        if path:
+            from pathlib import Path
+            try:
+                if DataExporter(self.collected_data).to_json(Path(path)):
+                    QMessageBox.information(self, "저장 완료", f"JSON 파일 저장 완료!\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "저장 실패", f"JSON 저장 중 오류가 발생했습니다:\n{e}")
+                logger.error(f"JSON Save Error: {e}")
+
+    def _show_excel_template_dialog(self):
+        current_template = settings.get("excel_template")
+        dlg = ExcelTemplateDialog(self, current_template=current_template)
+        dlg.template_saved.connect(lambda t: settings.set("excel_template", t))
+        dlg.exec()
         
     def _open_article_url(self):
         row = self.result_table.currentRow()
