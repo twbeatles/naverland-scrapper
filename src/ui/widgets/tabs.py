@@ -133,18 +133,18 @@ class FavoritesTab(QWidget):
         if not item:
             return
         
-        data = item.data(Qt.ItemDataRole.UserRole)
-        if not data:
+        item_data = item.data(Qt.ItemDataRole.UserRole)
+        if not item_data:
             return
         
         note, ok = QInputDialog.getText(
             self, "메모 편집", "메모:", 
-            text=data.get("note", "")
+            text=item_data.get("note", "")
         )
         if ok:
             self.db.update_article_note(
-                data.get("article_id", ""),
-                data.get("complex_id", ""),
+                item_data.get("article_id", ""),
+                item_data.get("complex_id", ""),
                 note
             )
             self.refresh()
@@ -159,20 +159,20 @@ class FavoritesTab(QWidget):
         if not item:
             return
         
-        data = item.data(Qt.ItemDataRole.UserRole)
-        if not data:
+        item_data = item.data(Qt.ItemDataRole.UserRole)
+        if not item_data:
             return
         
         if self._favorite_toggled:
             self._favorite_toggled(
-                data.get("article_id", ""),
-                data.get("complex_id", ""),
+                item_data.get("article_id", ""),
+                item_data.get("complex_id", ""),
                 False
             )
         else:
             self.db.toggle_favorite(
-                data.get("article_id", ""),
-                data.get("complex_id", ""),
+                item_data.get("article_id", ""),
+                item_data.get("complex_id", ""),
                 False
             )
         self.refresh()
@@ -187,7 +187,7 @@ class FavoritesTab(QWidget):
         if not item:
             return
         
-        data = item.data(Qt.ItemDataRole.UserRole)
-        if data:
-            url = f"https://new.land.naver.com/complexes/{data.get('complex_id', '')}?articleId={data.get('article_id', '')}"
+        item_data = item.data(Qt.ItemDataRole.UserRole)
+        if item_data:
+            url = f"https://new.land.naver.com/complexes/{item_data.get('complex_id', '')}?articleId={item_data.get('article_id', '')}"
             webbrowser.open(url)

@@ -1,4 +1,3 @@
-
 APP_TITLE = "네이버 부동산 매물 크롤러 Pro Plus"
 APP_VERSION = "v14.0"
 

@@ -55,4 +55,18 @@ def ensure_directories():
             d.mkdir(parents=True, exist_ok=True)
             logger.debug(f"디렉토리 확인: {d}")
         except Exception as e:
+DB_PATH = DATA_DIR / "complexes.db"
+SETTINGS_PATH = DATA_DIR / "settings.json"
+PRESETS_PATH = DATA_DIR / "presets.json"
+CACHE_PATH = DATA_DIR / "crawl_cache.json"
+HISTORY_PATH = DATA_DIR / "search_history.json"
+
+def ensure_directories():
+    """필수 디렉토리 생성"""
+    for d in [DATA_DIR, LOG_DIR]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"디렉토리 확인: {d}")
+        except Exception as e:
             logger.error(f"디렉토리 생성 실패: {d} - {e}")
+>>>>>>> 39500298f217e86700ed82ba5199a76ef9100859
