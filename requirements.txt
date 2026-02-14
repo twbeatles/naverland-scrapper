@@ -1,0 +1,8 @@
+PyQt6>=6.5
+undetected-chromedriver>=3.5
+selenium>=4.10
+beautifulsoup4>=4.12
+matplotlib>=3.7
+openpyxl>=3.1
+plyer>=2.1
+psutil>=5.9
