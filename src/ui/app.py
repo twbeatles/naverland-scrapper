@@ -34,8 +34,7 @@ from src.utils.logger import get_logger
 from src.core.database import ComplexDatabase
 from src.core.managers import SettingsManager
 from src.ui.styles import get_stylesheet
-from src.utils.helpers import DateTimeHelper
-from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
+from src.utils.helpers import DateTimeHelper, PriceConverter
 
 from src.ui.widgets.crawler_tab import CrawlerTab
 from src.ui.widgets.database_tab import DatabaseTab
@@ -43,7 +42,9 @@ from src.ui.widgets.group_tab import GroupTab
 from src.ui.widgets.tabs import FavoritesTab
 
 from src.ui.widgets.dashboard import DashboardWidget
-from src.ui.widgets.dialogs import SettingsDialog, ShortcutsDialog, AboutDialog
+from src.ui.widgets.chart import ChartWidget
+from src.ui.widgets.components import SortableTableWidgetItem
+from src.ui.widgets.dialogs import SettingsDialog, ShortcutsDialog, AboutDialog, URLBatchDialog
 from src.ui.widgets.toast import ToastWidget
 
 settings = SettingsManager()
@@ -72,11 +73,26 @@ class RealEstateApp(QMainWindow):
         self._init_menu()
         self._init_shortcuts()
         self._init_tray()
+        self._init_timers()
+        self._load_initial_data()
         
         # 윈도우 설정
         self._restore_window_geometry()
         
         self.show_toast(f"환영합니다! {APP_TITLE} {APP_VERSION}입니다.")
+
+    def _restore_window_geometry(self):
+        geo = settings.get("window_geometry")
+        if not geo:
+            return
+        if not isinstance(geo, (list, tuple)) or len(geo) != 4:
+            return
+        try:
+            x, y, w, h = (int(geo[0]), int(geo[1]), int(geo[2]), int(geo[3]))
+            self.setGeometry(x, y, w, h)
+        except Exception:
+            # Best-effort only; invalid saved geometry should not prevent startup.
+            return
     
     def _init_ui(self):
         main_widget = QWidget()
@@ -301,6 +317,32 @@ class RealEstateApp(QMainWindow):
         QShortcut(QKeySequence("Ctrl+T"), self, self._toggle_theme)
         QShortcut(QKeySequence("Ctrl+M"), self, self._minimize_to_tray)
         QShortcut(QKeySequence("Ctrl+Q"), self, self._quit_app)
+
+    # Shortcut handlers (delegate to modular widgets)
+    def _start_crawling(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.start_crawling()
+
+    def _stop_crawling(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.stop_crawling()
+
+    def _save_excel(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.save_excel()
+
+    def _save_csv(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.save_csv()
+
+    def _save_json(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.save_json()
     
     def _init_tray(self):
         if QSystemTrayIcon.isSystemTrayAvailable():
@@ -983,7 +1025,10 @@ class RealEstateApp(QMainWindow):
 
 
     def _focus_search(self):
-        self.result_search.setFocus()
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            if hasattr(self.crawler_tab, "result_search"):
+                self.crawler_tab.result_search.setFocus()
 
     def _minimize_to_tray(self):
         if self.tray_icon:

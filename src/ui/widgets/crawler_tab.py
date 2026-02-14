@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, 
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTableWidget, 
     QTableWidgetItem, QCheckBox, QAbstractItemView, QHeaderView, QTabWidget, 
     QGroupBox, QSplitter, QScrollArea, QFrame, QStackedWidget, QTextBrowser, 
     QDialog, QMessageBox, QFileDialog, QSizePolicy, QStyle, QApplication, QMenu,
-    QSpinBox, QDoubleSpinBox, QLineEdit
+    QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox
 )
 
 
@@ -329,7 +329,7 @@ class CrawlerTab(QWidget):
         self.view_stack = QStackedWidget()
         self.view_stack.addWidget(self.result_table)
         
-        self.card_view = CardViewWidget(theme=self.current_theme)
+        self.card_view = CardViewWidget(is_dark=(self.current_theme == "dark"))
         self.card_view.article_clicked.connect(lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"))))
         self.card_view.favorite_toggled.connect(self.db.toggle_favorite)
         self.view_stack.addWidget(self.card_view)

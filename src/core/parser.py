@@ -11,6 +11,8 @@ class NaverURLParser:
     
     # URL 패턴들
     PATTERNS = [
+        # new.land URL 형식: /complexes/123456 (사용자가 가장 많이 복사하는 형태)
+        r'new\.land\.naver\.com/complexes/(\d+)',
         # 신규 URL 형식: /complex/123456
         r'land\.naver\.com/complex/(\d+)',
         # 구형 URL: complexNo=123456

@@ -13,6 +13,9 @@ class TestNaverURLParser(unittest.TestCase):
         url = "https://land.naver.com/complex/123456"
         self.assertEqual(NaverURLParser.extract_complex_id(url), "123456")
 
+        url = "https://new.land.naver.com/complexes/123456"
+        self.assertEqual(NaverURLParser.extract_complex_id(url), "123456")
+
     def test_extract_from_text(self):
         text = "https://land.naver.com/complex/11111\n단지ID: 22222"
         results = NaverURLParser.extract_from_text(text)
