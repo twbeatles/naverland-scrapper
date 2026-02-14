@@ -23,9 +23,7 @@ class TestItemParser(unittest.TestCase):
         item = soup.select_one(".item_inner")
         
         data = ItemParser.parse_element(item, "Sample Complex", "12345", "매매")
-        
-        print(f"Parsed Data: {data}")
-        
+
         self.assertEqual(data["단지명"], "Sample Complex")
         self.assertEqual(data["단지ID"], "12345")
         self.assertEqual(data["거래유형"], "매매")
