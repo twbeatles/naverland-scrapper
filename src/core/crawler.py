@@ -27,7 +27,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from src.utils.constants import CRAWL_SPEED_PRESETS
-from src.utils.helpers import AreaConverter, PriceConverter, PricePerPyeongCalculator, DateTimeHelper, ChromeParamHelper
+from src.utils.helpers import PriceConverter, ChromeParamHelper
 from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryHandler
 from src.core.item_parser import ItemParser
@@ -38,14 +38,27 @@ MEMORY_THRESHOLD_MB = 500
 class CrawlerThread(QThread):
     log_signal = pyqtSignal(str, int)
     progress_signal = pyqtSignal(int, str, int)  # percent, current_name, remaining_seconds
-    item_signal = pyqtSignal(dict)
+    item_signal = pyqtSignal(dict)  # deprecated: items_signal(list[dict]) 사용 권장
+    items_signal = pyqtSignal(list)
     stats_signal = pyqtSignal(dict)
     complex_finished_signal = pyqtSignal(str, str, str, int)
     finished_signal = pyqtSignal(list)
     error_signal = pyqtSignal(str)
     alert_triggered_signal = pyqtSignal(str, str, str, float, int)
     
-    def __init__(self, targets, trade_types, area_filter, price_filter, db, speed="보통", cache=None):
+    def __init__(
+        self,
+        targets,
+        trade_types,
+        area_filter,
+        price_filter,
+        db,
+        speed="보통",
+        cache=None,
+        ui_batch_interval_ms=120,
+        ui_batch_size=30,
+        emit_legacy_item_signal=False,
+    ):
         super().__init__()
         self.targets = targets
         self.trade_types = trade_types
@@ -56,13 +69,42 @@ class CrawlerThread(QThread):
         self.cache = cache  # v12.0: CrawlCache 인스턴스
         self._running = True
         self.collected_data = []
+        self.pending_items = []
         self.stats = {"total_found": 0, "filtered_out": 0, "cache_hits": 0, "by_trade_type": {"매매": 0, "전세": 0, "월세": 0}}
         self.start_time = None
         self.items_per_second = 0
         self.retry_handler = RetryHandler()
+        self.ui_batch_interval_ms = max(20, int(ui_batch_interval_ms))
+        self.ui_batch_size = max(1, int(ui_batch_size))
+        self.emit_legacy_item_signal = bool(emit_legacy_item_signal)
+        self._last_batch_flush_at = time.monotonic()
     
     def stop(self): self._running = False
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
+
+    def _push_item(self, item):
+        self.collected_data.append(item)
+        self.pending_items.append(item)
+        self.stats["total_found"] += 1
+        if self.emit_legacy_item_signal:
+            self.item_signal.emit(item)
+        self._flush_pending_items_if_needed()
+
+    def _flush_pending_items_if_needed(self, force=False):
+        if not self.pending_items:
+            return
+        elapsed_ms = (time.monotonic() - self._last_batch_flush_at) * 1000
+        if force or len(self.pending_items) >= self.ui_batch_size or elapsed_ms >= self.ui_batch_interval_ms:
+            batch = list(self.pending_items)
+            self.pending_items.clear()
+            self.items_signal.emit(batch)
+            self.stats_signal.emit({
+                "total_found": self.stats.get("total_found", 0),
+                "filtered_out": self.stats.get("filtered_out", 0),
+                "cache_hits": self.stats.get("cache_hits", 0),
+                "by_trade_type": dict(self.stats.get("by_trade_type", {})),
+            })
+            self._last_batch_flush_at = time.monotonic()
     
     def _init_driver(self):
         """Chrome 드라이버 초기화 및 설정"""
@@ -166,7 +208,8 @@ class CrawlerThread(QThread):
                     self.log(f"\\n📍 [{current}/{total}] {name} - {ttype}")
                     
                     try:
-                        count = self._crawl(driver, name, cid, ttype)
+                        batch_result = self._crawl(driver, name, cid, ttype)
+                        count = int(batch_result.get("count", 0))
                         complex_count += count
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
                         self.log(f"   ✅ {count}건 수집")
@@ -189,12 +232,14 @@ class CrawlerThread(QThread):
                 self.complex_finished_signal.emit(name, cid, ",".join(self.trade_types), complex_count)
                 processed_complexes += 1
             
+            self._flush_pending_items_if_needed(force=True)
             self.log(f"\\n{'='*50}\\n✅ 완료! 총 {len(self.collected_data)}건")
         except Exception as e:
             self.log(f"❌ 치명적 오류: {e}", 40)
             self.log(f"상세:\\n{traceback.format_exc()}", 40)
             self.error_signal.emit(str(e))
         finally:
+            self._flush_pending_items_if_needed(force=True)
             if driver:
                 try:
                     driver.quit()
@@ -210,16 +255,15 @@ class CrawlerThread(QThread):
             if cached_items:
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
                 self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
-                # 캐시된 아이템을 collected_data에 추가하고 시그널 발송
+                matched_count = 0
                 for item in cached_items:
                     if self._check_filters(item, ttype):
-                        self.collected_data.append(item)
-                        self.item_signal.emit(item)
-                        self.stats["total_found"] += 1
+                        self._push_item(item)
+                        matched_count += 1
                     else:
                         self.stats["filtered_out"] += 1
-                self.stats_signal.emit(self.stats)
-                return len([i for i in cached_items if self._check_filters(i, ttype)])
+                self._flush_pending_items_if_needed(force=True)
+                return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
         
         trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
         url = f"https://new.land.naver.com/complexes/{cid}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
@@ -229,7 +273,7 @@ class CrawlerThread(QThread):
             self.retry_handler.execute_with_retry(driver.get, url)
         except Exception as e:
             self.log(f"   ❌ URL 접속 실패: {e}", 40)
-            return 0
+            return {"count": 0, "cache_hit": False, "raw_count": 0}
         
         # v14.0: 동적 대기 - 페이지 로드 완료까지 대기
         try:
@@ -255,19 +299,21 @@ class CrawlerThread(QThread):
         
         self._scroll(driver)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        count = self._parse(soup, name, cid, ttype)
+        parse_result = self._parse(soup, name, cid, ttype)
+        count = int(parse_result.get("count", 0))
         
         # v12.0: 크롤링 결과 캐시 저장
         if self.cache and count > 0:
-            # 이 단지+거래유형의 아이템만 필터링해서 캐시
-            items_to_cache = [
-                d for d in self.collected_data 
-                if d.get("단지ID") == cid and d.get("거래유형") == ttype
-            ]
+            items_to_cache = parse_result.get("items_to_cache", [])
             if items_to_cache:
                 self.cache.set(cid, ttype, items_to_cache)
         
-        return count
+        self._flush_pending_items_if_needed(force=True)
+        return {
+            "count": count,
+            "cache_hit": False,
+            "raw_count": int(parse_result.get("raw_count", 0)),
+        }
     
     def _scroll(self, driver):
         """v14.0: 컨텐츠 변화 감지 기반 최적화된 스크롤"""
@@ -306,7 +352,7 @@ class CrawlerThread(QThread):
             self.log(f"   ⚠️ 스크롤 오류: {e}", 30)
     
     def _parse(self, soup, name, cid, ttype):
-        items = []
+        items_to_cache = []
         found_items = ItemParser.find_items(soup)
         
         if found_items:
@@ -314,7 +360,7 @@ class CrawlerThread(QThread):
             self.log(f"   🔍 파싱 대상: {len(found_items)}개")
         else:
             self.log("   ⚠️ 파싱 대상 항목을 찾지 못했습니다.", 10)
-            return 0
+            return {"count": 0, "items_to_cache": [], "raw_count": 0}
         
         matched_count, skipped_type = 0, 0
         
@@ -326,14 +372,11 @@ class CrawlerThread(QThread):
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:
                         if self._check_filters(data, ttype):
-                            self.collected_data.append(data)
-                            self.item_signal.emit(data)
-                            items.append(data)
-                            self.stats["total_found"] += 1
+                            self._push_item(data)
+                            items_to_cache.append(data)
                             matched_count += 1
                         else:
                             self.stats["filtered_out"] += 1
-                        self.stats_signal.emit(self.stats)
                     else:
                         skipped_type += 1
             except Exception as e:
@@ -342,7 +385,11 @@ class CrawlerThread(QThread):
         if skipped_type > 0:
             self.log(f"   ℹ️ 다른 거래유형 {skipped_type}건 제외 (요청: {ttype})")
         
-        return matched_count
+        return {
+            "count": matched_count,
+            "items_to_cache": items_to_cache,
+            "raw_count": len(found_items),
+        }
 
         
     def _check_filters(self, data, ttype):

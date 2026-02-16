@@ -39,6 +39,18 @@ class TestCacheAndManagers(unittest.TestCase):
             cache.clear()
             self.assertIsNone(cache.get("12345", "매매"))
 
+    def test_crawl_cache_write_back_flush(self):
+        cache_path = self.tmp_path / "crawl_cache.json"
+        with patch("src.core.cache.CACHE_PATH", cache_path):
+            cache = CrawlCache(ttl_minutes=30, write_back_interval_sec=999, max_entries=2000)
+            with patch.object(cache, "_save", wraps=cache._save) as mock_save:
+                for i in range(10):
+                    cache.set(f"1{i}", "매매", [{"id": i}])
+                self.assertEqual(mock_save.call_count, 0)
+                cache.flush()
+                self.assertEqual(mock_save.call_count, 1)
+                self.assertTrue(cache_path.exists())
+
     def test_settings_and_preset_and_history_managers(self):
         settings_path = self.tmp_path / "settings.json"
         presets_path = self.tmp_path / "presets.json"

@@ -13,6 +13,7 @@ class URLBatchDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("🔗 URL 일괄 등록")
         self.setMinimumSize(600, 500)
+        self._selected_complexes = []
         self._setup_ui()
     
     def _setup_ui(self):
@@ -125,7 +126,14 @@ class URLBatchDialog(QDialog):
                 selected.append((name, cid))
         
         if selected:
+            self._selected_complexes = list(selected)
             self.complexes_added.emit(selected)
             self.accept()
         else:
             QMessageBox.warning(self, "선택 필요", "추가할 단지를 선택하세요.")
+
+    def get_selected_complexes(self):
+        return list(self._selected_complexes)
+
+    def get_urls(self):
+        return [f"https://new.land.naver.com/complexes/{cid}" for _, cid in self._selected_complexes]

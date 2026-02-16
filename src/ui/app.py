@@ -32,9 +32,9 @@ except ImportError:
 from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
 from src.utils.logger import get_logger
 from src.core.database import ComplexDatabase
-from src.core.managers import SettingsManager
+from src.core.managers import SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
 from src.ui.styles import get_stylesheet
-from src.utils.helpers import DateTimeHelper, PriceConverter
+from src.utils.helpers import DateTimeHelper, PriceConverter, get_article_url
 
 from src.ui.widgets.crawler_tab import CrawlerTab
 from src.ui.widgets.database_tab import DatabaseTab
@@ -44,7 +44,16 @@ from src.ui.widgets.tabs import FavoritesTab
 from src.ui.widgets.dashboard import DashboardWidget
 from src.ui.widgets.chart import ChartWidget
 from src.ui.widgets.components import SortableTableWidgetItem
-from src.ui.widgets.dialogs import SettingsDialog, ShortcutsDialog, AboutDialog, URLBatchDialog
+from src.ui.dialogs import (
+    SettingsDialog,
+    ShortcutsDialog,
+    AboutDialog,
+    URLBatchDialog,
+    PresetDialog,
+    AlertSettingDialog,
+    AdvancedFilterDialog,
+    ExcelTemplateDialog,
+)
 from src.ui.widgets.toast import ToastWidget
 
 settings = SettingsManager()
@@ -60,6 +69,13 @@ class RealEstateApp(QMainWindow):
         else: self.setGeometry(100, 100, 1500, 950)
         
         self.settings_manager = SettingsManager()
+        self.preset_manager = FilterPresetManager()
+        self.history_manager = SearchHistoryManager(max_items=settings.get("max_search_history", 20))
+        self.recently_viewed = RecentlyViewedManager()
+        self.advanced_filters = None
+        self.collected_data = []
+        self.is_scheduled_run = False
+        self.retry_handler = None
         self.db = ComplexDatabase()
         
         # v11.0: Toast 알림 시스템
@@ -103,7 +119,7 @@ class RealEstateApp(QMainWindow):
         layout.addWidget(self.tabs)
         
         # 1. 수집기 탭
-        self.crawler_tab = CrawlerTab(self.db)
+        self.crawler_tab = CrawlerTab(self.db, history_manager=self.history_manager, theme=self.current_theme)
         self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
         
         # 2. 단지 DB 탭
@@ -122,6 +138,8 @@ class RealEstateApp(QMainWindow):
         self._setup_guide_tab()
         
         self.status_bar = self.statusBar()
+        self.crawler_tab.data_collected.connect(self._on_crawl_data_collected)
+        self.crawler_tab.status_message.connect(self.status_bar.showMessage)
         
         self.tabs.currentChanged.connect(self._refresh_tab)
 
@@ -132,8 +150,8 @@ class RealEstateApp(QMainWindow):
 
     
     def _setup_schedule_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        self.schedule_tab = QWidget()
+        layout = QVBoxLayout(self.schedule_tab)
         sg = QGroupBox("⏰ 예약 크롤링")
         sl = QVBoxLayout()
         self.check_schedule = QCheckBox("예약 실행 활성화")
@@ -159,11 +177,11 @@ class RealEstateApp(QMainWindow):
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
-        self.tabs.addTab(tab, "⏰ 예약 설정")
+        self.tabs.addTab(self.schedule_tab, "⏰ 예약 설정")
     
     def _setup_history_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        self.history_tab = QWidget()
+        layout = QVBoxLayout(self.history_tab)
         bl = QHBoxLayout()
         btn_rf = QPushButton("🔄 새로고침")
         btn_rf.clicked.connect(self._load_history)
@@ -176,11 +194,11 @@ class RealEstateApp(QMainWindow):
         self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
         layout.addWidget(self.history_table)
-        self.tabs.addTab(tab, "📜 히스토리")
+        self.tabs.addTab(self.history_tab, "📜 히스토리")
     
     def _setup_stats_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+        self.stats_tab = QWidget()
+        layout = QVBoxLayout(self.stats_tab)
         fl = QHBoxLayout()
         fl.addWidget(QLabel("단지:"))
         self.stats_complex_combo = QComboBox()
@@ -207,20 +225,26 @@ class RealEstateApp(QMainWindow):
         self.stats_table.setAlternatingRowColors(True)
         
         # v10.0: Chart Integration
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.stats_table)
+        self.stats_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.stats_splitter.addWidget(self.stats_table)
+        self.chart_widget = None
+        self.chart_placeholder = QLabel("차트는 통계 조회 시 로드됩니다.")
+        self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.stats_splitter.addWidget(self.chart_placeholder)
+        self.stats_splitter.setSizes([320, 280])
         
-        self.chart_widget = ChartWidget()
-        splitter.addWidget(self.chart_widget)
-        splitter.setSizes([300, 300])
-        
-        layout.addWidget(splitter)
-        self.tabs.addTab(tab, "📈 통계/변동")
+        layout.addWidget(self.stats_splitter)
+        self.tabs.addTab(self.stats_tab, "📈 통계/변동")
     
     def _setup_dashboard_tab(self):
-        """v13.0: 분석 대시보드 탭"""
-        self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
-        self.tabs.addTab(self.dashboard_widget, "📊 대시보드")
+        """v13.0: 분석 대시보드 탭 (lazy load)"""
+        self.dashboard_tab = QWidget()
+        self.dashboard_layout = QVBoxLayout(self.dashboard_tab)
+        self.dashboard_placeholder = QLabel("대시보드는 첫 진입 시 로드됩니다.")
+        self.dashboard_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dashboard_layout.addWidget(self.dashboard_placeholder)
+        self.dashboard_widget = None
+        self.tabs.addTab(self.dashboard_tab, "📊 대시보드")
     
     def _setup_favorites_tab(self):
         """v13.0: 즐겨찾기 탭"""
@@ -373,6 +397,40 @@ class RealEstateApp(QMainWindow):
         
         # Connect signals after loading
         self.stats_complex_combo.currentIndexChanged.connect(self._on_stats_complex_changed)
+
+    def _ensure_chart_widget(self):
+        if self.chart_widget is not None:
+            return
+        self.chart_widget = ChartWidget()
+        idx = self.stats_splitter.indexOf(self.chart_placeholder)
+        if idx >= 0:
+            self.stats_splitter.insertWidget(idx, self.chart_widget)
+        else:
+            self.stats_splitter.addWidget(self.chart_widget)
+        self.chart_placeholder.hide()
+        self.chart_placeholder.deleteLater()
+
+    def _ensure_dashboard_widget(self):
+        if self.dashboard_widget is not None:
+            return
+        self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
+        self.dashboard_layout.addWidget(self.dashboard_widget)
+        self.dashboard_placeholder.hide()
+        self.dashboard_placeholder.deleteLater()
+        if self.collected_data:
+            self.dashboard_widget.set_data(self.collected_data)
+
+    def _on_crawl_data_collected(self, data):
+        self.collected_data = list(data) if data else []
+        self._load_history()
+        self._load_stats_complexes()
+        if self.tabs.currentWidget() is self.stats_tab:
+            self._load_stats()
+        if self.dashboard_widget is not None:
+            self.dashboard_widget.set_data(self.collected_data)
+        if hasattr(self, "favorites_tab"):
+            self.favorites_tab.refresh()
+        self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
     
     # Event handlers
     # Obsolete helpers removed (replaced by widgets: CrawlerTab, DatabaseTab, GroupTab)
@@ -486,6 +544,8 @@ class RealEstateApp(QMainWindow):
     
     def _load_stats(self):
         cid = self.stats_complex_combo.currentData()
+        if not cid:
+            return
         ttype = self.stats_type_combo.currentText()
         if ttype == "전체": ttype = None
         
@@ -528,6 +588,7 @@ class RealEstateApp(QMainWindow):
         
         # 차트 업데이트
         if chart_data["date"]:
+            self._ensure_chart_widget()
             title = f"{self.stats_complex_combo.currentText()} - {chart_data.get('type','')} {chart_data.get('py',0)}평 가격 추이"
             self.chart_widget.update_chart(
                 chart_data["date"], 
@@ -564,15 +625,12 @@ class RealEstateApp(QMainWindow):
         self.setStyleSheet(get_stylesheet(new_theme))
         
         # 개별 위젯 테마 업데이트
-        self.summary_card.set_theme(new_theme)
-        if hasattr(self, 'dashboard_widget'):
+        if hasattr(self, "crawler_tab"):
+            self.crawler_tab.set_theme(new_theme)
+        if self.dashboard_widget is not None:
             self.dashboard_widget.set_theme(new_theme)
         if hasattr(self, 'favorites_tab'):
             self.favorites_tab.set_theme(new_theme)
-        if hasattr(self, 'card_view'):
-            self.card_view.is_dark = (new_theme == "dark")
-            if self.collected_data:
-                self.card_view.set_data(self.collected_data)
         
         settings.set("theme", new_theme)
         self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")
@@ -592,13 +650,13 @@ class RealEstateApp(QMainWindow):
             
             # 개별 위젯 테마 업데이트 (안전하게)
             try:
-                if hasattr(self, 'summary_card') and hasattr(self.summary_card, 'set_theme'):
-                    self.summary_card.set_theme(new_theme)
+                if hasattr(self, 'crawler_tab') and hasattr(self.crawler_tab, 'set_theme'):
+                    self.crawler_tab.set_theme(new_theme)
             except Exception as e:
-                ui_logger.debug(f"summary_card 테마 적용 실패 (무시): {e}")
+                ui_logger.debug(f"crawler_tab 테마 적용 실패 (무시): {e}")
             
             try:
-                if hasattr(self, 'dashboard_widget') and hasattr(self.dashboard_widget, 'set_theme'):
+                if self.dashboard_widget is not None and hasattr(self.dashboard_widget, 'set_theme'):
                     self.dashboard_widget.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"dashboard_widget 테마 적용 실패 (무시): {e}")
@@ -608,14 +666,6 @@ class RealEstateApp(QMainWindow):
                     self.favorites_tab.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"favorites_tab 테마 적용 실패 (무시): {e}")
-            
-            try:
-                if hasattr(self, 'card_view'):
-                    self.card_view.is_dark = (new_theme == "dark")
-                    if self.collected_data:
-                        self.card_view.set_data(self.collected_data)
-            except Exception as e:
-                ui_logger.debug(f"card_view 테마 적용 실패 (무시): {e}")
             
             # 메뉴 체크 상태 업데이트
             if hasattr(self, 'action_theme_dark'):
@@ -640,16 +690,17 @@ class RealEstateApp(QMainWindow):
     def _save_preset(self):
         name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")
         if ok and name:
+            ct = self.crawler_tab
             config = {
-                "trade": self.check_trade.isChecked(),
-                "jeonse": self.check_jeonse.isChecked(),
-                "monthly": self.check_monthly.isChecked(),
-                "area": {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()},
+                "trade": ct.check_trade.isChecked(),
+                "jeonse": ct.check_jeonse.isChecked(),
+                "monthly": ct.check_monthly.isChecked(),
+                "area": {"enabled": ct.check_area_filter.isChecked(), "min": ct.spin_area_min.value(), "max": ct.spin_area_max.value()},
                 "price": {
-                    "enabled": self.check_price_filter.isChecked(),
-                    "trade_min": self.spin_trade_min.value(), "trade_max": self.spin_trade_max.value(),
-                    "jeonse_min": self.spin_jeonse_min.value(), "jeonse_max": self.spin_jeonse_max.value(),
-                    "monthly_min": self.spin_monthly_min.value(), "monthly_max": self.spin_monthly_max.value()
+                    "enabled": ct.check_price_filter.isChecked(),
+                    "trade_min": ct.spin_trade_min.value(), "trade_max": ct.spin_trade_max.value(),
+                    "jeonse_min": ct.spin_jeonse_min.value(), "jeonse_max": ct.spin_jeonse_max.value(),
+                    "monthly_min": ct.spin_monthly_min.value(), "monthly_max": ct.spin_monthly_max.value()
                 }
             }
             if self.preset_manager.save_preset(name, config):
@@ -663,23 +714,24 @@ class RealEstateApp(QMainWindow):
             if not config:
                 self.show_toast(f"프리셋 '{preset_name}' 불러오기 실패")
                 return
-            self.check_trade.setChecked(config.get("trade", True))
-            self.check_jeonse.setChecked(config.get("jeonse", True))
-            self.check_monthly.setChecked(config.get("monthly", False))
+            ct = self.crawler_tab
+            ct.check_trade.setChecked(config.get("trade", True))
+            ct.check_jeonse.setChecked(config.get("jeonse", True))
+            ct.check_monthly.setChecked(config.get("monthly", False))
             
             area = config.get("area", {})
-            self.check_area_filter.setChecked(area.get("enabled", False))
-            self.spin_area_min.setValue(area.get("min", 0))
-            self.spin_area_max.setValue(area.get("max", 200))
+            ct.check_area_filter.setChecked(area.get("enabled", False))
+            ct.spin_area_min.setValue(area.get("min", 0))
+            ct.spin_area_max.setValue(area.get("max", 200))
             
             p = config.get("price", {})
-            self.check_price_filter.setChecked(p.get("enabled", False))
-            self.spin_trade_min.setValue(p.get("trade_min", 0))
-            self.spin_trade_max.setValue(p.get("trade_max", 100000))
-            self.spin_jeonse_min.setValue(p.get("jeonse_min", 0))
-            self.spin_jeonse_max.setValue(p.get("jeonse_max", 50000))
-            self.spin_monthly_min.setValue(p.get("monthly_min", 0))
-            self.spin_monthly_max.setValue(p.get("monthly_max", 5000))
+            ct.check_price_filter.setChecked(p.get("enabled", False))
+            ct.spin_trade_min.setValue(p.get("trade_min", 0))
+            ct.spin_trade_max.setValue(p.get("trade_max", 100000))
+            ct.spin_jeonse_min.setValue(p.get("jeonse_min", 0))
+            ct.spin_jeonse_max.setValue(p.get("jeonse_max", 50000))
+            ct.spin_monthly_min.setValue(p.get("monthly_min", 0))
+            ct.spin_monthly_max.setValue(p.get("monthly_max", 5000))
             self.show_toast("프리셋을 불러왔습니다")
     
     def _show_alert_settings(self):
@@ -1013,15 +1065,20 @@ class RealEstateApp(QMainWindow):
             QMessageBox.critical(self, "오류", f"DB 복원 중 오류가 발생했습니다:\n{e}")
 
     def _refresh_tab(self):
-        idx = self.tabs.currentIndex()
-        if idx == 1: self.db_tab.load_data()
-        elif idx == 2: self.group_tab.load_groups()
-        elif idx == 4: self._load_history()
-        elif idx == 5: self._load_stats()
-        elif idx == 6: 
-             if hasattr(self, 'dashboard_widget'): self.dashboard_widget.refresh()
-        elif idx == 7:
-             if hasattr(self, 'favorites_tab'): self.favorites_tab.refresh()
+        current = self.tabs.currentWidget()
+        if current is self.db_tab:
+            self.db_tab.load_data()
+        elif current is self.group_tab:
+            self.group_tab.load_groups()
+        elif current is self.history_tab:
+            self._load_history()
+        elif current is self.stats_tab:
+            self._load_stats()
+        elif current is self.dashboard_tab:
+            self._ensure_dashboard_widget()
+            self.dashboard_widget.refresh()
+        elif current is self.favorites_tab:
+            self.favorites_tab.refresh()
 
 
     def _focus_search(self):

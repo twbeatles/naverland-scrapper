@@ -44,6 +44,18 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(len(in_group), 1)
         self.assertEqual(in_group[0]["name"], "단지A")
 
+    def test_add_price_snapshots_bulk(self):
+        rows = [
+            ("11111", "매매", 30.0, 10000, 12000, 11000, 7),
+            ("11111", "매매", 35.0, 13000, 15000, 14000, 5),
+            ("11111", "전세", 30.0, 4000, 5000, 4500, 4),
+        ]
+        saved = self.db.add_price_snapshots_bulk(rows)
+        self.assertEqual(saved, 3)
+
+        snapshots = self.db.get_price_snapshots("11111")
+        self.assertEqual(len(snapshots), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

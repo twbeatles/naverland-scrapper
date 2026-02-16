@@ -176,6 +176,8 @@ class ComplexDatabase:
             # 인덱스 추가
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_price_snapshots_lookup ON price_snapshots(complex_id, trade_type, snapshot_date DESC)')
             
             # v12.0 마이그레이션: 기존 테이블에 status 컬럼 없을 경우 추가
             try:
@@ -196,6 +198,7 @@ class ComplexDatabase:
                 logger.debug("status 인덱스 생성 실패 (무시)")
             
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
             conn.commit()
             logger.info("테이블 초기화 완료")
         except Exception as e:
@@ -497,6 +500,28 @@ class ComplexDatabase:
         except Exception as e:
             logger.error(f"가격 스냅샷 저장 실패: {e}")
             return False
+        finally:
+            self._pool.return_connection(conn)
+
+    def add_price_snapshots_bulk(self, rows):
+        """가격 스냅샷 일괄 저장"""
+        if not rows:
+            return 0
+        conn = self._pool.get_connection()
+        try:
+            conn.cursor().executemany(
+                '''
+                INSERT INTO price_snapshots (
+                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                rows
+            )
+            conn.commit()
+            return len(rows)
+        except Exception as e:
+            logger.error(f"가격 스냅샷 일괄 저장 실패: {e}")
+            return 0
         finally:
             self._pool.return_connection(conn)
     

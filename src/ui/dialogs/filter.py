@@ -83,11 +83,14 @@ class AdvancedFilterDialog(QDialog):
     """고급 결과 필터 다이얼로그 (v7.3)"""
     filter_applied = pyqtSignal(dict)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_filters=None):
         super().__init__(parent)
         self.setWindowTitle("🔍 고급 필터")
         self.setMinimumWidth(450)
+        self._filters = None
         self._setup_ui()
+        if current_filters:
+            self._apply_filters_to_ui(current_filters)
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -192,6 +195,7 @@ class AdvancedFilterDialog(QDialog):
         self.only_price_change.setChecked(False)
         self.include_keywords.clear()
         self.exclude_keywords.clear()
+        self._filters = None
     
     def _apply(self):
         filters = {
@@ -208,5 +212,26 @@ class AdvancedFilterDialog(QDialog):
             'include_keywords': [k.strip() for k in self.include_keywords.text().split(',') if k.strip()],
             'exclude_keywords': [k.strip() for k in self.exclude_keywords.text().split(',') if k.strip()],
         }
+        self._filters = filters
         self.filter_applied.emit(filters)
         self.accept()
+
+    def _apply_filters_to_ui(self, filters: dict):
+        try:
+            self.price_min.setValue(int(filters.get("price_min", self.price_min.value())))
+            self.price_max.setValue(int(filters.get("price_max", self.price_max.value())))
+            self.area_min.setValue(float(filters.get("area_min", self.area_min.value())))
+            self.area_max.setValue(float(filters.get("area_max", self.area_max.value())))
+            self.floor_low.setChecked(bool(filters.get("floor_low", True)))
+            self.floor_mid.setChecked(bool(filters.get("floor_mid", True)))
+            self.floor_high.setChecked(bool(filters.get("floor_high", True)))
+            self.only_new.setChecked(bool(filters.get("only_new", False)))
+            self.only_price_down.setChecked(bool(filters.get("only_price_down", False)))
+            self.only_price_change.setChecked(bool(filters.get("only_price_change", False)))
+            self.include_keywords.setText(", ".join(filters.get("include_keywords", [])))
+            self.exclude_keywords.setText(", ".join(filters.get("exclude_keywords", [])))
+        except Exception:
+            pass
+
+    def get_filters(self):
+        return self._filters

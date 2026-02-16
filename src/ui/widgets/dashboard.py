@@ -444,10 +444,13 @@ class CardViewWidget(QScrollArea):
         super().__init__(parent)
         self.is_dark = is_dark
         self._cards = []
-        self._data = []
+        self._all_data = []
+        self._filtered_data = []
         self._filter_text = ""
         self._card_width = 280
         self._card_spacing = 15
+        self._page_size = 120
+        self._render_cursor = 0
         self._last_columns = None
         self._setup_ui()
     
@@ -467,32 +470,93 @@ class CardViewWidget(QScrollArea):
         self.empty_label.setStyleSheet("color: #888; padding: 40px;")
         self.grid_layout.addWidget(self.empty_label, 0, 0)
         self.empty_label.hide()
+        self.verticalScrollBar().valueChanged.connect(self._on_scroll)
     
     def set_data(self, articles: list):
         """매물 데이터를 카드로 표시"""
-        self._data = list(articles) if articles else []
-        self._render_cards()
+        self._all_data = list(articles) if articles else []
+        self._apply_filter(reset_view=True)
+
+    def append_data(self, articles: list):
+        """기존 데이터에 매물 추가 (실시간 배치 업데이트용)"""
+        if not articles:
+            return
+        new_items = list(articles)
+        self._all_data.extend(new_items)
+
+        if self._filter_text:
+            # 필터가 켜져 있으면 정확성을 위해 재적용
+            self._apply_filter(reset_view=True)
+            return
+
+        had_count = len(self._filtered_data)
+        self._filtered_data.extend(new_items)
+        self.empty_label.setVisible(False)
+
+        if self._render_cursor >= had_count:
+            self._render_next_page()
 
     def _calc_columns(self) -> int:
         available = max(1, self.viewport().width())
         cols = max(1, available // (self._card_width + self._card_spacing))
         return cols
 
-    def _render_cards(self):
-        # 기존 카드 제거
+    def _clear_cards(self):
         for card in self._cards:
             card.deleteLater()
         self._cards.clear()
         self.grid_layout.setSpacing(self._card_spacing)
+        self._render_cursor = 0
+        self._last_columns = self._calc_columns()
 
-        if not self._data:
+    def _apply_filter(self, reset_view=False):
+        text = (self._filter_text or "").lower()
+        if text:
+            self._filtered_data = [
+                d for d in self._all_data
+                if text in str(d.get("단지명", "")).lower()
+                or text in str(d.get("타입/특징", "")).lower()
+            ]
+        else:
+            self._filtered_data = list(self._all_data)
+
+        if reset_view:
+            self._clear_cards()
+
+        if not self._filtered_data:
             self._last_columns = None
             self.empty_label.show()
             return
         self.empty_label.hide()
+        if reset_view:
+            self._render_next_page()
+        else:
+            self._relayout_rendered_cards()
 
+    def _on_scroll(self, value: int):
+        scroll_bar = self.verticalScrollBar()
+        if scroll_bar.maximum() <= 0:
+            return
+        if value >= (scroll_bar.maximum() - 220):
+            self._render_next_page()
+
+    def _relayout_rendered_cards(self):
         cols = self._calc_columns()
-        for i, article in enumerate(self._data):
+        if not self._cards:
+            self._last_columns = cols
+            return
+        for i, card in enumerate(self._cards):
+            row, col = divmod(i, cols)
+            self.grid_layout.addWidget(card, row, col)
+        self._last_columns = cols
+
+    def _render_next_page(self):
+        if self._render_cursor >= len(self._filtered_data):
+            return
+        cols = self._calc_columns()
+        end = min(len(self._filtered_data), self._render_cursor + self._page_size)
+        for i in range(self._render_cursor, end):
+            article = self._filtered_data[i]
             card = ArticleCard(article, self.is_dark)
             card.clicked.connect(self.article_clicked.emit)
             card.favorite_toggled.connect(self.favorite_toggled.emit)
@@ -500,28 +564,17 @@ class CardViewWidget(QScrollArea):
             row, col = divmod(i, cols)
             self.grid_layout.addWidget(card, row, col)
             self._cards.append(card)
-
+        self._render_cursor = end
         self._last_columns = cols
-        if self._filter_text:
-            self.filter_cards(self._filter_text)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._data:
+        if self._filtered_data:
             cols = self._calc_columns()
             if cols != self._last_columns:
-                self._render_cards()
+                self._relayout_rendered_cards()
     
     def filter_cards(self, text: str):
         """카드 필터링"""
         self._filter_text = text or ""
-        text = self._filter_text.lower()
-        visible_count = 0
-        for card in self._cards:
-            name = card.data.get("단지명", "").lower()
-            features = card.data.get("타입/특징", "").lower()
-            visible = text in name or text in features
-            card.setVisible(visible)
-            if visible:
-                visible_count += 1
-        self.empty_label.setVisible(visible_count == 0)
+        self._apply_filter(reset_view=True)

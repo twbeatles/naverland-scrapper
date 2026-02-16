@@ -24,6 +24,8 @@ class NaverURLParser:
         # 모바일 URL
         r'm\.land\.naver\.com.*complex[=/](\d+)',
     ]
+    _URL_RE = re.compile(r'https?://[^\s<>"\']+')
+    _ID_RE = re.compile(r'\b(\d{5,10})\b')
     
     # 재시도 핸들러 (클래스 레벨)
     _retry_handler = RetryHandler(max_retries=2, base_delay=1.0)
@@ -41,18 +43,21 @@ class NaverURLParser:
     def extract_from_text(cls, text):
         """텍스트에서 모든 단지 URL/ID 추출"""
         results = []
+        seen = set()
         # URL에서 추출
-        urls = re.findall(r'https?://[^\s<>"\']+', text)
+        urls = cls._URL_RE.findall(text)
         for url in urls:
             cid = cls.extract_complex_id(url)
-            if cid and cid not in [r[1] for r in results]:
+            if cid and cid not in seen:
                 results.append(("URL에서 추출", cid))
+                seen.add(cid)
         
         # 단독 숫자 ID (5자리 이상)
-        ids = re.findall(r'\b(\d{5,10})\b', text)
+        ids = cls._ID_RE.findall(text)
         for cid in ids:
-            if cid not in [r[1] for r in results]:
+            if cid not in seen:
                 results.append(("ID 직접 입력", cid))
+                seen.add(cid)
         
         return results
     

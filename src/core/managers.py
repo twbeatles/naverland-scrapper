@@ -20,6 +20,8 @@ DEFAULT_SETTINGS = {
     # v12.0 설정
     "cache_enabled": True,  # 캐시 사용 여부
     "cache_ttl_minutes": 30,  # 캐시 유효시간 (분)
+    "cache_write_back_interval_sec": 2,  # 캐시 파일 write-back 주기
+    "cache_max_entries": 2000,  # 최대 캐시 엔트리 수
     "show_price_per_pyeong": True,  # 평당가 표시
     "track_disappeared": True,  # 매물 소멸 추적
     "result_tab_mode": "combined",  # combined | separate (거래유형별 탭)
@@ -30,6 +32,8 @@ DEFAULT_SETTINGS = {
     "retry_on_error": True,  # 오류 시 재시도
     "max_retry_count": 3,  # 최대 재시도 횟수
     "recently_viewed_count": 50,  # 최근 본 매물 개수
+    "ui_batch_interval_ms": 120,  # UI 배치 반영 주기 (ms)
+    "ui_batch_size": 30,  # UI 배치 반영 최대 건수
 }
 
 class SettingsManager:

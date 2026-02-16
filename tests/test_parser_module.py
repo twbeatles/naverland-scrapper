@@ -23,6 +23,18 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertIn("11111", ids)
         self.assertIn("22222", ids)
 
+    def test_extract_from_text_large_deduplicate(self):
+        parts = []
+        for i in range(1000, 1100):
+            parts.append(f"https://new.land.naver.com/complexes/{i}")
+            parts.append(str(i))
+            parts.append(f"https://new.land.naver.com/complexes/{i}")  # duplicated URL
+        text = "\n".join(parts)
+        results = NaverURLParser.extract_from_text(text)
+        ids = [cid for _, cid in results]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 100)
+
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
         side_effect=Exception("network fail"),

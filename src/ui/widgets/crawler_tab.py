@@ -9,19 +9,18 @@ from PyQt6.QtWidgets import (
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 import webbrowser
-import logging
 import re
 
-from src.utils.constants import SHORTCUTS, CRAWL_SPEED_PRESETS
 from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url
 from src.core.managers import SettingsManager
 from src.core.crawler import CrawlerThread
+from src.core.cache import CrawlCache
 from src.core.export import DataExporter
 from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard
 )
 from src.ui.widgets.dashboard import CardViewWidget
-from src.ui.widgets.dialogs import MultiSelectDialog, URLBatchDialog, RecentSearchDialog, ExcelTemplateDialog
+from src.ui.dialogs import MultiSelectDialog, URLBatchDialog, RecentSearchDialog, ExcelTemplateDialog
 from src.ui.styles import COLORS
 from src.utils.logger import get_logger
 
@@ -43,8 +42,14 @@ class CrawlerTab(QWidget):
         self.history_manager = history_manager
         self.current_theme = theme
         self.crawler_thread = None
+        self.crawl_cache = None
         self.collected_data = []
         self.grouped_rows = {}
+        self._pending_search_text = ""
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(150)
+        self._search_timer.timeout.connect(self._apply_search_filter)
         
         # UI Setup
         self._init_ui()
@@ -290,7 +295,7 @@ class CrawlerTab(QWidget):
         # Search & Sort
         search_sort = QHBoxLayout()
         self.result_search = SearchBar("결과 검색...")
-        self.result_search.search_changed.connect(self._filter_results)
+        self.result_search.search_changed.connect(self._on_search_text_changed)
         search_sort.addWidget(self.result_search, 3)
         
         search_sort.addWidget(QLabel("정렬:"))
@@ -469,6 +474,12 @@ class CrawlerTab(QWidget):
     def _show_url_batch_dialog(self):
         dlg = URLBatchDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
+            selected = dlg.get_selected_complexes()
+            if selected:
+                for name, cid in selected:
+                    self._add_row(name, cid)
+                self.status_message.emit(f"{len(selected)}개 URL 등록 완료")
+                return
             urls = dlg.get_urls()
             self._add_complexes_from_url(urls)
 
@@ -512,7 +523,9 @@ class CrawlerTab(QWidget):
         self.progress_widget.reset()
         self.summary_card.reset()
         self.collected_data = []
+        self.crawl_cache = None
         self.result_table.setRowCount(0)
+        self.card_view.set_data([])
         self.grouped_rows = {}
         
         target_list = []
@@ -539,15 +552,25 @@ class CrawlerTab(QWidget):
             "전세": {"min": self.spin_jeonse_min.value(), "max": self.spin_jeonse_max.value()},
             "월세": {"min": self.spin_monthly_min.value(), "max": self.spin_monthly_max.value()}
         }
+
+        if settings.get("cache_enabled", True):
+            self.crawl_cache = CrawlCache(
+                ttl_minutes=settings.get("cache_ttl_minutes", 30),
+                write_back_interval_sec=settings.get("cache_write_back_interval_sec", 2),
+                max_entries=settings.get("cache_max_entries", 2000),
+            )
         
         # Start Thread
         self.crawler_thread = CrawlerThread(
             target_list, trade_types, area_filter, price_filter, self.db,
-            speed=self.speed_slider.current_speed()
+            speed=self.speed_slider.current_speed(),
+            cache=self.crawl_cache,
+            ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
+            ui_batch_size=settings.get("ui_batch_size", 30),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
-        self.crawler_thread.item_signal.connect(self._add_result)
+        self.crawler_thread.items_signal.connect(self._on_items_batch)
         self.crawler_thread.stats_signal.connect(self._update_stats_ui)
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
         self.crawler_thread.start()
@@ -567,6 +590,9 @@ class CrawlerTab(QWidget):
             self.btn_save.setEnabled(True)
             self.progress_widget.complete()
             self.append_log(f"✅ 크롤링 완료: 총 {len(data)}건 수집")
+
+            if self.crawl_cache:
+                self.crawl_cache.flush()
             
             # DB Write
             try:
@@ -597,34 +623,64 @@ class CrawlerTab(QWidget):
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
 
-    def _add_result(self, data):
-        self.collected_data.append(data)
-        
-        # Table Update
-        row = self.result_table.rowCount()
-        self.result_table.insertRow(row)
-        
-        self.result_table.setItem(row, 0, QTableWidgetItem(data['단지명']))
-        self.result_table.setItem(row, 1, QTableWidgetItem(data['거래유형']))
-        
-        price_text = data['매매가'] if data['거래유형'] == '매매' else data['보증금']
-        if data['월세']: price_text += f"/{data['월세']}"
-        self.result_table.setItem(row, 2, QTableWidgetItem(price_text))
-        
-        self.result_table.setItem(row, 3, QTableWidgetItem(f"{data['면적(평)']}평"))
-        self.result_table.setItem(row, 4, QTableWidgetItem(data['평당가_표시']))
-        self.result_table.setItem(row, 5, QTableWidgetItem(data['층/방향']))
-        self.result_table.setItem(row, 6, QTableWidgetItem(data['타입/특징']))
-        self.result_table.setItem(row, 7, QTableWidgetItem("N" if data.get("신규여부") else ""))
-        
-        # Hidden columns
-        self.result_table.setItem(row, 11, QTableWidgetItem(get_article_url(data['단지ID'], data['매물ID'])))
-        
-        # Card View Update (Optimize: don't reload all on every item)
+    def _on_items_batch(self, items):
+        if not items:
+            return
+        self.collected_data.extend(items)
+        self._append_rows_batch(items)
         if self.view_mode == "card":
-             # For performance, maybe update card view in batches or at end?
-             # But user wants real-time.
-             logger.debug("Card view 업데이트는 별도 신호/토글에서 처리됨")
+            self.card_view.append_data(items)
+
+    def _append_rows_batch(self, items):
+        start_row = self.result_table.rowCount()
+        row_count = len(items)
+        sorting_enabled = self.result_table.isSortingEnabled()
+        self.result_table.setSortingEnabled(False)
+        self.result_table.setUpdatesEnabled(False)
+        self.result_table.setRowCount(start_row + row_count)
+
+        for idx, data in enumerate(items):
+            row = start_row + idx
+            trade_type = data.get("거래유형", "")
+            price_text = data.get("매매가", "") if trade_type == "매매" else data.get("보증금", "")
+            monthly = data.get("월세", "")
+            if monthly:
+                price_text = f"{price_text}/{monthly}"
+            price_int = PriceConverter.to_int(data.get("매매가", "0")) if trade_type == "매매" else PriceConverter.to_int(data.get("보증금", "0"))
+            price_change = data.get("price_change", 0)
+            if isinstance(price_change, str):
+                price_change = PriceConverter.to_int(price_change)
+
+            self.result_table.setItem(row, 0, QTableWidgetItem(str(data.get("단지명", ""))))
+            self.result_table.setItem(row, 1, QTableWidgetItem(trade_type))
+            self.result_table.setItem(row, 2, QTableWidgetItem(price_text))
+            area_val = data.get("면적(평)", 0)
+            area_item = QTableWidgetItem(f"{area_val}평")
+            area_item.setData(Qt.ItemDataRole.EditRole, float(area_val) if area_val is not None else 0.0)
+            self.result_table.setItem(row, 3, area_item)
+            self.result_table.setItem(row, 4, QTableWidgetItem(str(data.get("평당가_표시", "-"))))
+            self.result_table.setItem(row, 5, QTableWidgetItem(str(data.get("층/방향", ""))))
+            self.result_table.setItem(row, 6, QTableWidgetItem(str(data.get("타입/특징", ""))))
+            self.result_table.setItem(row, 7, QTableWidgetItem("N" if data.get("is_new") or data.get("신규여부") else ""))
+
+            if price_change > 0:
+                change_text = f"+{PriceConverter.to_string(price_change)}"
+            elif price_change < 0:
+                change_text = PriceConverter.to_string(price_change)
+            else:
+                change_text = ""
+            self.result_table.setItem(row, 8, QTableWidgetItem(change_text))
+            self.result_table.setItem(row, 9, QTableWidgetItem(str(data.get("수집시각", ""))))
+            self.result_table.setItem(row, 10, QTableWidgetItem("🔗"))
+
+            article_url = get_article_url(data.get("단지ID", ""), data.get("매물ID", ""))
+            self.result_table.setItem(row, 11, QTableWidgetItem(article_url))
+            sort_item = QTableWidgetItem(str(price_int))
+            sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
+            self.result_table.setItem(row, 12, sort_item)
+
+        self.result_table.setUpdatesEnabled(True)
+        self.result_table.setSortingEnabled(sorting_enabled)
 
     def _update_stats_ui(self, stats):
         self.summary_card.update_stats(
@@ -635,14 +691,22 @@ class CrawlerTab(QWidget):
             filtered=stats["filtered_out"]
         )
 
+    def _on_search_text_changed(self, text):
+        self._pending_search_text = text
+        self._search_timer.start()
+
+    def _apply_search_filter(self):
+        self._filter_results(self._pending_search_text)
+
     def _filter_results(self, text):
         # Table filtering
+        text_lower = (text or "").lower()
         rows = self.result_table.rowCount()
         for r in range(rows):
             match = False
             for c in range(self.result_table.columnCount()):
                 item = self.result_table.item(r, c)
-                if item and text.lower() in item.text().lower():
+                if item and text_lower in item.text().lower():
                     match = True
                     break
             self.result_table.setRowHidden(r, not match)
@@ -688,15 +752,16 @@ class CrawlerTab(QWidget):
                 grouped[key].append(price)
         
         # 스냅샷 저장
-        saved = 0
+        rows = []
         for (cid, ttype, pyeong), prices in grouped.items():
             if prices:
                 min_price = min(prices)
                 max_price = max(prices)
                 avg_price = sum(prices) // len(prices)
-                
-                if self.db.add_price_snapshot(cid, ttype, pyeong, min_price, max_price, avg_price, len(prices)):
-                    saved += 1
+                rows.append((cid, ttype, pyeong, min_price, max_price, avg_price, len(prices)))
+
+        saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
+        self.append_log(f"📊 가격 스냅샷 {saved}건 저장", 10)
 
 
     def get_filter_state(self):

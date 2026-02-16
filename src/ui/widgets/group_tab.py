@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem, QLabel, QSplitter, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from src.ui.widgets.dialogs import MultiSelectDialog
+from src.ui.dialogs import MultiSelectDialog
 
 class GroupTab(QWidget):
     """그룹 관리 탭"""
