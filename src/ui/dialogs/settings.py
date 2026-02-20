@@ -80,6 +80,9 @@ class SettingsDialog(QDialog):
 
         self.check_lazy_startup = QCheckBox("비핵심 탭 초기 로드 지연")
         pl.addWidget(self.check_lazy_startup, 3, 0, 1, 2)
+
+        self.check_compact_duplicates = QCheckBox("동일 매물 묶어서 표시")
+        pl.addWidget(self.check_compact_duplicates, 4, 0, 1, 2)
         pg.setLayout(pl)
         layout.addWidget(pg)
         
@@ -117,6 +120,7 @@ class SettingsDialog(QDialog):
         self.spin_filter_debounce.setValue(int(settings.get("result_filter_debounce_ms", 220) or 220))
         self.spin_max_log_lines.setValue(int(settings.get("max_log_lines", 1500) or 1500))
         self.check_lazy_startup.setChecked(bool(settings.get("startup_lazy_noncritical_tabs", True)))
+        self.check_compact_duplicates.setChecked(bool(settings.get("compact_duplicate_listings", True)))
     
     def _save(self):
         new = {
@@ -132,6 +136,7 @@ class SettingsDialog(QDialog):
             "result_filter_debounce_ms": self.spin_filter_debounce.value(),
             "max_log_lines": self.spin_max_log_lines.value(),
             "startup_lazy_noncritical_tabs": self.check_lazy_startup.isChecked(),
+            "compact_duplicate_listings": self.check_compact_duplicates.isChecked(),
         }
         settings.update(new)
         self.settings_changed.emit(new)

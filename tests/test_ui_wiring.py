@@ -133,8 +133,61 @@ class TestUIWiring(unittest.TestCase):
             with patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting):
                 tab._append_rows_batch([sample])
 
-            self.assertEqual(tab.result_table.item(0, 7).text(), "")
+            self.assertEqual(tab.result_table.item(0, 7).text(), "1건")
             self.assertEqual(tab.result_table.item(0, 8).text(), "")
+            self.assertEqual(tab.result_table.item(0, 9).text(), "")
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_compacts_same_listing_rows(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_compact_rows.db"))
+            tab = CrawlerTab(db)
+            tab._compact_duplicates = True
+
+            batch = [
+                {
+                    "단지명": "A단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 34.0,
+                    "평당가_표시": "294만/평",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "올수리",
+                    "매물ID": "A1",
+                    "수집시각": "2026-02-20 10:00:00",
+                    "is_new": False,
+                    "price_change": 0,
+                },
+                {
+                    "단지명": "A단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 34.0,
+                    "평당가_표시": "294만/평",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "올수리",
+                    "매물ID": "A2",
+                    "수집시각": "2026-02-20 10:00:01",
+                    "is_new": False,
+                    "price_change": 0,
+                },
+            ]
+            tab._on_items_batch(batch)
+            self.assertEqual(len(tab.collected_data), 2)
+            self.assertEqual(tab.result_table.rowCount(), 1)
+            self.assertEqual(tab.result_table.item(0, 7).text(), "2건")
 
             db.close()
             tab.deleteLater()

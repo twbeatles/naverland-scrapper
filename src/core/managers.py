@@ -38,6 +38,7 @@ DEFAULT_SETTINGS = {
     "result_filter_debounce_ms": 220,  # 결과 검색 디바운스
     "max_log_lines": 1500,  # 로그 최대 라인 수
     "startup_lazy_noncritical_tabs": True,  # 비핵심 탭 초기 로드 지연
+    "compact_duplicate_listings": True,  # 동일 매물(가격/평수/층) 묶어서 표시
 }
 
 class SettingsManager:

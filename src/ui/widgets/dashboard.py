@@ -364,6 +364,11 @@ class ArticleCard(QFrame):
         top_layout.addStretch()
         
         # 신규/가격변동 배지
+        duplicate_count = int(self.data.get("duplicate_count", 1) or 1)
+        if duplicate_count > 1:
+            dup_badge = QLabel(f"{duplicate_count}건")
+            dup_badge.setStyleSheet("color: #06b6d4; font-weight: 700; font-size: 11px;")
+            top_layout.addWidget(dup_badge)
         if self.data.get("is_new") or self.data.get("신규여부"):
             new_badge = QLabel("NEW")
             new_badge.setStyleSheet("color: #f59e0b; font-weight: 800; font-size: 11px;")
