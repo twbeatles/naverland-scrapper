@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -10,6 +11,8 @@ from PyInstaller.utils.hooks import collect_submodules
 # NOTE: In PyInstaller 6.17, the spec is executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
 project_dir = Path.cwd().resolve()
+build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
+app_name = "naverland_onefile" if build_onefile else "naverland"
 
 # Keep hidden-imports minimal but reliable for modules that use dynamic imports.
 hiddenimports: list[str] = [
@@ -63,9 +66,11 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries if build_onefile else [],
+    a.datas if build_onefile else [],
     [],
-    exclude_binaries=True,
-    name="naverland",
+    exclude_binaries=not build_onefile,
+    name=app_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -78,12 +83,13 @@ exe = EXE(
     entitlements_file=None,
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="naverland",
-)
+if not build_onefile:
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name=app_name,
+    )
