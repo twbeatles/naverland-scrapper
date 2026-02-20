@@ -96,14 +96,16 @@ class GroupTab(QWidget):
 
     def _load_group_complexes(self, item):
         gid = item.data(Qt.ItemDataRole.UserRole)
+        self.complex_table.setUpdatesEnabled(False)
         self.complex_table.setRowCount(0)
-        for db_id, name, cid, memo in self.db.get_complexes_in_group(gid):
-            row = self.complex_table.rowCount()
-            self.complex_table.insertRow(row)
+        rows = self.db.get_complexes_in_group(gid)
+        self.complex_table.setRowCount(len(rows))
+        for row, (db_id, name, cid, memo) in enumerate(rows):
             self.complex_table.setItem(row, 0, QTableWidgetItem(str(db_id)))
             self.complex_table.setItem(row, 1, QTableWidgetItem(name))
             self.complex_table.setItem(row, 2, QTableWidgetItem(cid))
             self.complex_table.setItem(row, 3, QTableWidgetItem(memo or ""))
+        self.complex_table.setUpdatesEnabled(True)
 
     def _add_to_group(self):
         group_item = self.group_list.currentItem()

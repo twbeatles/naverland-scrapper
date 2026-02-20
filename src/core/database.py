@@ -196,9 +196,11 @@ class ComplexDatabase:
                 c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
             except Exception:
                 logger.debug("status 인덱스 생성 실패 (무시)")
+            c.execute('CREATE INDEX IF NOT EXISTS idx_article_status_last_seen ON article_history(status, last_seen)')
             
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
             conn.commit()
             logger.info("테이블 초기화 완료")
         except Exception as e:
@@ -564,6 +566,146 @@ class ComplexDatabase:
         except Exception as e:
             logger.error(f"알림 설정 추가 실패: {e}")
             return False
+        finally:
+            self._pool.return_connection(conn)
+
+    def get_article_history_state_bulk(self, complex_id, trade_type=None):
+        """단지(및 거래유형) 기준 매물 이력 상태를 일괄 조회"""
+        conn = self._pool.get_connection()
+        try:
+            sql = """
+                SELECT article_id, price, status, last_price, price_change
+                FROM article_history
+                WHERE complex_id = ?
+            """
+            params = [complex_id]
+            if trade_type:
+                sql += " AND trade_type = ?"
+                params.append(trade_type)
+
+            rows = conn.cursor().execute(sql, params).fetchall()
+            result = {}
+            for row in rows:
+                aid = row["article_id"]
+                if not aid:
+                    continue
+                result[str(aid)] = {
+                    "price": int(row["price"] or 0),
+                    "status": str(row["status"] or "active"),
+                    "last_price": int(row["last_price"] or 0),
+                    "price_change": int(row["price_change"] or 0),
+                }
+            return result
+        except Exception as e:
+            logger.error(f"매물 이력 일괄 조회 실패: {e}")
+            return {}
+        finally:
+            self._pool.return_connection(conn)
+
+    def upsert_article_history_bulk(self, rows):
+        """매물 이력을 일괄 upsert"""
+        if not rows:
+            return 0
+
+        normalized = []
+        for row in rows:
+            if isinstance(row, dict):
+                article_id = str(row.get("article_id", "") or "")
+                complex_id = str(row.get("complex_id", "") or "")
+                complex_name = str(row.get("complex_name", "") or "")
+                trade_type = str(row.get("trade_type", "") or "")
+                price = int(row.get("price", 0) or 0)
+                price_text = str(row.get("price_text", "") or "")
+                area = float(row.get("area", 0) or 0)
+                floor = str(row.get("floor", "") or "")
+                feature = str(row.get("feature", "") or "")
+                last_price = int(row.get("last_price", price) or price)
+            else:
+                try:
+                    (
+                        article_id,
+                        complex_id,
+                        complex_name,
+                        trade_type,
+                        price,
+                        price_text,
+                        area,
+                        floor,
+                        feature,
+                        last_price,
+                    ) = row
+                except Exception:
+                    continue
+
+            if not article_id or not complex_id or price <= 0:
+                continue
+            normalized.append(
+                (
+                    article_id,
+                    complex_id,
+                    complex_name,
+                    trade_type,
+                    price,
+                    price_text,
+                    area,
+                    floor,
+                    feature,
+                    last_price,
+                )
+            )
+
+        if not normalized:
+            return 0
+
+        conn = self._pool.get_connection()
+        try:
+            conn.cursor().executemany(
+                """
+                INSERT INTO article_history (
+                    article_id, complex_id, complex_name, trade_type,
+                    price, price_text, area_pyeong, floor_info, feature,
+                    first_seen, last_seen, last_price, price_change, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
+                ON CONFLICT(article_id, complex_id) DO UPDATE SET
+                    complex_name = excluded.complex_name,
+                    trade_type = excluded.trade_type,
+                    price = excluded.price,
+                    price_text = excluded.price_text,
+                    area_pyeong = excluded.area_pyeong,
+                    floor_info = excluded.floor_info,
+                    feature = excluded.feature,
+                    last_seen = CURRENT_DATE,
+                    last_price = article_history.price,
+                    price_change = excluded.price - article_history.price,
+                    status = 'active'
+                """,
+                normalized,
+            )
+            conn.commit()
+            return len(normalized)
+        except Exception as e:
+            logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+            return 0
+        finally:
+            self._pool.return_connection(conn)
+
+    def get_enabled_alert_rules(self, complex_id, trade_type=None):
+        """활성화된 알림 룰을 단지/거래유형 기준으로 조회"""
+        conn = self._pool.get_connection()
+        try:
+            sql = (
+                "SELECT id, complex_name, trade_type, area_min, area_max, price_min, price_max "
+                "FROM alert_settings WHERE complex_id = ? AND enabled = 1"
+            )
+            params = [complex_id]
+            if trade_type:
+                sql += " AND trade_type = ?"
+                params.append(trade_type)
+            rows = conn.cursor().execute(sql, params).fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"활성 알림 룰 조회 실패: {e}")
+            return []
         finally:
             self._pool.return_connection(conn)
 

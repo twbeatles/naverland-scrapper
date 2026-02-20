@@ -51,6 +51,8 @@ class ItemParser:
         "전세안고", "전세끼고", "주인직거래", "세입자있음", "세놓은",
         "펜트하우스", "복도식", "계단식", "엘리베이터", "경비실", "관리비저렴",
     )
+    AD_STRIP_RE = re.compile("|".join(re.escape(k) for k in sorted(AD_KEYWORDS, key=len, reverse=True)))
+    SPACE_RE = re.compile(r"\s+")
     PRICE_TEXT_RE = re.compile(r'(\d+억\s*\d*,?\d*만?|\d+,?\d*만)')
     MONTHLY_RE = re.compile(r'\d+[억만]?\s*/\s*\d+')
     SQM_RE = re.compile(r'(\d+(?:\.\d+)?)\s*(?:㎡|m²)')
@@ -179,15 +181,12 @@ class ItemParser:
             if not text or len(text) <= 2:
                 continue
 
-            is_ad_only = any(ad in text for ad in ItemParser.AD_KEYWORDS) and \
-                         not any(kw in text for kw in ItemParser.MEANINGFUL_KEYWORDS)
-            if is_ad_only:
+            has_meaningful = any(kw in text for kw in ItemParser.MEANINGFUL_KEYWORDS)
+            cleaned = ItemParser.AD_STRIP_RE.sub(" ", text)
+            cleaned = ItemParser.SPACE_RE.sub(" ", cleaned).strip()
+            if not has_meaningful and len(cleaned) <= 2:
                 continue
-
-            cleaned = text
-            for ad in ItemParser.AD_KEYWORDS:
-                cleaned = cleaned.replace(ad, "").strip()
-            if cleaned and len(cleaned) > 2:
+            if len(cleaned) > 2:
                 feature_text = cleaned[:100]
                 break
         

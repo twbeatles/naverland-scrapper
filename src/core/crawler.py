@@ -1,5 +1,4 @@
 import time
-import re
 import random
 import gc
 import traceback
@@ -28,7 +27,6 @@ except ImportError:
 
 from src.utils.constants import CRAWL_SPEED_PRESETS
 from src.utils.helpers import PriceConverter, ChromeParamHelper
-from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryHandler
 from src.core.item_parser import ItemParser
 
@@ -58,6 +56,11 @@ class CrawlerThread(QThread):
         ui_batch_interval_ms=120,
         ui_batch_size=30,
         emit_legacy_item_signal=False,
+        show_new_badge=True,
+        show_price_change=True,
+        price_change_threshold=0,
+        track_disappeared=True,
+        history_batch_size=200,
     ):
         super().__init__()
         self.targets = targets
@@ -77,7 +80,21 @@ class CrawlerThread(QThread):
         self.ui_batch_interval_ms = max(20, int(ui_batch_interval_ms))
         self.ui_batch_size = max(1, int(ui_batch_size))
         self.emit_legacy_item_signal = bool(emit_legacy_item_signal)
+        self.show_new_badge = bool(show_new_badge)
+        self.show_price_change = bool(show_price_change)
+        try:
+            self.price_change_threshold = max(0, int(price_change_threshold))
+        except (TypeError, ValueError):
+            self.price_change_threshold = 0
+        self.track_disappeared = bool(track_disappeared)
+        try:
+            self.history_batch_size = max(20, int(history_batch_size))
+        except (TypeError, ValueError):
+            self.history_batch_size = 200
         self._last_batch_flush_at = time.monotonic()
+        self._history_state_cache = {}
+        self._alert_rules_cache = {}
+        self._pending_history_rows = []
     
     def stop(self): self._running = False
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
@@ -105,6 +122,181 @@ class CrawlerThread(QThread):
                 "by_trade_type": dict(self.stats.get("by_trade_type", {})),
             })
             self._last_batch_flush_at = time.monotonic()
+
+    @staticmethod
+    def _row_get(row, key, default=None):
+        if row is None:
+            return default
+        try:
+            if isinstance(row, dict):
+                return row.get(key, default)
+            return row[key]
+        except Exception:
+            return default
+
+    def _cache_key(self, complex_id, trade_type):
+        return (str(complex_id or ""), str(trade_type or ""))
+
+    def _get_history_state_map(self, complex_id, trade_type):
+        key = (str(complex_id or ""), "*")
+        if key in self._history_state_cache:
+            return self._history_state_cache[key]
+        history_map = {}
+        if self.db and complex_id:
+            try:
+                history_map = self.db.get_article_history_state_bulk(complex_id)
+            except Exception as e:
+                self.log(f"   ⚠️ 이력 상태 로드 실패: {e}", 30)
+        self._history_state_cache[key] = history_map or {}
+        return self._history_state_cache[key]
+
+    def _get_alert_rules(self, complex_id, trade_type):
+        key = self._cache_key(complex_id, trade_type)
+        if key in self._alert_rules_cache:
+            return self._alert_rules_cache[key]
+        rules = []
+        if self.db and complex_id and trade_type:
+            try:
+                rules = self.db.get_enabled_alert_rules(complex_id, trade_type)
+            except Exception as e:
+                self.log(f"   ⚠️ 알림 룰 로드 실패: {e}", 30)
+        self._alert_rules_cache[key] = rules or []
+        return self._alert_rules_cache[key]
+
+    def _flush_history_updates_fallback(self, rows):
+        if not self.db:
+            return 0
+        saved = 0
+        for row in rows:
+            try:
+                ok = self.db.update_article_history(
+                    article_id=row.get("article_id", ""),
+                    complex_id=row.get("complex_id", ""),
+                    complex_name=row.get("complex_name", ""),
+                    trade_type=row.get("trade_type", ""),
+                    price=int(row.get("price", 0) or 0),
+                    price_text=row.get("price_text", ""),
+                    area=float(row.get("area", 0) or 0),
+                    floor=row.get("floor", ""),
+                    feature=row.get("feature", ""),
+                )
+                if ok:
+                    saved += 1
+            except Exception:
+                continue
+        return saved
+
+    def _flush_history_updates(self, force=False):
+        if not self._pending_history_rows:
+            return 0
+        if not force and len(self._pending_history_rows) < self.history_batch_size:
+            return 0
+        rows = list(self._pending_history_rows)
+        self._pending_history_rows.clear()
+        if not self.db:
+            return 0
+
+        try:
+            saved = int(self.db.upsert_article_history_bulk(rows) or 0)
+            if saved == len(rows):
+                return saved
+            self.log(
+                f"   ⚠️ 이력 일괄 저장 일부 실패 ({saved}/{len(rows)}), 개별 재시도...",
+                30,
+            )
+        except Exception as e:
+            self.log(f"   ⚠️ 이력 일괄 저장 실패: {e} (개별 재시도)", 30)
+        return self._flush_history_updates_fallback(rows)
+
+    def _enrich_item_with_history_and_alerts(self, data):
+        if not isinstance(data, dict):
+            return data
+
+        trade_type = str(data.get("거래유형", "") or "")
+        complex_id = str(data.get("단지ID", "") or "")
+        article_id = str(data.get("매물ID", "") or "")
+        complex_name = str(data.get("단지명", "") or "")
+
+        if trade_type == "매매":
+            price_text = str(data.get("매매가", "") or "")
+        else:
+            deposit = str(data.get("보증금", "") or "")
+            monthly = str(data.get("월세", "") or "")
+            price_text = f"{deposit}/{monthly}" if monthly else deposit
+        price_int = PriceConverter.to_int(price_text.split("/")[0] if "/" in price_text else price_text)
+
+        area_pyeong = 0.0
+        try:
+            area_pyeong = float(data.get("면적(평)", 0) or 0)
+        except (TypeError, ValueError):
+            area_pyeong = 0.0
+
+        is_new = False
+        raw_price_change = 0
+        if article_id and complex_id and price_int > 0:
+            history_map = self._get_history_state_map(complex_id, trade_type)
+            prev = history_map.get(article_id)
+            prev_price = int(self._row_get(prev, "price", 0) or 0)
+            is_new = prev is None
+            raw_price_change = 0 if is_new else price_int - prev_price
+
+            history_map[article_id] = {
+                "price": price_int,
+                "status": "active",
+                "last_price": prev_price if prev_price > 0 else price_int,
+                "price_change": raw_price_change,
+            }
+
+            self._pending_history_rows.append(
+                {
+                    "article_id": article_id,
+                    "complex_id": complex_id,
+                    "complex_name": complex_name,
+                    "trade_type": trade_type,
+                    "price": price_int,
+                    "price_text": price_text,
+                    "area": area_pyeong,
+                    "floor": str(data.get("층/방향", "") or ""),
+                    "feature": str(data.get("타입/특징", "") or ""),
+                    "last_price": prev_price if prev_price > 0 else price_int,
+                }
+            )
+            self._flush_history_updates(force=False)
+
+        price_change = int(raw_price_change)
+        if self.price_change_threshold > 0 and abs(price_change) < self.price_change_threshold:
+            price_change = 0
+
+        visible_is_new = bool(is_new) if self.show_new_badge else False
+        visible_price_change = int(price_change) if self.show_price_change else 0
+
+        data["is_new"] = visible_is_new
+        data["신규여부"] = visible_is_new
+        data["price_change"] = visible_price_change
+        data["가격변동"] = visible_price_change
+
+        if complex_id and trade_type and area_pyeong > 0 and price_int > 0:
+            rules = self._get_alert_rules(complex_id, trade_type)
+            for rule in rules:
+                area_min = float(self._row_get(rule, "area_min", 0) or 0)
+                area_max = float(self._row_get(rule, "area_max", 999999) or 999999)
+                price_min = int(self._row_get(rule, "price_min", 0) or 0)
+                price_max = int(self._row_get(rule, "price_max", 999999999) or 999999999)
+                if not (area_min <= area_pyeong <= area_max):
+                    continue
+                if not (price_min <= price_int <= price_max):
+                    continue
+                alert_id = int(self._row_get(rule, "id", 0) or 0)
+                alert_name = str(self._row_get(rule, "complex_name", complex_name) or complex_name)
+                self.alert_triggered_signal.emit(
+                    alert_name,
+                    trade_type,
+                    price_text,
+                    float(area_pyeong),
+                    alert_id,
+                )
+
+        return data
     
     def _init_driver(self):
         """Chrome 드라이버 초기화 및 설정"""
@@ -228,11 +420,23 @@ class CrawlerThread(QThread):
                     
                     speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
                     time.sleep(random.uniform(speed_cfg["min"], speed_cfg["max"]))
+
+                self._flush_history_updates(force=True)
                 
                 self.complex_finished_signal.emit(name, cid, ",".join(self.trade_types), complex_count)
                 processed_complexes += 1
+
+            # 전체 수집을 정상 종료한 경우에만 소멸 매물 처리
+            if self.track_disappeared and self._running and self.db:
+                try:
+                    disappeared = int(self.db.mark_disappeared_articles() or 0)
+                    if disappeared > 0:
+                        self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
+                except Exception as e:
+                    self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
             
             self._flush_pending_items_if_needed(force=True)
+            self._flush_history_updates(force=True)
             self.log(f"\\n{'='*50}\\n✅ 완료! 총 {len(self.collected_data)}건")
         except Exception as e:
             self.log(f"❌ 치명적 오류: {e}", 40)
@@ -240,6 +444,7 @@ class CrawlerThread(QThread):
             self.error_signal.emit(str(e))
         finally:
             self._flush_pending_items_if_needed(force=True)
+            self._flush_history_updates(force=True)
             if driver:
                 try:
                     driver.quit()
@@ -257,11 +462,13 @@ class CrawlerThread(QThread):
                 self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
                 matched_count = 0
                 for item in cached_items:
-                    if self._check_filters(item, ttype):
-                        self._push_item(item)
+                    processed_item = self._enrich_item_with_history_and_alerts(dict(item))
+                    if self._check_filters(processed_item, ttype):
+                        self._push_item(processed_item)
                         matched_count += 1
                     else:
                         self.stats["filtered_out"] += 1
+                self._flush_history_updates(force=True)
                 self._flush_pending_items_if_needed(force=True)
                 return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
         
@@ -308,6 +515,7 @@ class CrawlerThread(QThread):
             if items_to_cache:
                 self.cache.set(cid, ttype, items_to_cache)
         
+        self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
         return {
             "count": count,
@@ -371,9 +579,10 @@ class CrawlerThread(QThread):
                 if data and data.get("면적(㎡)", 0) > 0:
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:
-                        if self._check_filters(data, ttype):
-                            self._push_item(data)
-                            items_to_cache.append(data)
+                        enriched = self._enrich_item_with_history_and_alerts(data)
+                        if self._check_filters(enriched, ttype):
+                            self._push_item(enriched)
+                            items_to_cache.append(dict(enriched))
                             matched_count += 1
                         else:
                             self.stats["filtered_out"] += 1

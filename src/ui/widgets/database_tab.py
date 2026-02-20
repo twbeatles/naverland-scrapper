@@ -70,13 +70,13 @@ class DatabaseTab(QWidget):
 
     def load_data(self):
         """DB에서 단지 목록 로드"""
+        self.table.setUpdatesEnabled(False)
         self.table.setRowCount(0)
         try:
             complexes = self.db.get_all_complexes()
             self._update_empty_state(len(complexes))
-            for db_id, name, cid, memo in complexes:
-                row = self.table.rowCount()
-                self.table.insertRow(row)
+            self.table.setRowCount(len(complexes))
+            for row, (db_id, name, cid, memo) in enumerate(complexes):
                 self.table.setItem(row, 0, QTableWidgetItem(str(db_id)))
                 self.table.setItem(row, 1, QTableWidgetItem(str(name)))
                 self.table.setItem(row, 2, QTableWidgetItem(str(cid)))
@@ -84,6 +84,8 @@ class DatabaseTab(QWidget):
         except Exception as e:
             logger.error(f"로드 실패: {e}")
             self._update_empty_state(0)
+        finally:
+            self.table.setUpdatesEnabled(True)
         self._update_action_state()
 
     def _update_empty_state(self, count):

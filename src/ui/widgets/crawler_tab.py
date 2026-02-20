@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 
 
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QTextCursor
 import webbrowser
 import re
 
@@ -35,6 +36,7 @@ class CrawlerTab(QWidget):
     crawling_started = pyqtSignal()
     crawling_stopped = pyqtSignal()
     status_message = pyqtSignal(str)
+    alert_triggered = pyqtSignal(str, str, str, float, int)
     
     def __init__(self, db, history_manager=None, theme="dark", parent=None):
         super().__init__(parent)
@@ -46,9 +48,16 @@ class CrawlerTab(QWidget):
         self.collected_data = []
         self.grouped_rows = {}
         self._pending_search_text = ""
+        self._row_search_cache = []
+        self._row_hidden_state = {}
+        self._append_chunk_size = 200
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(150)
+        try:
+            debounce_ms = max(80, int(settings.get("result_filter_debounce_ms", 220)))
+        except (TypeError, ValueError):
+            debounce_ms = 220
+        self._search_timer.setInterval(debounce_ms)
         self._search_timer.timeout.connect(self._apply_search_filter)
         
         # UI Setup
@@ -527,6 +536,8 @@ class CrawlerTab(QWidget):
         self.result_table.setRowCount(0)
         self.card_view.set_data([])
         self.grouped_rows = {}
+        self._row_search_cache = []
+        self._row_hidden_state = {}
         
         target_list = []
         for r in range(self.table_list.rowCount()):
@@ -544,6 +555,17 @@ class CrawlerTab(QWidget):
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
             return
+
+        if self.history_manager:
+            try:
+                self.history_manager.add(
+                    {
+                        "complexes": [{"name": name, "cid": cid} for name, cid in target_list],
+                        "trade_types": list(trade_types),
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"최근 검색 기록 저장 실패: {e}")
             
         area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
         price_filter = {
@@ -567,11 +589,19 @@ class CrawlerTab(QWidget):
             cache=self.crawl_cache,
             ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
             ui_batch_size=settings.get("ui_batch_size", 30),
+            show_new_badge=settings.get("show_new_badge", True),
+            show_price_change=settings.get("show_price_change", True),
+            price_change_threshold=settings.get("price_change_threshold", 0),
+            track_disappeared=settings.get("track_disappeared", True),
+            history_batch_size=settings.get("history_batch_size", 200),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
         self.crawler_thread.items_signal.connect(self._on_items_batch)
         self.crawler_thread.stats_signal.connect(self._update_stats_ui)
+        self.crawler_thread.complex_finished_signal.connect(self._on_complex_finished)
+        self.crawler_thread.alert_triggered_signal.connect(self._on_alert_triggered)
+        self.crawler_thread.error_signal.connect(lambda msg: self.append_log(f"❌ 크롤링 오류: {msg}", 40))
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
         self.crawler_thread.start()
         
@@ -619,6 +649,18 @@ class CrawlerTab(QWidget):
         elif level == 10: color = theme_colors["text_secondary"]
         
         self.log_browser.append(f'<span style="color:{color}">{msg}</span>')
+        try:
+            max_lines = max(200, int(settings.get("max_log_lines", 1500)))
+        except (TypeError, ValueError):
+            max_lines = 1500
+        overflow = self.log_browser.document().blockCount() - max_lines
+        if overflow > 0:
+            cursor = self.log_browser.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            for _ in range(overflow):
+                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()
         # Scroll to bottom
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
@@ -634,53 +676,106 @@ class CrawlerTab(QWidget):
     def _append_rows_batch(self, items):
         start_row = self.result_table.rowCount()
         row_count = len(items)
+        if row_count == 0:
+            return
         sorting_enabled = self.result_table.isSortingEnabled()
+        active_filter = (self._pending_search_text or "").strip().lower()
         self.result_table.setSortingEnabled(False)
         self.result_table.setUpdatesEnabled(False)
         self.result_table.setRowCount(start_row + row_count)
 
-        for idx, data in enumerate(items):
-            row = start_row + idx
-            trade_type = data.get("거래유형", "")
-            price_text = data.get("매매가", "") if trade_type == "매매" else data.get("보증금", "")
-            monthly = data.get("월세", "")
-            if monthly:
-                price_text = f"{price_text}/{monthly}"
-            price_int = PriceConverter.to_int(data.get("매매가", "0")) if trade_type == "매매" else PriceConverter.to_int(data.get("보증금", "0"))
-            price_change = data.get("price_change", 0)
-            if isinstance(price_change, str):
-                price_change = PriceConverter.to_int(price_change)
+        show_new_badge = bool(settings.get("show_new_badge", True))
+        show_price_change = bool(settings.get("show_price_change", True))
+        try:
+            price_change_threshold = max(0, int(settings.get("price_change_threshold", 0)))
+        except (TypeError, ValueError):
+            price_change_threshold = 0
 
-            self.result_table.setItem(row, 0, QTableWidgetItem(str(data.get("단지명", ""))))
-            self.result_table.setItem(row, 1, QTableWidgetItem(trade_type))
-            self.result_table.setItem(row, 2, QTableWidgetItem(price_text))
-            area_val = data.get("면적(평)", 0)
-            area_item = QTableWidgetItem(f"{area_val}평")
-            area_item.setData(Qt.ItemDataRole.EditRole, float(area_val) if area_val is not None else 0.0)
-            self.result_table.setItem(row, 3, area_item)
-            self.result_table.setItem(row, 4, QTableWidgetItem(str(data.get("평당가_표시", "-"))))
-            self.result_table.setItem(row, 5, QTableWidgetItem(str(data.get("층/방향", ""))))
-            self.result_table.setItem(row, 6, QTableWidgetItem(str(data.get("타입/특징", ""))))
-            self.result_table.setItem(row, 7, QTableWidgetItem("N" if data.get("is_new") or data.get("신규여부") else ""))
+        chunk_size = max(50, int(self._append_chunk_size))
+        for start in range(0, row_count, chunk_size):
+            end = min(row_count, start + chunk_size)
+            for idx in range(start, end):
+                data = items[idx]
+                row = start_row + idx
+                trade_type = data.get("거래유형", "")
+                price_text = data.get("매매가", "") if trade_type == "매매" else data.get("보증금", "")
+                monthly = data.get("월세", "")
+                if monthly:
+                    price_text = f"{price_text}/{monthly}"
+                price_int = PriceConverter.to_int(data.get("매매가", "0")) if trade_type == "매매" else PriceConverter.to_int(data.get("보증금", "0"))
+                price_change = data.get("price_change", 0)
+                if isinstance(price_change, str):
+                    price_change = PriceConverter.to_int(price_change)
+                if price_change_threshold > 0 and abs(price_change) < price_change_threshold:
+                    price_change = 0
 
-            if price_change > 0:
-                change_text = f"+{PriceConverter.to_string(price_change)}"
-            elif price_change < 0:
-                change_text = PriceConverter.to_string(price_change)
-            else:
-                change_text = ""
-            self.result_table.setItem(row, 8, QTableWidgetItem(change_text))
-            self.result_table.setItem(row, 9, QTableWidgetItem(str(data.get("수집시각", ""))))
-            self.result_table.setItem(row, 10, QTableWidgetItem("🔗"))
+                self.result_table.setItem(row, 0, QTableWidgetItem(str(data.get("단지명", ""))))
+                self.result_table.setItem(row, 1, QTableWidgetItem(trade_type))
+                self.result_table.setItem(row, 2, QTableWidgetItem(price_text))
+                area_val = data.get("면적(평)", 0)
+                area_item = QTableWidgetItem(f"{area_val}평")
+                area_item.setData(Qt.ItemDataRole.EditRole, float(area_val) if area_val is not None else 0.0)
+                self.result_table.setItem(row, 3, area_item)
+                self.result_table.setItem(row, 4, QTableWidgetItem(str(data.get("평당가_표시", "-"))))
+                self.result_table.setItem(row, 5, QTableWidgetItem(str(data.get("층/방향", ""))))
+                self.result_table.setItem(row, 6, QTableWidgetItem(str(data.get("타입/특징", ""))))
+                is_new = bool(data.get("is_new") or data.get("신규여부"))
+                new_badge_text = "N" if show_new_badge and is_new else ""
+                self.result_table.setItem(row, 7, QTableWidgetItem(new_badge_text))
 
-            article_url = get_article_url(data.get("단지ID", ""), data.get("매물ID", ""))
-            self.result_table.setItem(row, 11, QTableWidgetItem(article_url))
-            sort_item = QTableWidgetItem(str(price_int))
-            sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
-            self.result_table.setItem(row, 12, sort_item)
+                if show_price_change and price_change > 0:
+                    change_text = f"+{PriceConverter.to_string(price_change)}"
+                elif show_price_change and price_change < 0:
+                    change_text = PriceConverter.to_string(price_change)
+                else:
+                    change_text = ""
+                self.result_table.setItem(row, 8, QTableWidgetItem(change_text))
+                collect_time = str(data.get("수집시각", ""))
+                self.result_table.setItem(row, 9, QTableWidgetItem(collect_time))
+                self.result_table.setItem(row, 10, QTableWidgetItem("🔗"))
+
+                article_url = get_article_url(data.get("단지ID", ""), data.get("매물ID", ""))
+                self.result_table.setItem(row, 11, QTableWidgetItem(article_url))
+                sort_item = QTableWidgetItem(str(price_int))
+                sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
+                self.result_table.setItem(row, 12, sort_item)
+
+                searchable = " ".join(
+                    [
+                        str(data.get("단지명", "")),
+                        str(trade_type),
+                        str(price_text),
+                        str(area_val),
+                        str(data.get("평당가_표시", "-")),
+                        str(data.get("층/방향", "")),
+                        str(data.get("타입/특징", "")),
+                        str(new_badge_text),
+                        str(change_text),
+                        str(collect_time),
+                    ]
+                ).lower()
+                self._row_search_cache.append(searchable)
+
+                hidden = bool(active_filter) and active_filter not in searchable
+                if self._row_hidden_state.get(row) != hidden:
+                    self.result_table.setRowHidden(row, hidden)
+                    self._row_hidden_state[row] = hidden
 
         self.result_table.setUpdatesEnabled(True)
         self.result_table.setSortingEnabled(sorting_enabled)
+
+    def _on_complex_finished(self, name, cid, trade_types, count):
+        try:
+            self.db.add_crawl_history(name, cid, trade_types, int(count))
+        except Exception as e:
+            self.append_log(f"⚠️ 히스토리 저장 실패: {e}", 30)
+
+    def _on_alert_triggered(self, complex_name, trade_type, price_text, area_pyeong, alert_id):
+        self.append_log(
+            f"🔔 알림 조건 충족: {complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)",
+            30,
+        )
+        self.alert_triggered.emit(complex_name, trade_type, price_text, area_pyeong, int(alert_id or 0))
 
     def _update_stats_ui(self, stats):
         self.summary_card.update_stats(
@@ -698,18 +793,35 @@ class CrawlerTab(QWidget):
     def _apply_search_filter(self):
         self._filter_results(self._pending_search_text)
 
+    def _rebuild_row_search_cache_from_table(self):
+        rows = self.result_table.rowCount()
+        self._row_search_cache = []
+        self._row_hidden_state = {}
+        for r in range(rows):
+            values = []
+            for c in range(self.result_table.columnCount()):
+                item = self.result_table.item(r, c)
+                if item:
+                    values.append(item.text())
+            self._row_search_cache.append(" ".join(values).lower())
+
     def _filter_results(self, text):
         # Table filtering
         text_lower = (text or "").lower()
         rows = self.result_table.rowCount()
         for r in range(rows):
-            match = False
-            for c in range(self.result_table.columnCount()):
-                item = self.result_table.item(r, c)
-                if item and text_lower in item.text().lower():
-                    match = True
-                    break
-            self.result_table.setRowHidden(r, not match)
+            if r >= len(self._row_search_cache):
+                values = []
+                for c in range(self.result_table.columnCount()):
+                    item = self.result_table.item(r, c)
+                    if item:
+                        values.append(item.text())
+                self._row_search_cache.append(" ".join(values).lower())
+            searchable = self._row_search_cache[r]
+            hidden = bool(text_lower) and text_lower not in searchable
+            if self._row_hidden_state.get(r) != hidden:
+                self.result_table.setRowHidden(r, hidden)
+                self._row_hidden_state[r] = hidden
             
         # Card filtering
         self.card_view.filter_cards(text)
@@ -724,6 +836,8 @@ class CrawlerTab(QWidget):
         
         order = Qt.SortOrder.AscendingOrder if is_asc else Qt.SortOrder.DescendingOrder
         self.result_table.sortItems(col, order)
+        self._rebuild_row_search_cache_from_table()
+        self._filter_results(self._pending_search_text)
 
     def _save_price_snapshots(self):
         """크롤링 결과를 가격 스냅샷으로 저장"""

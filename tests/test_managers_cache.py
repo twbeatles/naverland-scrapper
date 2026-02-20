@@ -65,6 +65,22 @@ class TestCacheAndManagers(unittest.TestCase):
             settings = SettingsManager()
             settings.set("theme", "light")
             self.assertEqual(settings.get("theme"), "light")
+            self.assertEqual(settings.get("history_batch_size"), 200)
+            self.assertEqual(settings.get("result_filter_debounce_ms"), 220)
+            self.assertEqual(settings.get("max_log_lines"), 1500)
+            self.assertTrue(settings.get("startup_lazy_noncritical_tabs"))
+            settings.update(
+                {
+                    "history_batch_size": 320,
+                    "result_filter_debounce_ms": 260,
+                    "max_log_lines": 2400,
+                    "startup_lazy_noncritical_tabs": False,
+                }
+            )
+            self.assertEqual(settings.get("history_batch_size"), 320)
+            self.assertEqual(settings.get("result_filter_debounce_ms"), 260)
+            self.assertEqual(settings.get("max_log_lines"), 2400)
+            self.assertFalse(settings.get("startup_lazy_noncritical_tabs"))
 
             presets = FilterPresetManager()
             presets.add("기본", {"trade": "매매"})

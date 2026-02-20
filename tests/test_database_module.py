@@ -56,6 +56,141 @@ class TestComplexDatabase(unittest.TestCase):
         snapshots = self.db.get_price_snapshots("11111")
         self.assertEqual(len(snapshots), 3)
 
+    def test_article_history_tracks_new_and_price_change(self):
+        is_new, change, prev = self.db.check_article_history("A1", "12345", 10000)
+        self.assertTrue(is_new)
+        self.assertEqual(change, 0)
+        self.assertEqual(prev, 0)
+
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="A1",
+                complex_id="12345",
+                complex_name="테스트단지",
+                trade_type="매매",
+                price=10000,
+                price_text="1억",
+                area=30.0,
+                floor="10층",
+                feature="역세권",
+            )
+        )
+
+        is_new2, change2, prev2 = self.db.check_article_history("A1", "12345", 9000)
+        self.assertFalse(is_new2)
+        self.assertEqual(change2, -1000)
+        self.assertEqual(prev2, 10000)
+
+    def test_mark_disappeared_and_alert_lookup(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="B1",
+                complex_id="99999",
+                complex_name="테스트단지",
+                trade_type="매매",
+                price=12000,
+                price_text="1억 2,000만",
+                area=33.0,
+                floor="8층",
+                feature="신축",
+            )
+        )
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                "UPDATE article_history SET last_seen = date('now', '-2 day'), status='active' WHERE article_id = ? AND complex_id = ?",
+                ("B1", "99999"),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        disappeared = self.db.mark_disappeared_articles()
+        self.assertGreaterEqual(disappeared, 1)
+
+        self.assertTrue(
+            self.db.add_alert_setting("99999", "테스트단지", "매매", 20.0, 40.0, 10000, 13000)
+        )
+        alerts = self.db.check_alerts("99999", "매매", 33.0, 12000)
+        self.assertGreaterEqual(len(alerts), 1)
+
+    def test_upsert_article_history_bulk_and_state_lookup(self):
+        rows_v1 = [
+            {
+                "article_id": "C1",
+                "complex_id": "77777",
+                "complex_name": "테스트단지",
+                "trade_type": "매매",
+                "price": 12000,
+                "price_text": "1억 2,000만",
+                "area": 33.0,
+                "floor": "10층",
+                "feature": "올수리",
+                "last_price": 12000,
+            },
+            {
+                "article_id": "C2",
+                "complex_id": "77777",
+                "complex_name": "테스트단지",
+                "trade_type": "매매",
+                "price": 10000,
+                "price_text": "1억",
+                "area": 30.0,
+                "floor": "8층",
+                "feature": "신축",
+                "last_price": 10000,
+            },
+        ]
+        saved1 = self.db.upsert_article_history_bulk(rows_v1)
+        self.assertEqual(saved1, 2)
+
+        rows_v2 = [
+            {
+                "article_id": "C1",
+                "complex_id": "77777",
+                "complex_name": "테스트단지",
+                "trade_type": "매매",
+                "price": 11000,
+                "price_text": "1억 1,000만",
+                "area": 33.0,
+                "floor": "10층",
+                "feature": "올수리",
+                "last_price": 12000,
+            }
+        ]
+        saved2 = self.db.upsert_article_history_bulk(rows_v2)
+        self.assertEqual(saved2, 1)
+
+        state = self.db.get_article_history_state_bulk("77777", "매매")
+        self.assertIn("C1", state)
+        self.assertIn("C2", state)
+        self.assertEqual(state["C1"]["price"], 11000)
+        self.assertEqual(state["C1"]["price_change"], -1000)
+        self.assertEqual(state["C2"]["price"], 10000)
+
+    def test_get_enabled_alert_rules(self):
+        self.assertTrue(
+            self.db.add_alert_setting("12345", "테스트단지", "매매", 20.0, 40.0, 9000, 13000)
+        )
+        self.assertTrue(
+            self.db.add_alert_setting("12345", "테스트단지", "전세", 20.0, 40.0, 3000, 6000)
+        )
+        all_rows = self.db.get_all_alert_settings()
+        self.assertGreaterEqual(len(all_rows), 2)
+        sale_alert_id = None
+        for row in all_rows:
+            if row["trade_type"] == "매매":
+                sale_alert_id = row["id"]
+                break
+        self.assertIsNotNone(sale_alert_id)
+        self.db.toggle_alert_setting(sale_alert_id, False)
+
+        rules_sale = self.db.get_enabled_alert_rules("12345", "매매")
+        rules_jeonse = self.db.get_enabled_alert_rules("12345", "전세")
+        self.assertEqual(len(rules_sale), 0)
+        self.assertEqual(len(rules_jeonse), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

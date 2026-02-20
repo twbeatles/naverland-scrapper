@@ -56,6 +56,32 @@ class SettingsDialog(QDialog):
         cl.addStretch()
         cg.setLayout(cl)
         layout.addWidget(cg)
+
+        # 성능
+        pg = QGroupBox("⚡ 성능")
+        pl = QGridLayout()
+        pl.addWidget(QLabel("이력 배치 크기:"), 0, 0)
+        self.spin_history_batch = QSpinBox()
+        self.spin_history_batch.setRange(20, 5000)
+        self.spin_history_batch.setSingleStep(20)
+        pl.addWidget(self.spin_history_batch, 0, 1)
+
+        pl.addWidget(QLabel("검색 디바운스(ms):"), 1, 0)
+        self.spin_filter_debounce = QSpinBox()
+        self.spin_filter_debounce.setRange(80, 1000)
+        self.spin_filter_debounce.setSingleStep(20)
+        pl.addWidget(self.spin_filter_debounce, 1, 1)
+
+        pl.addWidget(QLabel("로그 최대 라인:"), 2, 0)
+        self.spin_max_log_lines = QSpinBox()
+        self.spin_max_log_lines.setRange(200, 20000)
+        self.spin_max_log_lines.setSingleStep(100)
+        pl.addWidget(self.spin_max_log_lines, 2, 1)
+
+        self.check_lazy_startup = QCheckBox("비핵심 탭 초기 로드 지연")
+        pl.addWidget(self.check_lazy_startup, 3, 0, 1, 2)
+        pg.setLayout(pl)
+        layout.addWidget(pg)
         
         # 정렬
         og = QGroupBox("📊 결과 정렬")
@@ -87,6 +113,10 @@ class SettingsDialog(QDialog):
         self.combo_speed.setCurrentText(settings.get("crawl_speed", "보통"))
         self.combo_sort_col.setCurrentText(settings.get("default_sort_column", "가격"))
         self.combo_sort_order.setCurrentText("오름차순" if settings.get("default_sort_order", "asc") == "asc" else "내림차순")
+        self.spin_history_batch.setValue(int(settings.get("history_batch_size", 200) or 200))
+        self.spin_filter_debounce.setValue(int(settings.get("result_filter_debounce_ms", 220) or 220))
+        self.spin_max_log_lines.setValue(int(settings.get("max_log_lines", 1500) or 1500))
+        self.check_lazy_startup.setChecked(bool(settings.get("startup_lazy_noncritical_tabs", True)))
     
     def _save(self):
         new = {
@@ -97,7 +127,11 @@ class SettingsDialog(QDialog):
             "play_sound_on_complete": self.check_sound.isChecked(),
             "crawl_speed": self.combo_speed.currentText(),
             "default_sort_column": self.combo_sort_col.currentText(),
-            "default_sort_order": "asc" if self.combo_sort_order.currentText() == "오름차순" else "desc"
+            "default_sort_order": "asc" if self.combo_sort_order.currentText() == "오름차순" else "desc",
+            "history_batch_size": self.spin_history_batch.value(),
+            "result_filter_debounce_ms": self.spin_filter_debounce.value(),
+            "max_log_lines": self.spin_max_log_lines.value(),
+            "startup_lazy_noncritical_tabs": self.check_lazy_startup.isChecked(),
         }
         settings.update(new)
         self.settings_changed.emit(new)

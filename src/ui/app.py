@@ -76,7 +76,17 @@ class RealEstateApp(QMainWindow):
         self.collected_data = []
         self.is_scheduled_run = False
         self.retry_handler = None
+        self.tray_icon = None
+        self._is_shutting_down = False
+        self.favorite_keys = set()
+        self._shortcuts = {}
         self.db = ComplexDatabase()
+        self._lazy_noncritical_tabs = bool(settings.get("startup_lazy_noncritical_tabs", True))
+        self._noncritical_loaded = {
+            "history": False,
+            "stats": False,
+            "favorites": False,
+        }
         
         # v11.0: Toast 알림 시스템
         self.toast_widgets: List[ToastWidget] = []
@@ -140,6 +150,8 @@ class RealEstateApp(QMainWindow):
         self.status_bar = self.statusBar()
         self.crawler_tab.data_collected.connect(self._on_crawl_data_collected)
         self.crawler_tab.status_message.connect(self.status_bar.showMessage)
+        self.crawler_tab.alert_triggered.connect(self._on_alert_triggered)
+        self.group_tab.groups_updated.connect(self._load_schedule_groups)
         
         self.tabs.currentChanged.connect(self._refresh_tab)
 
@@ -275,6 +287,7 @@ class RealEstateApp(QMainWindow):
             <tr><td>💾 Excel 저장</td><td>Ctrl+S</td></tr>
             <tr><td>📄 CSV 저장</td><td>Ctrl+Shift+S</td></tr>
             <tr><td>🔍 검색</td><td>Ctrl+F</td></tr>
+            <tr><td>⚙️ 설정</td><td>Ctrl+,</td></tr>
             <tr><td>🎨 테마 변경</td><td>Ctrl+T</td></tr>
             <tr><td>📥 트레이 최소화</td><td>Ctrl+M</td></tr>
         </table>
@@ -332,15 +345,20 @@ class RealEstateApp(QMainWindow):
         help_menu.addAction("ℹ️ 정보", self._show_about)
     
     def _init_shortcuts(self):
-        QShortcut(QKeySequence("Ctrl+R"), self, self._start_crawling)
-        QShortcut(QKeySequence("Ctrl+Shift+R"), self, self._stop_crawling)
-        QShortcut(QKeySequence("Ctrl+S"), self, self._save_excel)
-        QShortcut(QKeySequence("Ctrl+Shift+S"), self, self._save_csv)
-        QShortcut(QKeySequence("F5"), self, self._refresh_tab)
-        QShortcut(QKeySequence("Ctrl+F"), self, self._focus_search)
-        QShortcut(QKeySequence("Ctrl+T"), self, self._toggle_theme)
-        QShortcut(QKeySequence("Ctrl+M"), self, self._minimize_to_tray)
-        QShortcut(QKeySequence("Ctrl+Q"), self, self._quit_app)
+        self._register_shortcut(SHORTCUTS["start_crawl"], self._start_crawling)
+        self._register_shortcut(SHORTCUTS["stop_crawl"], self._stop_crawling)
+        self._register_shortcut(SHORTCUTS["save_excel"], self._save_excel)
+        self._register_shortcut(SHORTCUTS["save_csv"], self._save_csv)
+        self._register_shortcut(SHORTCUTS["refresh"], self._refresh_tab)
+        self._register_shortcut(SHORTCUTS["search"], self._focus_search)
+        self._register_shortcut(SHORTCUTS["toggle_theme"], self._toggle_theme)
+        self._register_shortcut(SHORTCUTS["minimize_tray"], self._minimize_to_tray)
+        self._register_shortcut(SHORTCUTS["quit"], self._quit_app)
+        self._register_shortcut(SHORTCUTS["settings"], self._show_settings)
+
+    def _register_shortcut(self, key_sequence, callback):
+        shortcut = QShortcut(QKeySequence(key_sequence), self, callback)
+        self._shortcuts[key_sequence] = shortcut
 
     # Shortcut handlers (delegate to modular widgets)
     def _start_crawling(self):
@@ -369,6 +387,7 @@ class RealEstateApp(QMainWindow):
             self.crawler_tab.save_json()
     
     def _init_tray(self):
+        self.tray_icon = None
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.tray_icon = QSystemTrayIcon(self)
             self.tray_icon.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
@@ -389,13 +408,21 @@ class RealEstateApp(QMainWindow):
         # self._load_all_groups() - Handled by GroupTab
         if hasattr(self, 'db_tab'): self.db_tab.load_data()
         if hasattr(self, 'group_tab'): self.group_tab.load_groups()
-        
-        self._load_history()
-        self._load_stats_complexes()
+
+        if not self._lazy_noncritical_tabs:
+            self._load_history()
+            self._noncritical_loaded["history"] = True
+            self._load_stats_complexes()
+            self._noncritical_loaded["stats"] = True
+            self._refresh_favorite_keys()
+            self._noncritical_loaded["favorites"] = True
         self._load_schedule_groups()
-        # self._refresh_favorite_keys() - Obsolete
         
         # Connect signals after loading
+        try:
+            self.stats_complex_combo.currentIndexChanged.disconnect(self._on_stats_complex_changed)
+        except Exception:
+            pass
         self.stats_complex_combo.currentIndexChanged.connect(self._on_stats_complex_changed)
 
     def _ensure_chart_widget(self):
@@ -423,14 +450,22 @@ class RealEstateApp(QMainWindow):
     def _on_crawl_data_collected(self, data):
         self.collected_data = list(data) if data else []
         self._load_history()
+        self._noncritical_loaded["history"] = True
         self._load_stats_complexes()
+        self._noncritical_loaded["stats"] = True
         if self.tabs.currentWidget() is self.stats_tab:
             self._load_stats()
         if self.dashboard_widget is not None:
             self.dashboard_widget.set_data(self.collected_data)
         if hasattr(self, "favorites_tab"):
             self.favorites_tab.refresh()
+            self._noncritical_loaded["favorites"] = True
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
+
+    def _on_alert_triggered(self, complex_name, trade_type, price_text, area_pyeong, alert_id):
+        message = f"{complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)"
+        self.show_toast(f"🔔 조건 매물 발견: {message}")
+        self.show_notification("조건 매물 알림", message)
     
     # Event handlers
     # Obsolete helpers removed (replaced by widgets: CrawlerTab, DatabaseTab, GroupTab)
@@ -524,23 +559,28 @@ class RealEstateApp(QMainWindow):
     
     # History Tab handlers
     def _load_history(self):
-        self.history_table.setRowCount(0)
-        history = self.db.get_crawl_history()
-        for name, cid, ttype, cnt, date in history:
-            row = self.history_table.rowCount()
-            self.history_table.insertRow(row)
-            self.history_table.setItem(row, 0, QTableWidgetItem(name))
-            self.history_table.setItem(row, 1, QTableWidgetItem(cid))
-            self.history_table.setItem(row, 2, QTableWidgetItem(ttype))
-            self.history_table.setItem(row, 3, QTableWidgetItem(str(cnt)))
-            self.history_table.setItem(row, 4, QTableWidgetItem(date))
+        self.history_table.setUpdatesEnabled(False)
+        try:
+            self.history_table.setRowCount(0)
+            history = self.db.get_crawl_history()
+            self.history_table.setRowCount(len(history))
+            for row, (name, cid, ttype, cnt, date) in enumerate(history):
+                self.history_table.setItem(row, 0, QTableWidgetItem(name))
+                self.history_table.setItem(row, 1, QTableWidgetItem(cid))
+                self.history_table.setItem(row, 2, QTableWidgetItem(ttype))
+                self.history_table.setItem(row, 3, QTableWidgetItem(str(cnt)))
+                self.history_table.setItem(row, 4, QTableWidgetItem(date))
+        finally:
+            self.history_table.setUpdatesEnabled(True)
     
     # Stats Tab handlers
     def _load_stats_complexes(self):
+        self.stats_complex_combo.blockSignals(True)
         self.stats_complex_combo.clear()
         complexes = self.db.get_complexes_for_stats()
         for name, cid in complexes:
             self.stats_complex_combo.addItem(f"{name}", cid)
+        self.stats_complex_combo.blockSignals(False)
     
     def _load_stats(self):
         cid = self.stats_complex_combo.currentData()
@@ -563,28 +603,30 @@ class RealEstateApp(QMainWindow):
         if pyeong:
             snapshots = [s for s in snapshots if s[2] == pyeong]
         
-        self.stats_table.setRowCount(0)
-        # 차트용 데이터 수집
+        self.stats_table.setUpdatesEnabled(False)
         chart_data = {"date": [], "avg": [], "min": [], "max": []}
-        
-        for date, typ, py, min_p, max_p, avg_p, cnt in snapshots:
-            row = self.stats_table.rowCount()
-            self.stats_table.insertRow(row)
-            self.stats_table.setItem(row, 0, QTableWidgetItem(date))
-            self.stats_table.setItem(row, 1, QTableWidgetItem(typ))
-            self.stats_table.setItem(row, 2, QTableWidgetItem(f"{py}평"))
-            self.stats_table.setItem(row, 3, SortableTableWidgetItem(str(min_p)))
-            self.stats_table.setItem(row, 4, SortableTableWidgetItem(str(max_p)))
-            self.stats_table.setItem(row, 5, SortableTableWidgetItem(str(avg_p)))
-            
-            # 같은 유형/평형만 차트에 표시 (첫 번째 데이터 기준)
-            if not chart_data["date"] or (chart_data["type"] == typ and chart_data["py"] == py):
-                 chart_data["type"] = typ
-                 chart_data["py"] = py
-                 chart_data["date"].append(date)
-                 chart_data["avg"].append(avg_p)
-                 chart_data["min"].append(min_p)
-                 chart_data["max"].append(max_p)
+        try:
+            self.stats_table.setRowCount(0)
+            self.stats_table.setRowCount(len(snapshots))
+            # 차트용 데이터 수집
+            for row, (date, typ, py, min_p, max_p, avg_p, cnt) in enumerate(snapshots):
+                self.stats_table.setItem(row, 0, QTableWidgetItem(date))
+                self.stats_table.setItem(row, 1, QTableWidgetItem(typ))
+                self.stats_table.setItem(row, 2, QTableWidgetItem(f"{py}평"))
+                self.stats_table.setItem(row, 3, SortableTableWidgetItem(str(min_p)))
+                self.stats_table.setItem(row, 4, SortableTableWidgetItem(str(max_p)))
+                self.stats_table.setItem(row, 5, SortableTableWidgetItem(str(avg_p)))
+                
+                # 같은 유형/평형만 차트에 표시 (첫 번째 데이터 기준)
+                if not chart_data["date"] or (chart_data["type"] == typ and chart_data["py"] == py):
+                     chart_data["type"] = typ
+                     chart_data["py"] = py
+                     chart_data["date"].append(date)
+                     chart_data["avg"].append(avg_p)
+                     chart_data["min"].append(min_p)
+                     chart_data["max"].append(max_p)
+        finally:
+            self.stats_table.setUpdatesEnabled(True)
         
         # 차트 업데이트
         if chart_data["date"]:
@@ -744,103 +786,23 @@ class RealEstateApp(QMainWindow):
         AboutDialog(self).exec()
     
     def _show_advanced_filter(self):
-        dlg = AdvancedFilterDialog(self, self.advanced_filters)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            filters = dlg.get_filters()
-            if not filters or self._is_default_advanced_filter(filters):
-                self.advanced_filters = None
-                sender = self.sender()
-                if sender and isinstance(sender, QPushButton):
-                     sender.setStyleSheet("")
-                self.show_toast("고급 필터가 해제되었습니다")
-
-                if self.collected_data:
-                    self._render_results(self.collected_data, render_only=True)
-                    self._restore_summary()
-            else:
-                self.advanced_filters = filters
-                # 필터 버튼 스타일 변경으로 활성 상태 표시
-                sender = self.sender()
-                if sender and isinstance(sender, QPushButton):
-                     sender.setStyleSheet("background-color: #e67e22; border: 1px solid #d35400;")
-                self.show_toast("고급 필터가 적용되었습니다")
-
-                # 이미 결과가 있다면 다시 필터링
-                if self.collected_data:
-                    self._filter_results_advanced()
+        # Legacy path retained for backward compatibility.
+        # Advanced filtering is owned by CrawlerTab in the modular UI.
+        ui_logger.warning("Deprecated app-level advanced filter entry invoked; ignoring.")
+        self.status_bar.showMessage("고급 필터는 수집기 탭(CrawlerTab)에서만 지원됩니다.")
 
     def _apply_advanced_filter(self):
         self._show_advanced_filter()
 
     def _filter_results_advanced(self):
-        """고급 필터를 수집된 데이터에 적용"""
-        if not self.advanced_filters: return
-        
-        if self.result_table.rowCount() > 0:
-            ui_logger.debug("고급 필터: 테이블 재렌더링으로 처리")
-
-        filtered = [d for d in self.collected_data if self._check_advanced_filter(d)]
-        filtered_count = len(self.collected_data) - len(filtered)
-
-        self._render_results(filtered, render_only=True)
-
-        # 요약 카드 업데이트 (필터 결과 기준)
-        stats = {"매매": 0, "전세": 0, "월세": 0, "new": 0, "price_up": 0, "price_down": 0}
-        for d in filtered:
-            tt = d.get("거래유형", "")
-            if tt in stats:
-                stats[tt] += 1
-            if d.get("is_new", False):
-                stats["new"] += 1
-            pc = d.get("price_change", 0)
-            if isinstance(pc, str):
-                try:
-                    pc = PriceConverter.to_int(pc)
-                except Exception:
-                    pc = 0
-            if pc > 0:
-                stats["price_up"] += 1
-            elif pc < 0:
-                stats["price_down"] += 1
-
-        self.summary_card.update_stats(
-            len(filtered),
-            stats["매매"],
-            stats["전세"],
-            stats["월세"],
-            filtered_count,
-            stats["new"],
-            stats["price_up"],
-            stats["price_down"],
-        )
-
-        self.status_bar.showMessage(f"🔍 고급 필터 적용됨 (제외: {filtered_count}건)")
+        ui_logger.warning("Deprecated app-level _filter_results_advanced invoked; ignoring.")
+        self.status_bar.showMessage("고급 필터는 수집기 탭(CrawlerTab)에서만 지원됩니다.")
 
     def _render_results(self, data, render_only=True):
-        """테이블/카드 뷰 렌더링 (필터용)"""
-        self._refresh_favorite_keys()
-        self.result_table.setRowCount(0)
-        self.grouped_rows.clear()
-        for d in data:
-            self._add_result(d, render_only=render_only)
-
-        if hasattr(self, 'card_view'):
-            self.card_view.set_data(data)
+        ui_logger.warning("Deprecated app-level _render_results invoked; ignoring.")
 
     def _restore_summary(self):
-        """고급 필터 해제 시 요약 복원"""
-        total = self.last_crawl_stats.get("total_found", len(self.collected_data))
-        filtered = self.last_crawl_stats.get("filtered_out", 0)
-        self.summary_card.update_stats(
-            total,
-            self.crawl_stats.get("매매", 0),
-            self.crawl_stats.get("전세", 0),
-            self.crawl_stats.get("월세", 0),
-            filtered,
-            self.crawl_stats.get("new", 0),
-            self.crawl_stats.get("price_up", 0),
-            self.crawl_stats.get("price_down", 0),
-        )
+        ui_logger.warning("Deprecated app-level _restore_summary invoked; ignoring.")
 
     def _is_default_advanced_filter(self, filters: dict) -> bool:
         defaults = {
@@ -975,32 +937,27 @@ class RealEstateApp(QMainWindow):
         return True
 
     def _show_url_batch_dialog(self):
-        dlg = URLBatchDialog(self)
-        dlg.complexes_added.connect(self._add_complexes_from_dialog)
-        dlg.exec()
+        # Legacy compatibility: delegate to active CrawlerTab.
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab._show_url_batch_dialog()
+            return
+        ui_logger.warning("CrawlerTab unavailable for URL batch dialog.")
     
     def _add_complexes_from_url(self, urls):
-        count = 0
-        for url in urls:
-            # URL 파싱 로직 (utils/helpers.py 활용 가능)
-            # 여기서는 간단히 ID 추출 예시
-            m = re.search(r'/complexes/(\d+)', url)
-            if m:
-                cid = m.group(1)
-                # 이름은 가져오기 어려우므로 "URL추가_ID" 임시 지정 후 사용자가 수정 권장
-                # 또는 crawler가 ID로 이름 조회하는 기능 필요 (NaverURLParser 활용)
-                self._add_row(f"단지_{cid}", cid)
-                count += 1
-        self.show_toast(f"{count}개 URL 등록 완료")
+        if hasattr(self, "crawler_tab"):
+            self.crawler_tab._add_complexes_from_url(urls)
+            return
+        ui_logger.warning("CrawlerTab unavailable for _add_complexes_from_url.")
 
     def _add_complexes_from_dialog(self, complexes):
-        """URL 일괄 등록 다이얼로그에서 선택된 단지 추가"""
-        count = 0
-        for name, cid in complexes:
-            self._add_row(name, cid)
-            count += 1
-        if count:
-            self.show_toast(f"{count}개 단지 추가 완료")
+        if hasattr(self, "crawler_tab"):
+            for name, cid in complexes:
+                self.crawler_tab.add_task(name, cid)
+            if complexes:
+                self.show_toast(f"{len(complexes)}개 단지 추가 완료")
+            return
+        ui_logger.warning("CrawlerTab unavailable for _add_complexes_from_dialog.")
 
     def _show_excel_template_dialog(self):
         current_template = settings.get("excel_template")
@@ -1071,13 +1028,20 @@ class RealEstateApp(QMainWindow):
         elif current is self.group_tab:
             self.group_tab.load_groups()
         elif current is self.history_tab:
+            self._noncritical_loaded["history"] = True
             self._load_history()
         elif current is self.stats_tab:
+            if not self._noncritical_loaded["stats"]:
+                self._load_stats_complexes()
+                self._noncritical_loaded["stats"] = True
             self._load_stats()
         elif current is self.dashboard_tab:
             self._ensure_dashboard_widget()
             self.dashboard_widget.refresh()
         elif current is self.favorites_tab:
+            if not self._noncritical_loaded["favorites"]:
+                self._refresh_favorite_keys()
+                self._noncritical_loaded["favorites"] = True
             self.favorites_tab.refresh()
 
 
@@ -1088,9 +1052,11 @@ class RealEstateApp(QMainWindow):
                 self.crawler_tab.result_search.setFocus()
 
     def _minimize_to_tray(self):
-        if self.tray_icon:
-            self.hide()
-            self.tray_icon.showMessage("알림", "트레이로 최소화되었습니다.", QSystemTrayIcon.MessageIcon.Information, 2000)
+        if not self.tray_icon:
+            self.status_bar.showMessage("시스템 트레이를 사용할 수 없습니다.")
+            return
+        self.hide()
+        self.tray_icon.showMessage("알림", "트레이로 최소화되었습니다.", QSystemTrayIcon.MessageIcon.Information, 2000)
 
     def _show_from_tray(self):
         self.show()
@@ -1101,38 +1067,53 @@ class RealEstateApp(QMainWindow):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.show()
 
-    def _quit_app(self):
-        if settings.get("confirm_before_close"):
-            if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
-                return
-        
-        # 스레드 안전 종료 - CrawlerTab이 관리
+    def _shutdown(self):
+        if self._is_shutting_down:
+            return
+        self._is_shutting_down = True
         if hasattr(self, 'crawler_tab'):
             self.crawler_tab.stop_crawling()
-        
-        # 타이머 정리
         if hasattr(self, 'schedule_timer') and self.schedule_timer:
             self.schedule_timer.stop()
-        
-        # 설정 저장
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])
-        
-        # DB 연결 종료
-        self.db.close()
-        
+        try:
+            self.db.close()
+        except Exception as e:
+            ui_logger.debug(f"DB 종료 중 오류 (무시): {e}")
+        if self.tray_icon:
+            self.tray_icon.hide()
+
+    def _quit_app(self, skip_confirm=False):
+        if not skip_confirm and settings.get("confirm_before_close"):
+            if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
+                return
+        self._shutdown()
         QApplication.quit()
 
     def closeEvent(self, event):
+        if self._is_shutting_down:
+            event.accept()
+            return
+
+        if settings.get("minimize_to_tray", True) and self.tray_icon:
+            event.ignore()
+            self._minimize_to_tray()
+            return
+
         if settings.get("confirm_before_close"):
-            reply = QMessageBox.question(self, "종료", "정말 종료하시겠습니까?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-            if reply == QMessageBox.StandardButton.Yes:
-                self._quit_app()
-                event.accept()
-            else:
+            reply = QMessageBox.question(
+                self,
+                "종료",
+                "정말 종료하시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
                 event.ignore()
-        else:
-             self._quit_app()
-             event.accept()
+                return
+
+        self._shutdown()
+        event.accept()
 
     def show_toast(self, message, duration=3000):
         # 화면 우측 하단에 표시
@@ -1183,20 +1164,11 @@ class RealEstateApp(QMainWindow):
 
 
     def _toggle_view_mode(self):
-        """테이블/카드 뷰 전환"""
-        if self.btn_view_mode.isChecked():
-            self.view_mode = "card"
-            self.btn_view_mode.setText("📄 테이블")
-            self.view_stack.setCurrentWidget(self.card_view)
-            # 데이터 동기화 (필요시)
-            if self.collected_data and not self.card_view._cards:
-                self.card_view.set_data(self.collected_data)
-        else:
-            self.view_mode = "table"
-            self.btn_view_mode.setText("🃏 카드뷰")
-            self.view_stack.setCurrentWidget(self.result_table)
-            
-        settings.set("view_mode", self.view_mode)
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab._toggle_view_mode()
+            return
+        ui_logger.warning("CrawlerTab unavailable for _toggle_view_mode.")
         
     def show_notification(self, title: str, message: str):
         """시스템 트레이 알림 표시"""

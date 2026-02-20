@@ -34,6 +34,10 @@ DEFAULT_SETTINGS = {
     "recently_viewed_count": 50,  # 최근 본 매물 개수
     "ui_batch_interval_ms": 120,  # UI 배치 반영 주기 (ms)
     "ui_batch_size": 30,  # UI 배치 반영 최대 건수
+    "history_batch_size": 200,  # 이력 DB 일괄 반영 크기
+    "result_filter_debounce_ms": 220,  # 결과 검색 디바운스
+    "max_log_lines": 1500,  # 로그 최대 라인 수
+    "startup_lazy_noncritical_tabs": True,  # 비핵심 탭 초기 로드 지연
 }
 
 class SettingsManager:

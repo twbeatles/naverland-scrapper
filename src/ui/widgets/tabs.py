@@ -86,6 +86,7 @@ class FavoritesTab(QWidget):
             logger.error(f"즐겨찾기 로드 실패: {e}")
             favorites = []
         
+        self.table.setUpdatesEnabled(False)
         self.table.setRowCount(len(favorites))
         self._update_empty_state(len(favorites))
         
@@ -103,6 +104,7 @@ class FavoritesTab(QWidget):
             item = self.table.item(row, 0)
             if item:
                 item.setData(Qt.ItemDataRole.UserRole, fav)
+        self.table.setUpdatesEnabled(True)
 
         # selection actions
         self._update_action_state()

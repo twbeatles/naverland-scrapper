@@ -31,8 +31,11 @@ class DashboardWidget(QWidget):
         self.db = db
         self._theme = theme
         self._data = []
+        self._data_revision = 0
         self._stat_cards = []
         self._stat_cols = None
+        self._last_trade_chart_sig = None
+        self._last_price_chart_sig = None
         self._setup_ui()
     
     def _setup_ui(self):
@@ -139,12 +142,15 @@ class DashboardWidget(QWidget):
     
     def set_data(self, data: list):
         """대시보드 데이터 설정"""
-        self._data = data
+        self._data = list(data) if data else []
+        self._data_revision += 1
         self.refresh()
     
     def set_theme(self, theme: str):
         """테마 변경"""
         self._theme = theme
+        self._last_trade_chart_sig = None
+        self._last_price_chart_sig = None
         # 차트 색상 업데이트
         self.refresh()
     
@@ -232,6 +238,13 @@ class DashboardWidget(QWidget):
         """거래유형별 파이 차트 업데이트"""
         if not hasattr(self, 'trade_figure') or not hasattr(self, 'trade_canvas'):
             return
+        signature = (
+            self._data_revision,
+            self._theme,
+            tuple(sorted((k, int(v)) for k, v in trade_counts.items())),
+        )
+        if signature == self._last_trade_chart_sig:
+            return
         
         try:
             self.trade_figure.clear()
@@ -258,12 +271,16 @@ class DashboardWidget(QWidget):
             
             self.trade_figure.tight_layout()
             self.trade_canvas.draw()
+            self._last_trade_chart_sig = signature
         except Exception as e:
             logger.debug(f"거래유형 차트 그리기 실패 (무시): {e}")
     
     def _update_price_chart(self):
         """가격대별 히스토그램 업데이트"""
         if not hasattr(self, 'price_figure') or not hasattr(self, 'price_canvas'):
+            return
+        signature = (self._data_revision, self._theme)
+        if signature == self._last_price_chart_sig:
             return
         
         try:
@@ -294,6 +311,7 @@ class DashboardWidget(QWidget):
             
             self.price_figure.tight_layout()
             self.price_canvas.draw()
+            self._last_price_chart_sig = signature
         except Exception as e:
             logger.debug(f"가격 차트 그리기 실패 (무시): {e}")
 
@@ -445,6 +463,7 @@ class CardViewWidget(QScrollArea):
         self.is_dark = is_dark
         self._cards = []
         self._all_data = []
+        self._search_text_cache = []
         self._filtered_data = []
         self._filter_text = ""
         self._card_width = 280
@@ -471,10 +490,26 @@ class CardViewWidget(QScrollArea):
         self.grid_layout.addWidget(self.empty_label, 0, 0)
         self.empty_label.hide()
         self.verticalScrollBar().valueChanged.connect(self._on_scroll)
+
+    @staticmethod
+    def _build_search_text(article: dict) -> str:
+        if not isinstance(article, dict):
+            return ""
+        return " ".join(
+            [
+                str(article.get("단지명", "")),
+                str(article.get("타입/특징", "")),
+                str(article.get("거래유형", "")),
+                str(article.get("매매가", "")),
+                str(article.get("보증금", "")),
+                str(article.get("월세", "")),
+            ]
+        ).lower()
     
     def set_data(self, articles: list):
         """매물 데이터를 카드로 표시"""
         self._all_data = list(articles) if articles else []
+        self._search_text_cache = [self._build_search_text(a) for a in self._all_data]
         self._apply_filter(reset_view=True)
 
     def append_data(self, articles: list):
@@ -483,6 +518,7 @@ class CardViewWidget(QScrollArea):
             return
         new_items = list(articles)
         self._all_data.extend(new_items)
+        self._search_text_cache.extend(self._build_search_text(a) for a in new_items)
 
         if self._filter_text:
             # 필터가 켜져 있으면 정확성을 위해 재적용
@@ -513,9 +549,8 @@ class CardViewWidget(QScrollArea):
         text = (self._filter_text or "").lower()
         if text:
             self._filtered_data = [
-                d for d in self._all_data
-                if text in str(d.get("단지명", "")).lower()
-                or text in str(d.get("타입/특징", "")).lower()
+                d for d, searchable in zip(self._all_data, self._search_text_cache)
+                if text in searchable
             ]
         else:
             self._filtered_data = list(self._all_data)
