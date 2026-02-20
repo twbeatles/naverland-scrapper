@@ -44,7 +44,7 @@ class DashboardWidget(QWidget):
         
         # 제목
         title = QLabel("📊 분석 대시보드")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; padding: 10px;")
+        title.setStyleSheet("font-size: 22px; font-weight: 800; padding: 10px 0; letter-spacing: 0.5px;")
         layout.addWidget(title)
         
         # 통계 카드 영역 (반응형 그리드)
@@ -120,22 +120,26 @@ class DashboardWidget(QWidget):
             QFrame {{
                 background-color: {color}20;
                 border: 1px solid {color}40;
-                border-radius: 12px;
-                padding: 15px;
+                border-radius: 14px;
+                padding: 18px;
+            }}
+            QFrame:hover {{
+                border: 1px solid {color}80;
+                background-color: {color}28;
             }}
         """)
         card.setMinimumWidth(180)
         
         layout = QVBoxLayout(card)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 12px; color: #888;")
+        title_label.setStyleSheet("font-size: 12px; color: #888; font-weight: 500;")
         layout.addWidget(title_label)
         
         value_label = QLabel(value)
         value_label.setObjectName("value")
-        value_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color};")
+        value_label.setStyleSheet(f"font-size: 32px; font-weight: 800; color: {color}; letter-spacing: -0.5px;")
         layout.addWidget(value_label)
         
         return card
@@ -330,7 +334,7 @@ class ArticleCard(QFrame):
     def _setup_ui(self):
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setFixedSize(280, 190)
+        self.setFixedSize(280, 210)
         
         # 거래유형별 색상
         trade_type = self.data.get("거래유형", "매매")
@@ -338,15 +342,19 @@ class ArticleCard(QFrame):
         bg_color = colors["dark_bg"] if self.is_dark else colors["bg"]
         fg_color = colors["dark_fg"] if self.is_dark else colors["fg"]
         
+        # 다크/라이트 모드에 따른 호버 배경
+        hover_bg = f"{bg_color}" if self.is_dark else f"{fg_color}10"
+        
         self.setStyleSheet(f"""
             ArticleCard {{
                 background-color: {bg_color};
                 border: 1px solid {fg_color}40;
                 border-radius: 14px;
-                padding: 12px;
+                padding: 14px;
             }}
             ArticleCard:hover {{
                 border: 2px solid {fg_color};
+                background-color: {hover_bg};
             }}
         """)
         

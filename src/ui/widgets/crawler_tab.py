@@ -295,19 +295,22 @@ class CrawlerTab(QWidget):
     def _setup_action_group(self, layout):
         eg = QGroupBox("6️⃣ 실행")
         el = QHBoxLayout()
+        el.setSpacing(10)
         self.btn_start = QPushButton("▶️ 크롤링 시작")
         self.btn_start.setObjectName("startButton")
-        self.btn_start.setMinimumHeight(45)
+        self.btn_start.setMinimumHeight(48)
         self.btn_start.clicked.connect(self.start_crawling)
         
         self.btn_stop = QPushButton("⏹️ 중지")
         self.btn_stop.setObjectName("stopButton")
         self.btn_stop.setEnabled(False)
+        self.btn_stop.setMinimumHeight(42)
         self.btn_stop.clicked.connect(self.stop_crawling)
         
         self.btn_save = QPushButton("💾 저장")
         self.btn_save.setObjectName("saveButton")
         self.btn_save.setEnabled(False)
+        self.btn_save.setMinimumHeight(42)
         self.btn_save.clicked.connect(self.show_save_menu)
         
         el.addWidget(self.btn_start, 2)

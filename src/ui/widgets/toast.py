@@ -42,12 +42,12 @@ class ToastWidget(QWidget):
         color_info = self.TOAST_TYPES.get(self._type, self.TOAST_TYPES["info"])
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setContentsMargins(20, 12, 14, 12)
         layout.setSpacing(12)
         
         # 아이콘
         icon_label = QLabel(color_info["icon"])
-        icon_label.setStyleSheet("font-size: 22px;")
+        icon_label.setStyleSheet("font-size: 20px;")
         layout.addWidget(icon_label)
         
         # 메시지
@@ -56,15 +56,27 @@ class ToastWidget(QWidget):
             "color: white; font-size: 13px; font-weight: 600; padding: 0;"
         )
         msg_label.setWordWrap(True)
-        msg_label.setFont(QFont("Malgun Gothic", 10))
+        msg_font = QFont()
+        msg_font.setFamilies(['Pretendard', 'SUIT', 'Malgun Gothic', 'Segoe UI'])
+        msg_font.setPointSize(10)
+        msg_label.setFont(msg_font)
         layout.addWidget(msg_label, 1)
+        
+        # 닫기 버튼
+        close_btn = QLabel("×")
+        close_btn.setStyleSheet(
+            "color: rgba(255,255,255,0.6); font-size: 16px; font-weight: 700; padding: 0 4px;"
+        )
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.mousePressEvent = lambda e: self.fade_out()
+        layout.addWidget(close_btn)
         
         # 스타일 적용
         self.setStyleSheet(f"""
             ToastWidget {{
                 background-color: {color_info["bg"]};
                 border-radius: 12px;
-                border: 1px solid {color_info["border"]};
+                border: 1.5px solid {color_info["border"]};
             }}
         """)
         

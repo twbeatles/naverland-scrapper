@@ -150,7 +150,8 @@ class SummaryCard(QFrame):
         self._theme = theme
         self._apply_theme()
         layout = QHBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
         
         # 총 수집
         self.total_widget = self._create_stat_widget("📊 총 수집", "0건", "#3498db")
@@ -171,6 +172,7 @@ class SummaryCard(QFrame):
         # 구분선
         self.sep = QFrame()
         self.sep.setFrameShape(QFrame.Shape.VLine)
+        self.sep.setFixedHeight(44)
         self._update_separator_style()
         layout.addWidget(self.sep)
         
@@ -202,9 +204,9 @@ class SummaryCard(QFrame):
                         stop:0 rgba(32, 36, 55, 0.95),
                         stop:1 rgba(24, 28, 45, 0.95)
                     );
-                    border-radius: 12px; 
+                    border-radius: 14px; 
                     border: 1px solid rgba(255, 255, 255, 0.08);
-                    padding: 10px;
+                    padding: 12px;
                 }
             """)
         else:
@@ -215,9 +217,9 @@ class SummaryCard(QFrame):
                         stop:0 #ffffff,
                         stop:1 #f8fafc
                     );
-                    border-radius: 12px; 
+                    border-radius: 14px; 
                     border: 1px solid #e2e8f0;
-                    padding: 10px;
+                    padding: 12px;
                 }
             """)
     
@@ -249,17 +251,17 @@ class SummaryCard(QFrame):
     def _create_stat_widget(self, title, value, color):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(8, 5, 8, 5)
-        layout.setSpacing(2)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(3)
         
         title_label = QLabel(title)
         title_color = "#aaa" if self._theme == "dark" else "#64748b"
-        title_label.setStyleSheet(f"color: {title_color}; font-size: 11px;")
+        title_label.setStyleSheet(f"color: {title_color}; font-size: 11px; font-weight: 500;")
         layout.addWidget(title_label)
         
         value_label = QLabel(value)
         value_label.setObjectName("value")
-        value_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+        value_label.setStyleSheet(f"color: {color}; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;")
         layout.addWidget(value_label)
         
         return widget

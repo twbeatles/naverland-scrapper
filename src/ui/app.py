@@ -124,7 +124,8 @@ class RealEstateApp(QMainWindow):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         layout = QVBoxLayout(main_widget)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(12, 8, 12, 4)
+        layout.setSpacing(6)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
         

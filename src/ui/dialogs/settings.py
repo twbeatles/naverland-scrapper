@@ -18,12 +18,14 @@ class SettingsDialog(QDialog):
     
     def _setup_ui(self):
         self.setWindowTitle("⚙️ 설정")
-        self.setMinimumSize(450, 450)
+        self.setMinimumSize(500, 520)
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
         
         # 테마
         tg = QGroupBox("🎨 테마")
         tl = QHBoxLayout()
+        tl.setSpacing(10)
         self.combo_theme = QComboBox()
         self.combo_theme.addItems(["dark", "light"])
         tl.addWidget(QLabel("테마:"))
@@ -35,6 +37,7 @@ class SettingsDialog(QDialog):
         # 시스템
         sg = QGroupBox("🖥️ 시스템")
         sl = QVBoxLayout()
+        sl.setSpacing(10)
         self.check_tray = QCheckBox("닫기 시 트레이로 최소화")
         self.check_notify = QCheckBox("데스크톱 알림 표시")
         self.check_confirm = QCheckBox("종료 전 확인")
@@ -244,13 +247,15 @@ class ShortcutsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⌨️ 단축키")
-        self.setMinimumSize(400, 350)
+        self.setMinimumSize(450, 400)
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
         tbl = QTableWidget()
         tbl.setColumnCount(2)
         tbl.setHorizontalHeaderLabels(["기능", "단축키"])
         tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         tbl.setAlternatingRowColors(True)
+        tbl.verticalHeader().setDefaultSectionSize(38)
         shortcuts = [
             ("🚀 크롤링 시작", SHORTCUTS["start_crawl"]),
             ("⏹️ 크롤링 중지", SHORTCUTS["stop_crawl"]),
