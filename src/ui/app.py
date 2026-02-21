@@ -729,6 +729,8 @@ class RealEstateApp(QMainWindow):
         # 알림 설정 등은 즉시 반영됨
         if self.retry_handler:
             self.retry_handler.max_retries = settings.get("max_retry_count", 3)
+        if hasattr(self, 'crawler_tab') and hasattr(self.crawler_tab, 'update_runtime_settings'):
+            self.crawler_tab.update_runtime_settings()
     
     def _save_preset(self):
         name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")
@@ -1073,7 +1075,9 @@ class RealEstateApp(QMainWindow):
             return
         self._is_shutting_down = True
         if hasattr(self, 'crawler_tab'):
-            self.crawler_tab.stop_crawling()
+            ok = self.crawler_tab.shutdown_crawl(timeout_ms=8000)
+            if not ok:
+                ui_logger.warning("크롤링 스레드 종료 대기 타임아웃 상태에서 앱 종료를 진행합니다.")
         if hasattr(self, 'schedule_timer') and self.schedule_timer:
             self.schedule_timer.stop()
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])

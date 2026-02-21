@@ -243,6 +243,70 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_crawler_tab_rejects_start_when_thread_running(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        class _RunningThread:
+            def isRunning(self):
+                return True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_running_guard.db"))
+            tab = CrawlerTab(db)
+            running_thread = _RunningThread()
+            tab.crawler_thread = running_thread
+
+            tab.start_crawling()
+
+            self.assertIs(tab.crawler_thread, running_thread)
+            self.assertIn("이미 크롤링이 실행 중", tab.log_browser.toPlainText())
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_applies_runtime_settings_and_completion_sound(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        def _settings_get(key, default=None):
+            overrides = {
+                "result_filter_debounce_ms": 350,
+                "crawl_speed": "느림",
+                "default_sort_column": "면적",
+                "default_sort_order": "desc",
+                "compact_duplicate_listings": True,
+                "play_sound_on_complete": True,
+            }
+            return overrides.get(key, default)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_runtime_settings.db"))
+            tab = CrawlerTab(db)
+
+            with patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get):
+                tab.update_runtime_settings()
+
+            self.assertEqual(tab._search_timer.interval(), 350)
+            self.assertEqual(tab.speed_slider.current_speed(), "느림")
+            self.assertEqual(tab.combo_sort.currentText(), "면적 ↓")
+
+            tab.crawler_thread = object()
+            with (
+                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get),
+                patch("src.ui.widgets.crawler_tab.QApplication.beep") as mock_beep,
+                patch.object(tab, "_save_price_snapshots", return_value=None),
+            ):
+                tab._on_crawl_finished([])
+
+            mock_beep.assert_called_once()
+            self.assertIsNone(tab.crawler_thread)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_app_shortcuts_group_sync_and_safe_minimize(self):
         from src.ui.app import RealEstateApp
         from src.utils.constants import SHORTCUTS
@@ -262,6 +326,30 @@ class TestUIWiring(unittest.TestCase):
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
             app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_app_shutdown_waits_crawler_before_db_close(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        call_order = []
+        with (
+            patch.object(
+                app.crawler_tab,
+                "shutdown_crawl",
+                side_effect=lambda timeout_ms=8000: call_order.append("crawler_shutdown") or True,
+            ),
+            patch.object(app.db, "close", side_effect=lambda: call_order.append("db_close")),
+        ):
+            app._shutdown()
+
+        self.assertEqual(call_order, ["crawler_shutdown", "db_close"])
+
         if hasattr(app, "db") and app.db:
             app.db.close()
         app.deleteLater()

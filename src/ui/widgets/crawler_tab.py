@@ -288,6 +288,7 @@ class CrawlerTab(QWidget):
         spl = QVBoxLayout()
         self.speed_slider = SpeedSlider()
         self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
+        self.speed_slider.speed_changed.connect(self._on_speed_changed)
         spl.addWidget(self.speed_slider)
         spg.setLayout(spl)
         layout.addWidget(spg)
@@ -334,7 +335,9 @@ class CrawlerTab(QWidget):
         
         search_sort.addWidget(QLabel("정렬:"))
         self.combo_sort = QComboBox()
-        self.combo_sort.addItems(["가격 ↑", "가격 ↓", "면적 ↑", "면적 ↓", "단지명 ↑", "단지명 ↓"])
+        self.combo_sort.addItems(
+            ["가격 ↑", "가격 ↓", "면적 ↑", "면적 ↓", "단지명 ↑", "단지명 ↓", "거래유형 ↑", "거래유형 ↓"]
+        )
         self.combo_sort.currentTextChanged.connect(self._sort_results)
         search_sort.addWidget(self.combo_sort, 1)
         
@@ -397,6 +400,7 @@ class CrawlerTab(QWidget):
     def _load_state(self):
         # Load any persisted state if needed
         logger.debug("CrawlerTab 상태 로드 없음 (기본값 사용)")
+        self.update_runtime_settings()
 
     def set_theme(self, theme):
         self.current_theme = theme
@@ -404,6 +408,42 @@ class CrawlerTab(QWidget):
             self.summary_card.set_theme(theme)
         if hasattr(self, 'card_view'):
             self.card_view.is_dark = (theme == "dark")
+
+    def _on_speed_changed(self, speed):
+        settings.set("crawl_speed", speed)
+
+    def _default_sort_criterion(self):
+        column = str(settings.get("default_sort_column", "가격") or "가격")
+        order = str(settings.get("default_sort_order", "asc") or "asc").lower()
+        if column == "거래":
+            column = "거래유형"
+        if column not in {"가격", "면적", "단지명", "거래유형"}:
+            column = "가격"
+        arrow = "↑" if order == "asc" else "↓"
+        return f"{column} {arrow}"
+
+    def _apply_default_sort_settings(self):
+        criterion = self._default_sort_criterion()
+        idx = self.combo_sort.findText(criterion)
+        if idx < 0:
+            return
+        self.combo_sort.blockSignals(True)
+        self.combo_sort.setCurrentIndex(idx)
+        self.combo_sort.blockSignals(False)
+        if self.result_table.rowCount() > 0:
+            self._sort_results(self.combo_sort.currentText())
+
+    def update_runtime_settings(self):
+        try:
+            debounce_ms = max(80, int(settings.get("result_filter_debounce_ms", 220)))
+        except (TypeError, ValueError):
+            debounce_ms = 220
+        self._search_timer.setInterval(debounce_ms)
+        self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
+        self._apply_default_sort_settings()
+
+        compact = bool(settings.get("compact_duplicate_listings", True))
+        self.check_compact_duplicates.setChecked(compact)
         
     def _toggle_area_filter(self, state):
         enabled = state == Qt.CheckState.Checked.value
@@ -628,12 +668,18 @@ class CrawlerTab(QWidget):
         settings.set("view_mode", self.view_mode)
 
     def start_crawling(self):
+        if self.crawler_thread and self.crawler_thread.isRunning():
+            self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
+            self.status_message.emit("이미 크롤링이 실행 중입니다.")
+            return
+
         if self.table_list.rowCount() == 0:
             QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
             return
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
+        self.btn_save.setEnabled(False)
         self.log_browser.clear()
         self.progress_widget.reset()
         self.summary_card.reset()
@@ -693,6 +739,7 @@ class CrawlerTab(QWidget):
             cache=self.crawl_cache,
             ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
             ui_batch_size=settings.get("ui_batch_size", 30),
+            max_retry_count=settings.get("max_retry_count", 3),
             show_new_badge=settings.get("show_new_badge", True),
             show_price_change=settings.get("show_price_change", True),
             price_change_threshold=settings.get("price_change_threshold", 0),
@@ -717,10 +764,28 @@ class CrawlerTab(QWidget):
             self.append_log("🛑 중지 요청 중...", 30)
             self.btn_stop.setEnabled(False)
 
+    def shutdown_crawl(self, timeout_ms: int = 8000) -> bool:
+        thread = self.crawler_thread
+        if not thread:
+            return True
+        if not thread.isRunning():
+            self.crawler_thread = None
+            return True
+
+        thread.stop()
+        try:
+            wait_ms = max(100, int(timeout_ms))
+        except (TypeError, ValueError):
+            wait_ms = 8000
+        finished = bool(thread.wait(wait_ms))
+        if finished:
+            self.crawler_thread = None
+            return True
+        self.append_log(f"⚠️ 크롤링 종료 대기 타임아웃 ({wait_ms}ms)", 30)
+        return False
+
     def _on_crawl_finished(self, data):
         try:
-            self.btn_start.setEnabled(True)
-            self.btn_stop.setEnabled(False)
             self.btn_save.setEnabled(True)
             self.progress_widget.complete()
             self.append_log(f"✅ 크롤링 완료: 총 {len(data)}건 수집")
@@ -733,6 +798,12 @@ class CrawlerTab(QWidget):
                 self._save_price_snapshots()
             except Exception as e:
                 self.append_log(f"⚠️ 가격 스냅샷 저장 실패: {e}", 30)
+
+            if settings.get("play_sound_on_complete", True):
+                try:
+                    QApplication.beep()
+                except Exception as e:
+                    logger.debug(f"완료 알림음 재생 실패 (무시): {e}")
             
             self.data_collected.emit(data) # Notify App
             self.crawling_stopped.emit()
@@ -740,9 +811,10 @@ class CrawlerTab(QWidget):
         except Exception as e:
             self.append_log(f"❌ 크롤링 마무리 중 오류: {e}", 40)
             logger.error(f"Crawl finish handler failed: {e}")
-            # Ensure buttons are reset
+        finally:
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
+            self.crawler_thread = None
 
     def append_log(self, msg, level=20):
         theme_colors = COLORS[self.current_theme]
@@ -879,6 +951,8 @@ class CrawlerTab(QWidget):
             rows.sort(key=lambda d: self._extract_price_values(d)[2], reverse=not is_asc)
         elif key == "면적":
             rows.sort(key=lambda d: self._area_float(d.get("면적(평)", 0)), reverse=not is_asc)
+        elif key in ("거래", "거래유형"):
+            rows.sort(key=lambda d: str(d.get("거래유형", "")), reverse=not is_asc)
         else:
             rows.sort(key=lambda d: str(d.get("단지명", "")), reverse=not is_asc)
 
@@ -942,7 +1016,10 @@ class CrawlerTab(QWidget):
             trade=stats["by_trade_type"].get("매매", 0),
             jeonse=stats["by_trade_type"].get("전세", 0),
             monthly=stats["by_trade_type"].get("월세", 0),
-            filtered=stats["filtered_out"]
+            filtered=stats["filtered_out"],
+            new_count=stats.get("new_count", 0),
+            price_up=stats.get("price_up", 0),
+            price_down=stats.get("price_down", 0),
         )
 
     def _on_search_text_changed(self, text):
@@ -987,7 +1064,11 @@ class CrawlerTab(QWidget):
 
     def _sort_results(self, criterion):
         col_map = {
-            "단지명": self.COL_COMPLEX, "가격": self.COL_PRICE_SORT, "면적": self.COL_AREA
+            "단지명": self.COL_COMPLEX,
+            "가격": self.COL_PRICE_SORT,
+            "면적": self.COL_AREA,
+            "거래유형": self.COL_TRADE,
+            "거래": self.COL_TRADE,
         }
         is_asc = "↑" in criterion
         key = criterion.split(" ")[0]

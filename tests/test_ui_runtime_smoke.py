@@ -100,3 +100,19 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()
+
+    def test_database_migration_creates_alert_log_table(self):
+        from src.core.database import ComplexDatabase
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "migration_check.db"))
+            conn = db._pool.get_connection()
+            try:
+                row = conn.cursor().execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='article_alert_log'"
+                ).fetchone()
+            finally:
+                db._pool.return_connection(conn)
+
+            self.assertIsNotNone(row)
+            db.close()

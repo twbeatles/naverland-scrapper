@@ -173,6 +173,15 @@ class ComplexDatabase:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(article_id, complex_id)
             )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS article_alert_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER NOT NULL,
+                article_id TEXT NOT NULL,
+                complex_id TEXT NOT NULL,
+                notified_on DATE DEFAULT CURRENT_DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(alert_id, article_id, complex_id, notified_on)
+            )''')
             # 인덱스 추가
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
@@ -201,6 +210,7 @@ class ComplexDatabase:
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_alert_log_lookup ON article_alert_log(alert_id, article_id, complex_id, notified_on)')
             conn.commit()
             logger.info("테이블 초기화 완료")
         except Exception as e:
@@ -709,6 +719,44 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
 
+    def record_alert_notification(self, alert_id: int, article_id: str, complex_id: str, notified_on=None) -> bool:
+        """동일 매물/알림의 당일 중복 알림을 방지하기 위해 알림 기록을 저장"""
+        alert_id = int(alert_id or 0)
+        article_id = str(article_id or "").strip()
+        complex_id = str(complex_id or "").strip()
+        if alert_id <= 0 or not article_id or not complex_id:
+            return False
+
+        conn = self._pool.get_connection()
+        try:
+            c = conn.cursor()
+            if notified_on:
+                notified_on = str(notified_on).strip()
+                c.execute(
+                    """
+                    INSERT INTO article_alert_log (alert_id, article_id, complex_id, notified_on, created_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(alert_id, article_id, complex_id, notified_on) DO NOTHING
+                    """,
+                    (alert_id, article_id, complex_id, notified_on),
+                )
+            else:
+                c.execute(
+                    """
+                    INSERT INTO article_alert_log (alert_id, article_id, complex_id, notified_on, created_at)
+                    VALUES (?, ?, ?, CURRENT_DATE, CURRENT_TIMESTAMP)
+                    ON CONFLICT(alert_id, article_id, complex_id, notified_on) DO NOTHING
+                    """,
+                    (alert_id, article_id, complex_id),
+                )
+            conn.commit()
+            return (c.rowcount or 0) > 0
+        except Exception as e:
+            logger.error(f"알림 dedup 기록 실패: {e}")
+            return False
+        finally:
+            self._pool.return_connection(conn)
+
     def check_article_history(self, article_id, complex_id, current_price):
         """매물 이력 확인 (신규/변동)"""
         conn = self._pool.get_connection()
@@ -1051,18 +1099,62 @@ class ComplexDatabase:
         conn = self._pool.get_connection()
         try:
             # 마지막 확인일이 오늘이 아닌 'active' 매물을 'disappeared'로 변경
-            conn.cursor().execute("""
+            c = conn.cursor()
+            c.execute("""
                 UPDATE article_history 
                 SET status='disappeared' 
                 WHERE last_seen < CURRENT_DATE AND status='active'
             """)
-            updated = conn.total_changes
+            updated = c.rowcount if c.rowcount != -1 else 0
             conn.commit()
             if updated > 0:
                 logger.info(f"소멸 매물 처리: {updated}개")
             return updated
         except Exception as e:
             logger.error(f"소멸 매물 처리 실패: {e}")
+            return 0
+        finally:
+            self._pool.return_connection(conn)
+
+    def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, str]]) -> int:
+        """이번 실행 대상(단지ID, 거래유형) 범위에서만 소멸 매물을 처리"""
+        normalized: list[tuple[str, str]] = []
+        for pair in targets or []:
+            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                continue
+            complex_id = str(pair[0] or "").strip()
+            trade_type = str(pair[1] or "").strip()
+            if complex_id and trade_type:
+                normalized.append((complex_id, trade_type))
+
+        if not normalized:
+            return 0
+
+        conn = self._pool.get_connection()
+        try:
+            where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized))
+            params = []
+            for complex_id, trade_type in normalized:
+                params.extend([complex_id, trade_type])
+
+            c = conn.cursor()
+            c.execute(
+                f"""
+                UPDATE article_history
+                SET status='disappeared'
+                WHERE last_seen < CURRENT_DATE
+                  AND status='active'
+                  AND ({where_pairs})
+                """,
+                params,
+            )
+            updated = c.rowcount if c.rowcount != -1 else 0
+            conn.commit()
+            if updated > 0:
+                logger.info(f"대상 범위 소멸 매물 처리: {updated}개")
+            return updated
+        except Exception as e:
+            logger.error(f"대상 범위 소멸 매물 처리 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)

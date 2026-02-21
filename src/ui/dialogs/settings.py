@@ -263,6 +263,7 @@ class ShortcutsDialog(QDialog):
             ("📄 CSV 저장", SHORTCUTS["save_csv"]),
             ("🔄 새로고침", SHORTCUTS["refresh"]),
             ("🔍 검색", SHORTCUTS["search"]),
+            ("⚙️ 설정", SHORTCUTS["settings"]),
             ("🎨 테마 변경", SHORTCUTS["toggle_theme"]),
             ("📥 트레이 최소화", SHORTCUTS["minimize_tray"]),
             ("❌ 종료", SHORTCUTS["quit"])

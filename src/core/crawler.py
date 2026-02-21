@@ -56,6 +56,7 @@ class CrawlerThread(QThread):
         ui_batch_interval_ms=120,
         ui_batch_size=30,
         emit_legacy_item_signal=False,
+        max_retry_count=3,
         show_new_badge=True,
         show_price_change=True,
         price_change_threshold=0,
@@ -73,10 +74,22 @@ class CrawlerThread(QThread):
         self._running = True
         self.collected_data = []
         self.pending_items = []
-        self.stats = {"total_found": 0, "filtered_out": 0, "cache_hits": 0, "by_trade_type": {"매매": 0, "전세": 0, "월세": 0}}
+        self.stats = {
+            "total_found": 0,
+            "filtered_out": 0,
+            "cache_hits": 0,
+            "new_count": 0,
+            "price_up": 0,
+            "price_down": 0,
+            "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
+        }
         self.start_time = None
         self.items_per_second = 0
-        self.retry_handler = RetryHandler()
+        try:
+            retries = max(0, int(max_retry_count))
+        except (TypeError, ValueError):
+            retries = 3
+        self.retry_handler = RetryHandler(max_retries=retries)
         self.ui_batch_interval_ms = max(20, int(ui_batch_interval_ms))
         self.ui_batch_size = max(1, int(ui_batch_size))
         self.emit_legacy_item_signal = bool(emit_legacy_item_signal)
@@ -119,6 +132,9 @@ class CrawlerThread(QThread):
                 "total_found": self.stats.get("total_found", 0),
                 "filtered_out": self.stats.get("filtered_out", 0),
                 "cache_hits": self.stats.get("cache_hits", 0),
+                "new_count": self.stats.get("new_count", 0),
+                "price_up": self.stats.get("price_up", 0),
+                "price_down": self.stats.get("price_down", 0),
                 "by_trade_type": dict(self.stats.get("by_trade_type", {})),
             })
             self._last_batch_flush_at = time.monotonic()
@@ -266,6 +282,12 @@ class CrawlerThread(QThread):
         price_change = int(raw_price_change)
         if self.price_change_threshold > 0 and abs(price_change) < self.price_change_threshold:
             price_change = 0
+        if is_new:
+            self.stats["new_count"] = int(self.stats.get("new_count", 0)) + 1
+        if price_change > 0:
+            self.stats["price_up"] = int(self.stats.get("price_up", 0)) + 1
+        elif price_change < 0:
+            self.stats["price_down"] = int(self.stats.get("price_down", 0)) + 1
 
         visible_is_new = bool(is_new) if self.show_new_badge else False
         visible_price_change = int(price_change) if self.show_price_change else 0
@@ -288,6 +310,24 @@ class CrawlerThread(QThread):
                     continue
                 alert_id = int(self._row_get(rule, "id", 0) or 0)
                 alert_name = str(self._row_get(rule, "complex_name", complex_name) or complex_name)
+                should_emit = True
+                if alert_id > 0 and article_id:
+                    try:
+                        should_emit = bool(
+                            self.db.record_alert_notification(
+                                alert_id=alert_id,
+                                article_id=article_id,
+                                complex_id=complex_id,
+                            )
+                        )
+                    except Exception as e:
+                        should_emit = True
+                        self.log(f"   ⚠️ 알림 dedup 기록 실패 (emit 유지): {e}", 30)
+                elif alert_id > 0 and not article_id:
+                    self.log("   ℹ️ 매물ID 없음: 알림 dedup 생략", 10)
+
+                if not should_emit:
+                    continue
                 self.alert_triggered_signal.emit(
                     alert_name,
                     trade_type,
@@ -356,6 +396,7 @@ class CrawlerThread(QThread):
             total = len(self.targets) * len(self.trade_types)
             current = 0
             processed_complexes = 0  # 처리한 단지 수
+            processed_target_pairs = set()
             
             for name, cid in self.targets:
                 if not self._running: break
@@ -389,6 +430,8 @@ class CrawlerThread(QThread):
                 complex_count = 0
                 for ttype in self.trade_types:
                     if not self._running: break
+                    if cid and ttype:
+                        processed_target_pairs.add((str(cid), str(ttype)))
                     current += 1
                     
                     # 예상 남은 시간 계산
@@ -429,7 +472,15 @@ class CrawlerThread(QThread):
             # 전체 수집을 정상 종료한 경우에만 소멸 매물 처리
             if self.track_disappeared and self._running and self.db:
                 try:
-                    disappeared = int(self.db.mark_disappeared_articles() or 0)
+                    if processed_target_pairs and hasattr(self.db, "mark_disappeared_articles_for_targets"):
+                        disappeared = int(
+                            self.db.mark_disappeared_articles_for_targets(
+                                list(sorted(processed_target_pairs))
+                            )
+                            or 0
+                        )
+                    else:
+                        disappeared = int(self.db.mark_disappeared_articles() or 0)
                     if disappeared > 0:
                         self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
                 except Exception as e:

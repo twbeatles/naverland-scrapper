@@ -115,6 +115,84 @@ class TestComplexDatabase(unittest.TestCase):
         alerts = self.db.check_alerts("99999", "매매", 33.0, 12000)
         self.assertGreaterEqual(len(alerts), 1)
 
+    def test_mark_disappeared_for_targets_scope_and_rowcount(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="D1",
+                complex_id="10001",
+                complex_name="타깃단지",
+                trade_type="매매",
+                price=15000,
+                price_text="1억 5,000만",
+                area=35.0,
+                floor="12층",
+                feature="테스트",
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="D2",
+                complex_id="20002",
+                complex_name="비타깃단지",
+                trade_type="전세",
+                price=7000,
+                price_text="7,000만",
+                area=24.0,
+                floor="7층",
+                feature="테스트",
+            )
+        )
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                "UPDATE article_history SET last_seen = date('now', '-2 day'), status='active'"
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        updated = self.db.mark_disappeared_articles_for_targets([("10001", "매매")])
+        self.assertEqual(updated, 1)
+
+        conn = self.db._pool.get_connection()
+        try:
+            rows = conn.cursor().execute(
+                "SELECT complex_id, trade_type, status FROM article_history WHERE article_id IN (?, ?) ORDER BY article_id",
+                ("D1", "D2"),
+            ).fetchall()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(rows[0]["complex_id"], "10001")
+        self.assertEqual(rows[0]["status"], "disappeared")
+        self.assertEqual(rows[1]["complex_id"], "20002")
+        self.assertEqual(rows[1]["status"], "active")
+
+    def test_record_alert_notification_dedup_by_day(self):
+        first = self.db.record_alert_notification(
+            alert_id=10,
+            article_id="A100",
+            complex_id="C100",
+            notified_on="2026-02-21",
+        )
+        second = self.db.record_alert_notification(
+            alert_id=10,
+            article_id="A100",
+            complex_id="C100",
+            notified_on="2026-02-21",
+        )
+        third = self.db.record_alert_notification(
+            alert_id=10,
+            article_id="A100",
+            complex_id="C100",
+            notified_on="2026-02-22",
+        )
+
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertTrue(third)
+
     def test_upsert_article_history_bulk_and_state_lookup(self):
         rows_v1 = [
             {
