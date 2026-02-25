@@ -78,6 +78,19 @@ python src/main.py
 
 프로그램 시작 시 필수 라이브러리/디렉토리/충돌 마커(preflight)를 자동 점검합니다.
 
+### **4\. 배포 빌드 (PyInstaller)**
+
+기본 배포 프로필은 `naverland-scrapper.spec` 기준 **onefile**입니다.
+
+* 기본(onefile): `pyinstaller naverland-scrapper.spec`
+* onedir 강제: PowerShell에서 `$env:NAVERLAND_ONEFILE='0'; pyinstaller naverland-scrapper.spec`
+* onefile 복귀: PowerShell에서 `$env:NAVERLAND_ONEFILE='1'; pyinstaller naverland-scrapper.spec`
+
+빌드 산출물 이름은 모드에 따라 다릅니다.
+
+* onefile: `dist/naverland_onefile.exe`
+* onedir: `dist/naverland/`
+
 ## **📖 사용 가이드**
 
 1. **단지 등록**  

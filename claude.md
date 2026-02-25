@@ -32,9 +32,10 @@
     - **JSON**: 설정, 프리셋, 캐시, 히스토리
 - **Visualization**: `matplotlib` (PyQt6 임베디드)
 - **Build Tool**: `PyInstaller`
+- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile`, `NAVERLAND_ONEFILE=0` 시 `onedir`)
 - **Optional**: `psutil` (메모리 모니터링), `plyer` (알림)
 
-## 3. Architecture (v14.0 Modular)
+## 3. Architecture (v14.2 Modular)
 
 > **IMPORTANT**: 코드베이스가 모놀리식에서 모듈화 아키텍처로 리팩토링됨
 
@@ -144,6 +145,7 @@ src/
 ```
 Root/
 ├── src/                    # 소스 코드 (모듈화)
+├── tests/                  # pytest 테스트
 ├── data/                   # 데이터 저장
 │   ├── complexes.db        # SQLite 데이터베이스
 │   ├── settings.json       # 사용자 설정
@@ -152,13 +154,14 @@ Root/
 │   ├── crawl_cache.json    # 크롤링 캐시
 │   └── recently_viewed.json # 최근 본 매물
 ├── logs/                   # 로그 파일
-├── backup/legacy/          # 레거시 단일 파일
+├── naverland-scrapper.spec # PyInstaller 빌드 스펙
+├── pytest.ini              # 테스트/플러그인 설정
 ├── README.md               # 사용자 문서
 ├── claude.md               # 이 파일 (AI 컨텍스트)
 └── gemini.md               # AI 컨텍스트 (Gemini)
 ```
 
-## 6. Style Guide (v14.0)
+## 6. Style Guide (v14.2)
 
 ### Color Palette
 ```python

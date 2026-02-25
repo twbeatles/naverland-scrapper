@@ -13,6 +13,7 @@
 * **가격변동 표기 통일**: UI/CSV/Excel 출력 모두 `+/-` 부호 포함 포맷 적용
 * **차트 한글 폰트 fallback**: 폰트 미지원 환경에서 통계/대시보드 matplotlib glyph warning 최소화
 * **테스트 환경 분리**: `pytest.ini`에서 `langsmith_plugin` 자동 로드 비활성화
+* **배포 스펙 정합화**: `naverland-scrapper.spec` 기본 배포를 `onefile`로 고정하고 `NAVERLAND_ONEFILE=0`으로 `onedir` 전환 지원
 
 ### ✅ 검증
 
