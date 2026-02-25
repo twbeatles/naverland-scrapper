@@ -1,15 +1,15 @@
-# 기능 구현 리스크 감사 보고서 (업데이트: 2026-02-21)
+# 기능 구현 리스크 감사 보고서 (업데이트: 2026-02-25)
 
 ## 1) 목적/범위/기준
 - 목적: `README.md`, `claude.md`, `src/`, `tests/`를 교차 점검해 문서-구현 불일치 리스크를 관리한다.
-- 범위: v14.1 1차 안정성+기능확장 반영 상태 기준으로 갱신한다.
+- 범위: v14.2 안정성/복원/종료/필터/내보내기/테스트 환경 분리 반영 상태 기준으로 갱신한다.
 - 기준: `pytest -q` 통과 여부 + 런타임 연결성(스레드/DB/설정 반영/알림 정책) 검증.
 
 ## 2) 현재 상태 요약
-- 테스트: `pytest -q` 기준 전체 회귀 통과(기존 + 신규 케이스).
+- 테스트: `pytest -q` 기준 전체 회귀 통과(`54 passed`).
 - 결론:
-  - 과거 핵심 미연결 이슈(F-01~F-08 대부분)는 코드/테스트로 해소됨.
-  - 남은 항목은 “구조 개선/운영성 강화” 중심(P2)으로 축소됨.
+  - 과거 핵심 미연결 이슈(F-01~F-10)은 코드/테스트로 해소됨.
+  - DB 복원/종료 경계 및 고급 필터 동선/가격변동 포맷/차트 경고/pytest 환경 경고까지 반영 완료.
 
 ## 3) 주요 이슈 처리 현황
 | ID | 상태 | 요약 | 반영 |
@@ -22,16 +22,25 @@
 | F-06 | Resolved | 그룹 변경-예약 동기화 | `groups_updated -> _load_schedule_groups` 연결 유지 |
 | F-07 | Resolved | 최근 검색 저장 | 크롤링 시작 시 `history_manager.add()` 저장 유지 |
 | F-08 | Resolved | 단축키 불일치 | `SHORTCUTS["settings"]` 등록/테스트 보강 |
-| F-09 | Open (Low) | 레거시 잔존 메서드 정리 필요 | 동작 영향은 낮음, 추후 dead-code 정리 권장 |
+| F-09 | Resolved | 레거시 잔존 메서드 동선 | 고급 필터 app-level deprecated 경로를 CrawlerTab 위임으로 복원 |
 | F-10 | Resolved | 파이프라인 테스트 공백 | 동시실행 가드/종료순서/dedup/대상 소멸 회귀 추가 |
+| F-11 | Resolved | WAL 백업/복원 정합성 | online backup + atomic restore + integrity/필수 테이블 검증 |
+| F-12 | Resolved | 종료 타임아웃 경계 | `_shutdown()->bool` 계약 및 실패 시 DB close 차단 |
+| F-13 | Resolved | 가격변동 하락 표기 오류 | `to_signed_string` 기반 UI/CSV/Excel 포맷 일원화 |
+| F-14 | Resolved | matplotlib 한글 glyph 경고 | 폰트 fallback + ASCII fallback 라벨 적용 |
+| F-15 | Resolved | pytest 외부 플러그인 경고 | `pytest.ini`로 `langsmith_plugin` 비활성화 |
 
 ## 4) 이번 배치 핵심 변경
 - 동시 크롤링 시작 가드 추가(`CrawlerTab.start_crawling`).
 - 안전 종료 API 추가(`CrawlerTab.shutdown_crawl(timeout_ms)`).
 - 앱 종료 오케스트레이션 개선(`RealEstateApp._shutdown`).
+- 복원 유지보수 모드 추가(`RealEstateApp._enter_maintenance_mode/_exit_maintenance_mode`).
 - 소멸 매물 처리 범위 제한(`mark_disappeared_articles_for_targets`).
 - 알림 하루 1회 dedup 추가(`article_alert_log`, `record_alert_notification`).
+- online backup/restore 무결성 검증 추가(`ComplexDatabase.backup_database/restore_database`).
 - 재시도/통계/설정 반영 확장(`max_retry_count`, `new_count/price_up/price_down`).
+- 가격변동 표기 일원화(`PriceConverter.to_signed_string`, Export/UI 반영).
+- pytest 환경 플러그인 분리(`pytest.ini: -p no:langsmith_plugin`).
 
 ## 5) 신규 공개 인터페이스
 - `ComplexDatabase.mark_disappeared_articles_for_targets(targets) -> int`
@@ -39,9 +48,10 @@
 - `CrawlerThread.__init__(..., max_retry_count=3, ...)`
 - `CrawlerTab.shutdown_crawl(timeout_ms=8000) -> bool`
 - `CrawlerTab.update_runtime_settings()`
+- `PriceConverter.to_signed_string(price_int: int, zero_text: str = "") -> str`
 
 ## 6) 남은 권장 과제 (P2)
-1. `src/ui/app.py`의 deprecated 메서드군 정리 또는 별도 모듈로 격리.
+1. `src/ui/app.py` deprecated 레거시 위임 메서드 정리(추가 사용처 확인 후 제거).
 2. `ruff`/`vulture` 기반 dead-code 리포트 CI 도입.
 3. 운영 로그에 알림 dedup hit 카운터(일/규칙별) 집계 추가.
 

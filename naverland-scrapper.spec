@@ -33,6 +33,9 @@ excludes: list[str] = [
     "pytest",
     "pydoc",
     "tkinter",
+    # Test-only plugin; do not bundle into production binary.
+    "langsmith",
+    "langsmith.pytest_plugin",
     # Optional parsers/backends that get picked up when installed, but are not required by this project.
     "lxml",
     "html5lib",

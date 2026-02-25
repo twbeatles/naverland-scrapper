@@ -1,11 +1,14 @@
+import re
 import sqlite3
+import os
 from pathlib import Path
 from queue import Queue, Empty, Full
-from threading import Lock
+from threading import Lock, Condition
+import time
 import shutil
 from src.utils.paths import DB_PATH
 from src.utils.logger import get_logger
-from src.utils.helpers import DateTimeHelper
+from src.utils.helpers import DateTimeHelper, PriceConverter
 
 logger = get_logger("DB")
 
@@ -14,7 +17,11 @@ class ConnectionPool:
         self.db_path = Path(db_path)
         self.pool_size = pool_size
         self._pool = Queue(maxsize=pool_size)
-        self._lock = Lock()
+        self._lease_lock = Lock()
+        self._lease_cond = Condition(self._lease_lock)
+        self._leased_ids = set()
+        self._all_connections = {}
+        self._closing = False
         logger.info(f"ConnectionPool 초기화: {self.db_path}")
         self._initialize_pool()
     
@@ -22,6 +29,8 @@ class ConnectionPool:
         for i in range(self.pool_size):
             try:
                 conn = self._create_connection()
+                with self._lease_lock:
+                    self._all_connections[id(conn)] = conn
                 self._pool.put(conn)
             except Exception as e:
                 logger.error(f"연결 생성 실패 ({i+1}/{self.pool_size}): {e}")
@@ -38,14 +47,51 @@ class ConnectionPool:
         return conn
     
     def get_connection(self):
+        with self._lease_lock:
+            if self._closing:
+                raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
         try:
-            return self._pool.get(timeout=10)
+            conn = self._pool.get(timeout=10)
         except Exception as e:
+            with self._lease_lock:
+                if self._closing:
+                    raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
             logger.warning(f"풀에서 연결 가져오기 실패, 새 연결 생성: {e}")
-            return self._create_connection()
+            conn = self._create_connection()
+            with self._lease_lock:
+                if self._closing:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
+                self._all_connections[id(conn)] = conn
+        with self._lease_lock:
+            if self._closing:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                self._all_connections.pop(id(conn), None)
+                raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
+            self._leased_ids.add(id(conn))
+        return conn
     
     def return_connection(self, conn):
         if conn is None:
+            return
+        conn_id = id(conn)
+        with self._lease_cond:
+            self._leased_ids.discard(conn_id)
+            closing = self._closing
+            self._lease_cond.notify_all()
+        if closing:
+            try:
+                conn.close()
+            except Exception as e:
+                logger.debug(f"연결 종료 중 오류: {e}")
+            with self._lease_lock:
+                self._all_connections.pop(conn_id, None)
             return
         try:
             self._pool.put_nowait(conn)
@@ -54,39 +100,162 @@ class ConnectionPool:
                 conn.close()
             except Exception as e:
                 logger.debug(f"연결 종료 중 오류: {e}")
+            with self._lease_lock:
+                self._all_connections.pop(conn_id, None)
     
-    def close_all(self):
+    def close_all(self, timeout_ms=8000):
         """모든 연결 안전하게 종료"""
         logger.info("ConnectionPool 종료 시작...")
         closed_count = 0
         error_count = 0
-        
-        # 최대 시도 횟수 제한
-        max_attempts = self.pool_size + 5
-        attempts = 0
-        
-        while attempts < max_attempts:
-            attempts += 1
+
+        try:
+            wait_seconds = max(0.0, float(timeout_ms) / 1000.0)
+        except (TypeError, ValueError):
+            wait_seconds = 8.0
+        deadline = time.monotonic() + wait_seconds
+
+        with self._lease_cond:
+            self._closing = True
+            while self._leased_ids:
+                remain = deadline - time.monotonic()
+                if remain <= 0:
+                    logger.warning(
+                        f"ConnectionPool 종료 대기 타임아웃: 미반환 연결 {len(self._leased_ids)}개"
+                    )
+                    break
+                self._lease_cond.wait(timeout=remain)
+
+            tracked = list(self._all_connections.values())
+            self._all_connections.clear()
+            self._leased_ids.clear()
+
+        drained = []
+        while True:
             try:
-                conn = self._pool.get_nowait()
-                try:
-                    conn.close()
-                    closed_count += 1
-                except Exception as e:
-                    logger.warning(f"연결 종료 실패: {e}")
-                    error_count += 1
+                drained.append(self._pool.get_nowait())
             except Empty:
-                # 큐가 비었음
                 break
-        
+
+        seen_ids = set()
+        for conn in tracked + drained:
+            conn_id = id(conn)
+            if conn_id in seen_ids:
+                continue
+            seen_ids.add(conn_id)
+            try:
+                conn.close()
+                closed_count += 1
+            except Exception as e:
+                logger.warning(f"연결 종료 실패: {e}")
+                error_count += 1
+
         logger.info(f"ConnectionPool 종료 완료: {closed_count}개 종료, {error_count}개 오류")
 
 class ComplexDatabase:
+    _NUMERIC_RE = re.compile(r"-?\d+(?:\.\d+)?")
+    _RESTORE_REQUIRED_TABLES = (
+        "complexes",
+        "groups",
+        "group_complexes",
+        "crawl_history",
+        "price_snapshots",
+        "alert_settings",
+        "article_history",
+        "article_favorites",
+        "article_alert_log",
+    )
+
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else DB_PATH
         logger.info(f"ComplexDatabase 초기화: {self.db_path}")
         self._pool = ConnectionPool(self.db_path)
         self._init_tables()
+
+    @classmethod
+    def _coerce_float(cls, value, default=0.0):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return float(int(value))
+        if isinstance(value, (int, float)):
+            return float(value)
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return default
+        text = text.replace("평", "")
+        match = cls._NUMERIC_RE.search(text)
+        if not match:
+            return default
+        try:
+            return float(match.group(0))
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _coerce_int(cls, value, default=0):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return default
+        match = cls._NUMERIC_RE.search(text)
+        if not match:
+            return default
+        try:
+            return int(float(match.group(0)))
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _coerce_price(cls, value, default=0):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return default
+        if "억" in text or "만" in text:
+            parsed = PriceConverter.to_int(text)
+            if parsed > 0 or text in {"0", "0만", "0억"}:
+                return parsed
+        return cls._coerce_int(text, default=default)
+
+    @staticmethod
+    def _row_value(row, key, index, default=None):
+        if row is None:
+            return default
+        try:
+            return row[key]
+        except Exception:
+            pass
+        try:
+            return row[index]
+        except Exception:
+            return default
+
+    def _normalize_snapshot_row(self, row):
+        snapshot_date = str(self._row_value(row, "snapshot_date", 0, "") or "")
+        trade_type = str(self._row_value(row, "trade_type", 1, "") or "")
+        pyeong = self._coerce_float(self._row_value(row, "pyeong", 2, None), default=None)
+        if pyeong is None:
+            return None
+        min_price = self._coerce_price(self._row_value(row, "min_price", 3, 0), default=0)
+        max_price = self._coerce_price(self._row_value(row, "max_price", 4, 0), default=0)
+        avg_price = self._coerce_price(self._row_value(row, "avg_price", 5, 0), default=0)
+        item_count = max(0, self._coerce_int(self._row_value(row, "item_count", 6, 0), default=0))
+        return (snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count)
     
     def _init_tables(self):
         conn = self._pool.get_connection()
@@ -211,6 +380,48 @@ class ComplexDatabase:
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_log_lookup ON article_alert_log(alert_id, article_id, complex_id, notified_on)')
+
+            # v14.x: legacy price_snapshots 숫자 문자열 정규화 (예: "34평", "1억 2,000만")
+            try:
+                legacy_rows = c.execute(
+                    """
+                    SELECT id, pyeong, min_price, max_price, avg_price, item_count
+                    FROM price_snapshots
+                    WHERE typeof(pyeong)='text'
+                       OR typeof(min_price)='text'
+                       OR typeof(max_price)='text'
+                       OR typeof(avg_price)='text'
+                       OR typeof(item_count)='text'
+                    """
+                ).fetchall()
+                updates = []
+                for row in legacy_rows:
+                    pyeong = self._coerce_float(row["pyeong"], default=None)
+                    if pyeong is None:
+                        continue
+                    updates.append(
+                        (
+                            pyeong,
+                            self._coerce_price(row["min_price"], default=0),
+                            self._coerce_price(row["max_price"], default=0),
+                            self._coerce_price(row["avg_price"], default=0),
+                            max(0, self._coerce_int(row["item_count"], default=0)),
+                            row["id"],
+                        )
+                    )
+                if updates:
+                    c.executemany(
+                        """
+                        UPDATE price_snapshots
+                        SET pyeong = ?, min_price = ?, max_price = ?, avg_price = ?, item_count = ?
+                        WHERE id = ?
+                        """,
+                        updates,
+                    )
+                    logger.info(f"마이그레이션 완료: price_snapshots 정규화 {len(updates)}건")
+            except Exception as me:
+                logger.warning(f"price_snapshots 정규화 실패 (무시): {me}")
+
             conn.commit()
             logger.info("테이블 초기화 완료")
         except Exception as e:
@@ -472,24 +683,49 @@ class ComplexDatabase:
     def get_complex_price_history(self, complex_id, trade_type=None, pyeong=None):
         conn = self._pool.get_connection()
         try:
-            sql = 'SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price FROM price_snapshots WHERE complex_id = ?'
+            sql = '''
+                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count
+                FROM price_snapshots
+                WHERE complex_id = ?
+            '''
             params = [complex_id]
-            
+
             if trade_type and trade_type != "전체":
                 sql += ' AND trade_type = ?'
                 params.append(trade_type)
-            
-            if pyeong and pyeong != "전체":
-                try:
-                    p_val = float(pyeong.replace("평", ""))
-                    sql += ' AND pyeong = ?'
-                    params.append(p_val)
-                except (ValueError, TypeError):
-                    logger.debug(f"평형 값 파싱 실패: {pyeong}")
-                
+
             sql += ' ORDER BY snapshot_date DESC, pyeong'
-            
-            result = conn.cursor().execute(sql, params).fetchall()
+
+            raw_rows = conn.cursor().execute(sql, params).fetchall()
+            pyeong_filter = None
+            if pyeong and pyeong != "전체":
+                pyeong_filter = self._coerce_float(pyeong, default=None)
+                if pyeong_filter is None:
+                    logger.debug(f"평형 값 파싱 실패: {pyeong}")
+
+            result = []
+            skipped = 0
+            for row in raw_rows:
+                normalized = self._normalize_snapshot_row(row)
+                if normalized is None:
+                    skipped += 1
+                    continue
+                snapshot_date, row_trade_type, row_pyeong, min_price, max_price, avg_price, _item_count = normalized
+                if pyeong_filter is not None and abs(row_pyeong - pyeong_filter) > 1e-6:
+                    continue
+                result.append(
+                    (
+                        snapshot_date,
+                        row_trade_type,
+                        row_pyeong,
+                        min_price,
+                        max_price,
+                        avg_price,
+                    )
+                )
+
+            if skipped:
+                logger.debug(f"가격 히스토리 비정상 스냅샷 제외: {skipped}건")
             logger.debug(f"가격 히스토리 조회: {len(result)}개 (조건: {trade_type}, {pyeong})")
             return result
         except Exception as e:
@@ -554,7 +790,18 @@ class ComplexDatabase:
             
             sql += ' ORDER BY snapshot_date DESC, trade_type, pyeong'
             
-            result = conn.cursor().execute(sql, params).fetchall()
+            raw_rows = conn.cursor().execute(sql, params).fetchall()
+            result = []
+            skipped = 0
+            for row in raw_rows:
+                normalized = self._normalize_snapshot_row(row)
+                if normalized is None:
+                    skipped += 1
+                    continue
+                result.append(normalized)
+
+            if skipped:
+                logger.debug(f"가격 스냅샷 비정상 행 제외: {skipped}건")
             logger.debug(f"가격 스냅샷 조회: {len(result)}개")
             return result
         except Exception as e:
@@ -948,85 +1195,171 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
 
-    def backup_database(self, path):
+    @staticmethod
+    def _integrity_check_file(db_path: Path) -> bool:
+        conn = None
         try:
-            shutil.copy2(self.db_path, path)
-            logger.info(f"백업 완료: {path}")
-            return True
+            conn = sqlite3.connect(str(db_path), timeout=30)
+            row = conn.cursor().execute("PRAGMA integrity_check").fetchone()
+            if not row:
+                return False
+            return str(row[0]).strip().lower() == "ok"
+        except Exception as e:
+            logger.error(f"SQLite integrity_check 실패 ({db_path}): {e}")
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _validate_restored_database(self) -> int:
+        conn = self._pool.get_connection()
+        try:
+            c = conn.cursor()
+            row = c.execute("PRAGMA integrity_check").fetchone()
+            if not row or str(row[0]).strip().lower() != "ok":
+                raise RuntimeError(f"복원 DB integrity_check 실패: {row[0] if row else 'empty'}")
+
+            names = {
+                r[0]
+                for r in c.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            missing = [t for t in self._RESTORE_REQUIRED_TABLES if t not in names]
+            if missing:
+                raise RuntimeError(f"복원 DB 필수 테이블 누락: {', '.join(missing)}")
+
+            count_row = c.execute("SELECT COUNT(*) FROM complexes").fetchone()
+            return int(count_row[0] if count_row else 0)
+        finally:
+            self._pool.return_connection(conn)
+
+    def backup_database(self, path):
+        backup_path = Path(path)
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            if backup_path.resolve() == self.db_path.resolve():
+                logger.error("백업 실패: 원본 DB와 동일한 경로는 사용할 수 없습니다.")
+                return False
+        except Exception:
+            pass
+
+        source_conn = None
+        target_conn = None
+        try:
+            source_conn = self._pool.get_connection()
+            target_conn = sqlite3.connect(str(backup_path), timeout=30)
+            source_conn.backup(target_conn)
+            target_conn.commit()
         except Exception as e:
             logger.error(f"백업 실패: {e}")
             return False
+        finally:
+            if target_conn is not None:
+                try:
+                    target_conn.close()
+                except Exception:
+                    pass
+            if source_conn is not None:
+                self._pool.return_connection(source_conn)
+
+        verify_conn = None
+        try:
+            verify_conn = sqlite3.connect(str(backup_path), timeout=30)
+            row = verify_conn.cursor().execute("SELECT COUNT(*) FROM complexes").fetchone()
+            if not row:
+                logger.error("백업 검증 실패: complexes 집계 결과가 비어 있습니다.")
+                return False
+            if not self._integrity_check_file(backup_path):
+                logger.error("백업 검증 실패: integrity_check 불통과")
+                return False
+            logger.info(f"백업 완료: {backup_path} (complexes={int(row[0])})")
+            return True
+        except Exception as e:
+            logger.error(f"백업 검증 실패: {e}")
+            return False
+        finally:
+            if verify_conn is not None:
+                try:
+                    verify_conn.close()
+                except Exception:
+                    pass
     
     def restore_database(self, path):
-        """DB 복원 - 안전한 복원 로직"""
-        logger.info(f"복원 시작: {path}")
-        
-        # 1. 원본 파일 존재 확인
-        if not Path(path).exists():
-            logger.error(f"복원 파일이 존재하지 않음: {path}")
+        """DB 복원 - 유지보수/동시성 안전 복원 로직"""
+        restore_path = Path(path)
+        logger.info(f"복원 시작: {restore_path}")
+
+        if not restore_path.exists():
+            logger.error(f"복원 파일이 존재하지 않음: {restore_path}")
             return False
-        
+        if not self._integrity_check_file(restore_path):
+            logger.error(f"복원 파일 integrity_check 실패: {restore_path}")
+            return False
+
+        rollback_path = self.db_path.with_suffix(".db.pre_restore")
+        temp_restore_path = self.db_path.with_suffix(".db.restore_tmp")
+        rollback_ready = False
+
         try:
-            # 2. 기존 연결 풀 안전하게 종료
-            logger.info("기존 연결 풀 종료 중...")
-            if self._pool:
-                try:
-                    self._pool.close_all()
-                except Exception as e:
-                    logger.warning(f"연결 풀 종료 중 오류 (무시): {e}")
-            
-            # 3. 잠시 대기 (파일 핸들 해제를 위해)
-            import time
-            time.sleep(0.5)
-            
-            # 4. 기존 DB 파일 백업 (안전을 위해)
-            backup_path = self.db_path.with_suffix('.db.backup')
+            if temp_restore_path.exists():
+                temp_restore_path.unlink()
+        except OSError as e:
+            logger.warning(f"임시 복원 파일 정리 실패 (무시): {e}")
+
+        try:
             if self.db_path.exists():
-                try:
-                    shutil.copy2(self.db_path, backup_path)
-                    logger.info(f"기존 DB 백업: {backup_path}")
-                except Exception as e:
-                    logger.warning(f"기존 DB 백업 실패 (무시): {e}")
-            
-            # 5. 새 파일 복사
-            logger.info(f"파일 복사: {path} -> {self.db_path}")
-            shutil.copy2(path, self.db_path)
-            
-            # 6. 새 연결 풀 생성
-            logger.info("새 연결 풀 생성 중...")
-            # ConnectionPool is defined in this file, so we can use it directly
+                rollback_ready = self.backup_database(rollback_path)
+                if not rollback_ready:
+                    logger.error("복원 중단: 롤백용 사전 백업 생성 실패")
+                    return False
+
+            if self._pool:
+                self._pool.close_all(timeout_ms=8000)
+
+            shutil.copy2(restore_path, temp_restore_path)
+            os.replace(temp_restore_path, self.db_path)
+
             self._pool = ConnectionPool(self.db_path)
-            
-            # 7. 연결 테스트
-            conn = self._pool.get_connection()
-            test_result = conn.cursor().execute("SELECT COUNT(*) FROM complexes").fetchone()
-            self._pool.return_connection(conn)
-            logger.info(f"복원 완료! 단지 수: {test_result[0]}개")
-            
-            # 8. 백업 파일 삭제
-            if backup_path.exists():
+            self._init_tables()
+            complex_count = self._validate_restored_database()
+            logger.info(f"복원 완료! 단지 수: {complex_count}개")
+
+            if rollback_ready and rollback_path.exists():
                 try:
-                    backup_path.unlink()
+                    rollback_path.unlink()
                 except OSError as e:
-                    get_logger('ComplexDatabase').debug(f"백업 파일 삭제 실패 (무시): {e}")
-            
+                    logger.debug(f"사전 백업 파일 삭제 실패 (무시): {e}")
             return True
-            
+
         except Exception as e:
             logger.exception(f"복원 실패: {e}")
-            
-            # 복원 실패 시 기존 백업에서 복구 시도
-            backup_path = self.db_path.with_suffix('.db.backup')
-            if backup_path.exists():
+            try:
+                if temp_restore_path.exists():
+                    temp_restore_path.unlink()
+            except OSError:
+                pass
+
+            if rollback_ready and rollback_path.exists():
                 try:
-                    logger.info("백업에서 복구 시도...")
-                    shutil.copy2(backup_path, self.db_path)
-                    # ConnectionPool is defined in this file
+                    logger.info("복원 실패로 롤백을 시도합니다.")
+                    os.replace(rollback_path, self.db_path)
                     self._pool = ConnectionPool(self.db_path)
-                    logger.info("백업에서 복구 완료")
-                except Exception as e2:
-                    logger.error(f"백업 복구도 실패: {e2}")
-            
+                    self._init_tables()
+                    self._validate_restored_database()
+                    logger.info("롤백 복구 완료")
+                except Exception as rb_e:
+                    logger.error(f"롤백 복구 실패: {rb_e}")
+            elif self.db_path.exists():
+                try:
+                    self._pool = ConnectionPool(self.db_path)
+                    self._init_tables()
+                except Exception as reinit_e:
+                    logger.error(f"복원 실패 후 연결풀 재초기화 실패: {reinit_e}")
             return False
 
     def get_all_alert_settings(self):

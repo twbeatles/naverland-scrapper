@@ -34,6 +34,18 @@ class PriceConverter:
             return f"{price_int:,}만"
         return "0"
 
+    @staticmethod
+    def to_signed_string(price_int: int, zero_text: str = "") -> str:
+        try:
+            value = int(price_int)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return f"+{PriceConverter.to_string(value)}"
+        if value < 0:
+            return f"-{PriceConverter.to_string(abs(value))}"
+        return zero_text
+
 class AreaConverter:
     PYEONG_RATIO = 0.3025
     @classmethod

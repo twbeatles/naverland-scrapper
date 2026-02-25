@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import sqlite3
 import unittest
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -55,6 +56,33 @@ class TestComplexDatabase(unittest.TestCase):
 
         snapshots = self.db.get_price_snapshots("11111")
         self.assertEqual(len(snapshots), 3)
+
+    def test_price_snapshot_query_normalizes_legacy_text_values(self):
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                """
+                INSERT INTO price_snapshots (
+                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, snapshot_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("11111", "매매", "34평", "1억", "1억 2,000만", "1억 1,000만", "3건", "2026-02-25"),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        snapshots = self.db.get_price_snapshots("11111", "매매")
+        self.assertEqual(len(snapshots), 1)
+        _, _, pyeong, min_price, max_price, avg_price, item_count = snapshots[0]
+        self.assertEqual(pyeong, 34.0)
+        self.assertEqual(min_price, 10000)
+        self.assertEqual(max_price, 12000)
+        self.assertEqual(avg_price, 11000)
+        self.assertEqual(item_count, 3)
+
+        history = self.db.get_complex_price_history("11111", "매매", "34평")
+        self.assertEqual(len(history), 1)
 
     def test_article_history_tracks_new_and_price_change(self):
         is_new, change, prev = self.db.check_article_history("A1", "12345", 10000)
@@ -268,6 +296,61 @@ class TestComplexDatabase(unittest.TestCase):
         rules_jeonse = self.db.get_enabled_alert_rules("12345", "전세")
         self.assertEqual(len(rules_sale), 0)
         self.assertEqual(len(rules_jeonse), 1)
+
+    def test_backup_and_restore_preserves_rows(self):
+        self.assertTrue(self.db.add_complex("원본단지", "A-100"))
+        backup_path = os.path.join(self.tmp.name, "backup_snapshot.db")
+        self.assertTrue(self.db.backup_database(backup_path))
+        self.assertTrue(os.path.exists(backup_path))
+
+        self.assertTrue(self.db.add_complex("추가단지", "A-200"))
+        self.assertEqual(len(self.db.get_all_complexes()), 2)
+
+        self.assertTrue(self.db.restore_database(backup_path))
+        restored = self.db.get_all_complexes()
+        self.assertEqual(len(restored), 1)
+        self.assertEqual(restored[0]["complex_id"], "A-100")
+
+    def test_restore_recreates_missing_tables_from_legacy_schema(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy_minimal.db")
+        conn = sqlite3.connect(legacy_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """
+                CREATE TABLE complexes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    complex_id TEXT NOT NULL UNIQUE,
+                    memo TEXT DEFAULT ""
+                )
+                """
+            )
+            c.execute(
+                "INSERT INTO complexes (name, complex_id, memo) VALUES (?, ?, ?)",
+                ("레거시단지", "LEG-001", ""),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        self.assertTrue(self.db.restore_database(legacy_path))
+        rows = self.db.get_all_complexes()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["complex_id"], "LEG-001")
+
+        check_conn = self.db._pool.get_connection()
+        try:
+            integrity = check_conn.cursor().execute("PRAGMA integrity_check").fetchone()
+            self.assertEqual(str(integrity[0]).lower(), "ok")
+            table_rows = check_conn.cursor().execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        finally:
+            self.db._pool.return_connection(check_conn)
+        table_names = {r[0] for r in table_rows}
+        self.assertIn("article_history", table_names)
+        self.assertIn("price_snapshots", table_names)
 
 
 if __name__ == "__main__":

@@ -15,12 +15,16 @@ except ImportError:
 from datetime import datetime
 from typing import List, Tuple, Optional, Iterable
 
+from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
+
 class ChartWidget(QWidget):
     """v10.0: Analytics Chart using Matplotlib"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._korean_font_ok = False
         layout = QVBoxLayout(self)
         if MATPLOTLIB_AVAILABLE:
+            self._korean_font_ok = bool(setup_korean_font())
             self.figure = Figure(figsize=(5, 3), dpi=100, facecolor='#2b2b2b')
             self.canvas = FigureCanvas(self.figure)
             self.ax = self.figure.add_subplot(111)
@@ -53,6 +57,9 @@ class ChartWidget(QWidget):
     ):
         if not MATPLOTLIB_AVAILABLE:
             return
+        title_text = str(title or "Price Trend")
+        if not self._korean_font_ok:
+            title_text = sanitize_text_for_matplotlib(title_text, fallback="Price Trend")
 
         dates_list = list(dates)
         if not dates_list:
@@ -74,7 +81,7 @@ class ChartWidget(QWidget):
             self.ax.plot(x, y, marker='o', linestyle='-', color='#3498db', linewidth=2)
             self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
             self.ax.grid(True, linestyle='--', alpha=0.3)
-            self.ax.set_title(title, color='white')
+            self.ax.set_title(title_text, color='white')
             self.canvas.draw()
             return
 
@@ -115,5 +122,5 @@ class ChartWidget(QWidget):
         self.ax.plot(x, y_avg, marker='o', linestyle='-', color='#3498db', linewidth=2)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
         self.ax.grid(True, linestyle='--', alpha=0.3)
-        self.ax.set_title(title, color='white')
+        self.ax.set_title(title_text, color='white')
         self.canvas.draw()

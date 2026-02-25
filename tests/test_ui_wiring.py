@@ -2,6 +2,7 @@ import importlib.util
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -266,6 +267,102 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_crawler_tab_advanced_filter_applies_and_clears(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_advanced_filter_apply.db"))
+            tab = CrawlerTab(db)
+
+            items = [
+                {
+                    "단지명": "하락단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "1억",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 34.0,
+                    "평당가_표시": "294만/평",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "alpha",
+                    "매물ID": "A1",
+                    "수집시각": "2026-02-25 10:00:00",
+                    "is_new": False,
+                    "price_change": -500,
+                },
+                {
+                    "단지명": "상승단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "1억 2,000만",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 35.0,
+                    "평당가_표시": "340만/평",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "beta",
+                    "매물ID": "A2",
+                    "수집시각": "2026-02-25 10:00:01",
+                    "is_new": False,
+                    "price_change": 500,
+                },
+                {
+                    "단지명": "무변동단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "9,000만",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 24.0,
+                    "평당가_표시": "375만/평",
+                    "층/방향": "2층",
+                    "타입/특징": "gamma",
+                    "매물ID": "A3",
+                    "수집시각": "2026-02-25 10:00:02",
+                    "is_new": False,
+                    "price_change": 0,
+                },
+            ]
+
+            tab._append_rows_batch(items)
+            tab._advanced_filters = {"only_price_down": True}
+            tab._filter_results("")
+
+            hidden = sum(1 for r in range(tab.result_table.rowCount()) if tab.result_table.isRowHidden(r))
+            self.assertEqual(hidden, 2)
+
+            tab.clear_advanced_filters()
+            hidden_after_clear = sum(
+                1 for r in range(tab.result_table.rowCount()) if tab.result_table.isRowHidden(r)
+            )
+            self.assertEqual(hidden_after_clear, 0)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_blocks_start_during_maintenance_mode(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_maintenance_guard.db"))
+            tab = CrawlerTab(db, maintenance_guard=lambda: True)
+            tab.add_task("유지보수단지", "50001")
+
+            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+                tab.start_crawling()
+
+            self.assertIsNone(tab.crawler_thread)
+            self.assertIn("유지보수 모드", tab.log_browser.toPlainText())
+            mock_warning.assert_not_called()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_crawler_tab_applies_runtime_settings_and_completion_sound(self):
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -331,6 +428,234 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_app_advanced_filter_wiring_to_crawler_tab(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        with patch.object(app.crawler_tab, "open_advanced_filter_dialog") as mock_open:
+            app._show_advanced_filter()
+
+        self.assertIs(app.tabs.currentWidget(), app.crawler_tab)
+        mock_open.assert_called_once()
+
+        with patch.object(app.crawler_tab, "clear_advanced_filters") as mock_clear:
+            app._clear_advanced_filter()
+        mock_clear.assert_called_once()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_restore_db_maintenance_and_timer_restart(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from src.ui.app import RealEstateApp
+
+        class _TimerStub:
+            def __init__(self, active=True):
+                self.active = active
+                self.stop_called = 0
+                self.start_calls = []
+
+            def isActive(self):
+                return self.active
+
+            def stop(self):
+                self.stop_called += 1
+                self.active = False
+
+            def start(self, ms):
+                self.start_calls.append(ms)
+                self.active = True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+        app.schedule_timer = _TimerStub(active=True)
+
+        restore_path = "C:/tmp/mock_restore.db"
+        with (
+            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=(restore_path, "Database (*.db)")),
+            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=True) as mock_shutdown_crawl,
+            patch.object(app.db, "restore_database", return_value=True) as mock_restore,
+            patch.object(app, "_load_initial_data") as mock_reload,
+            patch("src.ui.app.QMessageBox.information"),
+            patch("src.ui.app.QApplication.processEvents", return_value=None),
+        ):
+            app._restore_db()
+
+        mock_shutdown_crawl.assert_called_once()
+        mock_restore.assert_called_once_with(Path(restore_path))
+        mock_reload.assert_called_once()
+        self.assertEqual(app.schedule_timer.stop_called, 1)
+        self.assertEqual(app.schedule_timer.start_calls, [60000])
+        self.assertFalse(app._maintenance_mode)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_restore_db_aborts_when_crawler_shutdown_fails(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from src.ui.app import RealEstateApp
+
+        class _TimerStub:
+            def __init__(self, active=True):
+                self.active = active
+                self.stop_called = 0
+                self.start_calls = []
+
+            def isActive(self):
+                return self.active
+
+            def stop(self):
+                self.stop_called += 1
+                self.active = False
+
+            def start(self, ms):
+                self.start_calls.append(ms)
+                self.active = True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+        app.schedule_timer = _TimerStub(active=True)
+
+        with (
+            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
+            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
+            patch.object(app.db, "restore_database") as mock_restore,
+            patch("src.ui.app.QMessageBox.warning") as mock_warning,
+            patch("src.ui.app.QApplication.processEvents", return_value=None),
+        ):
+            app._restore_db()
+
+        mock_restore.assert_not_called()
+        mock_warning.assert_called_once()
+        self.assertEqual(app.schedule_timer.start_calls, [60000])
+        self.assertFalse(app._maintenance_mode)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_stats_tab_handles_mixed_pyeong_types(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_mixed_types.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+
+            conn = app.db._pool.get_connection()
+            try:
+                conn.cursor().execute(
+                    "INSERT OR IGNORE INTO complexes (name, complex_id, memo) VALUES (?, ?, ?)",
+                    ("테스트단지", "90001", ""),
+                )
+                conn.cursor().executemany(
+                    """
+                    INSERT INTO price_snapshots (
+                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, snapshot_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        ("90001", "매매", 34.0, 10000, 12000, 11000, 2, "2026-02-24"),
+                        ("90001", "매매", "34평", "1억", "1억 2,000만", "1억 1,000만", "3건", "2026-02-25"),
+                    ],
+                )
+                conn.commit()
+            finally:
+                app.db._pool.return_connection(conn)
+
+            app._load_stats_complexes()
+            idx = app.stats_complex_combo.findData("90001")
+            self.assertGreaterEqual(idx, 0)
+
+            app.stats_complex_combo.setCurrentIndex(idx)
+            app._on_stats_complex_changed(idx)
+
+            labels = [app.stats_pyeong_combo.itemText(i) for i in range(app.stats_pyeong_combo.count())]
+            self.assertIn("34평", labels)
+
+            app._load_stats()
+            self.assertGreaterEqual(app.stats_table.rowCount(), 1)
+
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_stats_tab_repeated_entry_after_data_collection(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_repeated_entry.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+
+            sample_data = [
+                {
+                    "단지명": "반복진입단지",
+                    "단지ID": "99001",
+                    "매물ID": "R1",
+                    "거래유형": "매매",
+                    "매매가": "1억 1,000만",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 34.0,
+                    "층/방향": "10층",
+                    "타입/특징": "테스트",
+                    "수집시각": "2026-02-25 11:00:00",
+                    "is_new": True,
+                    "price_change": 0,
+                }
+            ]
+            app._on_crawl_data_collected(sample_data)
+
+            for _ in range(10):
+                app.tabs.setCurrentWidget(app.stats_tab)
+                app._refresh_tab()
+                app.tabs.setCurrentWidget(app.dashboard_tab)
+                app._refresh_tab()
+
+            self.assertTrue(True)  # 예외 없이 반복 진입 완료가 목적
+
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_app_shutdown_waits_crawler_before_db_close(self):
         from src.ui.app import RealEstateApp
 
@@ -346,10 +671,34 @@ class TestUIWiring(unittest.TestCase):
             ),
             patch.object(app.db, "close", side_effect=lambda: call_order.append("db_close")),
         ):
-            app._shutdown()
+            result = app._shutdown()
 
+        self.assertTrue(result)
         self.assertEqual(call_order, ["crawler_shutdown", "db_close"])
 
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_app_shutdown_blocks_db_close_on_crawler_timeout(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        with (
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
+            patch.object(app.db, "close") as mock_close,
+        ):
+            result = app._shutdown()
+
+        self.assertFalse(result)
+        self.assertFalse(app._is_shutting_down)
+        mock_close.assert_not_called()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
         if hasattr(app, "db") and app.db:
             app.db.close()
         app.deleteLater()
@@ -384,7 +733,7 @@ class TestUIWiring(unittest.TestCase):
         with (
             patch("src.ui.app.settings.get", side_effect=_settings_get),
             patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes) as mock_question,
-            patch.object(app, "_shutdown") as mock_shutdown,
+            patch.object(app, "_shutdown", return_value=True) as mock_shutdown,
         ):
             app.closeEvent(evt)
 
@@ -395,13 +744,23 @@ class TestUIWiring(unittest.TestCase):
 
         with (
             patch("src.ui.app.QMessageBox.question", side_effect=AssertionError("should not be called")),
-            patch.object(app, "_shutdown") as mock_shutdown2,
+            patch.object(app, "_shutdown", return_value=True) as mock_shutdown2,
             patch("src.ui.app.QApplication.quit") as mock_quit,
         ):
             app._quit_app(skip_confirm=True)
 
         mock_shutdown2.assert_called_once()
         mock_quit.assert_called_once()
+
+        evt2 = _EventStub()
+        with (
+            patch("src.ui.app.settings.get", side_effect=_settings_get),
+            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(app, "_shutdown", return_value=False),
+        ):
+            app.closeEvent(evt2)
+        self.assertFalse(evt2.accepted)
+        self.assertTrue(evt2.ignored)
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
             app.schedule_timer.stop()

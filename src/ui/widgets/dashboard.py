@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
+import time
 # Try importing matplotlib for charts
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -20,11 +21,13 @@ except ImportError:
 from src.utils.constants import TRADE_COLORS
 from src.utils.helpers import PriceConverter
 from src.utils.logger import get_logger
+from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
 
 logger = get_logger("Dashboard")
 
 class DashboardWidget(QWidget):
     """통합 대시보드 (v13.0)"""
+    warning_signal = pyqtSignal(str)
     
     def __init__(self, db, theme="dark", parent=None):
         super().__init__(parent)
@@ -36,7 +39,25 @@ class DashboardWidget(QWidget):
         self._stat_cols = None
         self._last_trade_chart_sig = None
         self._last_price_chart_sig = None
+        self._warning_cache = {}
+        self._warning_throttle_seconds = 3.0
+        self._korean_font_ok = bool(setup_korean_font()) if MATPLOTLIB_AVAILABLE else True
         self._setup_ui()
+
+    def _emit_warning(self, message: str):
+        text = str(message or "").strip()
+        if not text:
+            return
+        now = time.monotonic()
+        last = float(self._warning_cache.get(text, 0.0) or 0.0)
+        if now - last < self._warning_throttle_seconds:
+            return
+        self._warning_cache[text] = now
+        if len(self._warning_cache) > 32:
+            oldest = sorted(self._warning_cache.items(), key=lambda x: x[1])[:8]
+            for key, _ in oldest:
+                self._warning_cache.pop(key, None)
+        self.warning_signal.emit(text)
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -206,6 +227,7 @@ class DashboardWidget(QWidget):
         except Exception as e:
             logger.debug(f"소멸 매물 개수 조회 실패 (무시): {e}")
             disappeared = 0
+            self._emit_warning("대시보드 소멸 통계를 불러오지 못했습니다.")
         safe_set_text(self.disappeared_card, "value", str(disappeared))
         
         # 차트 업데이트
@@ -215,6 +237,7 @@ class DashboardWidget(QWidget):
                 self._update_price_chart()
             except Exception as e:
                 logger.debug(f"차트 업데이트 실패 (무시): {e}")
+                self._emit_warning("대시보드 차트 렌더링 중 오류가 발생했습니다.")
 
     def _calc_stat_columns(self) -> int:
         available = max(1, self.width() - 40)
@@ -257,10 +280,15 @@ class DashboardWidget(QWidget):
             labels = []
             sizes = []
             colors = ['#ef4444', '#22c55e', '#3b82f6']
+            label_map = {"매매": "Sale", "전세": "Jeonse", "월세": "Monthly"}
             
             for i, (label, count) in enumerate(trade_counts.items()):
                 if count > 0:
-                    labels.append(f"{label}\n({count})")
+                    if self._korean_font_ok:
+                        display = str(label)
+                    else:
+                        display = label_map.get(str(label), sanitize_text_for_matplotlib(str(label), fallback="Type"))
+                    labels.append(f"{display}\n({count})")
                     sizes.append(count)
             
             if sizes:
@@ -278,6 +306,7 @@ class DashboardWidget(QWidget):
             self._last_trade_chart_sig = signature
         except Exception as e:
             logger.debug(f"거래유형 차트 그리기 실패 (무시): {e}")
+            self._emit_warning("거래유형 차트 렌더링에 실패했습니다.")
     
     def _update_price_chart(self):
         """가격대별 히스토그램 업데이트"""
@@ -302,8 +331,12 @@ class DashboardWidget(QWidget):
             
             if prices:
                 ax.hist(prices, bins=10, color='#3b82f6', alpha=0.7, edgecolor='white')
-                ax.set_xlabel('가격 (억원)')
-                ax.set_ylabel('매물 수')
+                if self._korean_font_ok:
+                    ax.set_xlabel('가격 (억원)')
+                    ax.set_ylabel('매물 수')
+                else:
+                    ax.set_xlabel("Price (100M KRW)")
+                    ax.set_ylabel("Listings")
                 
                 # Style update
                 text_color = 'white' if self._theme == 'dark' else 'black'
@@ -318,6 +351,7 @@ class DashboardWidget(QWidget):
             self._last_price_chart_sig = signature
         except Exception as e:
             logger.debug(f"가격 차트 그리기 실패 (무시): {e}")
+            self._emit_warning("가격대 차트 렌더링에 실패했습니다.")
 
 
 class ArticleCard(QFrame):

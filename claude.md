@@ -1,9 +1,9 @@
-# AI Context: Naver Real Estate Crawler Pro Plus (v14.0)
+# AI Context: Naver Real Estate Crawler Pro Plus (v14.2)
 
 이 문서는 AI 에이전트가 프로젝트 작업 시 참조할 컨텍스트 정보입니다.
 
 ## 1. Project Overview
-- **Name**: Naver Real Estate Crawler Pro Plus v14.0 (네이버 부동산 매물 크롤러)
+- **Name**: Naver Real Estate Crawler Pro Plus v14.2 (네이버 부동산 매물 크롤러)
 - **Goal**: 네이버 부동산 매물 수집, 분석, 모니터링, 관리를 위한 데스크톱 앱
 - **Key Features**: 
     - 다중 단지 크롤링 & 그룹 관리
@@ -15,6 +15,9 @@
     - Toast 알림 (페이드 인/아웃 애니메이션)
     - 강력한 에러 핸들링 (RetryHandler, Rate limit 감지)
     - 메모리 관리 (임계치 초과 시 드라이버 재시작)
+    - DB 복원 유지보수 모드(복원 중 크롤링/스케줄 차단)
+    - SQLite online backup + restore integrity 검증
+    - 가격변동 부호 표기 통일(UI/CSV/Excel)
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+

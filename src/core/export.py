@@ -54,6 +54,26 @@ class DataExporter:
     
     def __init__(self, data): 
         self.data = data
+
+    @staticmethod
+    def _change_to_int(value):
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if value is None:
+            return 0
+        text = str(value).strip()
+        if not text:
+            return 0
+        sign = -1 if text.startswith("-") else 1
+        cleaned = text.lstrip("+-")
+        parsed = PriceConverter.to_int(cleaned)
+        return sign * parsed
+
+    @classmethod
+    def _format_price_change(cls, value):
+        return PriceConverter.to_signed_string(cls._change_to_int(value), zero_text="")
     
     def to_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
@@ -103,13 +123,7 @@ class DataExporter:
                     if cn == "신규여부":
                         value = "🆕 신규" if item.get('is_new', False) else ""
                     elif cn == "가격변동":
-                        pc = item.get('price_change', 0)
-                        if pc > 0:
-                            value = f"+{PriceConverter.to_string(pc)}"
-                        elif pc < 0:
-                            value = PriceConverter.to_string(pc)
-                        else:
-                            value = ""
+                        value = self._format_price_change(item.get('price_change', 0))
                     else:
                         value = item.get(cn, "")
                     
@@ -125,7 +139,7 @@ class DataExporter:
                     
                     # 가격 변동 색상
                     if cn == "가격변동":
-                        pc = item.get('price_change', 0)
+                        pc = self._change_to_int(item.get('price_change', 0))
                         if pc > 0:
                             cell.font = price_up_font
                         elif pc < 0:
@@ -160,8 +174,7 @@ class DataExporter:
                     # 특수 컬럼 추가
                     row = dict(item)
                     row['신규여부'] = "신규" if item.get('is_new', False) else ""
-                    pc = item.get('price_change', 0)
-                    row['가격변동'] = PriceConverter.to_string(pc) if pc else ""
+                    row['가격변동'] = self._format_price_change(item.get('price_change', 0))
                     writer.writerow(row)
             return path
         except Exception as e:

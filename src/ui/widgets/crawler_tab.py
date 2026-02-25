@@ -21,7 +21,13 @@ from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard
 )
 from src.ui.widgets.dashboard import CardViewWidget
-from src.ui.dialogs import MultiSelectDialog, URLBatchDialog, RecentSearchDialog, ExcelTemplateDialog
+from src.ui.dialogs import (
+    MultiSelectDialog,
+    URLBatchDialog,
+    RecentSearchDialog,
+    ExcelTemplateDialog,
+    AdvancedFilterDialog,
+)
 from src.ui.styles import COLORS
 from src.utils.logger import get_logger
 
@@ -52,18 +58,21 @@ class CrawlerTab(QWidget):
     status_message = pyqtSignal(str)
     alert_triggered = pyqtSignal(str, str, str, float, int)
     
-    def __init__(self, db, history_manager=None, theme="dark", parent=None):
+    def __init__(self, db, history_manager=None, theme="dark", parent=None, maintenance_guard=None):
         super().__init__(parent)
         self.db = db
         self.history_manager = history_manager
         self.current_theme = theme
+        self._maintenance_guard = maintenance_guard
         self.crawler_thread = None
         self.crawl_cache = None
         self.collected_data = []
         self.grouped_rows = {}
         self._pending_search_text = ""
         self._row_search_cache = []
+        self._row_payload_cache = []
         self._row_hidden_state = {}
+        self._advanced_filters = None
         self._append_chunk_size = 200
         self._compact_duplicates = bool(settings.get("compact_duplicate_listings", True))
         self._compact_items_by_key = {}
@@ -332,6 +341,15 @@ class CrawlerTab(QWidget):
         self.result_search = SearchBar("결과 검색...")
         self.result_search.search_changed.connect(self._on_search_text_changed)
         search_sort.addWidget(self.result_search, 3)
+
+        self.btn_advanced_filter = QPushButton("⚙️ 고급필터")
+        self.btn_advanced_filter.clicked.connect(self.open_advanced_filter_dialog)
+        search_sort.addWidget(self.btn_advanced_filter)
+
+        self.btn_clear_advanced_filter = QPushButton("🧹 필터해제")
+        self.btn_clear_advanced_filter.clicked.connect(self.clear_advanced_filters)
+        self.btn_clear_advanced_filter.setEnabled(False)
+        search_sort.addWidget(self.btn_clear_advanced_filter)
         
         search_sort.addWidget(QLabel("정렬:"))
         self.combo_sort = QComboBox()
@@ -632,6 +650,7 @@ class CrawlerTab(QWidget):
     def _reset_result_state(self):
         self.result_table.setRowCount(0)
         self._row_search_cache = []
+        self._row_payload_cache = []
         self._row_hidden_state = {}
         self._compact_items_by_key = {}
         self._compact_rows_data = []
@@ -650,6 +669,7 @@ class CrawlerTab(QWidget):
             self._append_rows_batch(self.collected_data)
             if self.view_mode == "card":
                 self.card_view.set_data(self.collected_data)
+        self._filter_results(self._pending_search_text)
             
     def _toggle_view_mode(self):
         if self.btn_view_mode.isChecked():
@@ -657,7 +677,10 @@ class CrawlerTab(QWidget):
             self.btn_view_mode.setText("📄 테이블")
             self.view_stack.setCurrentWidget(self.card_view)
             if self.collected_data:
-                if self._compact_duplicates:
+                if self._advanced_filters:
+                    self.card_view.set_data(self._advanced_filtered_data_for_cards())
+                    self.card_view.filter_cards(self._pending_search_text)
+                elif self._compact_duplicates:
                     self.card_view.set_data(list(self._compact_rows_data))
                 else:
                     self.card_view.set_data(self.collected_data)
@@ -671,6 +694,15 @@ class CrawlerTab(QWidget):
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
             self.status_message.emit("이미 크롤링이 실행 중입니다.")
+            return
+
+        try:
+            in_maintenance = bool(self._maintenance_guard()) if callable(self._maintenance_guard) else False
+        except Exception:
+            in_maintenance = False
+        if in_maintenance:
+            self.append_log("⛔ 유지보수 모드에서는 크롤링을 시작할 수 없습니다.", 30)
+            self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
             return
 
         if self.table_list.rowCount() == 0:
@@ -853,6 +885,8 @@ class CrawlerTab(QWidget):
             self._append_rows_batch(items)
             if self.view_mode == "card":
                 self.card_view.append_data(items)
+        if self._advanced_filters:
+            self._apply_card_filters(self._pending_search_text)
 
     def _sync_row_search_cache(self, row):
         values = []
@@ -866,10 +900,76 @@ class CrawlerTab(QWidget):
         self._row_search_cache[row] = searchable
         return searchable
 
+    def _build_row_payload_from_data(self, data, trade_type, price_int, area_val, price_change, is_new):
+        payload = dict(data or {})
+        payload["거래유형"] = trade_type
+        payload["price_int"] = int(price_int or 0)
+        payload["면적(평)"] = float(area_val or 0)
+        payload["층/방향"] = str(data.get("층/방향", "") if isinstance(data, dict) else "")
+        payload["타입/특징"] = str(data.get("타입/특징", "") if isinstance(data, dict) else "")
+        payload["is_new"] = bool(is_new)
+        payload["price_change"] = int(price_change or 0)
+        return payload
+
+    def _build_row_payload_from_table(self, row):
+        def _text(col):
+            item = self.result_table.item(row, col)
+            return item.text().strip() if item else ""
+
+        change_text = _text(self.COL_PRICE_CHANGE)
+        sign = -1 if change_text.startswith("-") else 1
+        change_value = PriceConverter.to_int(change_text.lstrip("+-"))
+        price_int_text = _text(self.COL_PRICE_SORT)
+        try:
+            price_int = int(price_int_text.replace(",", "")) if price_int_text else 0
+        except ValueError:
+            price_int = 0
+        area_val = self._area_float(_text(self.COL_AREA).replace("평", ""))
+        payload = {
+            "단지명": _text(self.COL_COMPLEX),
+            "거래유형": _text(self.COL_TRADE),
+            "price_int": int(price_int),
+            "면적(평)": float(area_val),
+            "층/방향": _text(self.COL_FLOOR),
+            "타입/특징": _text(self.COL_FEATURE),
+            "is_new": bool(_text(self.COL_NEW)),
+            "price_change": int(sign * change_value),
+        }
+        return payload
+
+    def _build_payload_lookup_by_url(self):
+        if self._compact_duplicates:
+            source = list(self._compact_rows_data)
+        else:
+            source = list(self.collected_data)
+        lookup = {}
+        for item in source:
+            trade_type, _, price_int = self._extract_price_values(item)
+            area_val = self._area_float(item.get("면적(평)", 0))
+            price_change = self._normalize_price_change(item.get("price_change", item.get("가격변동", 0)))
+            is_new = bool(item.get("is_new") or item.get("신규여부"))
+            payload = self._build_row_payload_from_data(
+                data=item,
+                trade_type=trade_type,
+                price_int=price_int,
+                area_val=area_val,
+                price_change=price_change,
+                is_new=is_new,
+            )
+            url = get_article_url(item.get("단지ID", ""), item.get("매물ID", ""))
+            if url:
+                lookup[url] = payload
+        return lookup
+
     def _apply_current_filter_to_row(self, row):
         text_lower = (self._pending_search_text or "").lower()
         searchable = self._row_search_cache[row] if row < len(self._row_search_cache) else ""
-        hidden = bool(text_lower) and text_lower not in searchable
+        hidden_by_text = bool(text_lower) and text_lower not in searchable
+        hidden_by_advanced = False
+        payload = self._row_payload_cache[row] if row < len(self._row_payload_cache) else None
+        if self._advanced_filters and payload is not None:
+            hidden_by_advanced = not self._check_advanced_filter(payload)
+        hidden = hidden_by_text or hidden_by_advanced
         if self._row_hidden_state.get(row) != hidden:
             self.result_table.setRowHidden(row, hidden)
             self._row_hidden_state[row] = hidden
@@ -913,10 +1013,8 @@ class CrawlerTab(QWidget):
         new_badge_text = "N" if show_new_badge and is_new else ""
         self.result_table.setItem(row, self.COL_NEW, QTableWidgetItem(new_badge_text))
 
-        if show_price_change and price_change > 0:
-            change_text = f"+{PriceConverter.to_string(price_change)}"
-        elif show_price_change and price_change < 0:
-            change_text = PriceConverter.to_string(price_change)
+        if show_price_change and price_change != 0:
+            change_text = PriceConverter.to_signed_string(price_change, zero_text="")
         else:
             change_text = ""
         self.result_table.setItem(row, self.COL_PRICE_CHANGE, QTableWidgetItem(change_text))
@@ -930,6 +1028,17 @@ class CrawlerTab(QWidget):
         sort_item = QTableWidgetItem(str(price_int))
         sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
         self.result_table.setItem(row, self.COL_PRICE_SORT, sort_item)
+        payload = self._build_row_payload_from_data(
+            data=data,
+            trade_type=trade_type,
+            price_int=price_int,
+            area_val=area_val,
+            price_change=price_change,
+            is_new=is_new,
+        )
+        while len(self._row_payload_cache) <= row:
+            self._row_payload_cache.append({})
+        self._row_payload_cache[row] = payload
 
     def _append_rows_compact_batch(self, items):
         for item in items:
@@ -965,6 +1074,7 @@ class CrawlerTab(QWidget):
         self.result_table.setSortingEnabled(False)
         self.result_table.setRowCount(len(rows))
         self._row_search_cache = []
+        self._row_payload_cache = []
         self._row_hidden_state = {}
 
         for row, data in enumerate(rows):
@@ -1032,7 +1142,9 @@ class CrawlerTab(QWidget):
     def _rebuild_row_search_cache_from_table(self):
         rows = self.result_table.rowCount()
         self._row_search_cache = []
+        self._row_payload_cache = []
         self._row_hidden_state = {}
+        payload_lookup = self._build_payload_lookup_by_url()
         for r in range(rows):
             values = []
             for c in range(self.result_table.columnCount()):
@@ -1040,10 +1152,167 @@ class CrawlerTab(QWidget):
                 if item:
                     values.append(item.text())
             self._row_search_cache.append(" ".join(values).lower())
+            url_item = self.result_table.item(r, self.COL_URL)
+            row_url = url_item.text().strip() if url_item else ""
+            payload = payload_lookup.get(row_url) or self._build_row_payload_from_table(r)
+            self._row_payload_cache.append(payload)
+
+    @staticmethod
+    def _is_default_advanced_filter(filters: dict) -> bool:
+        defaults = {
+            "price_min": 0,
+            "price_max": 9999999,
+            "area_min": 0,
+            "area_max": 500,
+            "floor_low": True,
+            "floor_mid": True,
+            "floor_high": True,
+            "only_new": False,
+            "only_price_down": False,
+            "only_price_change": False,
+        }
+        for key, val in defaults.items():
+            if filters.get(key) != val:
+                return False
+        if filters.get("include_keywords"):
+            return False
+        if filters.get("exclude_keywords"):
+            return False
+        return True
+
+    @staticmethod
+    def _floor_category(floor_text: str):
+        text = str(floor_text or "")
+        if "저층" in text:
+            return "low"
+        if "중층" in text:
+            return "mid"
+        if "고층" in text or "탑" in text:
+            return "high"
+        m = re.search(r"(\d+)\s*층", text)
+        if not m:
+            return None
+        try:
+            floor_num = int(m.group(1))
+        except ValueError:
+            return None
+        if floor_num <= 3:
+            return "low"
+        if floor_num <= 10:
+            return "mid"
+        return "high"
+
+    def _check_advanced_filter(self, d):
+        if not self._advanced_filters:
+            return True
+        f = self._advanced_filters
+
+        price_int = d.get("price_int")
+        if price_int is None:
+            price_text = d.get("매매가") or d.get("보증금") or ""
+            price_int = PriceConverter.to_int(price_text)
+        if price_int < f.get("price_min", 0) or price_int > f.get("price_max", 9999999):
+            return False
+
+        area = self._area_float(d.get("면적(평)", 0))
+        if area < f.get("area_min", 0) or area > f.get("area_max", 9999999):
+            return False
+
+        floor_category = self._floor_category(d.get("층/방향", ""))
+        if floor_category == "low" and not f.get("floor_low", True):
+            return False
+        if floor_category == "mid" and not f.get("floor_mid", True):
+            return False
+        if floor_category == "high" and not f.get("floor_high", True):
+            return False
+
+        if f.get("only_new") and not bool(d.get("is_new", False)):
+            return False
+
+        price_change = d.get("price_change", 0)
+        if isinstance(price_change, str):
+            try:
+                sign = -1 if str(price_change).strip().startswith("-") else 1
+                price_change = sign * PriceConverter.to_int(str(price_change).strip().lstrip("+-"))
+            except Exception:
+                price_change = 0
+
+        if f.get("only_price_down") and price_change >= 0:
+            return False
+        if f.get("only_price_change") and price_change == 0:
+            return False
+
+        text_blob = " ".join(
+            [
+                str(d.get("단지명", "")),
+                str(d.get("타입/특징", "")),
+                str(d.get("층/방향", "")),
+            ]
+        ).lower()
+        include_keywords = [k.lower() for k in f.get("include_keywords", [])]
+        exclude_keywords = [k.lower() for k in f.get("exclude_keywords", [])]
+        if include_keywords and not any(k in text_blob for k in include_keywords):
+            return False
+        if exclude_keywords and any(k in text_blob for k in exclude_keywords):
+            return False
+        return True
+
+    def _advanced_filtered_data_for_cards(self):
+        if self._compact_duplicates:
+            base = list(self._compact_rows_data)
+        else:
+            base = list(self.collected_data)
+        if not self._advanced_filters:
+            return base
+        filtered = []
+        for item in base:
+            trade_type, _, price_int = self._extract_price_values(item)
+            area_val = self._area_float(item.get("면적(평)", 0))
+            price_change = self._normalize_price_change(item.get("price_change", item.get("가격변동", 0)))
+            is_new = bool(item.get("is_new") or item.get("신규여부"))
+            payload = self._build_row_payload_from_data(
+                data=item,
+                trade_type=trade_type,
+                price_int=price_int,
+                area_val=area_val,
+                price_change=price_change,
+                is_new=is_new,
+            )
+            if self._check_advanced_filter(payload):
+                filtered.append(item)
+        return filtered
+
+    def _apply_card_filters(self, text):
+        if self._advanced_filters:
+            self.card_view.set_data(self._advanced_filtered_data_for_cards())
+        elif self._compact_duplicates:
+            self.card_view.set_data(list(self._compact_rows_data))
+        else:
+            self.card_view.set_data(list(self.collected_data))
+        self.card_view.filter_cards(text)
+
+    def open_advanced_filter_dialog(self):
+        dialog = AdvancedFilterDialog(self, current_filters=self._advanced_filters)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected = dialog.get_filters()
+            if selected and not self._is_default_advanced_filter(selected):
+                self._advanced_filters = selected
+                self.status_message.emit("고급 필터가 적용되었습니다.")
+            else:
+                self._advanced_filters = None
+                self.status_message.emit("고급 필터가 초기화되었습니다.")
+            self.btn_clear_advanced_filter.setEnabled(self._advanced_filters is not None)
+            self._filter_results(self._pending_search_text)
+
+    def clear_advanced_filters(self):
+        self._advanced_filters = None
+        if hasattr(self, "btn_clear_advanced_filter"):
+            self.btn_clear_advanced_filter.setEnabled(False)
+        self.status_message.emit("고급 필터를 해제했습니다.")
+        self._filter_results(self._pending_search_text)
 
     def _filter_results(self, text):
-        # Table filtering
-        text_lower = (text or "").lower()
+        self._pending_search_text = text or ""
         rows = self.result_table.rowCount()
         for r in range(rows):
             if r >= len(self._row_search_cache):
@@ -1053,14 +1322,12 @@ class CrawlerTab(QWidget):
                     if item:
                         values.append(item.text())
                 self._row_search_cache.append(" ".join(values).lower())
-            searchable = self._row_search_cache[r]
-            hidden = bool(text_lower) and text_lower not in searchable
-            if self._row_hidden_state.get(r) != hidden:
-                self.result_table.setRowHidden(r, hidden)
-                self._row_hidden_state[r] = hidden
+            if r >= len(self._row_payload_cache):
+                self._row_payload_cache.append(self._build_row_payload_from_table(r))
+            self._apply_current_filter_to_row(r)
             
         # Card filtering
-        self.card_view.filter_cards(text)
+        self._apply_card_filters(self._pending_search_text)
 
     def _sort_results(self, criterion):
         col_map = {
@@ -1074,6 +1341,7 @@ class CrawlerTab(QWidget):
         key = criterion.split(" ")[0]
         if self._compact_duplicates:
             self._render_compact_rows()
+            self._apply_card_filters(self._pending_search_text)
             return
 
         col = col_map.get(key, self.COL_COMPLEX)

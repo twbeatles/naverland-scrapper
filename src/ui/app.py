@@ -34,7 +34,7 @@ from src.utils.logger import get_logger
 from src.core.database import ComplexDatabase
 from src.core.managers import SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
 from src.ui.styles import get_stylesheet
-from src.utils.helpers import DateTimeHelper, PriceConverter, get_article_url
+from src.utils.helpers import DateTimeHelper, get_article_url
 
 from src.ui.widgets.crawler_tab import CrawlerTab
 from src.ui.widgets.database_tab import DatabaseTab
@@ -51,7 +51,6 @@ from src.ui.dialogs import (
     URLBatchDialog,
     PresetDialog,
     AlertSettingDialog,
-    AdvancedFilterDialog,
     ExcelTemplateDialog,
 )
 from src.ui.widgets.toast import ToastWidget
@@ -78,6 +77,9 @@ class RealEstateApp(QMainWindow):
         self.retry_handler = None
         self.tray_icon = None
         self._is_shutting_down = False
+        self._maintenance_mode = False
+        self._maintenance_reason = ""
+        self._maintenance_enabled_snapshot: List[Tuple[Any, bool]] = []
         self.favorite_keys = set()
         self._shortcuts = {}
         self.db = ComplexDatabase()
@@ -130,7 +132,12 @@ class RealEstateApp(QMainWindow):
         layout.addWidget(self.tabs)
         
         # 1. 수집기 탭
-        self.crawler_tab = CrawlerTab(self.db, history_manager=self.history_manager, theme=self.current_theme)
+        self.crawler_tab = CrawlerTab(
+            self.db,
+            history_manager=self.history_manager,
+            theme=self.current_theme,
+            maintenance_guard=lambda: self._maintenance_mode,
+        )
         self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
         
         # 2. 단지 DB 탭
@@ -308,11 +315,11 @@ class RealEstateApp(QMainWindow):
         
         # 파일 메뉴
         file_menu = menubar.addMenu("📂 파일")
-        file_menu.addAction("💾 DB 백업", self._backup_db)
-        file_menu.addAction("📂 DB 복원", self._restore_db)
+        self.action_backup_db = file_menu.addAction("💾 DB 백업", self._backup_db)
+        self.action_restore_db = file_menu.addAction("📂 DB 복원", self._restore_db)
         file_menu.addSeparator()
-        file_menu.addAction("⚙️ 설정", self._show_settings)
-        file_menu.addAction("❌ 종료", self._quit_app)
+        self.action_settings = file_menu.addAction("⚙️ 설정", self._show_settings)
+        self.action_quit = file_menu.addAction("❌ 종료", self._quit_app)
         
         # 보기 메뉴 (v13.0)
         view_menu = menubar.addMenu("👁️ 보기")
@@ -333,8 +340,11 @@ class RealEstateApp(QMainWindow):
         
         # 필터 메뉴
         filter_menu = menubar.addMenu("🔍 필터")
-        filter_menu.addAction("💾 현재 필터 저장", self._save_preset)
-        filter_menu.addAction("📂 필터 불러오기", self._load_preset)
+        self.action_save_preset = filter_menu.addAction("💾 현재 필터 저장", self._save_preset)
+        self.action_load_preset = filter_menu.addAction("📂 필터 불러오기", self._load_preset)
+        filter_menu.addSeparator()
+        self.action_advanced_filter = filter_menu.addAction("⚙️ 고급 결과 필터", self._show_advanced_filter)
+        self.action_clear_advanced_filter = filter_menu.addAction("🧹 고급 필터 해제", self._clear_advanced_filter)
         
         # 알림 메뉴
         alert_menu = menubar.addMenu("🔔 알림")
@@ -442,6 +452,8 @@ class RealEstateApp(QMainWindow):
         if self.dashboard_widget is not None:
             return
         self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
+        if hasattr(self.dashboard_widget, "warning_signal"):
+            self.dashboard_widget.warning_signal.connect(self._on_dashboard_warning)
         self.dashboard_layout.addWidget(self.dashboard_widget)
         self.dashboard_placeholder.hide()
         self.dashboard_placeholder.deleteLater()
@@ -467,6 +479,13 @@ class RealEstateApp(QMainWindow):
         message = f"{complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)"
         self.show_toast(f"🔔 조건 매물 발견: {message}")
         self.show_notification("조건 매물 알림", message)
+
+    def _on_dashboard_warning(self, message: str):
+        text = str(message or "").strip()
+        if not text:
+            return
+        ui_logger.warning(f"Dashboard warning: {text}")
+        self.status_bar.showMessage(f"⚠️ {text}")
     
     # Event handlers
     # Obsolete helpers removed (replaced by widgets: CrawlerTab, DatabaseTab, GroupTab)
@@ -573,15 +592,51 @@ class RealEstateApp(QMainWindow):
                 self.history_table.setItem(row, 4, QTableWidgetItem(date))
         finally:
             self.history_table.setUpdatesEnabled(True)
-    
+
+    @staticmethod
+    def _parse_pyeong_value(value):
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return None
+        text = text.replace("평", "")
+        match = re.search(r"-?\d+(?:\.\d+)?", text)
+        if not match:
+            return None
+        try:
+            return float(match.group(0))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _format_pyeong_value(value):
+        try:
+            return f"{float(value):g}"
+        except (TypeError, ValueError):
+            return str(value)
+
     # Stats Tab handlers
     def _load_stats_complexes(self):
+        current_cid = self.stats_complex_combo.currentData()
         self.stats_complex_combo.blockSignals(True)
-        self.stats_complex_combo.clear()
-        complexes = self.db.get_complexes_for_stats()
-        for name, cid in complexes:
-            self.stats_complex_combo.addItem(f"{name}", cid)
-        self.stats_complex_combo.blockSignals(False)
+        try:
+            self.stats_complex_combo.clear()
+            complexes = self.db.get_complexes_for_stats()
+            for name, cid in complexes:
+                self.stats_complex_combo.addItem(f"{name}", cid)
+            if current_cid:
+                idx = self.stats_complex_combo.findData(current_cid)
+                if idx >= 0:
+                    self.stats_complex_combo.setCurrentIndex(idx)
+            if self.stats_complex_combo.count() > 0 and self.stats_complex_combo.currentIndex() < 0:
+                self.stats_complex_combo.setCurrentIndex(0)
+        except Exception as e:
+            ui_logger.warning(f"통계 단지 목록 로드 실패: {e}")
+        finally:
+            self.stats_complex_combo.blockSignals(False)
     
     def _load_stats(self):
         cid = self.stats_complex_combo.currentData()
@@ -589,50 +644,67 @@ class RealEstateApp(QMainWindow):
             return
         ttype = self.stats_type_combo.currentText()
         if ttype == "전체": ttype = None
-        
-        # v10.0: 평형 필터
-        pyeong_text = self.stats_pyeong_combo.currentText()
-        pyeong = None
-        if pyeong_text != "전체":
-            try:
-                pyeong = float(pyeong_text.replace("평", ""))
-            except ValueError:
-                ui_logger.warning(f"평형 파싱 실패: {pyeong_text}")
-                pyeong = None
-        
+
+        pyeong = self.stats_pyeong_combo.currentData()
+        if pyeong is None:
+            pyeong_text = self.stats_pyeong_combo.currentText()
+            if pyeong_text != "전체":
+                pyeong = self._parse_pyeong_value(pyeong_text)
+                if pyeong is None:
+                    ui_logger.warning(f"평형 파싱 실패: {pyeong_text}")
+
         snapshots = self.db.get_price_snapshots(cid, ttype)
-        if pyeong:
-            snapshots = [s for s in snapshots if s[2] == pyeong]
-        
+        if pyeong is not None:
+            filtered = []
+            for s in snapshots:
+                py = self._parse_pyeong_value(s[2] if len(s) > 2 else None)
+                if py is not None and abs(py - float(pyeong)) <= 1e-6:
+                    filtered.append(s)
+            snapshots = filtered
+
         self.stats_table.setUpdatesEnabled(False)
-        chart_data = {"date": [], "avg": [], "min": [], "max": []}
+        chart_data = {"date": [], "avg": [], "min": [], "max": [], "type": None, "py": None}
         try:
             self.stats_table.setRowCount(0)
             self.stats_table.setRowCount(len(snapshots))
             # 차트용 데이터 수집
             for row, (date, typ, py, min_p, max_p, avg_p, cnt) in enumerate(snapshots):
+                parsed_py = self._parse_pyeong_value(py)
+                py_text = (
+                    f"{self._format_pyeong_value(parsed_py)}평"
+                    if parsed_py is not None
+                    else f"{py}평"
+                )
                 self.stats_table.setItem(row, 0, QTableWidgetItem(date))
                 self.stats_table.setItem(row, 1, QTableWidgetItem(typ))
-                self.stats_table.setItem(row, 2, QTableWidgetItem(f"{py}평"))
+                self.stats_table.setItem(row, 2, QTableWidgetItem(py_text))
                 self.stats_table.setItem(row, 3, SortableTableWidgetItem(str(min_p)))
                 self.stats_table.setItem(row, 4, SortableTableWidgetItem(str(max_p)))
                 self.stats_table.setItem(row, 5, SortableTableWidgetItem(str(avg_p)))
                 
                 # 같은 유형/평형만 차트에 표시 (첫 번째 데이터 기준)
-                if not chart_data["date"] or (chart_data["type"] == typ and chart_data["py"] == py):
-                     chart_data["type"] = typ
-                     chart_data["py"] = py
-                     chart_data["date"].append(date)
-                     chart_data["avg"].append(avg_p)
-                     chart_data["min"].append(min_p)
-                     chart_data["max"].append(max_p)
+                same_series = (
+                    chart_data["type"] == typ
+                    and chart_data["py"] == parsed_py
+                )
+                if parsed_py is not None and (not chart_data["date"] or same_series):
+                    chart_data["type"] = typ
+                    chart_data["py"] = parsed_py
+                    chart_data["date"].append(date)
+                    chart_data["avg"].append(avg_p)
+                    chart_data["min"].append(min_p)
+                    chart_data["max"].append(max_p)
         finally:
             self.stats_table.setUpdatesEnabled(True)
         
         # 차트 업데이트
         if chart_data["date"]:
             self._ensure_chart_widget()
-            title = f"{self.stats_complex_combo.currentText()} - {chart_data.get('type','')} {chart_data.get('py',0)}평 가격 추이"
+            title = (
+                f"{self.stats_complex_combo.currentText()} - "
+                f"{chart_data.get('type','')} "
+                f"{self._format_pyeong_value(chart_data.get('py', 0))}평 가격 추이"
+            )
             self.chart_widget.update_chart(
                 chart_data["date"], 
                 chart_data["avg"], 
@@ -644,17 +716,38 @@ class RealEstateApp(QMainWindow):
     def _on_stats_complex_changed(self, index):
         """통계 탭 단지 변경 시 평형 콤보박스 업데이트"""
         cid = self.stats_complex_combo.currentData()
-        if not cid: return
-        
-        snapshots = self.db.get_price_snapshots(cid)
+        if not cid:
+            return
+
+        try:
+            snapshots = self.db.get_price_snapshots(cid)
+        except Exception as e:
+            ui_logger.warning(f"평형 목록 로드 실패: {e}")
+            snapshots = []
         # 평형 목록 추출
-        pyeongs = sorted(list(set(s[2] for s in snapshots)))
-        
+        pyeong_values = []
+        for row in snapshots:
+            value = self._parse_pyeong_value(row[2] if len(row) > 2 else None)
+            if value is not None:
+                pyeong_values.append(value)
+        pyeongs = sorted(set(pyeong_values))
+
+        prev_text = self.stats_pyeong_combo.currentText()
+        prev_value = self._parse_pyeong_value(prev_text) if prev_text and prev_text != "전체" else None
+
         self.stats_pyeong_combo.blockSignals(True)
         self.stats_pyeong_combo.clear()
-        self.stats_pyeong_combo.addItem("전체")
+        self.stats_pyeong_combo.addItem("전체", None)
         for p in pyeongs:
-            self.stats_pyeong_combo.addItem(f"{p}평")
+            self.stats_pyeong_combo.addItem(f"{self._format_pyeong_value(p)}평", p)
+        if prev_value is not None:
+            for i in range(1, self.stats_pyeong_combo.count()):
+                row_value = self.stats_pyeong_combo.itemData(i)
+                if row_value is None:
+                    continue
+                if abs(float(row_value) - float(prev_value)) <= 1e-6:
+                    self.stats_pyeong_combo.setCurrentIndex(i)
+                    break
         self.stats_pyeong_combo.blockSignals(False)
 
     def _toggle_theme(self, theme=None):
@@ -787,19 +880,78 @@ class RealEstateApp(QMainWindow):
     
     def _show_about(self):
         AboutDialog(self).exec()
+
+    def _enter_maintenance_mode(self, reason: str):
+        if self._maintenance_mode:
+            return
+        self._maintenance_mode = True
+        self._maintenance_reason = str(reason or "").strip() or "유지보수"
+        self._maintenance_enabled_snapshot = []
+
+        targets = [self.tabs]
+        if hasattr(self, "crawler_tab"):
+            targets.extend(
+                [
+                    self.crawler_tab.btn_start,
+                    self.crawler_tab.btn_save,
+                    self.crawler_tab.btn_advanced_filter,
+                    self.crawler_tab.btn_clear_advanced_filter,
+                ]
+            )
+        for action_name in (
+            "action_backup_db",
+            "action_restore_db",
+            "action_settings",
+            "action_save_preset",
+            "action_load_preset",
+            "action_advanced_filter",
+            "action_clear_advanced_filter",
+        ):
+            action = getattr(self, action_name, None)
+            if action is not None:
+                targets.append(action)
+
+        for target in targets:
+            try:
+                enabled = bool(target.isEnabled())
+                self._maintenance_enabled_snapshot.append((target, enabled))
+                target.setEnabled(False)
+            except Exception:
+                continue
+        self.status_bar.showMessage(f"🛠️ 유지보수 모드: {self._maintenance_reason}")
+
+    def _exit_maintenance_mode(self):
+        if not self._maintenance_mode:
+            return
+        for target, was_enabled in self._maintenance_enabled_snapshot:
+            try:
+                target.setEnabled(bool(was_enabled))
+            except Exception:
+                continue
+        self._maintenance_enabled_snapshot = []
+        self._maintenance_mode = False
+        self._maintenance_reason = ""
     
     def _show_advanced_filter(self):
-        # Legacy path retained for backward compatibility.
-        # Advanced filtering is owned by CrawlerTab in the modular UI.
-        ui_logger.warning("Deprecated app-level advanced filter entry invoked; ignoring.")
-        self.status_bar.showMessage("고급 필터는 수집기 탭(CrawlerTab)에서만 지원됩니다.")
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.open_advanced_filter_dialog()
+            return
+        ui_logger.warning("CrawlerTab unavailable for advanced filter dialog.")
+        self.status_bar.showMessage("고급 필터를 열 수 없습니다.")
 
     def _apply_advanced_filter(self):
         self._show_advanced_filter()
 
     def _filter_results_advanced(self):
-        ui_logger.warning("Deprecated app-level _filter_results_advanced invoked; ignoring.")
-        self.status_bar.showMessage("고급 필터는 수집기 탭(CrawlerTab)에서만 지원됩니다.")
+        self._show_advanced_filter()
+
+    def _clear_advanced_filter(self):
+        if hasattr(self, "crawler_tab"):
+            self.tabs.setCurrentWidget(self.crawler_tab)
+            self.crawler_tab.clear_advanced_filters()
+            return
+        ui_logger.warning("CrawlerTab unavailable for clearing advanced filter.")
 
     def _render_results(self, data, render_only=True):
         ui_logger.warning("Deprecated app-level _render_results invoked; ignoring.")
@@ -858,85 +1010,8 @@ class RealEstateApp(QMainWindow):
                 self.favorites_tab.refresh()
     
     def _check_advanced_filter(self, d):
-        """단일 데이터에 대한 고급 필터 체크"""
-        if not self.advanced_filters: return True
-        
-        f = self.advanced_filters
-
-        # 가격 필터
-        price_int = d.get("price_int")
-        if price_int is None:
-            price_text = d.get("매매가") or d.get("보증금") or ""
-            price_int = PriceConverter.to_int(price_text)
-        if price_int < f.get("price_min", 0) or price_int > f.get("price_max", 9999999):
-            return False
-
-        # 면적 필터 (평)
-        area = d.get("면적(평)", 0) or 0
-        if area < f.get("area_min", 0) or area > f.get("area_max", 9999999):
-            return False
-
-        # 층수 필터
-        floor_text = d.get("층/방향", "")
-        floor_category = None
-        if "저층" in floor_text:
-            floor_category = "low"
-        elif "중층" in floor_text:
-            floor_category = "mid"
-        elif "고층" in floor_text or "탑" in floor_text:
-            floor_category = "high"
-        else:
-            m = re.search(r'(\d+)\s*층', floor_text)
-            if m:
-                try:
-                    floor_num = int(m.group(1))
-                    if floor_num <= 3:
-                        floor_category = "low"
-                    elif floor_num <= 10:
-                        floor_category = "mid"
-                    else:
-                        floor_category = "high"
-                except ValueError:
-                    floor_category = None
-
-        if floor_category == "low" and not f.get("floor_low", True):
-            return False
-        if floor_category == "mid" and not f.get("floor_mid", True):
-            return False
-        if floor_category == "high" and not f.get("floor_high", True):
-            return False
-
-        # 신규/가격 변동 필터
-        if f.get("only_new") and not d.get("is_new", False):
-            return False
-
-        price_change = d.get("price_change", 0)
-        if isinstance(price_change, str):
-            try:
-                price_change = PriceConverter.to_int(price_change)
-            except Exception:
-                price_change = 0
-
-        if f.get("only_price_down") and price_change >= 0:
-            return False
-        if f.get("only_price_change") and price_change == 0:
-            return False
-
-        # 키워드 필터
-        text_blob = " ".join([
-            str(d.get("단지명", "")),
-            str(d.get("타입/특징", "")),
-            str(d.get("층/방향", "")),
-        ]).lower()
-
-        include_keywords = [k.lower() for k in f.get("include_keywords", [])]
-        exclude_keywords = [k.lower() for k in f.get("exclude_keywords", [])]
-
-        if include_keywords and not any(k in text_blob for k in include_keywords):
-            return False
-        if exclude_keywords and any(k in text_blob for k in exclude_keywords):
-            return False
-
+        if hasattr(self, "crawler_tab"):
+            return self.crawler_tab._check_advanced_filter(d)
         return True
 
     def _show_url_batch_dialog(self):
@@ -981,7 +1056,7 @@ class RealEstateApp(QMainWindow):
                 QMessageBox.critical(self, "실패", "DB 백업에 실패했습니다.")
 
     def _restore_db(self):
-        """DB 복원 - 안전한 UI 처리"""
+        """DB 복원 - 유지보수 모드 + 안전한 UI 처리"""
         path, _ = QFileDialog.getOpenFileName(self, "DB 복원", "", "Database (*.db)")
         if not path:
             return
@@ -997,32 +1072,64 @@ class RealEstateApp(QMainWindow):
         
         if reply != QMessageBox.StandardButton.Yes:
             return
-        
-        # 진행 중 표시
-        self.status_bar.showMessage("🔄 DB 복원 중...")
+
+        timer_was_active = bool(
+            hasattr(self, "schedule_timer")
+            and self.schedule_timer
+            and self.schedule_timer.isActive()
+        )
+
+        self._enter_maintenance_mode("DB 복원")
         QApplication.processEvents()
-        
         try:
+            if hasattr(self, "schedule_timer") and self.schedule_timer:
+                self.schedule_timer.stop()
+
+            if hasattr(self, "crawler_tab"):
+                ok = self.crawler_tab.shutdown_crawl(timeout_ms=8000)
+                if not ok:
+                    self.status_bar.showMessage("⚠️ 크롤링 스레드 종료 후 다시 복원을 시도하세요.")
+                    QMessageBox.warning(
+                        self,
+                        "복원 중단",
+                        "진행 중인 크롤링 스레드를 안전하게 종료하지 못해 DB 복원을 중단했습니다.",
+                    )
+                    ui_logger.warning("DB 복원 중단: 크롤링 스레드 종료 실패")
+                    return
+
+            self.status_bar.showMessage("🔄 DB 복원 중...")
+            QApplication.processEvents()
             ui_logger.info(f"DB 복원 시작: {path}")
-            
-            if self.db.restore_database(Path(path)):
-                # 성공 시 모든 데이터 다시 로드
-                ui_logger.info("DB 복원 성공, 데이터 다시 로드 중...")
-                self._load_initial_data()
-                self.status_bar.showMessage("✅ DB 복원 완료!")
-                QMessageBox.information(self, "복원 완료", "DB 복원이 완료되었습니다!")
-                ui_logger.info("DB 복원 완료")
-            else:
+
+            if not self.db.restore_database(Path(path)):
                 self.status_bar.showMessage("❌ DB 복원 실패")
                 QMessageBox.critical(self, "복원 실패", "DB 복원에 실패했습니다.\n콘솔 로그를 확인하세요.")
                 ui_logger.error("DB 복원 실패")
-                
+                return
+
+            ui_logger.info("DB 복원 성공, 데이터 다시 로드 중...")
+            for key in self._noncritical_loaded:
+                self._noncritical_loaded[key] = False
+            self._load_initial_data()
+            if self.dashboard_widget is not None:
+                self.dashboard_widget.refresh()
+            self.status_bar.showMessage("✅ DB 복원 완료!")
+            QMessageBox.information(self, "복원 완료", "DB 복원이 완료되었습니다!")
+            ui_logger.info("DB 복원 완료")
+
         except Exception as e:
-            ui_logger.error(f"DB 복원 중 예외: {e}")
-            import traceback
-            traceback.print_exc()
+            ui_logger.exception(f"DB 복원 중 예외: {e}")
             self.status_bar.showMessage("❌ DB 복원 중 오류 발생")
             QMessageBox.critical(self, "오류", f"DB 복원 중 오류가 발생했습니다:\n{e}")
+        finally:
+            self._exit_maintenance_mode()
+            if (
+                timer_was_active
+                and hasattr(self, "schedule_timer")
+                and self.schedule_timer
+                and not self.schedule_timer.isActive()
+            ):
+                self.schedule_timer.start(60000)
 
     def _refresh_tab(self):
         current = self.tabs.currentWidget()
@@ -1034,10 +1141,14 @@ class RealEstateApp(QMainWindow):
             self._noncritical_loaded["history"] = True
             self._load_history()
         elif current is self.stats_tab:
-            if not self._noncritical_loaded["stats"]:
-                self._load_stats_complexes()
-                self._noncritical_loaded["stats"] = True
-            self._load_stats()
+            try:
+                if not self._noncritical_loaded["stats"]:
+                    self._load_stats_complexes()
+                    self._noncritical_loaded["stats"] = True
+                self._load_stats()
+            except Exception as e:
+                ui_logger.exception(f"통계 탭 로드 실패: {e}")
+                self.status_bar.showMessage("⚠️ 통계 탭 로드 중 오류가 발생했습니다.")
         elif current is self.dashboard_tab:
             self._ensure_dashboard_widget()
             self.dashboard_widget.refresh()
@@ -1070,15 +1181,18 @@ class RealEstateApp(QMainWindow):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.show()
 
-    def _shutdown(self):
+    def _shutdown(self) -> bool:
         if self._is_shutting_down:
-            return
+            return True
         self._is_shutting_down = True
-        if hasattr(self, 'crawler_tab'):
+        if hasattr(self, "crawler_tab"):
             ok = self.crawler_tab.shutdown_crawl(timeout_ms=8000)
             if not ok:
-                ui_logger.warning("크롤링 스레드 종료 대기 타임아웃 상태에서 앱 종료를 진행합니다.")
-        if hasattr(self, 'schedule_timer') and self.schedule_timer:
+                self._is_shutting_down = False
+                ui_logger.warning("크롤링 스레드 종료 대기 타임아웃으로 앱 종료를 취소합니다.")
+                self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 앱 종료를 시도하세요.")
+                return False
+        if hasattr(self, "schedule_timer") and self.schedule_timer:
             self.schedule_timer.stop()
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])
         try:
@@ -1087,12 +1201,14 @@ class RealEstateApp(QMainWindow):
             ui_logger.debug(f"DB 종료 중 오류 (무시): {e}")
         if self.tray_icon:
             self.tray_icon.hide()
+        return True
 
     def _quit_app(self, skip_confirm=False):
         if not skip_confirm and settings.get("confirm_before_close"):
             if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
                 return
-        self._shutdown()
+        if not self._shutdown():
+            return
         QApplication.quit()
 
     def closeEvent(self, event):
@@ -1117,8 +1233,10 @@ class RealEstateApp(QMainWindow):
                 event.ignore()
                 return
 
-        self._shutdown()
-        event.accept()
+        if self._shutdown():
+            event.accept()
+            return
+        event.ignore()
 
     def show_toast(self, message, duration=3000):
         # 화면 우측 하단에 표시
