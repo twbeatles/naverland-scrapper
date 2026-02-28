@@ -2,6 +2,8 @@ import os
 import sys
 import tempfile
 import unittest
+import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +52,28 @@ class TestCacheAndManagers(unittest.TestCase):
                 cache.flush()
                 self.assertEqual(mock_save.call_count, 1)
                 self.assertTrue(cache_path.exists())
+
+    def test_crawl_cache_legacy_items_compatibility(self):
+        cache_path = self.tmp_path / "crawl_cache.json"
+        legacy_payload = {
+            "12345_매매": {
+                "cached_at": datetime.now().isoformat(),
+                "items": [{"id": 7}],
+            }
+        }
+        cache_path.write_text(json.dumps(legacy_payload, ensure_ascii=False), encoding="utf-8")
+
+        with patch("src.core.cache.CACHE_PATH", cache_path):
+            cache = CrawlCache(ttl_minutes=30)
+            data = cache.get("12345", "매매")
+            self.assertIsNotNone(data)
+            self.assertEqual(data[0]["id"], 7)
+
+            cache.set("99999", "매매", [{"id": 9}])
+            cache.flush()
+            stored = json.loads(cache_path.read_text(encoding="utf-8"))
+            self.assertIn("raw_items", stored["99999_매매"])
+            self.assertNotIn("items", stored["99999_매매"])
 
     def test_settings_and_preset_and_history_managers(self):
         settings_path = self.tmp_path / "settings.json"

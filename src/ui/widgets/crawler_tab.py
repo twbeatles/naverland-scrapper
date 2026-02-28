@@ -210,21 +210,41 @@ class CrawlerTab(QWidget):
         price_grid.addWidget(self.spin_jeonse_max, 1, 3)
         price_grid.addWidget(QLabel("만원"), 1, 4)
         
-        # 월세
-        price_grid.addWidget(QLabel("월세:"), 2, 0)
-        self.spin_monthly_min = QSpinBox()
-        self.spin_monthly_min.setRange(0, 999999)
-        self.spin_monthly_min.setSingleStep(100)
-        self.spin_monthly_min.setEnabled(False)
-        price_grid.addWidget(self.spin_monthly_min, 2, 1)
+        # 월세 보증금
+        price_grid.addWidget(QLabel("월세 보증금:"), 2, 0)
+        self.spin_monthly_deposit_min = QSpinBox()
+        self.spin_monthly_deposit_min.setRange(0, 999999)
+        self.spin_monthly_deposit_min.setSingleStep(1000)
+        self.spin_monthly_deposit_min.setEnabled(False)
+        price_grid.addWidget(self.spin_monthly_deposit_min, 2, 1)
         price_grid.addWidget(QLabel("~"), 2, 2)
-        self.spin_monthly_max = QSpinBox()
-        self.spin_monthly_max.setRange(0, 999999)
-        self.spin_monthly_max.setValue(5000)
-        self.spin_monthly_max.setSingleStep(100)
-        self.spin_monthly_max.setEnabled(False)
-        price_grid.addWidget(self.spin_monthly_max, 2, 3)
+        self.spin_monthly_deposit_max = QSpinBox()
+        self.spin_monthly_deposit_max.setRange(0, 999999)
+        self.spin_monthly_deposit_max.setValue(50000)
+        self.spin_monthly_deposit_max.setSingleStep(1000)
+        self.spin_monthly_deposit_max.setEnabled(False)
+        price_grid.addWidget(self.spin_monthly_deposit_max, 2, 3)
         price_grid.addWidget(QLabel("만원"), 2, 4)
+
+        # 월세 금액
+        price_grid.addWidget(QLabel("월세 금액:"), 3, 0)
+        self.spin_monthly_rent_min = QSpinBox()
+        self.spin_monthly_rent_min.setRange(0, 999999)
+        self.spin_monthly_rent_min.setSingleStep(100)
+        self.spin_monthly_rent_min.setEnabled(False)
+        price_grid.addWidget(self.spin_monthly_rent_min, 3, 1)
+        price_grid.addWidget(QLabel("~"), 3, 2)
+        self.spin_monthly_rent_max = QSpinBox()
+        self.spin_monthly_rent_max.setRange(0, 999999)
+        self.spin_monthly_rent_max.setValue(5000)
+        self.spin_monthly_rent_max.setSingleStep(100)
+        self.spin_monthly_rent_max.setEnabled(False)
+        price_grid.addWidget(self.spin_monthly_rent_max, 3, 3)
+        price_grid.addWidget(QLabel("만원"), 3, 4)
+
+        # Legacy aliases for preset/backward compatibility.
+        self.spin_monthly_min = self.spin_monthly_rent_min
+        self.spin_monthly_max = self.spin_monthly_rent_max
         
         pl.addLayout(price_grid)
         pg.setLayout(pl)
@@ -350,6 +370,10 @@ class CrawlerTab(QWidget):
         self.btn_clear_advanced_filter.clicked.connect(self.clear_advanced_filters)
         self.btn_clear_advanced_filter.setEnabled(False)
         search_sort.addWidget(self.btn_clear_advanced_filter)
+
+        self.lbl_advanced_filter = QLabel("고급필터: OFF")
+        self.lbl_advanced_filter.setStyleSheet("color: #888;")
+        search_sort.addWidget(self.lbl_advanced_filter)
         
         search_sort.addWidget(QLabel("정렬:"))
         self.combo_sort = QComboBox()
@@ -419,6 +443,7 @@ class CrawlerTab(QWidget):
         # Load any persisted state if needed
         logger.debug("CrawlerTab 상태 로드 없음 (기본값 사용)")
         self.update_runtime_settings()
+        self._update_advanced_filter_badge()
 
     def set_theme(self, theme):
         self.current_theme = theme
@@ -470,8 +495,16 @@ class CrawlerTab(QWidget):
         
     def _toggle_price_filter(self, state):
         enabled = state == Qt.CheckState.Checked.value
-        for w in [self.spin_trade_min, self.spin_trade_max, self.spin_jeonse_min, 
-                  self.spin_jeonse_max, self.spin_monthly_min, self.spin_monthly_max]:
+        for w in [
+            self.spin_trade_min,
+            self.spin_trade_max,
+            self.spin_jeonse_min,
+            self.spin_jeonse_max,
+            self.spin_monthly_deposit_min,
+            self.spin_monthly_deposit_max,
+            self.spin_monthly_rent_min,
+            self.spin_monthly_rent_max,
+        ]:
             w.setEnabled(enabled)
 
     def _add_complex(self):
@@ -596,6 +629,37 @@ class CrawlerTab(QWidget):
         settings.set("compact_duplicate_listings", self._compact_duplicates)
         self._rebuild_result_views_from_collected_data()
 
+    def _update_advanced_filter_badge(self):
+        if not hasattr(self, "lbl_advanced_filter"):
+            return
+        if self._advanced_filters:
+            self.lbl_advanced_filter.setText("고급필터: ON")
+            self.lbl_advanced_filter.setStyleSheet("color: #10b981; font-weight: 700;")
+        else:
+            self.lbl_advanced_filter.setText("고급필터: OFF")
+            self.lbl_advanced_filter.setStyleSheet("color: #888;")
+
+    def _apply_advanced_filter_items(self, items):
+        if not items:
+            return []
+        if not self._advanced_filters:
+            return list(items)
+        return [item for item in items if self._check_advanced_filter(item)]
+
+    def set_advanced_filters(self, filters):
+        next_filters = filters or None
+        if next_filters and self._is_default_advanced_filter(next_filters):
+            next_filters = None
+        self._advanced_filters = dict(next_filters) if isinstance(next_filters, dict) else None
+        if hasattr(self, "btn_clear_advanced_filter"):
+            self.btn_clear_advanced_filter.setEnabled(self._advanced_filters is not None)
+        self._update_advanced_filter_badge()
+        self._rebuild_result_views_from_collected_data()
+        if self._advanced_filters:
+            self.status_message.emit("고급 필터 적용됨")
+        else:
+            self.status_message.emit("고급 필터 해제됨")
+
     @staticmethod
     def _area_float(value):
         try:
@@ -657,33 +721,33 @@ class CrawlerTab(QWidget):
 
     def _rebuild_result_views_from_collected_data(self):
         self._reset_result_state()
-        if not self.collected_data:
+        display_data = self._apply_advanced_filter_items(self.collected_data)
+        if not display_data:
             self.card_view.set_data([])
             return
 
         if self._compact_duplicates:
-            self._append_rows_compact_batch(self.collected_data)
+            self._append_rows_compact_batch(display_data)
             if self.view_mode == "card":
                 self.card_view.set_data(list(self._compact_rows_data))
         else:
-            self._append_rows_batch(self.collected_data)
+            self._append_rows_batch(display_data)
             if self.view_mode == "card":
-                self.card_view.set_data(self.collected_data)
+                self.card_view.set_data(display_data)
         self._filter_results(self._pending_search_text)
-            
+
     def _toggle_view_mode(self):
         if self.btn_view_mode.isChecked():
             self.view_mode = "card"
             self.btn_view_mode.setText("📄 테이블")
             self.view_stack.setCurrentWidget(self.card_view)
             if self.collected_data:
-                if self._advanced_filters:
-                    self.card_view.set_data(self._advanced_filtered_data_for_cards())
-                    self.card_view.filter_cards(self._pending_search_text)
-                elif self._compact_duplicates:
+                if self._compact_duplicates:
                     self.card_view.set_data(list(self._compact_rows_data))
                 else:
-                    self.card_view.set_data(self.collected_data)
+                    self.card_view.set_data(self._apply_advanced_filter_items(self.collected_data))
+                if self._advanced_filters or self._pending_search_text:
+                    self._apply_card_filters(self._pending_search_text)
         else:
             self.view_mode = "table"
             self.btn_view_mode.setText("🃏 카드뷰")
@@ -754,8 +818,23 @@ class CrawlerTab(QWidget):
             "enabled": self.check_price_filter.isChecked(),
             "매매": {"min": self.spin_trade_min.value(), "max": self.spin_trade_max.value()},
             "전세": {"min": self.spin_jeonse_min.value(), "max": self.spin_jeonse_max.value()},
-            "월세": {"min": self.spin_monthly_min.value(), "max": self.spin_monthly_max.value()}
+            "월세": {
+                "deposit_min": self.spin_monthly_deposit_min.value(),
+                "deposit_max": self.spin_monthly_deposit_max.value(),
+                "rent_min": self.spin_monthly_rent_min.value(),
+                "rent_max": self.spin_monthly_rent_max.value(),
+                # Legacy keys for backward compatibility with old readers.
+                "min": self.spin_monthly_rent_min.value(),
+                "max": self.spin_monthly_rent_max.value(),
+            },
         }
+
+        try:
+            configured_retry_count = max(0, int(settings.get("max_retry_count", 3)))
+        except (TypeError, ValueError):
+            configured_retry_count = 3
+        retry_on_error = bool(settings.get("retry_on_error", True))
+        max_retry_count = configured_retry_count if retry_on_error else 0
 
         if settings.get("cache_enabled", True):
             self.crawl_cache = CrawlCache(
@@ -771,7 +850,7 @@ class CrawlerTab(QWidget):
             cache=self.crawl_cache,
             ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
             ui_batch_size=settings.get("ui_batch_size", 30),
-            max_retry_count=settings.get("max_retry_count", 3),
+            max_retry_count=max_retry_count,
             show_new_badge=settings.get("show_new_badge", True),
             show_price_change=settings.get("show_price_change", True),
             price_change_threshold=settings.get("price_change_threshold", 0),
@@ -877,15 +956,18 @@ class CrawlerTab(QWidget):
         if not items:
             return
         self.collected_data.extend(items)
+        visible_items = self._apply_advanced_filter_items(items)
+        if not visible_items:
+            return
         if self._compact_duplicates:
-            self._append_rows_compact_batch(items)
+            self._append_rows_compact_batch(visible_items)
             if self.view_mode == "card":
                 self.card_view.set_data(list(self._compact_rows_data))
         else:
-            self._append_rows_batch(items)
+            self._append_rows_batch(visible_items)
             if self.view_mode == "card":
-                self.card_view.append_data(items)
-        if self._advanced_filters:
+                self.card_view.append_data(visible_items)
+        if self.view_mode == "card" and (self._advanced_filters or self._pending_search_text or self._compact_duplicates):
             self._apply_card_filters(self._pending_search_text)
 
     def _sync_row_search_cache(self, row):
@@ -1294,22 +1376,10 @@ class CrawlerTab(QWidget):
     def open_advanced_filter_dialog(self):
         dialog = AdvancedFilterDialog(self, current_filters=self._advanced_filters)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            selected = dialog.get_filters()
-            if selected and not self._is_default_advanced_filter(selected):
-                self._advanced_filters = selected
-                self.status_message.emit("고급 필터가 적용되었습니다.")
-            else:
-                self._advanced_filters = None
-                self.status_message.emit("고급 필터가 초기화되었습니다.")
-            self.btn_clear_advanced_filter.setEnabled(self._advanced_filters is not None)
-            self._filter_results(self._pending_search_text)
+            self.set_advanced_filters(dialog.get_filters())
 
     def clear_advanced_filters(self):
-        self._advanced_filters = None
-        if hasattr(self, "btn_clear_advanced_filter"):
-            self.btn_clear_advanced_filter.setEnabled(False)
-        self.status_message.emit("고급 필터를 해제했습니다.")
-        self._filter_results(self._pending_search_text)
+        self.set_advanced_filters(None)
 
     def _filter_results(self, text):
         self._pending_search_text = text or ""
@@ -1401,9 +1471,14 @@ class CrawlerTab(QWidget):
                 "enabled": self.check_price_filter.isChecked(),
                 "trade_min": self.spin_trade_min.value(),
                 "trade_max": self.spin_trade_max.value(),
-                # Add other price fields if needed, or simplify preset structure
-                # The preset manager likely expects a specific structure.
-                # Just mapping common fields.
+                "jeonse_min": self.spin_jeonse_min.value(),
+                "jeonse_max": self.spin_jeonse_max.value(),
+                "monthly_min": self.spin_monthly_rent_min.value(),
+                "monthly_max": self.spin_monthly_rent_max.value(),
+                "monthly_deposit_min": self.spin_monthly_deposit_min.value(),
+                "monthly_deposit_max": self.spin_monthly_deposit_max.value(),
+                "monthly_rent_min": self.spin_monthly_rent_min.value(),
+                "monthly_rent_max": self.spin_monthly_rent_max.value(),
             },
             # Add other settings...
         }
@@ -1415,7 +1490,23 @@ class CrawlerTab(QWidget):
             self.check_area_filter.setChecked(area.get("enabled", False))
             self.spin_area_min.setValue(area.get("min", 0))
             self.spin_area_max.setValue(area.get("max", 0))
-        # Handle other fields...
+        if "price" in state:
+            p = state["price"]
+            self.check_price_filter.setChecked(p.get("enabled", False))
+            self.spin_trade_min.setValue(p.get("trade_min", 0))
+            self.spin_trade_max.setValue(p.get("trade_max", 100000))
+            self.spin_jeonse_min.setValue(p.get("jeonse_min", 0))
+            self.spin_jeonse_max.setValue(p.get("jeonse_max", 50000))
+            self.spin_monthly_deposit_min.setValue(
+                p.get("monthly_deposit_min", p.get("monthly_min", 0))
+            )
+            self.spin_monthly_deposit_max.setValue(
+                p.get("monthly_deposit_max", p.get("monthly_max", 50000))
+            )
+            self.spin_monthly_rent_min.setValue(p.get("monthly_rent_min", p.get("monthly_min", 0)))
+            self.spin_monthly_rent_max.setValue(
+                p.get("monthly_rent_max", p.get("monthly_max", 5000))
+            )
         
     def show_save_menu(self):
         menu = QMenu(self)

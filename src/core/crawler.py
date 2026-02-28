@@ -43,6 +43,22 @@ class CrawlerThread(QThread):
     finished_signal = pyqtSignal(list)
     error_signal = pyqtSignal(str)
     alert_triggered_signal = pyqtSignal(str, str, str, float, int)
+    BLOCKED_PAGE_PATTERNS = (
+        "captcha",
+        "캡차",
+        "자동입력 방지",
+        "자동 입력 방지",
+        "접근이 제한",
+        "접속이 제한",
+        "비정상적인 접근",
+        "서비스 이용이 제한",
+        "verify you are human",
+        "robot check",
+        "access denied",
+        "security check",
+        "cloudflare",
+        "bot detection",
+    )
     
     def __init__(
         self,
@@ -512,8 +528,10 @@ class CrawlerThread(QThread):
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
                 self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
                 matched_count = 0
-                for item in cached_items:
-                    processed_item = self._enrich_item_with_history_and_alerts(dict(item))
+                for raw_item in cached_items:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    processed_item = self._enrich_item_with_history_and_alerts(dict(raw_item))
                     if self._check_filters(processed_item, ttype):
                         self._push_item(processed_item)
                         matched_count += 1
@@ -525,14 +543,40 @@ class CrawlerThread(QThread):
         
         trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
         url = f"https://new.land.naver.com/complexes/{cid}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
-        
-        self.log(f"   🔗 URL 접속 중...")
+
         try:
-            self.retry_handler.execute_with_retry(driver.get, url)
+            parse_result = self.retry_handler.execute_with_retry(
+                self._crawl_once,
+                driver,
+                name,
+                cid,
+                ttype,
+                url,
+            )
         except Exception as e:
-            self.log(f"   ❌ URL 접속 실패: {e}", 40)
-            return {"count": 0, "cache_hit": False, "raw_count": 0}
+            self.log(f"   ❌ {name}({ttype}) 크롤링 실패: {e}", 40)
+            raise
+        count = int(parse_result.get("count", 0))
         
+        # v14.2: 필터 통과 여부와 무관하게 raw_items 캐시 저장
+        if self.cache:
+            raw_items = parse_result.get("raw_items", [])
+            if raw_items:
+                self.cache.set(cid, ttype, raw_items)
+        
+        self._flush_history_updates(force=True)
+        self._flush_pending_items_if_needed(force=True)
+        return {
+            "count": count,
+            "cache_hit": False,
+            "raw_count": int(parse_result.get("raw_count", 0)),
+        }
+
+    def _crawl_once(self, driver, name, cid, ttype, url):
+        self.log("   🔗 URL 접속 중...")
+        driver.get(url)
+        self._assert_not_blocked_page(driver, context="초기 페이지")
+
         # v14.0: 동적 대기 - 페이지 로드 완료까지 대기
         try:
             WebDriverWait(driver, 10).until(
@@ -540,7 +584,8 @@ class CrawlerThread(QThread):
             )
         except TimeoutException:
             self.log("   ⚠️ 매물 리스트 로드 대기 시간 초과, 계속 진행...", 30)
-        
+        self._assert_not_blocked_page(driver, context="목록 대기")
+
         try:
             article_tab = driver.find_element("css selector", "a[href*='articleList'], .tab_item[data-tab='article']")
             article_tab.click()
@@ -554,64 +599,175 @@ class CrawlerThread(QThread):
         except (NoSuchElementException, Exception) as e:
             # 탭 클릭 실패는 정상적인 상황일 수 있음 (탭이 없는 경우)
             self.log(f"   ℹ️ 매물 탭 찾기 실패 (정상): {type(e).__name__}", 10)
-        
+
+        self._assert_not_blocked_page(driver, context="탭 진입")
         self._scroll(driver)
+        self._assert_not_blocked_page(driver, context="스크롤 완료")
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        parse_result = self._parse(soup, name, cid, ttype)
-        count = int(parse_result.get("count", 0))
-        
-        # v12.0: 크롤링 결과 캐시 저장
-        if self.cache and count > 0:
-            items_to_cache = parse_result.get("items_to_cache", [])
-            if items_to_cache:
-                self.cache.set(cid, ttype, items_to_cache)
-        
-        self._flush_history_updates(force=True)
-        self._flush_pending_items_if_needed(force=True)
-        return {
-            "count": count,
-            "cache_hit": False,
-            "raw_count": int(parse_result.get("raw_count", 0)),
-        }
+        return self._parse(soup, name, cid, ttype)
+
+    def _detect_block_signal(self, title, page_source):
+        title_lower = str(title or "").lower()
+        source_lower = str(page_source or "").lower()
+        source_head = source_lower[:20000]
+        haystack = f"{title_lower}\n{source_head}"
+        for pattern in self.BLOCKED_PAGE_PATTERNS:
+            if pattern in haystack:
+                return pattern
+        return None
+
+    def _assert_not_blocked_page(self, driver, context=""):
+        try:
+            title = driver.title
+        except Exception:
+            title = ""
+        try:
+            page_source = driver.page_source
+        except Exception:
+            page_source = ""
+
+        signal = self._detect_block_signal(title, page_source)
+        if signal:
+            ctx = f" ({context})" if context else ""
+            self.log(f"   ⚠️ 차단/방어 페이지 감지{ctx}: {signal}", 30)
+            raise RuntimeError(f"temporary blocked page detected{ctx}: {signal}")
+
+    def _get_item_state(self, driver, selectors):
+        script = """
+            const selector = arguments[0];
+            const nodes = Array.from(document.querySelectorAll(selector));
+            const ids = [];
+            for (const node of nodes) {
+                let id =
+                    node.getAttribute('data-article-id') ||
+                    node.getAttribute('data-id') ||
+                    node.getAttribute('id') ||
+                    '';
+                if (!id) {
+                    const anchor = node.querySelector("a[href*='articleId=']");
+                    if (anchor) {
+                        const href = anchor.getAttribute('href') || '';
+                        const m = href.match(/articleId=(\\d+)/);
+                        if (m) {
+                            id = m[1];
+                        }
+                    }
+                }
+                if (id) {
+                    ids.push(String(id));
+                }
+            }
+            return {count: nodes.length, ids: ids};
+        """
+        try:
+            state = driver.execute_script(script, selectors) or {}
+        except Exception:
+            return 0, set()
+        count = int(state.get("count", 0) or 0)
+        raw_ids = state.get("ids", [])
+        if not isinstance(raw_ids, list):
+            raw_ids = []
+        return count, {str(x) for x in raw_ids if x is not None}
+
+    def _detect_scroll_container(self, driver):
+        script = """
+            const candidates = [];
+            const seedSelectors = [
+                '.article_list',
+                '.item_list',
+                '.list_contents',
+                '[class*="article_list"]',
+                '[class*="item_list"]',
+                '[class*="ArticleList"]',
+                '[class*="List"]'
+            ];
+            for (const sel of seedSelectors) {
+                candidates.push(...Array.from(document.querySelectorAll(sel)));
+            }
+            if (candidates.length === 0) {
+                candidates.push(...Array.from(document.querySelectorAll('div, section, ul')));
+            }
+            let best = null;
+            let bestScroll = 0;
+            for (const el of candidates.slice(0, 400)) {
+                const style = window.getComputedStyle(el);
+                const overflowY = style.overflowY || '';
+                if (!(overflowY.includes('auto') || overflowY.includes('scroll'))) {
+                    continue;
+                }
+                const scrollGap = el.scrollHeight - el.clientHeight;
+                if (scrollGap > 40 && scrollGap > bestScroll) {
+                    best = el;
+                    bestScroll = scrollGap;
+                }
+            }
+            window.__naver_scroll_container = best;
+            return !!best;
+        """
+        try:
+            return bool(driver.execute_script(script))
+        except Exception:
+            return False
+
+    def _scroll_once(self, driver, use_container):
+        if use_container:
+            script = """
+                const container = window.__naver_scroll_container;
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                    return true;
+                }
+                return false;
+            """
+            try:
+                if bool(driver.execute_script(script)):
+                    return True
+            except Exception:
+                pass
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+        return False
     
     def _scroll(self, driver):
-        """v14.0: 컨텐츠 변화 감지 기반 최적화된 스크롤"""
+        """v14.2: 내부 컨테이너 우선 + window 폴백 스크롤"""
         try:
-            # 컨텐츠 아이템 수 기반 스크롤 (더 효율적)
             selectors = ".item_article, .item_inner, .article_item, [class*='ArticleItem']"
-            last_count = 0
+            seen_ids = set()
+            last_count = -1
             stable_count = 0
-            max_scroll_attempts = 15  # 최대 스크롤 횟수
+            max_scroll_attempts = 18
+            use_container = self._detect_scroll_container(driver)
+            if use_container:
+                self.log("   ℹ️ 내부 스크롤 컨테이너 감지, 컨테이너 스크롤 우선 적용", 10)
             
             for _ in range(max_scroll_attempts):
                 if not self._running:
                     break
-                
-                # 현재 아이템 수 확인
-                try:
-                    items = driver.find_elements("css selector", selectors)
-                    current_count = len(items)
-                except Exception:
-                    current_count = 0
-                
-                # 아이템 수가 변하지 않으면 카운트 증가
-                if current_count == last_count:
+
+                current_count, current_ids = self._get_item_state(driver, selectors)
+                new_ids = current_ids - seen_ids
+                seen_ids.update(current_ids)
+
+                if current_count == last_count and not new_ids:
                     stable_count += 1
-                    if stable_count >= 2:  # 2번 연속 변화 없으면 종료
+                    if stable_count >= 2:
                         break
                 else:
                     stable_count = 0
                     last_count = current_count
-                
-                # 스크롤 실행
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(0.8)  # 최소 대기 (네트워크 요청 시간 고려)
+
+                used_container = self._scroll_once(driver, use_container=use_container)
+                if use_container and not used_container:
+                    self.log("   ℹ️ 내부 컨테이너 스크롤 실패, window 스크롤로 폴백", 10)
+                    use_container = False
+
+                time.sleep(0.8)
                 
         except Exception as e:
             self.log(f"   ⚠️ 스크롤 오류: {e}", 30)
     
     def _parse(self, soup, name, cid, ttype):
-        items_to_cache = []
+        raw_items = []
         found_items = ItemParser.find_items(soup)
         
         if found_items:
@@ -619,7 +775,7 @@ class CrawlerThread(QThread):
             self.log(f"   🔍 파싱 대상: {len(found_items)}개")
         else:
             self.log("   ⚠️ 파싱 대상 항목을 찾지 못했습니다.", 10)
-            return {"count": 0, "items_to_cache": [], "raw_count": 0}
+            return {"count": 0, "raw_items": [], "raw_count": 0}
         
         matched_count, skipped_type = 0, 0
         
@@ -630,10 +786,10 @@ class CrawlerThread(QThread):
                 if data and data.get("면적(㎡)", 0) > 0:
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:
+                        raw_items.append(dict(data))
                         enriched = self._enrich_item_with_history_and_alerts(data)
                         if self._check_filters(enriched, ttype):
                             self._push_item(enriched)
-                            items_to_cache.append(dict(enriched))
                             matched_count += 1
                         else:
                             self.stats["filtered_out"] += 1
@@ -647,7 +803,7 @@ class CrawlerThread(QThread):
         
         return {
             "count": matched_count,
-            "items_to_cache": items_to_cache,
+            "raw_items": raw_items,
             "raw_count": len(found_items),
         }
 
@@ -658,9 +814,28 @@ class CrawlerThread(QThread):
             if sqm < self.area_filter.get("min", 0) or sqm > self.area_filter.get("max", 999):
                 return False
         if self.price_filter.get("enabled"):
-            price_range = self.price_filter.get(ttype, {})
-            min_p, max_p = price_range.get("min", 0), price_range.get("max", 999999)
-            if ttype == "매매": price = PriceConverter.to_int(data.get("매매가", "0"))
-            else: price = PriceConverter.to_int(data.get("보증금", "0"))
-            if price < min_p or price > max_p: return False
+            price_range = self.price_filter.get(ttype, {}) or {}
+            if ttype == "매매":
+                min_p = price_range.get("min", 0)
+                max_p = price_range.get("max", 999999)
+                price = PriceConverter.to_int(data.get("매매가", "0"))
+                if price < min_p or price > max_p:
+                    return False
+            elif ttype == "월세":
+                deposit_min = price_range.get("deposit_min", price_range.get("min", 0))
+                deposit_max = price_range.get("deposit_max", price_range.get("max", 999999))
+                rent_min = price_range.get("rent_min", price_range.get("min", 0))
+                rent_max = price_range.get("rent_max", price_range.get("max", 999999))
+                deposit = PriceConverter.to_int(data.get("보증금", "0"))
+                monthly_rent = PriceConverter.to_int(data.get("월세", "0"))
+                if deposit < deposit_min or deposit > deposit_max:
+                    return False
+                if monthly_rent < rent_min or monthly_rent > rent_max:
+                    return False
+            else:
+                min_p = price_range.get("min", 0)
+                max_p = price_range.get("max", 999999)
+                price = PriceConverter.to_int(data.get("보증금", "0"))
+                if price < min_p or price > max_p:
+                    return False
         return True

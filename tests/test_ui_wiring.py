@@ -769,6 +769,181 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_app_shutdown_aborts_when_crawler_shutdown_fails(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        call_order = []
+        with (
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
+            patch.object(app.db, "close", side_effect=lambda: call_order.append("db_close")),
+        ):
+            ok = app._shutdown()
+
+        self.assertFalse(ok)
+        self.assertEqual(call_order, [])
+        self.assertFalse(app._is_shutting_down)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_close_event_cancels_when_shutdown_fails(self):
+        from src.ui.app import RealEstateApp
+
+        class _EventStub:
+            def __init__(self):
+                self.accepted = False
+                self.ignored = False
+
+            def accept(self):
+                self.accepted = True
+
+            def ignore(self):
+                self.ignored = True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        def _settings_get(key, default=None):
+            overrides = {
+                "minimize_to_tray": False,
+                "confirm_before_close": False,
+            }
+            return overrides.get(key, default)
+
+        evt = _EventStub()
+        with (
+            patch("src.ui.app.settings.get", side_effect=_settings_get),
+            patch.object(app, "_shutdown", return_value=False),
+            patch("src.ui.app.QMessageBox.warning") as mock_warning,
+        ):
+            app.closeEvent(evt)
+
+        self.assertFalse(evt.accepted)
+        self.assertTrue(evt.ignored)
+        mock_warning.assert_called_once()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_crawler_tab_disables_retry_when_retry_setting_off(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "retry_off.db"))
+            tab = CrawlerTab(db)
+            tab.add_task("테스트단지", "12345")
+
+            def _settings_get(key, default=None):
+                overrides = {
+                    "retry_on_error": False,
+                    "max_retry_count": 7,
+                    "cache_enabled": False,
+                }
+                return overrides.get(key, default)
+
+            with (
+                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get),
+                patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls,
+            ):
+                tab.start_crawling()
+
+            kwargs = mock_thread_cls.call_args.kwargs
+            self.assertEqual(kwargs["max_retry_count"], 0)
+            mock_thread_cls.return_value.start.assert_called_once()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_advanced_filter_updates_table_and_card(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "advanced_filter.db"))
+            tab = CrawlerTab(db)
+            tab.check_compact_duplicates.setChecked(False)
+
+            sample = [
+                {
+                    "단지명": "A단지",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(㎡)": 84.0,
+                    "면적(평)": 25.4,
+                    "평당가_표시": "394만원",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "테스트",
+                    "매물ID": "A1",
+                    "수집시각": "2026-02-20 10:00:00",
+                    "is_new": True,
+                    "price_change": -100,
+                },
+                {
+                    "단지명": "B단지",
+                    "단지ID": "22222",
+                    "거래유형": "매매",
+                    "매매가": "20000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(㎡)": 84.0,
+                    "면적(평)": 25.4,
+                    "평당가_표시": "788만원",
+                    "층/방향": "3층 동향",
+                    "타입/특징": "테스트",
+                    "매물ID": "B1",
+                    "수집시각": "2026-02-20 10:00:01",
+                    "is_new": False,
+                    "price_change": 0,
+                },
+            ]
+            tab._on_items_batch(sample)
+            self.assertEqual(tab.result_table.rowCount(), 2)
+
+            filters = {
+                "price_min": 0,
+                "price_max": 9999999,
+                "area_min": 0,
+                "area_max": 500,
+                "floor_low": True,
+                "floor_mid": True,
+                "floor_high": True,
+                "only_new": True,
+                "only_price_down": False,
+                "only_price_change": False,
+                "include_keywords": [],
+                "exclude_keywords": [],
+            }
+            tab.set_advanced_filters(filters)
+            self.assertEqual(tab.result_table.rowCount(), 1)
+
+            tab.btn_view_mode.setChecked(True)
+            tab._toggle_view_mode()
+            self.assertEqual(len(tab.card_view._all_data), 1)
+
+            tab.set_advanced_filters(None)
+            self.assertEqual(tab.result_table.rowCount(), 2)
+            self.assertEqual(len(tab.card_view._all_data), 2)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

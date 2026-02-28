@@ -25,7 +25,11 @@ class RetryHandler:
                     raise
                 
                 if attempt < self.max_retries:
-                    wait_time = NetworkErrorHandler.get_wait_time(e, attempt)
+                    wait_time = NetworkErrorHandler.get_wait_time(
+                        e,
+                        attempt,
+                        base_delay=self.base_delay,
+                    )
                     
                     if self.is_rate_limited(e):
                         wait_time = max(wait_time, 30)  # Rate limit시 최소 30초 대기

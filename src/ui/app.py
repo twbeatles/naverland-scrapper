@@ -838,7 +838,14 @@ class RealEstateApp(QMainWindow):
                     "enabled": ct.check_price_filter.isChecked(),
                     "trade_min": ct.spin_trade_min.value(), "trade_max": ct.spin_trade_max.value(),
                     "jeonse_min": ct.spin_jeonse_min.value(), "jeonse_max": ct.spin_jeonse_max.value(),
-                    "monthly_min": ct.spin_monthly_min.value(), "monthly_max": ct.spin_monthly_max.value()
+                    # Legacy monthly keys (rent-based) for compatibility.
+                    "monthly_min": ct.spin_monthly_rent_min.value(),
+                    "monthly_max": ct.spin_monthly_rent_max.value(),
+                    # New split schema for monthly deposit + monthly rent.
+                    "monthly_deposit_min": ct.spin_monthly_deposit_min.value(),
+                    "monthly_deposit_max": ct.spin_monthly_deposit_max.value(),
+                    "monthly_rent_min": ct.spin_monthly_rent_min.value(),
+                    "monthly_rent_max": ct.spin_monthly_rent_max.value(),
                 }
             }
             if self.preset_manager.save_preset(name, config):
@@ -868,8 +875,18 @@ class RealEstateApp(QMainWindow):
             ct.spin_trade_max.setValue(p.get("trade_max", 100000))
             ct.spin_jeonse_min.setValue(p.get("jeonse_min", 0))
             ct.spin_jeonse_max.setValue(p.get("jeonse_max", 50000))
-            ct.spin_monthly_min.setValue(p.get("monthly_min", 0))
-            ct.spin_monthly_max.setValue(p.get("monthly_max", 5000))
+            ct.spin_monthly_deposit_min.setValue(
+                p.get("monthly_deposit_min", p.get("monthly_min", 0))
+            )
+            ct.spin_monthly_deposit_max.setValue(
+                p.get("monthly_deposit_max", p.get("monthly_max", 50000))
+            )
+            ct.spin_monthly_rent_min.setValue(
+                p.get("monthly_rent_min", p.get("monthly_min", 0))
+            )
+            ct.spin_monthly_rent_max.setValue(
+                p.get("monthly_rent_max", p.get("monthly_max", 5000))
+            )
             self.show_toast("프리셋을 불러왔습니다")
     
     def _show_alert_settings(self):
@@ -1189,7 +1206,7 @@ class RealEstateApp(QMainWindow):
             ok = self.crawler_tab.shutdown_crawl(timeout_ms=8000)
             if not ok:
                 self._is_shutting_down = False
-                ui_logger.warning("크롤링 스레드 종료 대기 타임아웃으로 앱 종료를 취소합니다.")
+                ui_logger.warning("크롤링 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
                 self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 앱 종료를 시도하세요.")
                 return False
         if hasattr(self, "schedule_timer") and self.schedule_timer:
@@ -1208,6 +1225,11 @@ class RealEstateApp(QMainWindow):
             if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
                 return
         if not self._shutdown():
+            QMessageBox.warning(
+                self,
+                "종료 중단",
+                "크롤링 스레드가 아직 종료되지 않아 앱 종료를 중단했습니다.\n잠시 후 다시 시도해주세요.",
+            )
             return
         QApplication.quit()
 
@@ -1236,6 +1258,11 @@ class RealEstateApp(QMainWindow):
         if self._shutdown():
             event.accept()
             return
+        QMessageBox.warning(
+            self,
+            "종료 중단",
+            "크롤링 스레드가 아직 종료되지 않아 창 닫기를 취소했습니다.\n잠시 후 다시 시도해주세요.",
+        )
         event.ignore()
 
     def show_toast(self, message, duration=3000):

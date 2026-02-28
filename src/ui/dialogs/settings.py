@@ -51,12 +51,22 @@ class SettingsDialog(QDialog):
         
         # 크롤링
         cg = QGroupBox("🔄 크롤링")
-        cl = QHBoxLayout()
+        cl = QGridLayout()
         self.combo_speed = QComboBox()
         self.combo_speed.addItems(list(CRAWL_SPEED_PRESETS.keys()))
-        cl.addWidget(QLabel("기본 속도:"))
-        cl.addWidget(self.combo_speed)
-        cl.addStretch()
+        cl.addWidget(QLabel("기본 속도:"), 0, 0)
+        cl.addWidget(self.combo_speed, 0, 1)
+
+        self.check_retry_on_error = QCheckBox("오류 시 자동 재시도")
+        self.check_retry_on_error.toggled.connect(
+            lambda checked: self.spin_max_retry_count.setEnabled(bool(checked))
+        )
+        cl.addWidget(self.check_retry_on_error, 1, 0, 1, 2)
+
+        cl.addWidget(QLabel("최대 재시도 횟수:"), 2, 0)
+        self.spin_max_retry_count = QSpinBox()
+        self.spin_max_retry_count.setRange(0, 10)
+        cl.addWidget(self.spin_max_retry_count, 2, 1)
         cg.setLayout(cl)
         layout.addWidget(cg)
 
@@ -117,6 +127,9 @@ class SettingsDialog(QDialog):
         self.check_confirm.setChecked(settings.get("confirm_before_close", True))
         self.check_sound.setChecked(settings.get("play_sound_on_complete", True))
         self.combo_speed.setCurrentText(settings.get("crawl_speed", "보통"))
+        self.check_retry_on_error.setChecked(bool(settings.get("retry_on_error", True)))
+        self.spin_max_retry_count.setValue(int(settings.get("max_retry_count", 3) or 3))
+        self.spin_max_retry_count.setEnabled(self.check_retry_on_error.isChecked())
         self.combo_sort_col.setCurrentText(settings.get("default_sort_column", "가격"))
         self.combo_sort_order.setCurrentText("오름차순" if settings.get("default_sort_order", "asc") == "asc" else "내림차순")
         self.spin_history_batch.setValue(int(settings.get("history_batch_size", 200) or 200))
@@ -133,6 +146,8 @@ class SettingsDialog(QDialog):
             "confirm_before_close": self.check_confirm.isChecked(),
             "play_sound_on_complete": self.check_sound.isChecked(),
             "crawl_speed": self.combo_speed.currentText(),
+            "retry_on_error": self.check_retry_on_error.isChecked(),
+            "max_retry_count": self.spin_max_retry_count.value(),
             "default_sort_column": self.combo_sort_col.currentText(),
             "default_sort_order": "asc" if self.combo_sort_order.currentText() == "오름차순" else "desc",
             "history_batch_size": self.spin_history_batch.value(),

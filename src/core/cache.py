@@ -38,7 +38,10 @@ class CrawlCache:
                     for key, entry in data.items():
                         try:
                             cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
-                            if now - cached_at < self.ttl:
+                            has_payload = isinstance(entry.get("raw_items"), list) or isinstance(
+                                entry.get("items"), list
+                            )
+                            if now - cached_at < self.ttl and has_payload:
                                 self._cache[key] = entry
                         except (ValueError, TypeError):
                             continue
@@ -91,7 +94,14 @@ class CrawlCache:
                 cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
                 if datetime.now() - cached_at < self.ttl:
                     get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type})")
-                    return entry.get('items', [])
+                    # v14.2: raw_items 우선 사용, legacy items 포맷과 호환 유지
+                    raw_items = entry.get("raw_items")
+                    if isinstance(raw_items, list):
+                        return raw_items
+                    legacy_items = entry.get("items")
+                    if isinstance(legacy_items, list):
+                        return legacy_items
+                    return []
                 else:
                     # 만료된 캐시 삭제
                     del self._cache[key]
@@ -101,18 +111,20 @@ class CrawlCache:
             except (ValueError, TypeError):
                 return None
     
-    def set(self, complex_id: str, trade_type: str, items: List[dict]):
+    def set(self, complex_id: str, trade_type: str, raw_items: List[dict]):
         """결과 캐시"""
         with self._lock:
             key = self._get_key(complex_id, trade_type)
             self._cache[key] = {
                 'cached_at': datetime.now().isoformat(),
-                'items': items
+                'raw_items': list(raw_items),
             }
             self._evict_if_needed()
             self._dirty = True
             self._flush_if_needed()
-            get_logger('CrawlCache').debug(f"캐시 저장: {complex_id} ({trade_type}) - {len(items)}건")
+            get_logger('CrawlCache').debug(
+                f"캐시 저장: {complex_id} ({trade_type}) - {len(raw_items)}건"
+            )
 
     def flush(self):
         """dirty 상태가 있으면 즉시 파일에 반영"""

@@ -25,7 +25,12 @@ class NaverURLParser:
         r'm\.land\.naver\.com.*complex[=/](\d+)',
     ]
     _URL_RE = re.compile(r'https?://[^\s<>"\']+')
-    _ID_RE = re.compile(r'\b(\d{5,10})\b')
+    _STANDALONE_ID_LINE_RE = re.compile(r'^\s*(\d{5,10})\s*$')
+    _CONTEXT_ID_LINE_RE = re.compile(
+        r'(?:단지\s*(?:id|번호)?|complex\s*id|complexno)\s*[:=]?\s*(\d{5,10})',
+        re.IGNORECASE,
+    )
+    _COMPLEX_QUERY_RE = re.compile(r'complexNo=(\d{5,10})', re.IGNORECASE)
     
     # 재시도 핸들러 (클래스 레벨)
     _retry_handler = RetryHandler(max_retries=2, base_delay=1.0)
@@ -52,14 +57,40 @@ class NaverURLParser:
                 results.append(("URL에서 추출", cid))
                 seen.add(cid)
         
-        # 단독 숫자 ID (5자리 이상)
-        ids = cls._ID_RE.findall(text)
-        for cid in ids:
-            if cid not in seen:
+        # 단독 숫자는 "라인 전체 숫자" 또는 "명시 문맥(단지ID/complexNo)"에서만 추출
+        for line in text.splitlines():
+            cid = cls._extract_id_from_line(line)
+            if cid and cid not in seen:
                 results.append(("ID 직접 입력", cid))
                 seen.add(cid)
         
         return results
+
+    @classmethod
+    def _extract_id_from_line(cls, line):
+        if not line:
+            return None
+        raw_line = str(line).strip()
+        if not raw_line:
+            return None
+
+        lower = raw_line.lower()
+        if "articleid" in lower and "complexno" not in lower:
+            return None
+
+        q_match = cls._COMPLEX_QUERY_RE.search(raw_line)
+        if q_match:
+            return q_match.group(1)
+
+        context_match = cls._CONTEXT_ID_LINE_RE.search(raw_line)
+        if context_match:
+            return context_match.group(1)
+
+        standalone_match = cls._STANDALONE_ID_LINE_RE.match(raw_line)
+        if standalone_match:
+            return standalone_match.group(1)
+
+        return None
     
     @classmethod
     def _fetch_name_impl(cls, complex_id):

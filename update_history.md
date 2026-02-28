@@ -2,27 +2,39 @@
 
 ## **v14.2 (최신 버전)**
 
-**안정성/운영성 강화 패치**
+**안정성/운영성/스크래핑 정확도 강화 패치**
 
 ### ✨ 신규/강화 기능
 
 * **DB 백업/복원 안정화**: SQLite online backup API 기반 백업, 복원 후 `PRAGMA integrity_check` + 필수 테이블 검증 추가
 * **복원 유지보수 모드 도입**: 복원 중 크롤링/스케줄/주요 UI 액션 차단 후 완료 시 복구
-* **종료 시퀀스 강화**: 크롤러 종료 실패 시 DB close를 차단하고 앱 종료를 중단하는 안전 계약 적용
-* **고급 필터 진입 경로 복원**: 앱 필터 메뉴에서 고급 결과 필터 진입/해제 정식 지원
+* **월세 필터 분리 정책**: 월세 필터를 `보증금`/`월세`로 분리하고 두 조건 동시 만족 정책 적용
+* **CrawlerTab 고급필터 실구현**: 수집 탭/필터 메뉴에서 고급필터 열기/적용/해제 및 ON/OFF 배지 표시
+* **설정 UI 확장**: `retry_on_error`, `max_retry_count`를 설정창에서 직접 제어
 * **가격변동 표기 통일**: UI/CSV/Excel 출력 모두 `+/-` 부호 포함 포맷 적용
 * **차트 한글 폰트 fallback**: 폰트 미지원 환경에서 통계/대시보드 matplotlib glyph warning 최소화
 * **테스트 환경 분리**: `pytest.ini`에서 `langsmith_plugin` 자동 로드 비활성화
 * **배포 스펙 정합화**: `naverland-scrapper.spec` 기본 배포를 `onefile`로 고정하고 `NAVERLAND_ONEFILE=0`으로 `onedir` 전환 지원
 
+### 🛠 개선사항
+
+* **캐시 정확도 개선**: 필터 통과 결과가 아닌 원본(raw) 매물 캐시 저장 후 조회 시 재필터링
+* **차단 페이지 즉시 실패 처리**: 캡차/접근제한 시그널 감지 시 정상 0건이 아닌 실패 경로로 처리
+* **스크롤 내구성 향상**: 내부 컨테이너 스크롤 우선 + window 폴백 + 신규 ID 유입 기반 종료 조건
+* **URL 과추출 완화**: 무문맥 숫자 추출 축소, API 이름 미확인 항목은 기본 체크 해제
+* **종료 정책 강화**: `shutdown_crawl()` 타임아웃 시 앱 종료 중단 및 DB close 차단
+* **Retry base_delay 반영**: `RetryHandler.base_delay`가 실제 대기 계산에 반영되도록 연결
+* **프리셋 스키마 확장**: `monthly_min/max`(legacy) + `monthly_deposit_*`, `monthly_rent_*`(신규) 동시 지원
+* **빌드 점검**: `naverland-scrapper.spec` 확인 결과 추가 hidden import 수정 불필요
+
 ### ✅ 검증
 
-* **회귀 테스트**: `pytest -q` 기준 `54 passed`
+* **회귀 테스트**: `pytest -q` 기준 전체 통과
 * **추가 시나리오**:
   * 통계/대시보드 반복 진입 안정성
   * 고급 필터 적용/해제 동작
   * 복원/종료 경계 시나리오
-  * Export 포맷(`to_signed_string`) 회귀
+  * 캐시 재평가/월세 이중 조건/차단 감지/Retry 반영 회귀
 
 ---
 

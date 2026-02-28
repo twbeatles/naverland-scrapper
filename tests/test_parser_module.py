@@ -35,6 +35,27 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(len(ids), 100)
 
+    def test_extract_from_text_ignores_contextless_numbers(self):
+        text = "\n".join(
+            [
+                "기사 번호 987654321",
+                "articleId=1234567890",
+                "매물 54321",
+            ]
+        )
+        results = NaverURLParser.extract_from_text(text)
+        ids = [cid for _, cid in results]
+        self.assertNotIn("987654321", ids)
+        self.assertNotIn("1234567890", ids)
+        self.assertNotIn("54321", ids)
+
+    def test_extract_from_text_accepts_standalone_id_lines(self):
+        text = "12345\n67890"
+        results = NaverURLParser.extract_from_text(text)
+        ids = [cid for _, cid in results]
+        self.assertIn("12345", ids)
+        self.assertIn("67890", ids)
+
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
         side_effect=Exception("network fail"),

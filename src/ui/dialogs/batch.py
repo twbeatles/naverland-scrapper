@@ -92,18 +92,19 @@ class URLBatchDialog(QDialog):
             
             # 체크박스
             chk = QCheckBox()
-            chk.setChecked(True)
+            name = NaverURLParser.fetch_complex_name(cid)
+            is_verified = not name.startswith("단지_")
+            chk.setChecked(is_verified)
             self.result_table.setCellWidget(row, 0, chk)
             
             # 단지 ID
             self.result_table.setItem(row, 1, QTableWidgetItem(cid))
             
             # 단지명 조회
-            name = NaverURLParser.fetch_complex_name(cid)
             self.result_table.setItem(row, 2, QTableWidgetItem(name))
             
             # 상태
-            status = "✅ 확인됨" if not name.startswith("단지_") else "⚠️ 이름 미확인"
+            status = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
             self.result_table.setItem(row, 3, QTableWidgetItem(status))
             
             QApplication.processEvents()

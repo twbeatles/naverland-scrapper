@@ -2,6 +2,7 @@ import importlib.util
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 # Ensure headless-friendly Qt platform for CI runners.
@@ -43,6 +44,25 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         d1.deleteLater()
         d2.deleteLater()
         self._qt_app.processEvents()
+
+    def test_url_batch_dialog_unverified_defaults_unchecked(self):
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        with (
+            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[("URL", "11111"), ("ID", "22222")]),
+            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=["단지_11111", "검증단지"]),
+        ):
+            dlg = URLBatchDialog()
+            dlg.input_text.setPlainText("dummy")
+            dlg._parse_urls()
+
+            chk_unknown = dlg.result_table.cellWidget(0, 0)
+            chk_verified = dlg.result_table.cellWidget(1, 0)
+            self.assertFalse(chk_unknown.isChecked())
+            self.assertTrue(chk_verified.isChecked())
+
+            dlg.deleteLater()
+            self._qt_app.processEvents()
 
     def test_crawler_tab_batch_render_smoke(self):
         from src.core.database import ComplexDatabase

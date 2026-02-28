@@ -34,13 +34,18 @@ class NetworkErrorHandler:
         return any(pattern in error_str for pattern in all_patterns)
     
     @classmethod
-    def get_wait_time(cls, error: Exception, attempt: int) -> float:
+    def get_wait_time(
+        cls,
+        error: Exception,
+        attempt: int,
+        base_delay: float = 2.0,
+    ) -> float:
         """오류 타입과 시도 횟수에 따른 대기 시간 계산 (지수 백오프)"""
-        base_delay = 2.0
         max_delay = 60.0
+        delay_unit = max(0.1, float(base_delay or 0))
         
         # 지수 백오프: 2^attempt * base_delay + 랜덤 jitter
-        delay = min(base_delay * (2 ** attempt), max_delay)
+        delay = min(delay_unit * (2 ** attempt), max_delay)
         jitter = random.uniform(0, delay * 0.3)
         
         return delay + jitter

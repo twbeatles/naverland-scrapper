@@ -18,6 +18,28 @@
     - DB 복원 유지보수 모드(복원 중 크롤링/스케줄 차단)
     - SQLite online backup + restore integrity 검증
     - 가격변동 부호 표기 통일(UI/CSV/Excel)
+    - 월세 필터 분리(보증금/월세 동시 조건)
+    - 원본(raw) 캐시 저장 후 조회 시 재필터링
+    - 차단 페이지 감지 시 즉시 실패 처리
+
+## 0. v14.2 Delta Notes
+- `CrawlerTab`:
+  - 월세 가격 필터 입력이 `monthly_deposit_*`, `monthly_rent_*`로 확장됨.
+  - 고급 필터 UI(버튼/상태 배지)와 결과 파이프라인(테이블/카드뷰) 연동 완료.
+  - `retry_on_error=False` 설정 시 크롤러 재시도 횟수는 0으로 강제됨.
+- `CrawlerThread`:
+  - 캐시 저장 포맷을 `raw_items` 중심으로 전환(legacy `items` 읽기 호환 유지).
+  - 차단/방어 페이지 시그널(title/page_source) 감지 시 예외 발생.
+  - 스크롤은 내부 컨테이너 우선, 실패 시 window 스크롤 폴백.
+  - 월세 필터는 보증금/월세 모두 만족해야 통과.
+- `RealEstateApp`:
+  - DB 복원 중 유지보수 모드로 전환되어 크롤링/일부 UI 동작이 차단됨.
+  - 종료 시 `shutdown_crawl()` 실패하면 앱 종료를 중단하고 DB close를 수행하지 않음.
+  - 앱 메뉴의 고급 필터 항목은 CrawlerTab으로 위임됨.
+- `NaverURLParser`:
+  - 단독 숫자 추출을 라인 단독/명시 문맥으로 제한해 과추출 완화.
+- Build:
+  - `naverland-scrapper.spec` 점검 결과 본 변경에 대한 추가 hidden import 수정 불필요.
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+
