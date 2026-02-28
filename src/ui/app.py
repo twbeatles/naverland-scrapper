@@ -1238,12 +1238,14 @@ class RealEstateApp(QMainWindow):
             event.accept()
             return
 
+        asked_confirmation = False
         if settings.get("minimize_to_tray", True) and self.tray_icon:
             event.ignore()
             self._minimize_to_tray()
             return
 
         if settings.get("confirm_before_close"):
+            asked_confirmation = True
             reply = QMessageBox.question(
                 self,
                 "종료",
@@ -1258,11 +1260,14 @@ class RealEstateApp(QMainWindow):
         if self._shutdown():
             event.accept()
             return
-        QMessageBox.warning(
-            self,
-            "종료 중단",
-            "크롤링 스레드가 아직 종료되지 않아 창 닫기를 취소했습니다.\n잠시 후 다시 시도해주세요.",
-        )
+        if not asked_confirmation:
+            QMessageBox.warning(
+                self,
+                "종료 중단",
+                "크롤링 스레드가 아직 종료되지 않아 창 닫기를 취소했습니다.\n잠시 후 다시 시도해주세요.",
+            )
+        else:
+            self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 창 닫기를 시도하세요.")
         event.ignore()
 
     def show_toast(self, message, duration=3000):
