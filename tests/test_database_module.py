@@ -3,6 +3,7 @@ import sys
 import tempfile
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -50,6 +51,23 @@ class TestComplexDatabase(unittest.TestCase):
         status2 = self.db.add_complex("단지A", "11111", return_status=True)
         self.assertEqual(status1, "inserted")
         self.assertEqual(status2, "existing")
+
+    def test_get_complexes_for_stats_returns_partial_when_one_source_fails(self):
+        def _fake_fetchall_safe(_conn, _query, params=(), context=""):
+            if context == "통계 단지 조회(complexes)":
+                return [{"name": "단지A", "complex_id": "11111"}]
+            if context == "통계 단지 조회(crawl_history)":
+                return []
+            if context == "통계 단지 조회(price_snapshots)":
+                return [{"complex_id": "22222"}]
+            return []
+
+        with patch.object(self.db, "_fetchall_safe", side_effect=_fake_fetchall_safe):
+            rows = self.db.get_complexes_for_stats()
+
+        self.assertEqual(len(rows), 2)
+        self.assertIn(("단지A", "11111"), rows)
+        self.assertIn(("단지_22222", "22222"), rows)
 
     def test_write_circuit_breaker_blocks_crawl_history_write(self):
         self.db._disable_writes("database_corruption")

@@ -217,6 +217,24 @@ class ComplexDatabase:
         else:
             logger.critical(f"DB write 비활성화: {self._write_disabled_reason}")
 
+    def _log_corruption_detected(self, context: str, exc):
+        if self._is_corruption_sqlite_error(exc):
+            self._disable_writes("database_corruption", exc)
+            logger.critical(
+                f"DB 손상 감지({context}). 앱 내 DB 복원 기능으로 정상 백업본을 복원하세요."
+            )
+
+    def _fetchall_safe(self, conn, query: str, params=(), context: str = ""):
+        try:
+            return conn.cursor().execute(query, params).fetchall()
+        except Exception as e:
+            self._log_corruption_detected(context or "read", e)
+            if context:
+                logger.error(f"{context} 실패: {e}")
+            else:
+                logger.error(f"DB 조회 실패: {e}")
+            return []
+
     @classmethod
     def _coerce_float(cls, value, default=0.0):
         if value is None:
@@ -513,12 +531,15 @@ class ComplexDatabase:
         """모든 단지 조회 - 디버깅 강화"""
         conn = self._pool.get_connection()
         try:
-            result = conn.cursor().execute(
-                "SELECT id, name, complex_id, memo FROM complexes ORDER BY name"
-            ).fetchall()
+            result = self._fetchall_safe(
+                conn,
+                "SELECT id, name, complex_id, memo FROM complexes ORDER BY name",
+                context="단지 조회(complexes)",
+            )
             logger.debug(f"단지 조회: {len(result)}개")
             return result
         except Exception as e:
+            self._log_corruption_detected("단지 조회", e)
             logger.exception(f"단지 조회 실패: {e}")
             return []
         finally:
@@ -531,9 +552,11 @@ class ComplexDatabase:
             complex_map = {}
 
             # 1) 저장된 단지 목록
-            rows = conn.cursor().execute(
-                "SELECT name, complex_id FROM complexes ORDER BY name"
-            ).fetchall()
+            rows = self._fetchall_safe(
+                conn,
+                "SELECT name, complex_id FROM complexes ORDER BY name",
+                context="통계 단지 조회(complexes)",
+            )
             for row in rows:
                 cid = row["complex_id"]
                 name = row["name"]
@@ -541,7 +564,8 @@ class ComplexDatabase:
                     complex_map[cid] = name
 
             # 2) 크롤링 기록(최신 이름 우선)
-            history_rows = conn.cursor().execute(
+            history_rows = self._fetchall_safe(
+                conn,
                 '''
                 SELECT ch.complex_id, ch.complex_name
                 FROM crawl_history ch
@@ -551,8 +575,9 @@ class ComplexDatabase:
                     GROUP BY complex_id
                 ) latest
                 ON ch.complex_id = latest.complex_id AND ch.crawled_at = latest.last_crawl
-                '''
-            ).fetchall()
+                ''',
+                context="통계 단지 조회(crawl_history)",
+            )
             for row in history_rows:
                 cid = row["complex_id"]
                 name = row["complex_name"] or f"단지_{cid}"
@@ -560,9 +585,11 @@ class ComplexDatabase:
                     complex_map[cid] = name
 
             # 3) 스냅샷에만 존재하는 단지 보강
-            snapshot_rows = conn.cursor().execute(
-                "SELECT DISTINCT complex_id FROM price_snapshots"
-            ).fetchall()
+            snapshot_rows = self._fetchall_safe(
+                conn,
+                "SELECT DISTINCT complex_id FROM price_snapshots",
+                context="통계 단지 조회(price_snapshots)",
+            )
             for row in snapshot_rows:
                 cid = row["complex_id"]
                 if cid and cid not in complex_map:
@@ -573,6 +600,7 @@ class ComplexDatabase:
             logger.debug(f"통계 단지 조회: {len(result)}개")
             return result
         except Exception as e:
+            self._log_corruption_detected("통계 단지 조회", e)
             logger.exception(f"통계 단지 조회 실패: {e}")
             return []
         finally:
@@ -639,10 +667,15 @@ class ComplexDatabase:
     def get_all_groups(self):
         conn = self._pool.get_connection()
         try:
-            result = conn.cursor().execute("SELECT id, name, description FROM groups ORDER BY name").fetchall()
+            result = self._fetchall_safe(
+                conn,
+                "SELECT id, name, description FROM groups ORDER BY name",
+                context="그룹 조회(groups)",
+            )
             logger.debug(f"그룹 조회: {len(result)}개")
             return result
         except Exception as e:
+            self._log_corruption_detected("그룹 조회", e)
             logger.error(f"그룹 조회 실패: {e}")
             return []
         finally:
@@ -762,12 +795,16 @@ class ComplexDatabase:
     def get_crawl_history(self, limit=100):
         conn = self._pool.get_connection()
         try:
-            result = conn.cursor().execute(
+            result = self._fetchall_safe(
+                conn,
                 'SELECT complex_name, complex_id, trade_types, item_count, crawled_at '
-                'FROM crawl_history ORDER BY crawled_at DESC LIMIT ?', (limit,)
-            ).fetchall()
+                'FROM crawl_history ORDER BY crawled_at DESC LIMIT ?',
+                params=(limit,),
+                context="크롤링 기록 조회(crawl_history)",
+            )
             return result
         except Exception as e:
+            self._log_corruption_detected("크롤링 기록 조회", e)
             logger.error(f"크롤링 기록 조회 실패: {e}")
             return []
         finally:
@@ -789,7 +826,12 @@ class ComplexDatabase:
 
             sql += ' ORDER BY snapshot_date DESC, pyeong'
 
-            raw_rows = conn.cursor().execute(sql, params).fetchall()
+            raw_rows = self._fetchall_safe(
+                conn,
+                sql,
+                params=params,
+                context="가격 히스토리 조회(price_snapshots)",
+            )
             pyeong_filter = None
             if pyeong and pyeong != "전체":
                 pyeong_filter = self._coerce_float(pyeong, default=None)
@@ -822,6 +864,7 @@ class ComplexDatabase:
             logger.debug(f"가격 히스토리 조회: {len(result)}개 (조건: {trade_type}, {pyeong})")
             return result
         except Exception as e:
+            self._log_corruption_detected("가격 히스토리 조회", e)
             logger.error(f"가격 히스토리 조회 실패: {e}")
             return []
         finally:
@@ -883,7 +926,12 @@ class ComplexDatabase:
             
             sql += ' ORDER BY snapshot_date DESC, trade_type, pyeong'
             
-            raw_rows = conn.cursor().execute(sql, params).fetchall()
+            raw_rows = self._fetchall_safe(
+                conn,
+                sql,
+                params=params,
+                context="가격 스냅샷 조회(price_snapshots)",
+            )
             result = []
             skipped = 0
             for row in raw_rows:
@@ -898,6 +946,7 @@ class ComplexDatabase:
             logger.debug(f"가격 스냅샷 조회: {len(result)}개")
             return result
         except Exception as e:
+            self._log_corruption_detected("가격 스냅샷 조회", e)
             logger.error(f"가격 스냅샷 조회 실패: {e}")
             return []
         finally:
