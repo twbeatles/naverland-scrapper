@@ -22,6 +22,8 @@ from src.utils.constants import TRADE_COLORS
 from src.utils.helpers import PriceConverter
 from src.utils.logger import get_logger
 from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
+from src.ui.styles import COLORS
+from src.ui.widgets.components import EmptyStateWidget
 
 logger = get_logger("Dashboard")
 
@@ -125,9 +127,11 @@ class DashboardWidget(QWidget):
         layout.addWidget(self.trend_frame)
 
         # 빈 상태 안내
-        self.empty_label = QLabel("아직 수집된 데이터가 없습니다.\n크롤링을 실행한 후 다시 확인하세요.")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888; padding: 30px;")
+        self.empty_label = EmptyStateWidget(
+            icon="📊",
+            title="아직 수집된 데이터가 없습니다",
+            description="크롤링을 실행한 후 다시 확인하세요."
+        )
         layout.addWidget(self.empty_label)
         self.empty_label.hide()
         
@@ -135,34 +139,37 @@ class DashboardWidget(QWidget):
     
     def _create_stat_card(self, title: str, value: str, color: str) -> QFrame:
         """통계 카드 위젯 생성"""
+        c = COLORS[self._theme]
         card = QFrame()
+        card.setObjectName("statCard")
         card.setFrameStyle(QFrame.Shape.StyledPanel)
+        card.setMinimumWidth(180)
         card.setStyleSheet(f"""
-            QFrame {{
+            QFrame#statCard {{
                 background-color: {color}20;
                 border: 1px solid {color}40;
                 border-radius: 14px;
                 padding: 18px;
             }}
-            QFrame:hover {{
+            QFrame#statCard:hover {{
                 border: 1px solid {color}80;
                 background-color: {color}28;
             }}
         """)
-        card.setMinimumWidth(180)
-        
+
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
-        
+
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 12px; color: #888; font-weight: 500;")
+        title_label.setObjectName("statCardTitle")
+        title_label.setStyleSheet(f"font-size: 12px; color: {c['text_secondary']}; font-weight: 500;")
         layout.addWidget(title_label)
-        
+
         value_label = QLabel(value)
         value_label.setObjectName("value")
         value_label.setStyleSheet(f"font-size: 32px; font-weight: 800; color: {color}; letter-spacing: -0.5px;")
         layout.addWidget(value_label)
-        
+
         return card
     
     def set_data(self, data: list):
@@ -431,10 +438,12 @@ class ArticleCard(QFrame):
             top_layout.addWidget(change_badge)
         
         # 즐겨찾기 버튼
+        theme_key = "dark" if self.is_dark else "light"
+        accent = COLORS[theme_key]["accent"]
         self.fav_btn = QPushButton("★" if self.data.get("is_favorite") else "☆")
         self.fav_btn.setFixedSize(30, 30)
         self.fav_btn.setStyleSheet(
-            "border: none; font-size: 18px; background: transparent; color: #f59e0b;"
+            f"border: none; font-size: 18px; background: transparent; color: {accent};"
         )
         self.fav_btn.clicked.connect(self._toggle_favorite)
         top_layout.addWidget(self.fav_btn)

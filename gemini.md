@@ -1,9 +1,9 @@
-# AI Context: Naver Real Estate Crawler Pro Plus (v14.2)
+# AI Context: Naver Real Estate Crawler Pro Plus (v15.0)
 
 이 문서는 AI 에이전트가 프로젝트 작업 시 참조할 컨텍스트 정보입니다.
 
 ## 1. Project Overview
-- **Name**: Naver Real Estate Crawler Pro Plus v14.2 (네이버 부동산 매물 크롤러)
+- **Name**: Naver Real Estate Crawler Pro Plus v15.0 (네이버 부동산 매물 크롤러)
 - **Goal**: 네이버 부동산 매물 수집, 분석, 모니터링, 관리를 위한 데스크톱 앱
 - **Key Features**: 
     - 다중 단지 크롤링 & 그룹 관리
@@ -11,7 +11,7 @@
     - Excel/CSV/JSON 내보내기 (템플릿 지원)
     - 카드 뷰/대시보드/즐겨찾기/최근 본 매물
     - 신규/가격 변동/소멸 매물 추적
-    - **Modern UI - Glassmorphism Dark/Light 테마**
+    - **Modern UI - Glassmorphism & Token-based Design (v15.0)**
     - Toast 알림 (페이드 인/아웃 애니메이션)
     - 강력한 에러 핸들링 (RetryHandler, Rate limit 감지)
     - 메모리 관리 (임계치 초과 시 드라이버 재시작)
@@ -22,7 +22,13 @@
     - 원본(raw) 캐시 저장 후 조회 시 재필터링
     - 차단 페이지 감지 시 즉시 실패 처리
 
-## 0. v14.2 Delta Notes
+## 0. v15.0 Delta Notes (UI/UX Refactoring)
+- `styles.py`: 하드코딩된 색상을 `COLORS` 딕셔너리로 추출하고 `_generate_stylesheet` 함수를 도입하여 QSS 기반 동적 테마를 생성합니다.
+- `components.py`: 반복적으로 사용되는 '결과 없음' 상태 처리를 위한 `EmptyStateWidget` 컴포넌트가 추가되었습니다. `SummaryCard`와 `SpeedSlider` 등의 인라인 스타일링이 객체 이름 및 QSS 기반으로 리팩토링되었습니다.
+- 모든 위젯 및 탭(`CrawlerTab`, `DatabaseTab`, `GroupTab`, `FavoritesTab`, `DashboardWidget` 등)에 `EmptyStateWidget`이 적용되었고, 인라인 QSS가 제거되었습니다.
+- 다이얼로그 창(`AboutDialog`, `FilterDialog` 등)의 테마 일관성(HTML 및 색상 포함)이 향상되었습니다.
+
+## 0-1. v14.2 Delta Notes
 - `CrawlerTab`:
   - 월세 가격 필터 입력이 `monthly_deposit_*`, `monthly_rent_*`로 확장됨.
   - 고급 필터 UI(버튼/상태 배지)와 결과 파이프라인(테이블/카드뷰) 연동 완료.

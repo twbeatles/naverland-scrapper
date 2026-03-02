@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 import webbrowser
 from src.utils.helpers import get_complex_url
-from src.ui.widgets.components import SearchBar
+from src.ui.widgets.components import SearchBar, EmptyStateWidget
 from src.utils.logger import get_logger
 
 logger = get_logger("DatabaseTab")
@@ -60,9 +60,11 @@ class DatabaseTab(QWidget):
         layout.addWidget(self.table)
 
         # 빈 상태
-        self.empty_label = QLabel("등록된 단지가 없습니다.\n크롤러 탭에서 단지를 추가한 뒤 DB에 저장하세요.")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888; padding: 30px;")
+        self.empty_label = EmptyStateWidget(
+            icon="🏢",
+            title="등록된 단지가 없습니다",
+            description="크롤러 탭에서 단지를 추가한 뒤 DB에 저장하세요."
+        )
         self.empty_label.hide()
         layout.addWidget(self.empty_label)
 

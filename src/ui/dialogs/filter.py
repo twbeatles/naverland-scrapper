@@ -41,7 +41,8 @@ class MultiSelectDialog(QDialog):
         
         # 카운트
         self.count_label = QLabel("선택: 0개")
-        self.count_label.setStyleSheet("font-weight: bold; color: #4a9eff;")
+        self.count_label.setObjectName("selectCount")
+        self.count_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(self.count_label)
         
         # 버튼

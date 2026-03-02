@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 import webbrowser
+from src.ui.widgets.components import EmptyStateWidget
 from src.utils.logger import get_logger
 
 logger = get_logger("FavoritesTab")
@@ -47,9 +48,11 @@ class FavoritesTab(QWidget):
         layout.addWidget(self.table)
 
         # 빈 상태
-        self.empty_label = QLabel("즐겨찾기 매물이 없습니다.\n카드/테이블에서 ⭐을 눌러 추가하세요.")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888; padding: 30px;")
+        self.empty_label = EmptyStateWidget(
+            icon="⭐",
+            title="즐겨찾기 매물이 없습니다",
+            description="카드/테이블에서 ⭐을 눌러 추가하세요."
+        )
         self.empty_label.hide()
         layout.addWidget(self.empty_label)
         

@@ -896,7 +896,7 @@ class RealEstateApp(QMainWindow):
         ShortcutsDialog(self).exec()
     
     def _show_about(self):
-        AboutDialog(self).exec()
+        AboutDialog(self, theme=self.current_theme).exec()
 
     def _enter_maintenance_mode(self, reason: str):
         if self._maintenance_mode:
