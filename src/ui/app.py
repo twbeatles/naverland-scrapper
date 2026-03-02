@@ -523,6 +523,12 @@ class RealEstateApp(QMainWindow):
         gid = self.schedule_group_combo.currentData()
         if gid:
             if hasattr(self, 'crawler_tab'):
+                running_thread = getattr(self.crawler_tab, "crawler_thread", None)
+                if running_thread and running_thread.isRunning():
+                    self.status_bar.showMessage("⏸ 예약 작업 건너뜀: 현재 크롤링이 실행 중입니다.")
+                    ui_logger.info("예약 작업 스킵: 현재 크롤러 실행 중")
+                    return
+
                 # 탭 전환
                 self.tabs.setCurrentWidget(self.crawler_tab)
                 

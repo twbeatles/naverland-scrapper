@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
 )
 
 
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRegularExpression
+from PyQt6.QtGui import QTextCursor, QRegularExpressionValidator
 import webbrowser
 import re
 
@@ -98,7 +98,7 @@ class CrawlerTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(380)
+        scroll.setMinimumWidth(410)
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
@@ -125,8 +125,17 @@ class CrawlerTab(QWidget):
         self._setup_result_area(right)
         
         splitter.addWidget(right_w)
-        splitter.setSizes([450, 900])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([520, 880])
         layout.addWidget(splitter)
+
+    def _configure_filter_spinbox(self, spinbox):
+        """Compact spinbox policy for narrow control panel / HiDPI scaling."""
+        spinbox.setMinimumWidth(80)
+        spinbox.setMaximumWidth(180)
+        spinbox.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        spinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def _setup_options_group(self, layout):
         # 1. 거래유형
@@ -153,18 +162,22 @@ class CrawlerTab(QWidget):
         al.addWidget(self.check_area_filter)
         
         area_input = QHBoxLayout()
+        area_input.setContentsMargins(0, 0, 0, 0)
+        area_input.setSpacing(6)
         self.spin_area_min = QSpinBox()
         self.spin_area_min.setRange(0, 300)
         self.spin_area_min.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_area_min)
         self.spin_area_max = QSpinBox()
         self.spin_area_max.setRange(0, 300)
         self.spin_area_max.setValue(200)
         self.spin_area_max.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_area_max)
         
         area_input.addWidget(QLabel("최소:"))
-        area_input.addWidget(self.spin_area_min)
+        area_input.addWidget(self.spin_area_min, 1)
         area_input.addWidget(QLabel("㎡  ~  최대:"))
-        area_input.addWidget(self.spin_area_max)
+        area_input.addWidget(self.spin_area_max, 1)
         area_input.addWidget(QLabel("㎡"))
         al.addLayout(area_input)
         ag.setLayout(al)
@@ -178,12 +191,18 @@ class CrawlerTab(QWidget):
         pl.addWidget(self.check_price_filter)
         
         price_grid = QGridLayout()
+        price_grid.setContentsMargins(0, 0, 0, 0)
+        price_grid.setHorizontalSpacing(6)
+        price_grid.setVerticalSpacing(8)
+        price_grid.setColumnStretch(1, 1)
+        price_grid.setColumnStretch(3, 1)
         # 매매
         price_grid.addWidget(QLabel("매매:"), 0, 0)
         self.spin_trade_min = QSpinBox()
         self.spin_trade_min.setRange(0, 999999)
         self.spin_trade_min.setSingleStep(1000)
         self.spin_trade_min.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_trade_min)
         price_grid.addWidget(self.spin_trade_min, 0, 1)
         price_grid.addWidget(QLabel("~"), 0, 2)
         self.spin_trade_max = QSpinBox()
@@ -191,6 +210,7 @@ class CrawlerTab(QWidget):
         self.spin_trade_max.setValue(100000)
         self.spin_trade_max.setSingleStep(1000)
         self.spin_trade_max.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_trade_max)
         price_grid.addWidget(self.spin_trade_max, 0, 3)
         price_grid.addWidget(QLabel("만원"), 0, 4)
         
@@ -200,6 +220,7 @@ class CrawlerTab(QWidget):
         self.spin_jeonse_min.setRange(0, 999999)
         self.spin_jeonse_min.setSingleStep(1000)
         self.spin_jeonse_min.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_jeonse_min)
         price_grid.addWidget(self.spin_jeonse_min, 1, 1)
         price_grid.addWidget(QLabel("~"), 1, 2)
         self.spin_jeonse_max = QSpinBox()
@@ -207,6 +228,7 @@ class CrawlerTab(QWidget):
         self.spin_jeonse_max.setValue(50000)
         self.spin_jeonse_max.setSingleStep(1000)
         self.spin_jeonse_max.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_jeonse_max)
         price_grid.addWidget(self.spin_jeonse_max, 1, 3)
         price_grid.addWidget(QLabel("만원"), 1, 4)
         
@@ -216,6 +238,7 @@ class CrawlerTab(QWidget):
         self.spin_monthly_deposit_min.setRange(0, 999999)
         self.spin_monthly_deposit_min.setSingleStep(1000)
         self.spin_monthly_deposit_min.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_monthly_deposit_min)
         price_grid.addWidget(self.spin_monthly_deposit_min, 2, 1)
         price_grid.addWidget(QLabel("~"), 2, 2)
         self.spin_monthly_deposit_max = QSpinBox()
@@ -223,6 +246,7 @@ class CrawlerTab(QWidget):
         self.spin_monthly_deposit_max.setValue(50000)
         self.spin_monthly_deposit_max.setSingleStep(1000)
         self.spin_monthly_deposit_max.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_monthly_deposit_max)
         price_grid.addWidget(self.spin_monthly_deposit_max, 2, 3)
         price_grid.addWidget(QLabel("만원"), 2, 4)
 
@@ -232,6 +256,7 @@ class CrawlerTab(QWidget):
         self.spin_monthly_rent_min.setRange(0, 999999)
         self.spin_monthly_rent_min.setSingleStep(100)
         self.spin_monthly_rent_min.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_monthly_rent_min)
         price_grid.addWidget(self.spin_monthly_rent_min, 3, 1)
         price_grid.addWidget(QLabel("~"), 3, 2)
         self.spin_monthly_rent_max = QSpinBox()
@@ -239,6 +264,7 @@ class CrawlerTab(QWidget):
         self.spin_monthly_rent_max.setValue(5000)
         self.spin_monthly_rent_max.setSingleStep(100)
         self.spin_monthly_rent_max.setEnabled(False)
+        self._configure_filter_spinbox(self.spin_monthly_rent_max)
         price_grid.addWidget(self.spin_monthly_rent_max, 3, 3)
         price_grid.addWidget(QLabel("만원"), 3, 4)
 
@@ -270,6 +296,8 @@ class CrawlerTab(QWidget):
         self.input_name.setPlaceholderText("단지명")
         self.input_id = QLineEdit()
         self.input_id.setPlaceholderText("단지 ID")
+        self._complex_id_regex = QRegularExpression(r"^\d{5,10}$")
+        self.input_id.setValidator(QRegularExpressionValidator(self._complex_id_regex, self))
         btn_add = QPushButton("➕")
         btn_add.setMaximumWidth(45)
         btn_add.clicked.connect(self._add_complex)
@@ -510,10 +538,16 @@ class CrawlerTab(QWidget):
     def _add_complex(self):
         name = self.input_name.text().strip()
         cid = self.input_id.text().strip()
-        if name and cid:
-            self._add_row(name, cid)
-            self.input_name.clear()
-            self.input_id.clear()
+        if not name or not cid:
+            return
+        if not self._complex_id_regex.match(cid).hasMatch():
+            QMessageBox.warning(self, "입력 오류", "단지 ID는 숫자 5~10자리만 입력할 수 있습니다.")
+            self.input_id.setFocus()
+            self.input_id.selectAll()
+            return
+        self._add_row(name, cid)
+        self.input_name.clear()
+        self.input_id.clear()
 
     def add_task(self, name, cid):
         row = self.table_list.rowCount()
@@ -536,14 +570,25 @@ class CrawlerTab(QWidget):
         self.table_list.setRowCount(0)
 
     def _save_to_db(self):
-        count = 0
+        inserted_count = 0
+        existing_count = 0
+        failed_count = 0
         total = self.table_list.rowCount()
         for r in range(total):
             name = self.table_list.item(r, 0).text()
             cid = self.table_list.item(r, 1).text()
-            if self.db.add_complex(name, cid):
-                count += 1
-        QMessageBox.information(self, "저장 완료", f"{count}개 단지가 DB에 저장되었습니다.")
+            status = self.db.add_complex(name, cid, return_status=True)
+            if status == "inserted":
+                inserted_count += 1
+            elif status == "existing":
+                existing_count += 1
+            else:
+                failed_count += 1
+        QMessageBox.information(
+            self,
+            "저장 완료",
+            f"신규 저장: {inserted_count}개\n기존 존재: {existing_count}개\n실패: {failed_count}개",
+        )
 
     def _show_db_load_dialog(self):
         complexes = self.db.get_all_complexes()
@@ -592,6 +637,33 @@ class CrawlerTab(QWidget):
                 self.check_trade.setChecked("매매" in types)
                 self.check_jeonse.setChecked("전세" in types)
                 self.check_monthly.setChecked("월세" in types)
+
+                area_filter = search.get("area_filter") or {}
+                self.check_area_filter.setChecked(bool(area_filter.get("enabled")))
+                self.spin_area_min.setValue(int(area_filter.get("min", self.spin_area_min.value()) or 0))
+                self.spin_area_max.setValue(int(area_filter.get("max", self.spin_area_max.value()) or 0))
+
+                price_filter = search.get("price_filter") or {}
+                self.check_price_filter.setChecked(bool(price_filter.get("enabled")))
+                sale = price_filter.get("매매", {}) or {}
+                jeonse = price_filter.get("전세", {}) or {}
+                monthly = price_filter.get("월세", {}) or {}
+                self.spin_trade_min.setValue(int(sale.get("min", self.spin_trade_min.value()) or 0))
+                self.spin_trade_max.setValue(int(sale.get("max", self.spin_trade_max.value()) or 0))
+                self.spin_jeonse_min.setValue(int(jeonse.get("min", self.spin_jeonse_min.value()) or 0))
+                self.spin_jeonse_max.setValue(int(jeonse.get("max", self.spin_jeonse_max.value()) or 0))
+                self.spin_monthly_deposit_min.setValue(
+                    int(monthly.get("deposit_min", monthly.get("min", self.spin_monthly_deposit_min.value())) or 0)
+                )
+                self.spin_monthly_deposit_max.setValue(
+                    int(monthly.get("deposit_max", monthly.get("max", self.spin_monthly_deposit_max.value())) or 0)
+                )
+                self.spin_monthly_rent_min.setValue(
+                    int(monthly.get("rent_min", monthly.get("min", self.spin_monthly_rent_min.value())) or 0)
+                )
+                self.spin_monthly_rent_max.setValue(
+                    int(monthly.get("rent_max", monthly.get("max", self.spin_monthly_rent_max.value())) or 0)
+                )
         except Exception as e:
             QMessageBox.critical(self, "오류", f"최근 검색 기록을 불러오는 중 오류가 발생했습니다:\n{e}")
             logger.error(f"Recent search load failed: {e}")
@@ -802,17 +874,6 @@ class CrawlerTab(QWidget):
             self.btn_stop.setEnabled(False)
             return
 
-        if self.history_manager:
-            try:
-                self.history_manager.add(
-                    {
-                        "complexes": [{"name": name, "cid": cid} for name, cid in target_list],
-                        "trade_types": list(trade_types),
-                    }
-                )
-            except Exception as e:
-                logger.warning(f"최근 검색 기록 저장 실패: {e}")
-            
         area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
         price_filter = {
             "enabled": self.check_price_filter.isChecked(),
@@ -828,6 +889,19 @@ class CrawlerTab(QWidget):
                 "max": self.spin_monthly_rent_max.value(),
             },
         }
+
+        if self.history_manager:
+            try:
+                self.history_manager.add(
+                    {
+                        "complexes": [{"name": name, "cid": cid} for name, cid in target_list],
+                        "trade_types": list(trade_types),
+                        "area_filter": area_filter,
+                        "price_filter": price_filter,
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"최근 검색 기록 저장 실패: {e}")
 
         try:
             configured_retry_count = max(0, int(settings.get("max_retry_count", 3)))
@@ -856,6 +930,7 @@ class CrawlerTab(QWidget):
             price_change_threshold=settings.get("price_change_threshold", 0),
             track_disappeared=settings.get("track_disappeared", True),
             history_batch_size=settings.get("history_batch_size", 200),
+            negative_cache_ttl_minutes=settings.get("cache_negative_ttl_minutes", 5),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
@@ -883,6 +958,8 @@ class CrawlerTab(QWidget):
             self.crawler_thread = None
             return True
 
+        if hasattr(thread, "set_shutdown_mode"):
+            thread.set_shutdown_mode(True)
         thread.stop()
         try:
             wait_ms = max(100, int(timeout_ms))

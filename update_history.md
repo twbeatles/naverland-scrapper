@@ -1,6 +1,31 @@
 # 🔄 업데이트 히스토리
 
-## **v14.2 (최신 버전)**
+## **v15.0 (최신 버전)**
+
+**기능 구현 감사 리포트(2026-03-02) 전항목 반영 배치**
+
+### ✅ 핵심 반영 항목
+
+* **종료/복구 중단 안정화**: `RetryCancelledError` 도입, 재시도 대기 구간 인터럽트 가능화, `CrawlerThread.stop()`의 인터럽트 요청 연동.
+* **URL 배치 분석 비동기화**: `URLBatchDialog`에 worker thread + 진행률 + 취소 버튼 추가로 UI block 제거.
+* **DB 정합성 강화**: 단지 삭제 시 `group_complexes` 선삭제, orphan 정리 SQL 추가, FK 활성화.
+* **분석 모듈 중복 제거**: `analysis.py`의 `MarketAnalyzer`/`ComplexComparator` 중복 정의 제거.
+* **예약 실행 보호 로직**: 실행 중에는 예약 태스크 목록을 덮어쓰지 않고 skip 처리.
+* **검색 히스토리 dedupe 개선**: `trade_types`, `area_filter`, `price_filter` 포함 canonical key 적용.
+* **0건 결과 negative cache**: empty list도 short TTL로 저장/재사용.
+* **버전 메타데이터 통합**: `src/utils/version.py`의 `APP_VERSION = "v15.0"`를 단일 소스로 사용.
+* **DB 저장 카운트 정밀화**: `add_complex(return_status=True)` 기반 `inserted/existing/error` 분리 집계.
+* **수동 단지 ID 검증 강화**: 5~10자리 숫자 validator + 최종 정규식 검증 추가.
+
+### 🧪 검증
+
+* **회귀 테스트**: `PYTHONPATH=. pytest -q`
+* **결과**: `77 passed`
+* **PyInstaller spec 점검**: `naverland-scrapper.spec`은 이번 변경 기준 추가 hidden import 수정 없이 유지 가능.
+
+---
+
+## **v14.2**
 
 **안정성/운영성/스크래핑 정확도 강화 패치**
 
@@ -138,3 +163,4 @@
 * **최근 검색 기록**: 자주 찾는 단지 조합 저장 및 불러오기 기능
 * **정렬 옵션**: 가격순, 면적순, 단지명순 등 다양한 정렬 기능
 * **완료 알림음**: 작업 완료 시 소리 알림 옵션
+

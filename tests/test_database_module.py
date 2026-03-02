@@ -45,6 +45,56 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(len(in_group), 1)
         self.assertEqual(in_group[0]["name"], "단지A")
 
+    def test_add_complex_return_status(self):
+        status1 = self.db.add_complex("단지A", "11111", return_status=True)
+        status2 = self.db.add_complex("단지A", "11111", return_status=True)
+        self.assertEqual(status1, "inserted")
+        self.assertEqual(status2, "existing")
+
+    def test_delete_complex_removes_group_mapping(self):
+        self.db.add_complex("단지A", "11111")
+        complex_id = self.db.get_all_complexes()[0]["id"]
+        self.assertTrue(self.db.create_group("그룹A", ""))
+        group_id = self.db.get_all_groups()[0]["id"]
+        self.assertEqual(self.db.add_complexes_to_group(group_id, [complex_id]), 1)
+
+        self.assertTrue(self.db.delete_complex(complex_id))
+        rows = self.db.get_complexes_in_group(group_id)
+        self.assertEqual(len(rows), 0)
+
+        conn = self.db._pool.get_connection()
+        try:
+            cnt = conn.cursor().execute(
+                "SELECT COUNT(*) FROM group_complexes WHERE complex_id = ?",
+                (complex_id,),
+            ).fetchone()[0]
+        finally:
+            self.db._pool.return_connection(conn)
+        self.assertEqual(cnt, 0)
+
+    def test_delete_complexes_bulk_removes_group_mapping(self):
+        self.db.add_complex("단지A", "11111")
+        self.db.add_complex("단지B", "22222")
+        rows = self.db.get_all_complexes()
+        ids = [rows[0]["id"], rows[1]["id"]]
+
+        self.assertTrue(self.db.create_group("그룹A", ""))
+        group_id = self.db.get_all_groups()[0]["id"]
+        self.assertEqual(self.db.add_complexes_to_group(group_id, ids), 2)
+
+        deleted = self.db.delete_complexes_bulk(ids)
+        self.assertEqual(deleted, 2)
+
+        conn = self.db._pool.get_connection()
+        try:
+            cnt = conn.cursor().execute(
+                "SELECT COUNT(*) FROM group_complexes WHERE complex_id IN (?, ?)",
+                (ids[0], ids[1]),
+            ).fetchone()[0]
+        finally:
+            self.db._pool.return_connection(conn)
+        self.assertEqual(cnt, 0)
+
     def test_add_price_snapshots_bulk(self):
         rows = [
             ("11111", "매매", 30.0, 10000, 12000, 11000, 7),

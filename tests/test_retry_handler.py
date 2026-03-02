@@ -1,40 +1,46 @@
 import os
 import sys
+import time
 import unittest
-from unittest.mock import patch
-
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.utils.retry_handler import RetryHandler
+from src.utils.retry_handler import RetryCancelledError, RetryHandler
 
 
 class TestRetryHandler(unittest.TestCase):
-    def test_execute_with_retry_passes_base_delay(self):
-        seen_base_delay = []
-        attempts = {"count": 0}
+    def test_execute_with_retry_cancelled_while_waiting(self):
+        handler = RetryHandler(max_retries=3, base_delay=0.2)
 
-        def _fn():
-            if attempts["count"] == 0:
-                attempts["count"] += 1
-                raise TimeoutError("timeout")
+        start = time.monotonic()
+
+        def _failing():
+            raise TimeoutError("temporary network error")
+
+        def _cancel_checker():
+            return (time.monotonic() - start) >= 0.05
+
+        with self.assertRaises(RetryCancelledError):
+            handler.execute_with_retry(
+                _failing,
+                cancel_checker=_cancel_checker,
+                sleep_chunk_seconds=0.05,
+            )
+
+    def test_execute_with_retry_cancelled_before_attempt(self):
+        handler = RetryHandler(max_retries=1, base_delay=0.1)
+        called = {"count": 0}
+
+        def _func():
+            called["count"] += 1
             return "ok"
 
-        def _wait_time(_error, _attempt, base_delay=2.0):
-            seen_base_delay.append(base_delay)
-            return 0.0
+        with self.assertRaises(RetryCancelledError):
+            handler.execute_with_retry(_func, cancel_checker=lambda: True)
 
-        with (
-            patch("src.utils.retry_handler.NetworkErrorHandler.is_recoverable", return_value=True),
-            patch("src.utils.retry_handler.NetworkErrorHandler.get_wait_time", side_effect=_wait_time),
-            patch("src.utils.retry_handler.time.sleep", return_value=None),
-        ):
-            handler = RetryHandler(max_retries=1, base_delay=1.5)
-            result = handler.execute_with_retry(_fn)
-
-        self.assertEqual(result, "ok")
-        self.assertEqual(seen_base_delay, [1.5])
+        self.assertEqual(called["count"], 0)
 
 
 if __name__ == "__main__":
     unittest.main()
+

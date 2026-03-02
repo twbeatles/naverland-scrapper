@@ -47,6 +47,22 @@
 - Build:
   - `naverland-scrapper.spec` 점검 결과 본 변경에 대한 추가 hidden import 수정 불필요.
 
+## 0-2. v15.0 Functional Stabilization (2026-03-02)
+- `RetryHandler`:
+  - `RetryCancelledError` 추가, 재시도 대기 구간 취소 가능(cancellable backoff) 처리.
+- `CrawlerThread`:
+  - `requestInterruption()` 연동, interruptible sleep, shutdown mode, negative cache TTL 분리 적용.
+- `URLBatchDialog`:
+  - 단지명 조회를 worker thread로 분리하고 진행률/취소 상태를 UI에 반영.
+- `ComplexDatabase`:
+  - `group_complexes` orphan 정리, 삭제 경로 선정리, `add_complex(return_status=True)` 상태 반환 추가.
+- `SearchHistoryManager`:
+  - `trade_types/area_filter/price_filter`를 포함하는 canonical dedupe key 적용.
+- `RealEstateApp`:
+  - 예약 실행 시 이미 크롤링 중이면 목록 덮어쓰기 없이 skip.
+- Tests:
+  - UI wiring, retry cancellation, DB orphan 정리, negative cache 회귀 케이스 보강.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
@@ -63,7 +79,7 @@
 - **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile`, `NAVERLAND_ONEFILE=0` 시 `onedir`)
 - **Optional**: `psutil` (메모리 모니터링), `plyer` (알림)
 
-## 3. Architecture (v14.2 Modular)
+## 3. Architecture (v15.0 Modular)
 
 > **IMPORTANT**: 코드베이스가 모놀리식에서 모듈화 아키텍처로 리팩토링됨
 

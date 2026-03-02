@@ -1,5 +1,6 @@
+from src.utils.version import APP_VERSION
+
 APP_TITLE = "네이버 부동산 매물 크롤러 Pro Plus"
-APP_VERSION = "v14.0"
 
 CRAWL_SPEED_PRESETS = {
     "빠름": {"min": 1, "max": 2, "desc": "빠른 수집 (차단 위험)"},

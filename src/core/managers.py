@@ -1,6 +1,6 @@
 import json
 from threading import Lock
-from typing import List
+from typing import Any, List
 from pathlib import Path
 from src.utils.paths import DATA_DIR, SETTINGS_PATH, PRESETS_PATH, HISTORY_PATH
 from src.utils.logger import get_logger
@@ -20,6 +20,7 @@ DEFAULT_SETTINGS = {
     # v12.0 설정
     "cache_enabled": True,  # 캐시 사용 여부
     "cache_ttl_minutes": 30,  # 캐시 유효시간 (분)
+    "cache_negative_ttl_minutes": 5,  # 0건 결과 캐시 유효시간(분)
     "cache_write_back_interval_sec": 2,  # 캐시 파일 write-back 주기
     "cache_max_entries": 2000,  # 최대 캐시 엔트리 수
     "show_price_per_pyeong": True,  # 평당가 표시
@@ -119,13 +120,49 @@ class SearchHistoryManager:
                 json.dump(self._history[:self.max_items], f, ensure_ascii=False, indent=2)
         except OSError as e:
             get_logger('SearchHistoryManager').warning(f"검색 기록 저장 실패: {e}")
+
+    @staticmethod
+    def _normalize_complexes(complexes) -> list[dict]:
+        normalized = []
+        for item in complexes or []:
+            if isinstance(item, dict):
+                name = str(item.get("name", "") or "")
+                cid = str(item.get("cid", "") or "")
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                name = str(item[0] or "")
+                cid = str(item[1] or "")
+            else:
+                continue
+            normalized.append({"name": name, "cid": cid})
+        normalized.sort(key=lambda x: (x["cid"], x["name"]))
+        return normalized
+
+    @staticmethod
+    def _canonical_obj(value: Any):
+        if isinstance(value, dict):
+            return {str(k): SearchHistoryManager._canonical_obj(value[k]) for k in sorted(value.keys())}
+        if isinstance(value, list):
+            return [SearchHistoryManager._canonical_obj(v) for v in value]
+        return value
+
+    @classmethod
+    def _dedupe_key(cls, search_info: dict) -> str:
+        payload = {
+            "complexes": cls._normalize_complexes(search_info.get("complexes", [])),
+            "trade_types": sorted([str(t) for t in (search_info.get("trade_types") or [])]),
+            "area_filter": cls._canonical_obj(search_info.get("area_filter") or {}),
+            "price_filter": cls._canonical_obj(search_info.get("price_filter") or {}),
+        }
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
     
     def add(self, search_info):
         """검색 기록 추가"""
-        search_info['timestamp'] = DateTimeHelper.now_string()
+        payload = dict(search_info or {})
+        payload['timestamp'] = DateTimeHelper.now_string()
+        key = self._dedupe_key(payload)
         # 중복 제거
-        self._history = [h for h in self._history if h.get('complexes') != search_info.get('complexes')]
-        self._history.insert(0, search_info)
+        self._history = [h for h in self._history if self._dedupe_key(h) != key]
+        self._history.insert(0, payload)
         self._history = self._history[:self.max_items]
         self._save()
     

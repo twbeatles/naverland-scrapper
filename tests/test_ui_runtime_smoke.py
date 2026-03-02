@@ -1,6 +1,7 @@
 import importlib.util
 import os
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -55,11 +56,50 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             dlg = URLBatchDialog()
             dlg.input_text.setPlainText("dummy")
             dlg._parse_urls()
+            for _ in range(60):
+                self._qt_app.processEvents()
+                if not dlg._parsing:
+                    break
+                time.sleep(0.01)
 
             chk_unknown = dlg.result_table.cellWidget(0, 0)
             chk_verified = dlg.result_table.cellWidget(1, 0)
             self.assertFalse(chk_unknown.isChecked())
             self.assertTrue(chk_verified.isChecked())
+
+            dlg.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_url_batch_dialog_cancel_restores_button_state(self):
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        def _slow_fetch(cid, cancel_checker=None):
+            # give event loop time to click cancel
+            for _ in range(20):
+                if callable(cancel_checker) and cancel_checker():
+                    raise Exception("cancelled")
+                time.sleep(0.01)
+            return f"단지_{cid}"
+
+        with (
+            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[("URL", "11111"), ("ID", "22222")]),
+            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=_slow_fetch),
+        ):
+            dlg = URLBatchDialog()
+            dlg.input_text.setPlainText("dummy")
+            dlg._parse_urls()
+            self.assertTrue(dlg._parsing)
+            dlg._cancel_lookup()
+
+            for _ in range(120):
+                self._qt_app.processEvents()
+                if not dlg._parsing:
+                    break
+                time.sleep(0.01)
+
+            self.assertFalse(dlg._parsing)
+            self.assertTrue(dlg.btn_parse.isEnabled())
+            self.assertFalse(dlg.btn_cancel.isEnabled())
 
             dlg.deleteLater()
             self._qt_app.processEvents()

@@ -428,6 +428,41 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_scheduled_run_skips_when_crawler_already_running(self):
+        from src.ui.app import RealEstateApp
+
+        class _RunningThread:
+            def isRunning(self):
+                return True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.schedule_group_combo.clear()
+        app.schedule_group_combo.addItem("테스트그룹", 10)
+        app.crawler_tab.clear_tasks()
+        app.crawler_tab.add_task("기존단지", "99999")
+        app.crawler_tab.crawler_thread = _RunningThread()
+
+        with (
+            patch.object(app.crawler_tab, "clear_tasks", wraps=app.crawler_tab.clear_tasks) as mock_clear,
+            patch.object(app.db, "get_complexes_in_group", return_value=[(1, "새단지", "12345", "")]),
+            patch.object(app.crawler_tab, "start_crawling") as mock_start,
+        ):
+            app._run_scheduled()
+
+        self.assertEqual(mock_clear.call_count, 0)
+        self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
+        self.assertEqual(app.crawler_tab.table_list.item(0, 1).text(), "99999")
+        mock_start.assert_not_called()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
     def test_app_advanced_filter_wiring_to_crawler_tab(self):
         from src.ui.app import RealEstateApp
 
@@ -862,6 +897,26 @@ class TestUIWiring(unittest.TestCase):
             kwargs = mock_thread_cls.call_args.kwargs
             self.assertEqual(kwargs["max_retry_count"], 0)
             mock_thread_cls.return_value.start.assert_called_once()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_rejects_invalid_manual_complex_id(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "invalid_manual_id.db"))
+            tab = CrawlerTab(db)
+            tab.input_name.setText("테스트단지")
+            tab.input_id.setText("1234")
+
+            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+                tab._add_complex()
+
+            self.assertEqual(tab.table_list.rowCount(), 0)
+            mock_warning.assert_called_once()
 
             db.close()
             tab.deleteLater()

@@ -33,6 +33,9 @@ class _CacheStub:
     def get(self, _cid, _ttype):
         return list(self._items)
 
+    def set(self, _cid, _ttype, _items, ttl_seconds=None):
+        return None
+
 
 class TestCrawlerRegressions(unittest.TestCase):
     def _build_thread(self, *, price_filter):
@@ -109,6 +112,26 @@ class TestCrawlerRegressions(unittest.TestCase):
         self.assertEqual(strict_result["count"], 0)
         self.assertEqual(loose_result["count"], 1)
         self.assertEqual(loose_result["raw_count"], 1)
+
+    def test_negative_cache_hit_returns_zero_without_network_call(self):
+        cache = _CacheStub([])
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=cache,
+            max_retry_count=0,
+        )
+        thread._crawl_once = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("_crawl_once must not be called on negative cache hit")
+        )
+
+        result = thread._crawl(None, "테스트단지", "12345", "매매")
+        self.assertEqual(result["count"], 0)
+        self.assertTrue(result["cache_hit"])
+        self.assertEqual(result["raw_count"], 0)
 
     def test_blocked_page_detection_signal(self):
         thread = self._build_thread(price_filter={"enabled": False})

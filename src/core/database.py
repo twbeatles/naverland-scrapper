@@ -43,6 +43,7 @@ class ConnectionPool:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=30000")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA foreign_keys=ON")
         conn.row_factory = sqlite3.Row
         return conn
     
@@ -278,8 +279,8 @@ class ComplexDatabase:
                 group_id INTEGER,
                 complex_id INTEGER,
                 PRIMARY KEY (group_id, complex_id),
-                FOREIGN KEY (group_id) REFERENCES groups(id),
-                FOREIGN KEY (complex_id) REFERENCES complexes(id)
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (complex_id) REFERENCES complexes(id) ON DELETE CASCADE
             )''')
             c.execute('''CREATE TABLE IF NOT EXISTS crawl_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -422,6 +423,15 @@ class ComplexDatabase:
             except Exception as me:
                 logger.warning(f"price_snapshots 정규화 실패 (무시): {me}")
 
+            # 기존 버전에서 남아있을 수 있는 group_complexes 고아 데이터 정리
+            c.execute(
+                """
+                DELETE FROM group_complexes
+                WHERE complex_id NOT IN (SELECT id FROM complexes)
+                   OR group_id NOT IN (SELECT id FROM groups)
+                """
+            )
+
             conn.commit()
             logger.info("테이블 초기화 완료")
         except Exception as e:
@@ -429,7 +439,7 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
     
-    def add_complex(self, name, complex_id, memo=""):
+    def add_complex(self, name, complex_id, memo="", return_status: bool = False):
         """단지 추가 - 디버깅 강화"""
         conn = self._pool.get_connection()
         try:
@@ -439,19 +449,19 @@ class ComplexDatabase:
             existing = c.fetchone()
             if existing:
                 logger.debug(f"단지 이미 존재: {name} ({complex_id})")
-                return True  # 이미 존재하면 성공으로 처리
+                return "existing" if return_status else True  # 이미 존재하면 성공으로 처리
             
             c.execute("INSERT INTO complexes (name, complex_id, memo) VALUES (?, ?, ?)", 
                      (name, complex_id, memo))
             conn.commit()
             logger.info(f"단지 추가 성공: {name} ({complex_id})")
-            return True
+            return "inserted" if return_status else True
         except sqlite3.IntegrityError as e:
             logger.debug(f"단지 중복 (정상): {name} ({complex_id})")
-            return True
+            return "existing" if return_status else True
         except Exception as e:
             logger.exception(f"단지 추가 실패: {name} ({complex_id}) - {e}")
-            return False
+            return "error" if return_status else False
         finally:
             self._pool.return_connection(conn)
     
@@ -527,7 +537,9 @@ class ComplexDatabase:
     def delete_complex(self, db_id):
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("DELETE FROM complexes WHERE id = ?", (db_id,))
+            c = conn.cursor()
+            c.execute("DELETE FROM group_complexes WHERE complex_id = ?", (db_id,))
+            c.execute("DELETE FROM complexes WHERE id = ?", (db_id,))
             conn.commit()
             logger.info(f"단지 삭제: ID={db_id}")
             return True
@@ -544,6 +556,7 @@ class ComplexDatabase:
                 return 0
             c = conn.cursor()
             placeholders = ','.join('?' * len(db_ids))
+            c.execute(f"DELETE FROM group_complexes WHERE complex_id IN ({placeholders})", db_ids)
             c.execute(f"DELETE FROM complexes WHERE id IN ({placeholders})", db_ids)
             conn.commit()
             logger.info(f"단지 일괄 삭제: {c.rowcount}개")

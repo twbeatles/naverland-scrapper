@@ -26,6 +26,15 @@ class CrawlCache:
     def _get_key(self, complex_id: str, trade_type: str) -> str:
         """캐시 키 생성"""
         return f"{complex_id}_{trade_type}"
+
+    def _entry_ttl(self, entry: dict) -> timedelta:
+        try:
+            ttl_seconds = int(entry.get("ttl_seconds", 0) or 0)
+        except (TypeError, ValueError):
+            ttl_seconds = 0
+        if ttl_seconds > 0:
+            return timedelta(seconds=ttl_seconds)
+        return self.ttl
     
     def _load(self):
         """캐시 파일 로드"""
@@ -41,7 +50,7 @@ class CrawlCache:
                             has_payload = isinstance(entry.get("raw_items"), list) or isinstance(
                                 entry.get("items"), list
                             )
-                            if now - cached_at < self.ttl and has_payload:
+                            if now - cached_at < self._entry_ttl(entry) and has_payload:
                                 self._cache[key] = entry
                         except (ValueError, TypeError):
                             continue
@@ -92,7 +101,7 @@ class CrawlCache:
             
             try:
                 cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
-                if datetime.now() - cached_at < self.ttl:
+                if datetime.now() - cached_at < self._entry_ttl(entry):
                     get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type})")
                     # v14.2: raw_items 우선 사용, legacy items 포맷과 호환 유지
                     raw_items = entry.get("raw_items")
@@ -111,14 +120,27 @@ class CrawlCache:
             except (ValueError, TypeError):
                 return None
     
-    def set(self, complex_id: str, trade_type: str, raw_items: List[dict]):
+    def set(
+        self,
+        complex_id: str,
+        trade_type: str,
+        raw_items: List[dict],
+        ttl_seconds: Optional[int] = None,
+    ):
         """결과 캐시"""
         with self._lock:
             key = self._get_key(complex_id, trade_type)
-            self._cache[key] = {
+            payload = {
                 'cached_at': datetime.now().isoformat(),
                 'raw_items': list(raw_items),
             }
+            try:
+                ttl = int(ttl_seconds or 0)
+            except (TypeError, ValueError):
+                ttl = 0
+            if ttl > 0:
+                payload["ttl_seconds"] = ttl
+            self._cache[key] = payload
             self._evict_if_needed()
             self._dirty = True
             self._flush_if_needed()

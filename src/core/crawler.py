@@ -27,7 +27,7 @@ except ImportError:
 
 from src.utils.constants import CRAWL_SPEED_PRESETS
 from src.utils.helpers import PriceConverter, ChromeParamHelper
-from src.utils.retry_handler import RetryHandler
+from src.utils.retry_handler import RetryCancelledError, RetryHandler
 from src.core.item_parser import ItemParser
 
 # 메모리 임계치 (MB) - 초과 시 드라이버 재시작
@@ -78,6 +78,7 @@ class CrawlerThread(QThread):
         price_change_threshold=0,
         track_disappeared=True,
         history_batch_size=200,
+        negative_cache_ttl_minutes=5,
     ):
         super().__init__()
         self.targets = targets
@@ -106,6 +107,7 @@ class CrawlerThread(QThread):
         except (TypeError, ValueError):
             retries = 3
         self.retry_handler = RetryHandler(max_retries=retries)
+        self._shutdown_mode = False
         self.ui_batch_interval_ms = max(20, int(ui_batch_interval_ms))
         self.ui_batch_size = max(1, int(ui_batch_size))
         self.emit_legacy_item_signal = bool(emit_legacy_item_signal)
@@ -120,12 +122,41 @@ class CrawlerThread(QThread):
             self.history_batch_size = max(20, int(history_batch_size))
         except (TypeError, ValueError):
             self.history_batch_size = 200
+        try:
+            self.negative_cache_ttl_minutes = max(0, int(negative_cache_ttl_minutes))
+        except (TypeError, ValueError):
+            self.negative_cache_ttl_minutes = 5
         self._last_batch_flush_at = time.monotonic()
         self._history_state_cache = {}
         self._alert_rules_cache = {}
         self._pending_history_rows = []
     
-    def stop(self): self._running = False
+    def stop(self):
+        self._running = False
+        try:
+            self.requestInterruption()
+        except Exception:
+            pass
+
+    def set_shutdown_mode(self, enabled: bool = True):
+        self._shutdown_mode = bool(enabled)
+        if self._shutdown_mode:
+            self.retry_handler.max_retries = 0
+
+    def _should_stop(self) -> bool:
+        return (not self._running) or bool(self.isInterruptionRequested())
+
+    def _sleep_interruptible(self, seconds: float, chunk_seconds: float = 0.2) -> bool:
+        remaining = max(0.0, float(seconds or 0.0))
+        chunk = min(0.2, max(0.05, float(chunk_seconds or 0.2)))
+        while remaining > 0:
+            if self._should_stop():
+                return False
+            step = chunk if remaining > chunk else remaining
+            time.sleep(step)
+            remaining -= step
+        return True
+
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
 
     def _push_item(self, item):
@@ -415,7 +446,8 @@ class CrawlerThread(QThread):
             processed_target_pairs = set()
             
             for name, cid in self.targets:
-                if not self._running: break
+                if self._should_stop():
+                    break
                 
                 # v14.0: 메모리 기반 드라이버 재시작 (500MB 임계치)
                 should_restart = False
@@ -437,7 +469,8 @@ class CrawlerThread(QThread):
                         self.log(f"⚠️ 드라이버 종료 실패 (무시): {e}", 30)
                     driver = None
                     gc.collect()
-                    time.sleep(1)
+                    if not self._sleep_interruptible(1.0):
+                        break
                     
                     driver = self._init_driver()
                     if not driver:
@@ -445,7 +478,8 @@ class CrawlerThread(QThread):
                 
                 complex_count = 0
                 for ttype in self.trade_types:
-                    if not self._running: break
+                    if self._should_stop():
+                        break
                     if cid and ttype:
                         processed_target_pairs.add((str(cid), str(ttype)))
                     current += 1
@@ -464,6 +498,10 @@ class CrawlerThread(QThread):
                         complex_count += count
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
                         self.log(f"   ✅ {count}건 수집")
+                    except RetryCancelledError:
+                        self.log("   ⏹ 중단 요청으로 현재 작업을 종료합니다.", 20)
+                        self.stop()
+                        break
                     except Exception as e:
                         self.log(f"   ❌ 오류: {e}", 40)
                         self.log(f"   상세: {traceback.format_exc()}", 40)
@@ -478,7 +516,8 @@ class CrawlerThread(QThread):
                              driver = self._init_driver()
                     
                     speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
-                    time.sleep(random.uniform(speed_cfg["min"], speed_cfg["max"]))
+                    if not self._sleep_interruptible(random.uniform(speed_cfg["min"], speed_cfg["max"])):
+                        break
 
                 self._flush_history_updates(force=True)
                 
@@ -486,7 +525,7 @@ class CrawlerThread(QThread):
                 processed_complexes += 1
 
             # 전체 수집을 정상 종료한 경우에만 소멸 매물 처리
-            if self.track_disappeared and self._running and self.db:
+            if self.track_disappeared and (not self._should_stop()) and self.db:
                 try:
                     if processed_target_pairs and hasattr(self.db, "mark_disappeared_articles_for_targets"):
                         disappeared = int(
@@ -505,6 +544,8 @@ class CrawlerThread(QThread):
             self._flush_pending_items_if_needed(force=True)
             self._flush_history_updates(force=True)
             self.log(f"\\n{'='*50}\\n✅ 완료! 총 {len(self.collected_data)}건")
+        except RetryCancelledError:
+            self.log("⏹ 중단 요청으로 크롤링을 종료했습니다.", 20)
         except Exception as e:
             self.log(f"❌ 치명적 오류: {e}", 40)
             self.log(f"상세:\\n{traceback.format_exc()}", 40)
@@ -524,7 +565,7 @@ class CrawlerThread(QThread):
         # v12.0: 캐시 확인
         if self.cache:
             cached_items = self.cache.get(cid, ttype)
-            if cached_items:
+            if cached_items is not None:
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
                 self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
                 matched_count = 0
@@ -552,7 +593,10 @@ class CrawlerThread(QThread):
                 cid,
                 ttype,
                 url,
+                cancel_checker=self._should_stop,
             )
+        except RetryCancelledError:
+            raise
         except Exception as e:
             self.log(f"   ❌ {name}({ttype}) 크롤링 실패: {e}", 40)
             raise
@@ -563,6 +607,10 @@ class CrawlerThread(QThread):
             raw_items = parse_result.get("raw_items", [])
             if raw_items:
                 self.cache.set(cid, ttype, raw_items)
+            else:
+                negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
+                if negative_ttl_seconds > 0:
+                    self.cache.set(cid, ttype, [], ttl_seconds=negative_ttl_seconds)
         
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
@@ -741,7 +789,7 @@ class CrawlerThread(QThread):
                 self.log("   ℹ️ 내부 스크롤 컨테이너 감지, 컨테이너 스크롤 우선 적용", 10)
             
             for _ in range(max_scroll_attempts):
-                if not self._running:
+                if self._should_stop():
                     break
 
                 current_count, current_ids = self._get_item_state(driver, selectors)
@@ -761,7 +809,8 @@ class CrawlerThread(QThread):
                     self.log("   ℹ️ 내부 컨테이너 스크롤 실패, window 스크롤로 폴백", 10)
                     use_container = False
 
-                time.sleep(0.8)
+                if not self._sleep_interruptible(0.8):
+                    break
                 
         except Exception as e:
             self.log(f"   ⚠️ 스크롤 오류: {e}", 30)
@@ -780,7 +829,8 @@ class CrawlerThread(QThread):
         matched_count, skipped_type = 0, 0
         
         for item in found_items:
-            if not self._running: break
+            if self._should_stop():
+                break
             try:
                 data = ItemParser.parse_element(item, name, cid, ttype)
                 if data and data.get("면적(㎡)", 0) > 0:
