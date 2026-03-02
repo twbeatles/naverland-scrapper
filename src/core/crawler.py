@@ -130,6 +130,7 @@ class CrawlerThread(QThread):
         self._history_state_cache = {}
         self._alert_rules_cache = {}
         self._pending_history_rows = []
+        self._db_write_disabled_notified = False
     
     def stop(self):
         self._running = False
@@ -229,6 +230,9 @@ class CrawlerThread(QThread):
     def _flush_history_updates_fallback(self, rows):
         if not self.db:
             return 0
+        if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+            self._notify_db_write_disabled()
+            return 0
         saved = 0
         for row in rows:
             try:
@@ -249,6 +253,22 @@ class CrawlerThread(QThread):
                 continue
         return saved
 
+    def _notify_db_write_disabled(self):
+        if self._db_write_disabled_notified:
+            return
+        self._db_write_disabled_notified = True
+        reason = ""
+        if self.db and hasattr(self.db, "get_write_disabled_reason"):
+            try:
+                reason = str(self.db.get_write_disabled_reason() or "")
+            except Exception:
+                reason = ""
+        suffix = f" ({reason})" if reason else ""
+        self.log(
+            f"⚠️ DB 쓰기 기능이 비활성화되었습니다{suffix}. 수집은 계속되지만 이력/기록 저장이 제한됩니다.",
+            40,
+        )
+
     def _flush_history_updates(self, force=False):
         if not self._pending_history_rows:
             return 0
@@ -258,16 +278,25 @@ class CrawlerThread(QThread):
         self._pending_history_rows.clear()
         if not self.db:
             return 0
+        if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+            self._notify_db_write_disabled()
+            return 0
 
         try:
             saved = int(self.db.upsert_article_history_bulk(rows) or 0)
             if saved == len(rows):
                 return saved
+            if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                self._notify_db_write_disabled()
+                return 0
             self.log(
                 f"   ⚠️ 이력 일괄 저장 일부 실패 ({saved}/{len(rows)}), 개별 재시도...",
                 30,
             )
         except Exception as e:
+            if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                self._notify_db_write_disabled()
+                return 0
             self.log(f"   ⚠️ 이력 일괄 저장 실패: {e} (개별 재시도)", 30)
         return self._flush_history_updates_fallback(rows)
 
@@ -359,17 +388,20 @@ class CrawlerThread(QThread):
                 alert_name = str(self._row_get(rule, "complex_name", complex_name) or complex_name)
                 should_emit = True
                 if alert_id > 0 and article_id:
-                    try:
-                        should_emit = bool(
-                            self.db.record_alert_notification(
-                                alert_id=alert_id,
-                                article_id=article_id,
-                                complex_id=complex_id,
-                            )
-                        )
-                    except Exception as e:
+                    if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
                         should_emit = True
-                        self.log(f"   ⚠️ 알림 dedup 기록 실패 (emit 유지): {e}", 30)
+                    else:
+                        try:
+                            should_emit = bool(
+                                self.db.record_alert_notification(
+                                    alert_id=alert_id,
+                                    article_id=article_id,
+                                    complex_id=complex_id,
+                                )
+                            )
+                        except Exception as e:
+                            should_emit = True
+                            self.log(f"   ⚠️ 알림 dedup 기록 실패 (emit 유지): {e}", 30)
                 elif alert_id > 0 and not article_id:
                     self.log("   ℹ️ 매물ID 없음: 알림 dedup 생략", 10)
 
@@ -520,6 +552,13 @@ class CrawlerThread(QThread):
                         break
 
                 self._flush_history_updates(force=True)
+                if self.db:
+                    try:
+                        self.db.add_crawl_history(name, cid, ",".join(self.trade_types), int(complex_count))
+                        if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                            self._notify_db_write_disabled()
+                    except Exception as e:
+                        self.log(f"⚠️ 크롤링 기록 저장 실패: {e}", 30)
                 
                 self.complex_finished_signal.emit(name, cid, ",".join(self.trade_types), complex_count)
                 processed_complexes += 1
@@ -539,6 +578,8 @@ class CrawlerThread(QThread):
                     if disappeared > 0:
                         self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
                 except Exception as e:
+                    if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                        self._notify_db_write_disabled()
                     self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
             
             self._flush_pending_items_if_needed(force=True)

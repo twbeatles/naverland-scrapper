@@ -1267,10 +1267,7 @@ class CrawlerTab(QWidget):
         self.result_table.setUpdatesEnabled(True)
 
     def _on_complex_finished(self, name, cid, trade_types, count):
-        try:
-            self.db.add_crawl_history(name, cid, trade_types, int(count))
-        except Exception as e:
-            self.append_log(f"⚠️ 히스토리 저장 실패: {e}", 30)
+        self.append_log(f"📌 단지 완료: {name} ({cid}) {count}건", 10)
 
     def _on_alert_triggered(self, complex_name, trade_type, price_text, area_pyeong, alert_id):
         self.append_log(

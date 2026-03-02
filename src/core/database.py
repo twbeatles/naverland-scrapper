@@ -171,7 +171,51 @@ class ComplexDatabase:
         self.db_path = Path(db_path) if db_path else DB_PATH
         logger.info(f"ComplexDatabase 초기화: {self.db_path}")
         self._pool = ConnectionPool(self.db_path)
+        self._write_lock = Lock()
+        self._write_disabled_reason = ""
         self._init_tables()
+
+    @staticmethod
+    def _sqlite_error_text(exc) -> str:
+        try:
+            return str(exc).lower()
+        except Exception:
+            return ""
+
+    @classmethod
+    def _is_locked_sqlite_error(cls, exc) -> bool:
+        text = cls._sqlite_error_text(exc)
+        return (
+            "database is locked" in text
+            or "database table is locked" in text
+            or "database schema is locked" in text
+        )
+
+    @classmethod
+    def _is_corruption_sqlite_error(cls, exc) -> bool:
+        text = cls._sqlite_error_text(exc)
+        return (
+            "database disk image is malformed" in text
+            or "malformed database schema" in text
+            or "file is not a database" in text
+        )
+
+    def is_write_disabled(self) -> bool:
+        return bool(self._write_disabled_reason)
+
+    def get_write_disabled_reason(self) -> str:
+        return str(self._write_disabled_reason or "")
+
+    def _disable_writes(self, reason: str, exc=None):
+        if self._write_disabled_reason:
+            return
+        self._write_disabled_reason = str(reason or "unknown")
+        if exc is not None:
+            logger.critical(
+                f"DB write 비활성화: {self._write_disabled_reason} ({exc})"
+            )
+        else:
+            logger.critical(f"DB write 비활성화: {self._write_disabled_reason}")
 
     @classmethod
     def _coerce_float(cls, value, default=0.0):
@@ -667,16 +711,52 @@ class ComplexDatabase:
             self._pool.return_connection(conn)
     
     def add_crawl_history(self, name, cid, types, count):
+        if self.is_write_disabled():
+            return False
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute(
-                "INSERT INTO crawl_history (complex_name, complex_id, trade_types, item_count) VALUES (?, ?, ?, ?)",
-                (name, cid, types, count)
-            )
-            conn.commit()
+            with self._write_lock:
+                try:
+                    conn.execute("PRAGMA busy_timeout=1200")
+                except Exception:
+                    pass
+                for attempt in range(3):
+                    try:
+                        conn.cursor().execute(
+                            "INSERT INTO crawl_history (complex_name, complex_id, trade_types, item_count) VALUES (?, ?, ?, ?)",
+                            (name, cid, types, count),
+                        )
+                        conn.commit()
+                        return True
+                    except sqlite3.OperationalError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_locked_sqlite_error(e) and attempt < 2:
+                            time.sleep(0.1 * (attempt + 1))
+                            continue
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"크롤링 기록 저장 실패: {e}")
+                        return False
+                    except sqlite3.DatabaseError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"크롤링 기록 저장 실패: {e}")
+                        return False
         except Exception as e:
             logger.error(f"크롤링 기록 저장 실패: {e}")
+            return False
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
     
     def get_crawl_history(self, limit=100):
@@ -876,6 +956,8 @@ class ComplexDatabase:
         """매물 이력을 일괄 upsert"""
         if not rows:
             return 0
+        if self.is_write_disabled():
+            return 0
 
         normalized = []
         for row in rows:
@@ -929,34 +1011,66 @@ class ComplexDatabase:
 
         conn = self._pool.get_connection()
         try:
-            conn.cursor().executemany(
-                """
-                INSERT INTO article_history (
-                    article_id, complex_id, complex_name, trade_type,
-                    price, price_text, area_pyeong, floor_info, feature,
-                    first_seen, last_seen, last_price, price_change, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
-                ON CONFLICT(article_id, complex_id) DO UPDATE SET
-                    complex_name = excluded.complex_name,
-                    trade_type = excluded.trade_type,
-                    price = excluded.price,
-                    price_text = excluded.price_text,
-                    area_pyeong = excluded.area_pyeong,
-                    floor_info = excluded.floor_info,
-                    feature = excluded.feature,
-                    last_seen = CURRENT_DATE,
-                    last_price = article_history.price,
-                    price_change = excluded.price - article_history.price,
-                    status = 'active'
-                """,
-                normalized,
-            )
-            conn.commit()
-            return len(normalized)
+            with self._write_lock:
+                try:
+                    conn.execute("PRAGMA busy_timeout=5000")
+                except Exception:
+                    pass
+                for attempt in range(3):
+                    try:
+                        conn.cursor().executemany(
+                            """
+                            INSERT INTO article_history (
+                                article_id, complex_id, complex_name, trade_type,
+                                price, price_text, area_pyeong, floor_info, feature,
+                                first_seen, last_seen, last_price, price_change, status
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
+                            ON CONFLICT(article_id, complex_id) DO UPDATE SET
+                                complex_name = excluded.complex_name,
+                                trade_type = excluded.trade_type,
+                                price = excluded.price,
+                                price_text = excluded.price_text,
+                                area_pyeong = excluded.area_pyeong,
+                                floor_info = excluded.floor_info,
+                                feature = excluded.feature,
+                                last_seen = CURRENT_DATE,
+                                last_price = article_history.price,
+                                price_change = excluded.price - article_history.price,
+                                status = 'active'
+                            """,
+                            normalized,
+                        )
+                        conn.commit()
+                        return len(normalized)
+                    except sqlite3.OperationalError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_locked_sqlite_error(e) and attempt < 2:
+                            time.sleep(0.1 * (attempt + 1))
+                            continue
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+                        return 0
+                    except sqlite3.DatabaseError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+                        return 0
         except Exception as e:
             logger.error(f"매물 이력 일괄 업서트 실패: {e}")
             return 0
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
 
     def get_enabled_alert_rules(self, complex_id, trade_type=None):
@@ -1046,40 +1160,49 @@ class ComplexDatabase:
     def update_article_history(self, article_id, complex_id, complex_name, trade_type, 
                              price, price_text, area, floor, feature):
         """매물 정보 업데이트"""
+        if self.is_write_disabled():
+            return False
         conn = self._pool.get_connection()
         try:
-            c = conn.cursor()
-            
-            # 기존 정보 조회
-            c.execute(
-                "SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ?",
-                (article_id, complex_id)
-            )
-            row = c.fetchone()
-            
-            if row:
-                last_price = row['price']
-                price_change = price - last_price
+            with self._write_lock:
+                c = conn.cursor()
                 
-                c.execute("""
-                    UPDATE article_history 
-                    SET price=?, price_text=?, last_seen=CURRENT_DATE, 
-                        last_price=?, price_change=?, status='active'
-                    WHERE article_id=? AND complex_id=?
-                """, (price, price_text, last_price, price_change, article_id, complex_id))
-            else:
-                c.execute("""
-                    INSERT INTO article_history (
-                        article_id, complex_id, complex_name, trade_type, 
-                        price, price_text, area_pyeong, floor_info, feature,
-                        first_seen, last_seen, last_price, price_change, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
-                """, (article_id, complex_id, complex_name, trade_type, 
-                      price, price_text, area, floor, feature, price))
-            
-            conn.commit()
-            return True
+                # 기존 정보 조회
+                c.execute(
+                    "SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ?",
+                    (article_id, complex_id)
+                )
+                row = c.fetchone()
+                
+                if row:
+                    last_price = row['price']
+                    price_change = price - last_price
+                    
+                    c.execute("""
+                        UPDATE article_history 
+                        SET price=?, price_text=?, last_seen=CURRENT_DATE, 
+                            last_price=?, price_change=?, status='active'
+                        WHERE article_id=? AND complex_id=?
+                    """, (price, price_text, last_price, price_change, article_id, complex_id))
+                else:
+                    c.execute("""
+                        INSERT INTO article_history (
+                            article_id, complex_id, complex_name, trade_type, 
+                            price, price_text, area_pyeong, floor_info, feature,
+                            first_seen, last_seen, last_price, price_change, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
+                    """, (article_id, complex_id, complex_name, trade_type, 
+                          price, price_text, area, floor, feature, price))
+                
+                conn.commit()
+                return True
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if self._is_corruption_sqlite_error(e):
+                self._disable_writes("database_corruption", e)
             logger.error(f"매물 이력 업데이트 실패: {e}")
             return False
         finally:
@@ -1340,6 +1463,7 @@ class ComplexDatabase:
             self._pool = ConnectionPool(self.db_path)
             self._init_tables()
             complex_count = self._validate_restored_database()
+            self._write_disabled_reason = ""
             logger.info(f"복원 완료! 단지 수: {complex_count}개")
 
             if rollback_ready and rollback_path.exists():
@@ -1442,28 +1566,47 @@ class ComplexDatabase:
 
     def mark_disappeared_articles(self):
         """오늘 확인되지 않은 매물을 소멸 처리"""
+        if self.is_write_disabled():
+            return 0
         conn = self._pool.get_connection()
         try:
-            # 마지막 확인일이 오늘이 아닌 'active' 매물을 'disappeared'로 변경
-            c = conn.cursor()
-            c.execute("""
-                UPDATE article_history 
-                SET status='disappeared' 
-                WHERE last_seen < CURRENT_DATE AND status='active'
-            """)
-            updated = c.rowcount if c.rowcount != -1 else 0
-            conn.commit()
-            if updated > 0:
-                logger.info(f"소멸 매물 처리: {updated}개")
-            return updated
+            with self._write_lock:
+                try:
+                    conn.execute("PRAGMA busy_timeout=3000")
+                except Exception:
+                    pass
+                # 마지막 확인일이 오늘이 아닌 'active' 매물을 'disappeared'로 변경
+                c = conn.cursor()
+                c.execute("""
+                    UPDATE article_history 
+                    SET status='disappeared' 
+                    WHERE last_seen < CURRENT_DATE AND status='active'
+                """)
+                updated = c.rowcount if c.rowcount != -1 else 0
+                conn.commit()
+                if updated > 0:
+                    logger.info(f"소멸 매물 처리: {updated}개")
+                return updated
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if self._is_corruption_sqlite_error(e):
+                self._disable_writes("database_corruption", e)
             logger.error(f"소멸 매물 처리 실패: {e}")
             return 0
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, str]]) -> int:
         """이번 실행 대상(단지ID, 거래유형) 범위에서만 소멸 매물을 처리"""
+        if self.is_write_disabled():
+            return 0
         normalized: list[tuple[str, str]] = []
         for pair in targets or []:
             if not isinstance(pair, (list, tuple)) or len(pair) < 2:
@@ -1478,31 +1621,46 @@ class ComplexDatabase:
 
         conn = self._pool.get_connection()
         try:
-            where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized))
-            params = []
-            for complex_id, trade_type in normalized:
-                params.extend([complex_id, trade_type])
+            with self._write_lock:
+                try:
+                    conn.execute("PRAGMA busy_timeout=3000")
+                except Exception:
+                    pass
+                where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized))
+                params = []
+                for complex_id, trade_type in normalized:
+                    params.extend([complex_id, trade_type])
 
-            c = conn.cursor()
-            c.execute(
-                f"""
-                UPDATE article_history
-                SET status='disappeared'
-                WHERE last_seen < CURRENT_DATE
-                  AND status='active'
-                  AND ({where_pairs})
-                """,
-                params,
-            )
-            updated = c.rowcount if c.rowcount != -1 else 0
-            conn.commit()
-            if updated > 0:
-                logger.info(f"대상 범위 소멸 매물 처리: {updated}개")
-            return updated
+                c = conn.cursor()
+                c.execute(
+                    f"""
+                    UPDATE article_history
+                    SET status='disappeared'
+                    WHERE last_seen < CURRENT_DATE
+                      AND status='active'
+                      AND ({where_pairs})
+                    """,
+                    params,
+                )
+                updated = c.rowcount if c.rowcount != -1 else 0
+                conn.commit()
+                if updated > 0:
+                    logger.info(f"대상 범위 소멸 매물 처리: {updated}개")
+                return updated
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if self._is_corruption_sqlite_error(e):
+                self._disable_writes("database_corruption", e)
             logger.error(f"대상 범위 소멸 매물 처리 실패: {e}")
             return 0
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
             
     def get_disappeared_articles(self, limit=50):

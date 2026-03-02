@@ -17,7 +17,7 @@ class TestUIWiring(unittest.TestCase):
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
-    def test_crawler_tab_saves_search_history_and_crawl_history(self):
+    def test_crawler_tab_saves_search_history_and_complex_finished_slot_is_ui_only(self):
         from src.core.crawler import CrawlerThread
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -43,6 +43,10 @@ class TestUIWiring(unittest.TestCase):
             self.assertIn("매매", history.calls[0]["trade_types"])
 
             tab._on_complex_finished("테스트단지", "12345", "매매,전세", 4)
+            rows = db.get_crawl_history(limit=1)
+            self.assertEqual(len(rows), 0)
+
+            self.assertTrue(db.add_crawl_history("테스트단지", "12345", "매매,전세", 4))
             rows = db.get_crawl_history(limit=1)
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["complex_id"], "12345")

@@ -16,12 +16,15 @@
 * **버전 메타데이터 통합**: `src/utils/version.py`의 `APP_VERSION = "v15.0"`를 단일 소스로 사용.
 * **DB 저장 카운트 정밀화**: `add_complex(return_status=True)` 기반 `inserted/existing/error` 분리 집계.
 * **수동 단지 ID 검증 강화**: 5~10자리 숫자 validator + 최종 정규식 검증 추가.
+* **DB 잠금 대응 보강**: 크롤링 이력/매물 이력/소멸 처리 write를 직렬화하고 짧은 재시도 경로를 적용.
+* **DB 손상 보호 장치**: `malformed` 감지 시 write circuit-breaker를 활성화해 수집 지속 + 추가 write 차단.
+* **UI 멈춤 완화**: `complex_finished` 슬롯의 UI 스레드 DB write를 제거하고 백그라운드 스레드 저장으로 이관.
 
 ### 🧪 검증
 
 * **회귀 테스트**: `PYTHONPATH=. pytest -q`
-* **결과**: `77 passed`
-* **PyInstaller spec 점검**: `naverland-scrapper.spec`은 이번 변경 기준 추가 hidden import 수정 없이 유지 가능.
+* **결과**: `79 passed`
+* **PyInstaller spec 점검**: `naverland-scrapper.spec`은 이번 변경(잠금/손상 대응 포함) 기준 추가 hidden import 수정 없이 유지 가능.
 
 ---
 

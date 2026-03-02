@@ -51,6 +51,32 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(status1, "inserted")
         self.assertEqual(status2, "existing")
 
+    def test_write_circuit_breaker_blocks_crawl_history_write(self):
+        self.db._disable_writes("database_corruption")
+        self.assertTrue(self.db.is_write_disabled())
+        self.assertFalse(self.db.add_crawl_history("테스트단지", "12345", "매매", 1))
+        self.assertEqual(len(self.db.get_crawl_history(limit=10)), 0)
+
+    def test_write_circuit_breaker_blocks_bulk_history_upsert(self):
+        self.db._disable_writes("database_corruption")
+        saved = self.db.upsert_article_history_bulk(
+            [
+                {
+                    "article_id": "X1",
+                    "complex_id": "11111",
+                    "complex_name": "테스트단지",
+                    "trade_type": "매매",
+                    "price": 10000,
+                    "price_text": "1억",
+                    "area": 30.0,
+                    "floor": "10층",
+                    "feature": "테스트",
+                    "last_price": 10000,
+                }
+            ]
+        )
+        self.assertEqual(saved, 0)
+
     def test_delete_complex_removes_group_mapping(self):
         self.db.add_complex("단지A", "11111")
         complex_id = self.db.get_all_complexes()[0]["id"]

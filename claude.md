@@ -63,6 +63,17 @@
 - Tests:
   - UI wiring, retry cancellation, DB orphan 정리, negative cache 회귀 케이스 보강.
 
+## 0-3. v15.0 Runtime DB Stability Patch (2026-03-02)
+- `ComplexDatabase`:
+  - write 경로(`crawl_history`, `article_history`, `disappeared`)에 write lock을 적용해 동시 write 경쟁을 완화.
+  - `database is locked`에 대해 짧은 재시도/빠른 실패 정책을 적용해 장시간 UI block 가능성 축소.
+  - `database disk image is malformed` 감지 시 write circuit-breaker를 켜서 추가 쓰기를 차단.
+- `CrawlerThread`:
+  - `complex_finished` 시점의 크롤링 기록 저장을 worker thread에서 처리.
+  - DB write 비활성화 상태를 1회 경고 로그로 사용자에게 알림.
+- `CrawlerTab`:
+  - `complex_finished` 슬롯에서 UI 스레드 DB write를 제거하고 로그 업데이트 전용으로 전환.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
