@@ -1,5 +1,6 @@
 import importlib.util
 import importlib
+import os
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -27,6 +28,14 @@ OPTIONAL_DEPENDENCIES = [
 REQUIRED_INTERNAL_IMPORTS = [
     "src.ui.app",
 ]
+
+
+def _is_truthy_env(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def should_skip_playwright_browser_check() -> bool:
+    return _is_truthy_env(os.environ.get("NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK"))
 
 
 def find_conflict_markers(
@@ -109,7 +118,7 @@ def run_preflight_checks(
             "필수 라이브러리가 누락되었습니다: " + ", ".join(missing_required)
         )
         app_logger.error("필수 라이브러리 누락: %s", ", ".join(missing_required))
-    else:
+    elif not should_skip_playwright_browser_check():
         missing_browser = find_missing_playwright_browser()
         if missing_browser:
             errors.append("Playwright Chromium 브라우저가 준비되지 않았습니다: " + missing_browser)

@@ -11,6 +11,7 @@ jobs:
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
+      NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK: "1"
     strategy:
       fail-fast: false
       matrix:
