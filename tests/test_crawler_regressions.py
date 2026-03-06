@@ -30,10 +30,10 @@ class _CacheStub:
     def __init__(self, items):
         self._items = list(items)
 
-    def get(self, _cid, _ttype):
+    def get(self, _cid, _ttype, **_kwargs):
         return list(self._items)
 
-    def set(self, _cid, _ttype, _items, ttl_seconds=None):
+    def set(self, _cid, _ttype, _items, ttl_seconds=None, **_kwargs):
         return None
 
 

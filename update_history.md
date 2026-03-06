@@ -1,3 +1,28 @@
+# 업데이트 히스토리
+
+## **v15.0.2 (2026-03-06)**
+
+**Audit+Followup 통합 수정 마감 + 문서/빌드 정합 반영**
+
+### ✅ 통합 수정 완료 항목
+
+* 비동기 안정화 보강: response drain timeout 설정 연동, timeout/wait 통계 누적, 중단 시 detail task cancel+gather 정리.
+* 캐시 정합 통일: complex 모드 캐시 컨텍스트를 엔진 공통(mode=complex, asset_type=APT, marker_id="")으로 정규화.
+* 레거시 키 읽기 호환: 기존 complex 컨텍스트 키 hit 시 정규 키로 재저장하는 승격 경로 유지.
+* DB 경계 강화: 소멸 마킹 API가 (complex_id, trade_type)과 (asset_type, complex_id, trade_type)를 모두 지원.
+* Geo 운영 가시성: 상태바+로그에 geo_discovered_count, geo_dedup_count, response_drain_wait_count, response_drain_timeout_count 노출.
+* Geo 정책 정합: geo_sweep는 Playwright 전용 유지, Selenium fallback 미지원 경고 로그 명시.
+
+### ✅ 문서/빌드 정합
+
+* 문서 동기화: README.md, claude.md, gemini.md, 감사/후속 리포트 문서에 동일 정책 기준 반영.
+* PyInstaller spec 점검: naverland-scrapper.spec 기준에서 이번 범위 추가 수정 불필요 확인.
+* .gitignore 점검: build/, dist/, logs/, playwright-report/, test-results/, .playwright/, ms-playwright/ 등 빌드/실행 산출물 무시 규칙이 이미 유효함을 확인.
+
+### ✅ 검증
+
+* PYTHONPATH=. pytest -q tests/test_playwright_engine_stabilization.py tests/test_managers_cache.py tests/test_database_module.py tests/test_geo_tab_wiring.py tests/test_crawler_regressions.py
+* 결과: 44 passed
 # 🔄 업데이트 히스토리
 
 ## **v15.0 (최신 버전)**

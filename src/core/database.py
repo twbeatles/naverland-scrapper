@@ -1862,20 +1862,29 @@ class ComplexDatabase:
                 pass
             self._pool.return_connection(conn)
 
-    def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, str]]) -> int:
+    def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
         """이번 실행 대상(단지ID, 거래유형) 범위에서만 소멸 매물을 처리"""
         if self.is_write_disabled():
             return 0
-        normalized: list[tuple[str, str]] = []
+        normalized_pairs: list[tuple[str, str]] = []
+        normalized_triples: list[tuple[str, str, str]] = []
         for pair in targets or []:
-            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            if not isinstance(pair, (list, tuple)):
                 continue
-            complex_id = str(pair[0] or "").strip()
-            trade_type = str(pair[1] or "").strip()
-            if complex_id and trade_type:
-                normalized.append((complex_id, trade_type))
+            if len(pair) >= 3:
+                asset_type = str(pair[0] or "").strip().upper()
+                complex_id = str(pair[1] or "").strip()
+                trade_type = str(pair[2] or "").strip()
+                if asset_type and complex_id and trade_type:
+                    normalized_triples.append((asset_type, complex_id, trade_type))
+                continue
+            if len(pair) >= 2:
+                complex_id = str(pair[0] or "").strip()
+                trade_type = str(pair[1] or "").strip()
+                if complex_id and trade_type:
+                    normalized_pairs.append((complex_id, trade_type))
 
-        if not normalized:
+        if not normalized_pairs and not normalized_triples:
             return 0
 
         conn = self._pool.get_connection()
@@ -1885,10 +1894,22 @@ class ComplexDatabase:
                     conn.execute("PRAGMA busy_timeout=3000")
                 except Exception:
                     pass
-                where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized))
+                scoped_clauses: list[str] = []
                 params = []
-                for complex_id, trade_type in normalized:
-                    params.extend([complex_id, trade_type])
+
+                if normalized_pairs:
+                    where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized_pairs))
+                    scoped_clauses.append(f"({where_pairs})")
+                    for complex_id, trade_type in normalized_pairs:
+                        params.extend([complex_id, trade_type])
+
+                if normalized_triples:
+                    where_triples = " OR ".join(
+                        ["(asset_type = ? AND complex_id = ? AND trade_type = ?)"] * len(normalized_triples)
+                    )
+                    scoped_clauses.append(f"({where_triples})")
+                    for asset_type, complex_id, trade_type in normalized_triples:
+                        params.extend([asset_type, complex_id, trade_type])
 
                 c = conn.cursor()
                 c.execute(
@@ -1897,7 +1918,7 @@ class ComplexDatabase:
                     SET status='disappeared'
                     WHERE last_seen < CURRENT_DATE
                       AND status='active'
-                      AND ({where_pairs})
+                      AND ({' OR '.join(scoped_clauses)})
                     """,
                     params,
                 )

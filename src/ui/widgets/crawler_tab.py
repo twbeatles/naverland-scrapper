@@ -956,6 +956,7 @@ class CrawlerTab(QWidget):
             playwright_headless=settings.get("playwright_headless", False),
             playwright_detail_workers=settings.get("playwright_detail_workers", 12),
             block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
+            playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)

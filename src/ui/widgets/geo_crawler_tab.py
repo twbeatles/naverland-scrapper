@@ -28,7 +28,7 @@ settings = SettingsManager()
 
 class GeoCrawlerTab(CrawlerTab):
     def _setup_complex_list_group(self, layout):
-        group = QGroupBox("4️⃣ 지도 탐색")
+        group = QGroupBox("4️⃣ 지리 탐색")
         grid = QGridLayout()
 
         self.spin_lat = QDoubleSpinBox()
@@ -54,7 +54,7 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_rings = QSpinBox()
         self.spin_rings.setRange(0, 6)
         self.spin_rings.setValue(int(settings.get("geo_grid_rings", 1) or 1))
-        grid.addWidget(QLabel("링:"), 3, 0)
+        grid.addWidget(QLabel("링 수:"), 3, 0)
         grid.addWidget(self.spin_rings, 3, 1)
 
         self.spin_step = QSpinBox()
@@ -130,7 +130,7 @@ class GeoCrawlerTab(CrawlerTab):
             self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
             return
         if self.crawler_thread and self.crawler_thread.isRunning():
-            QMessageBox.information(self, "알림", "이미 지도 탐색이 실행 중입니다.")
+            QMessageBox.information(self, "알림", "이미 지리탐색이 실행 중입니다.")
             return
 
         trade_types = []
@@ -164,8 +164,16 @@ class GeoCrawlerTab(CrawlerTab):
         self.card_view.set_data([])
         self.grouped_rows = {}
         self.discovered_table.setRowCount(0)
+        self._discovered_row_map = {}
+        self._last_geo_status_stats = None
+        if settings.get("fallback_engine_enabled", True):
+            self.append_log("⚠️ Geo 모드는 Playwright 전용이며 Selenium fallback은 지원하지 않습니다.", 30)
 
-        area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
+        area_filter = {
+            "enabled": self.check_area_filter.isChecked(),
+            "min": self.spin_area_min.value(),
+            "max": self.spin_area_max.value(),
+        }
         price_filter = {
             "enabled": self.check_price_filter.isChecked(),
             "매매": {"min": self.spin_trade_min.value(), "max": self.spin_trade_max.value()},
@@ -220,6 +228,7 @@ class GeoCrawlerTab(CrawlerTab):
             playwright_headless=settings.get("playwright_headless", False),
             playwright_detail_workers=settings.get("playwright_detail_workers", 12),
             block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
+            playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
@@ -234,15 +243,64 @@ class GeoCrawlerTab(CrawlerTab):
         self.crawling_started.emit()
 
     def _on_discovered_complex(self, payload: dict):
-        row = self.discovered_table.rowCount()
-        self.discovered_table.insertRow(row)
+        asset_type = str(payload.get("asset_type", "") or "")
+        complex_id = str(payload.get("complex_id", "") or "")
+        dedupe_key = f"{asset_type}:{complex_id}"
+        if not hasattr(self, "_discovered_row_map"):
+            self._discovered_row_map = {}
+
+        row = self._discovered_row_map.get(dedupe_key)
+        if row is None:
+            row = self.discovered_table.rowCount()
+            self.discovered_table.insertRow(row)
+            self._discovered_row_map[dedupe_key] = row
+
         status = str(payload.get("db_status", "") or "")
         if status == "inserted":
             status = "신규"
         elif status == "existing":
             status = "기존"
+        elif status == "skipped":
+            status = "유지"
+        elif status == "error":
+            status = "오류"
         self.discovered_table.setItem(row, 0, QTableWidgetItem(status))
-        self.discovered_table.setItem(row, 1, QTableWidgetItem(str(payload.get("asset_type", ""))))
+        self.discovered_table.setItem(row, 1, QTableWidgetItem(asset_type))
         self.discovered_table.setItem(row, 2, QTableWidgetItem(str(payload.get("complex_name", ""))))
-        self.discovered_table.setItem(row, 3, QTableWidgetItem(str(payload.get("complex_id", ""))))
+        self.discovered_table.setItem(row, 3, QTableWidgetItem(complex_id))
         self.discovered_table.setItem(row, 4, QTableWidgetItem(str(payload.get("count", 0))))
+
+    def _update_stats_ui(self, stats):
+        super()._update_stats_ui(stats)
+        discovered = int(stats.get("geo_discovered_count", 0) or 0)
+        dedup = int(stats.get("geo_dedup_count", 0) or 0)
+        drain_wait = int(stats.get("response_drain_wait_count", 0) or 0)
+        drain_timeout = int(stats.get("response_drain_timeout_count", 0) or 0)
+        snapshot = (discovered, dedup, drain_wait, drain_timeout)
+        if getattr(self, "_last_geo_status_stats", None) == snapshot:
+            return
+        self._last_geo_status_stats = snapshot
+        self.status_message.emit(
+            f"Geo 발견 {discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
+        )
+
+    def _on_crawl_finished(self, data):
+        final_stats = {}
+        thread = self.crawler_thread
+        if thread and hasattr(thread, "stats"):
+            try:
+                final_stats = dict(thread.stats or {})
+            except Exception:
+                final_stats = {}
+        super()._on_crawl_finished(data)
+        discovered = int(final_stats.get("geo_discovered_count", 0) or 0)
+        dedup = int(final_stats.get("geo_dedup_count", 0) or 0)
+        drain_wait = int(final_stats.get("response_drain_wait_count", 0) or 0)
+        drain_timeout = int(final_stats.get("response_drain_timeout_count", 0) or 0)
+        self.append_log(
+            f"📌 Geo 요약: 발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}",
+            10,
+        )
+        self.status_message.emit(
+            f"Geo 완료: 발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}"
+        )

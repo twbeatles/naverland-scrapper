@@ -23,9 +23,77 @@ class CrawlCache:
         self._last_flush_at = datetime.now()
         self._load()
     
-    def _get_key(self, complex_id: str, trade_type: str) -> str:
-        """캐시 키 생성"""
-        return f"{complex_id}_{trade_type}"
+    @staticmethod
+    def _normalize_float_token(value) -> str:
+        try:
+            return f"{float(value):.5f}"
+        except (TypeError, ValueError):
+            return ""
+
+    @staticmethod
+    def _normalize_int_token(value) -> str:
+        try:
+            return str(int(value))
+        except (TypeError, ValueError):
+            return ""
+
+    def _context_namespace(
+        self,
+        *,
+        mode: str = "",
+        asset_type: str = "",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        marker_id: str = "",
+    ) -> str:
+        parts = []
+        mode_token = str(mode or "").strip().lower()
+        asset_token = str(asset_type or "").strip().upper()
+        lat_token = self._normalize_float_token(source_lat)
+        lon_token = self._normalize_float_token(source_lon)
+        zoom_token = self._normalize_int_token(source_zoom)
+        marker_token = str(marker_id or "").strip()
+
+        if mode_token:
+            parts.append(f"mode={mode_token}")
+        if asset_token:
+            parts.append(f"asset={asset_token}")
+        if lat_token:
+            parts.append(f"lat={lat_token}")
+        if lon_token:
+            parts.append(f"lon={lon_token}")
+        if zoom_token:
+            parts.append(f"zoom={zoom_token}")
+        if marker_token:
+            parts.append(f"marker={marker_token}")
+        return "|".join(parts)
+
+    def _get_key(
+        self,
+        complex_id: str,
+        trade_type: str,
+        *,
+        mode: str = "",
+        asset_type: str = "",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        marker_id: str = "",
+    ) -> str:
+        """캐시 키 생성 (기본 키 + 컨텍스트 네임스페이스)"""
+        base = f"{complex_id}_{trade_type}"
+        context_ns = self._context_namespace(
+            mode=mode,
+            asset_type=asset_type,
+            source_lat=source_lat,
+            source_lon=source_lon,
+            source_zoom=source_zoom,
+            marker_id=marker_id,
+        )
+        if not context_ns:
+            return base
+        return f"{base}__ctx__{context_ns}"
 
     def _entry_ttl(self, entry: dict) -> timedelta:
         try:
@@ -91,18 +159,53 @@ class CrawlCache:
         if (now - self._last_flush_at).total_seconds() >= self.write_back_interval_sec:
             self._save()
 
-    def get(self, complex_id: str, trade_type: str) -> Optional[List[dict]]:
+    def get(
+        self,
+        complex_id: str,
+        trade_type: str,
+        *,
+        mode: str = "",
+        asset_type: str = "",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        marker_id: str = "",
+    ) -> Optional[List[dict]]:
         """캐시된 결과 반환 (유효한 경우)"""
         with self._lock:
-            key = self._get_key(complex_id, trade_type)
+            context_ns = self._context_namespace(
+                mode=mode,
+                asset_type=asset_type,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+            )
+            key = self._get_key(
+                complex_id,
+                trade_type,
+                mode=mode,
+                asset_type=asset_type,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+            )
             entry = self._cache.get(key)
+            # 레거시 호환: 무컨텍스트 조회 경로에서만 legacy 기본 키를 읽는다.
+            if entry is None and not context_ns:
+                legacy_key = f"{complex_id}_{trade_type}"
+                if legacy_key != key:
+                    entry = self._cache.get(legacy_key)
+                    key = legacy_key
             if not entry:
                 return None
             
             try:
                 cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
                 if datetime.now() - cached_at < self._entry_ttl(entry):
-                    get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type})")
+                    suffix = f", context={context_ns}" if context_ns else ""
+                    get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type}{suffix})")
                     # v14.2: raw_items 우선 사용, legacy items 포맷과 호환 유지
                     raw_items = entry.get("raw_items")
                     if isinstance(raw_items, list):
@@ -126,14 +229,40 @@ class CrawlCache:
         trade_type: str,
         raw_items: List[dict],
         ttl_seconds: Optional[int] = None,
+        *,
+        mode: str = "",
+        asset_type: str = "",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        marker_id: str = "",
     ):
         """결과 캐시"""
         with self._lock:
-            key = self._get_key(complex_id, trade_type)
+            context_ns = self._context_namespace(
+                mode=mode,
+                asset_type=asset_type,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+            )
+            key = self._get_key(
+                complex_id,
+                trade_type,
+                mode=mode,
+                asset_type=asset_type,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+            )
             payload = {
                 'cached_at': datetime.now().isoformat(),
                 'raw_items': list(raw_items),
             }
+            if context_ns:
+                payload["context"] = context_ns
             try:
                 ttl = int(ttl_seconds or 0)
             except (TypeError, ValueError):
@@ -144,8 +273,9 @@ class CrawlCache:
             self._evict_if_needed()
             self._dirty = True
             self._flush_if_needed()
+            suffix = f", context={context_ns}" if context_ns else ""
             get_logger('CrawlCache').debug(
-                f"캐시 저장: {complex_id} ({trade_type}) - {len(raw_items)}건"
+                f"캐시 저장: {complex_id} ({trade_type}{suffix}) - {len(raw_items)}건"
             )
 
     def flush(self):

@@ -89,6 +89,7 @@ class CrawlerThread(QThread):
         playwright_headless=False,
         playwright_detail_workers=12,
         block_heavy_resources=True,
+        playwright_response_drain_timeout_ms=3000,
     ):
         super().__init__()
         self.targets = targets
@@ -108,6 +109,10 @@ class CrawlerThread(QThread):
             "new_count": 0,
             "price_up": 0,
             "price_down": 0,
+            "geo_discovered_count": 0,
+            "geo_dedup_count": 0,
+            "response_drain_wait_count": 0,
+            "response_drain_timeout_count": 0,
             "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
         }
         self.start_time = None
@@ -154,12 +159,18 @@ class CrawlerThread(QThread):
         except (TypeError, ValueError):
             self.playwright_detail_workers = 12
         self.block_heavy_resources = bool(block_heavy_resources)
+        try:
+            self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
+        except (TypeError, ValueError):
+            self.playwright_response_drain_timeout_ms = 3000
         self._engine = None
         self._last_batch_flush_at = time.monotonic()
         self._history_state_cache = {}
         self._alert_rules_cache = {}
         self._pending_history_rows = []
         self._db_write_disabled_notified = False
+        self._registered_discovered_complex_keys = set()
+        self._discovered_complex_status = {}
     
     def stop(self):
         self._running = False
@@ -205,16 +216,21 @@ class CrawlerThread(QThread):
         if not isinstance(payload, dict):
             return
         cid = str(payload.get("complex_id", "") or "")
+        asset_type = str(payload.get("asset_type", "APT") or "APT").upper()
         name = str(payload.get("complex_name", "") or "")
         if not cid or not name:
             return
-        status = "skipped"
-        if self.db:
-            try:
-                status = str(self.db.add_complex(name, cid, return_status=True) or "skipped")
-            except Exception as e:
-                self.log(f"⚠️ 발견 단지 자동 등록 실패: {name} ({cid}) - {e}", 30)
-                status = "error"
+        dedupe_key = f"{asset_type}:{cid}"
+        status = self._discovered_complex_status.get(dedupe_key, "skipped")
+        if dedupe_key not in self._registered_discovered_complex_keys:
+            self._registered_discovered_complex_keys.add(dedupe_key)
+            if self.db:
+                try:
+                    status = str(self.db.add_complex(name, cid, return_status=True) or "skipped")
+                except Exception as e:
+                    self.log(f"⚠️ 발견 단지 자동 등록 실패: {name} ({cid}) - {e}", 30)
+                    status = "error"
+            self._discovered_complex_status[dedupe_key] = status
         emitted = dict(payload)
         emitted["db_status"] = status
         self.discovered_complex_signal.emit(emitted)
@@ -321,16 +337,26 @@ class CrawlerThread(QThread):
             batch = list(self.pending_items)
             self.pending_items.clear()
             self.items_signal.emit(batch)
-            self.stats_signal.emit({
-                "total_found": self.stats.get("total_found", 0),
-                "filtered_out": self.stats.get("filtered_out", 0),
-                "cache_hits": self.stats.get("cache_hits", 0),
-                "new_count": self.stats.get("new_count", 0),
-                "price_up": self.stats.get("price_up", 0),
-                "price_down": self.stats.get("price_down", 0),
-                "by_trade_type": dict(self.stats.get("by_trade_type", {})),
-            })
+            self.emit_stats()
             self._last_batch_flush_at = time.monotonic()
+
+    def _build_stats_payload(self) -> dict:
+        return {
+            "total_found": self.stats.get("total_found", 0),
+            "filtered_out": self.stats.get("filtered_out", 0),
+            "cache_hits": self.stats.get("cache_hits", 0),
+            "new_count": self.stats.get("new_count", 0),
+            "price_up": self.stats.get("price_up", 0),
+            "price_down": self.stats.get("price_down", 0),
+            "geo_discovered_count": self.stats.get("geo_discovered_count", 0),
+            "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
+            "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
+            "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
+            "by_trade_type": dict(self.stats.get("by_trade_type", {})),
+        }
+
+    def emit_stats(self):
+        self.stats_signal.emit(self._build_stats_payload())
 
     @staticmethod
     def _row_get(row, key, default=None):
@@ -763,7 +789,12 @@ class CrawlerThread(QThread):
     def _crawl(self, driver, name, cid, ttype):
         # v12.0: 캐시 확인
         if self.cache:
-            cached_items = self.cache.get(cid, ttype)
+            cached_items = self.cache.get(
+                cid,
+                ttype,
+                mode=self.crawl_mode,
+                asset_type="APT",
+            )
             if cached_items is not None:
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
                 self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
@@ -805,11 +836,24 @@ class CrawlerThread(QThread):
         if self.cache:
             raw_items = parse_result.get("raw_items", [])
             if raw_items:
-                self.cache.set(cid, ttype, raw_items)
+                self.cache.set(
+                    cid,
+                    ttype,
+                    raw_items,
+                    mode=self.crawl_mode,
+                    asset_type="APT",
+                )
             else:
                 negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
                 if negative_ttl_seconds > 0:
-                    self.cache.set(cid, ttype, [], ttl_seconds=negative_ttl_seconds)
+                    self.cache.set(
+                        cid,
+                        ttype,
+                        [],
+                        ttl_seconds=negative_ttl_seconds,
+                        mode=self.crawl_mode,
+                        asset_type="APT",
+                    )
         
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)

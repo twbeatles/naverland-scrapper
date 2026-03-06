@@ -291,6 +291,65 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(rows[1]["complex_id"], "20002")
         self.assertEqual(rows[1]["status"], "active")
 
+    def test_mark_disappeared_for_targets_scope_with_asset_type(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="E1",
+                complex_id="30003",
+                complex_name="단지A",
+                trade_type="매매",
+                price=18000,
+                price_text="1억8,000만",
+                area=32.0,
+                floor="10층",
+                feature="테스트",
+                extra={"asset_type": "APT"},
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="E2",
+                complex_id="30003",
+                complex_name="단지A",
+                trade_type="매매",
+                price=17500,
+                price_text="1억7,500만",
+                area=31.0,
+                floor="9층",
+                feature="테스트",
+                extra={"asset_type": "VL"},
+            )
+        )
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                "UPDATE article_history SET last_seen = date('now', '-2 day'), status='active' WHERE article_id IN (?, ?)",
+                ("E1", "E2"),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        updated = self.db.mark_disappeared_articles_for_targets([("APT", "30003", "매매")])
+        self.assertEqual(updated, 1)
+
+        conn = self.db._pool.get_connection()
+        try:
+            rows = conn.cursor().execute(
+                "SELECT article_id, asset_type, status FROM article_history WHERE article_id IN (?, ?) ORDER BY article_id",
+                ("E1", "E2"),
+            ).fetchall()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(rows[0]["article_id"], "E1")
+        self.assertEqual(rows[0]["asset_type"], "APT")
+        self.assertEqual(rows[0]["status"], "disappeared")
+        self.assertEqual(rows[1]["article_id"], "E2")
+        self.assertEqual(rows[1]["asset_type"], "VL")
+        self.assertEqual(rows[1]["status"], "active")
+
     def test_record_alert_notification_dedup_by_day(self):
         first = self.db.record_alert_notification(
             alert_id=10,

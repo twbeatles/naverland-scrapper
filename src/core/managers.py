@@ -45,6 +45,7 @@ DEFAULT_SETTINGS = {
     "playwright_headless": False,
     "playwright_detail_workers": 12,
     "playwright_block_heavy_resources": True,
+    "playwright_response_drain_timeout_ms": 3000,
     "geo_default_zoom": 15,
     "geo_grid_rings": 1,
     "geo_grid_step_px": 480,

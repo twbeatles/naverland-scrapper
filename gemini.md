@@ -269,3 +269,10 @@ COLORS["light"] = {
 - Toast fade-out: 400ms, InCubic
 - Slide offset: 30px vertical
 - 호버 시 타이머 일시정지
+
+## 0-3. Packaging/Policy Consistency (2026-03-06)
+- `naverland-scrapper.spec` 검토 완료: 이번 통합 수정 범위에서 spec 추가 변경은 필요하지 않음
+- fallback 정책: Selenium fallback은 `complex` 모드 전용, `geo_sweep`는 Playwright 전용
+- cache 정책: `complex` 모드는 `mode=complex`, `asset_type=APT`, `marker_id=""` 컨텍스트로 엔진 공통 정규화
+- legacy cache 정책: 기존 complex 키는 읽기 호환만 유지하고 hit 시 정규 키로 재저장
+- 운영 가시성: Geo 통계(`geo_discovered_count`, `geo_dedup_count`, `response_drain_wait_count`, `response_drain_timeout_count`)는 로그/상태바 기준으로 확인

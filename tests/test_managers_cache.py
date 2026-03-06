@@ -93,6 +93,7 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertEqual(settings.get("cache_negative_ttl_minutes"), 5)
             self.assertEqual(settings.get("result_filter_debounce_ms"), 220)
             self.assertEqual(settings.get("max_log_lines"), 1500)
+            self.assertEqual(settings.get("playwright_response_drain_timeout_ms"), 3000)
             self.assertTrue(settings.get("startup_lazy_noncritical_tabs"))
             self.assertTrue(settings.get("compact_duplicate_listings"))
             settings.update(
@@ -128,6 +129,60 @@ class TestCacheAndManagers(unittest.TestCase):
             cache.set("12345", "매매", [], ttl_seconds=60)
             data = cache.get("12345", "매매")
             self.assertEqual(data, [])
+
+    def test_crawl_cache_context_key_isolation_and_legacy_compat(self):
+        cache_path = self.tmp_path / "crawl_cache.json"
+        with patch("src.core.cache.CACHE_PATH", cache_path):
+            cache = CrawlCache(ttl_minutes=30)
+            complex_items = [{"id": "complex"}]
+            geo_items = [{"id": "geo"}]
+
+            cache.set("12345", "매매", complex_items, mode="complex", asset_type="APT")
+            cache.set(
+                "12345",
+                "매매",
+                geo_items,
+                mode="geo_sweep",
+                asset_type="APT",
+                source_lat=37.55,
+                source_lon=126.99,
+                source_zoom=15,
+                marker_id="M1",
+            )
+
+            self.assertEqual(
+                cache.get("12345", "매매", mode="complex", asset_type="APT"),
+                complex_items,
+            )
+            self.assertEqual(
+                cache.get(
+                    "12345",
+                    "매매",
+                    mode="geo_sweep",
+                    asset_type="APT",
+                    source_lat=37.55,
+                    source_lon=126.99,
+                    source_zoom=15,
+                    marker_id="M1",
+                ),
+                geo_items,
+            )
+            self.assertIsNone(
+                cache.get(
+                    "12345",
+                    "매매",
+                    mode="geo_sweep",
+                    asset_type="APT",
+                    source_lat=37.56,
+                    source_lon=126.99,
+                    source_zoom=15,
+                    marker_id="M1",
+                )
+            )
+
+            cache.set("99999", "매매", [{"id": "legacy"}])  # 무컨텍스트(레거시)
+            self.assertEqual(cache.get("99999", "매매"), [{"id": "legacy"}])
+            self.assertIsNone(cache.get("99999", "매매", mode="complex", asset_type="APT"))
 
     def test_recently_viewed_manager(self):
         storage_path = self.tmp_path / "recently_viewed.json"

@@ -7,7 +7,7 @@
 - **Goal**: 네이버 부동산 매물 수집, 분석, 모니터링, 관리를 위한 데스크톱 앱
 - **Key Features**: 
     - 다중 단지 크롤링 & 그룹 관리
-    - Playwright 기본 엔진 + Selenium fallback
+    - Playwright 기본 엔진 + Selenium fallback(일반 단지 수집 `complex` 모드 전용, `geo_sweep`은 Playwright 전용)
     - 지도 탐색 탭 기반 좌표 sweep (APT/VL, 매매/전세/월세)
     - 응답 가로채기 기반 고속 목록 수집 + 모바일 상세 병렬 수집
     - 실시간 가격 추세 분석 & 시각화 (히스토그램, 파이차트)
@@ -85,6 +85,8 @@
 - `PlaywrightCrawlerEngine`:
   - 기본 Chromium 엔진, response interception 기반 목록 수집, 모바일 상세 워커 풀 수집을 담당.
   - 지도 sweep에서 발견한 단지를 즉시 DB에 등록하고 같은 실행 흐름에서 상세 수집까지 연결.
+- `CrawlCache`:
+  - 캐시 키는 기본 `complex_id + trade_type`에 `mode/asset_type/source_lat/source_lon/source_zoom/marker_id` 컨텍스트 네임스페이스를 결합해 모드 간 메타데이터 오염을 차단.
 - `ComplexDatabase` / `DataExporter`:
   - `asset_type`, broker/contact, `existing_jeonse_price`, `gap_price`, `gap_ratio` 등 신규 컬럼을 저장/조회/export.
   - `crawl_history`에 `engine`, `mode`, `source_lat/lon/zoom` 메타데이터를 저장.
@@ -303,3 +305,16 @@ COLORS["light"] = {
 - Toast fade-out: 400ms, InCubic
 - Slide offset: 30px vertical
 - 호버 시 타이머 일시정지
+
+## 0-5. v15.0 Stabilization Addendum (2026-03-06)
+- 신규 설정: `playwright_response_drain_timeout_ms` (default: `3000`)
+- 캐시 정책(복합 모드): `mode=complex`, `asset_type=APT`, `marker_id=""`로 정규화
+- 레거시 complex 캐시 키는 읽기 호환만 유지하고, 적중 시 정규 키로 승격 저장
+- `geo_sweep`는 Playwright 전용 유지, Selenium fallback 미지원
+- Geo 운영 통계 키: `geo_discovered_count`, `geo_dedup_count`, `response_drain_wait_count`, `response_drain_timeout_count`
+
+## 0-6. Packaging/Docs Consistency (2026-03-06)
+- `naverland-scrapper.spec` 점검 결과: 현 시점 코드 기준 추가 hidden import/runtime hook 변경 불필요
+- fallback 정책 정합: Selenium fallback은 `complex` 모드 전용, `geo_sweep`는 Playwright 전용
+- 캐시 정책 정합: `complex` 모드 컨텍스트는 `mode=complex`, `asset_type=APT`, `marker_id=""`로 엔진 공통 정규화
+- 레거시 캐시 정책: legacy complex 키는 읽기 호환만 제공하고 적중 시 정규 키로 재저장
