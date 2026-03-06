@@ -30,7 +30,7 @@ REQUIRED_INTERNAL_IMPORTS = [
 ]
 
 
-def _is_truthy_env(value: str | None) -> bool:
+def _is_truthy_env(value: Optional[str]) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
