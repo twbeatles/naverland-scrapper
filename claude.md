@@ -7,10 +7,14 @@
 - **Goal**: 네이버 부동산 매물 수집, 분석, 모니터링, 관리를 위한 데스크톱 앱
 - **Key Features**: 
     - 다중 단지 크롤링 & 그룹 관리
+    - Playwright 기본 엔진 + Selenium fallback
+    - 지도 탐색 탭 기반 좌표 sweep (APT/VL, 매매/전세/월세)
+    - 응답 가로채기 기반 고속 목록 수집 + 모바일 상세 병렬 수집
     - 실시간 가격 추세 분석 & 시각화 (히스토그램, 파이차트)
     - Excel/CSV/JSON 내보내기 (템플릿 지원)
     - 카드 뷰/대시보드/즐겨찾기/최근 본 매물
     - 신규/가격 변동/소멸 매물 추적
+    - 중개사/연락처/기전세금/갭 분석 필드 저장 및 export
     - **Modern UI - Glassmorphism & Token-based Design (v15.0)**
     - Toast 알림 (페이드 인/아웃 애니메이션)
     - 강력한 에러 핸들링 (RetryHandler, Rate limit 감지)
@@ -74,11 +78,27 @@
 - `CrawlerTab`:
   - `complex_finished` 슬롯에서 UI 스레드 DB write를 제거하고 로그 업데이트 전용으로 전환.
 
+## 0-4. v15.0 Anti-Bot / Geo Expansion (2026-03-06)
+- `CrawlerThread`:
+  - 엔진 오케스트레이션 레이어로 축소되고 `PlaywrightCrawlerEngine`/`SeleniumCrawlerEngine` 선택 및 fallback을 담당.
+  - `crawl_mode=complex|geo_sweep`, `engine_name`, `GeoSweepConfig`, `discovered_complex_signal`을 지원.
+- `PlaywrightCrawlerEngine`:
+  - 기본 Chromium 엔진, response interception 기반 목록 수집, 모바일 상세 워커 풀 수집을 담당.
+  - 지도 sweep에서 발견한 단지를 즉시 DB에 등록하고 같은 실행 흐름에서 상세 수집까지 연결.
+- `ComplexDatabase` / `DataExporter`:
+  - `asset_type`, broker/contact, `existing_jeonse_price`, `gap_price`, `gap_ratio` 등 신규 컬럼을 저장/조회/export.
+  - `crawl_history`에 `engine`, `mode`, `source_lat/lon/zoom` 메타데이터를 저장.
+- UI / Build:
+  - `GeoCrawlerTab` 추가, 설정에 `crawl_engine`, `playwright_*`, `geo_*` 항목 추가.
+  - `naverland-scrapper.spec`는 Playwright hidden import, runtime hook, Chromium bundle 수집을 포함.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
 - **Web Automation**: 
+    - `playwright` (기본 Chromium 엔진, response interception, 모바일 상세 병렬 수집)
     - `undetected-chromedriver` (동적 콘텐츠 & 우회)
+    - `selenium` (fallback 및 DevTools 계층)
     - `beautifulsoup4` (파싱)
     - `urllib` (API 호출)
     - `winreg` (Windows 레지스트리 기반 Chrome 버전 감지)
@@ -87,7 +107,7 @@
     - **JSON**: 설정, 프리셋, 캐시, 히스토리
 - **Visualization**: `matplotlib` (PyQt6 임베디드)
 - **Build Tool**: `PyInstaller`
-- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile`, `NAVERLAND_ONEFILE=0` 시 `onedir`)
+- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile`, `NAVERLAND_ONEFILE=0` 시 `onedir`, Playwright Chromium bundle 포함)
 - **Optional**: `psutil` (메모리 모니터링), `plyer` (알림)
 
 ## 3. Architecture (v15.0 Modular)
@@ -99,13 +119,25 @@ src/
 ├── main.py                     # 진입점
 │
 ├── core/                       # 비즈니스 로직
-│   ├── crawler.py              # CrawlerThread (QThread)
+│   ├── crawler.py              # CrawlerThread (QThread, engine orchestration)
 │   ├── database.py             # ConnectionPool, ComplexDatabase
+│   ├── item_parser.py          # ItemParser (정규화 파싱)
 │   ├── parser.py               # NaverURLParser (RetryHandler 적용)
 │   ├── cache.py                # CrawlCache (TTL 기반)
 │   ├── analysis.py             # MarketAnalyzer, ComplexComparator
 │   ├── export.py               # DataExporter, ExcelTemplate
-│   └── managers.py             # SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
+│   ├── managers.py             # SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
+│   ├── engines/                # 크롤링 엔진 계층
+│   │   ├── base.py             # CrawlerEngine 인터페이스
+│   │   ├── playwright_engine.py # 기본 Playwright 엔진
+│   │   └── selenium_engine.py  # 호환 / fallback 엔진
+│   ├── models/                 # 크롤링 DTO / enum
+│   │   └── crawl_models.py     # CrawlMode, CrawlRequest, GeoSweepConfig
+│   └── services/               # Anti-bot / geo 보조 서비스
+│       ├── map_geometry.py     # Mercator 변환, sweep 좌표 생성
+│       ├── response_capture.py # 목록 응답 정규화
+│       ├── detail_fetcher.py   # 모바일 상세 수집
+│       └── gap_analysis.py     # 갭 계산 유틸리티
 │
 ├── ui/                         # 사용자 인터페이스
 │   ├── app.py                  # RealEstateApp (QMainWindow)
@@ -128,6 +160,7 @@ src/
 │       ├── chart.py            # ChartWidget (matplotlib)
 │       ├── tabs.py             # 탭 관련 위젯
 │       ├── crawler_tab.py      # CrawlerTab (데이터 수집 탭)
+│       ├── geo_crawler_tab.py  # GeoCrawlerTab (지도 탐색 탭)
 │       ├── database_tab.py     # DatabaseTab (DB 관리 탭)
 │       ├── group_tab.py        # GroupTab (그룹 관리 탭)
 │       └── dialogs.py          # 위젯 수준 다이얼로그
@@ -137,6 +170,8 @@ src/
     ├── helpers.py              # PriceConverter, AreaConverter, DateTimeHelper, ChromeParamHelper
     ├── logger.py               # get_logger()
     ├── paths.py                # DATA_DIR, DB_PATH, LOG_DIR
+    ├── preflight.py            # 실행 전 의존성/브라우저 점검
+    ├── runtime_playwright.py   # frozen 환경 Playwright 경로 설정
     ├── retry_handler.py        # RetryHandler (지수 백오프)
     ├── retry.py                # 재시도 유틸리티 (legacy)
     ├── error_handler.py        # NetworkErrorHandler
@@ -148,23 +183,29 @@ src/
 #### **Core Logic**
 | 클래스 | 파일 | 설명 |
 |--------|------|------|
-| `CrawlerThread` | `crawler.py` | QThread 기반 크롤링, 메모리 관리 |
+| `CrawlerThread` | `crawler.py` | QThread 기반 오케스트레이션, 엔진 선택/fallback |
+| `CrawlerEngine` | `engines/base.py` | 크롤링 엔진 인터페이스 |
+| `PlaywrightCrawlerEngine` | `engines/playwright_engine.py` | 기본 anti-bot 수집 엔진 |
+| `SeleniumCrawlerEngine` | `engines/selenium_engine.py` | 호환 / fallback 엔진 |
 | `NaverURLParser` | `parser.py` | URL 파싱, RetryHandler로 API 호출 |
+| `ItemParser` | `item_parser.py` | 매물 payload 정규화 및 상세 필드 보강 |
 | `CrawlCache` | `cache.py` | TTL 기반 크롤링 결과 캐싱 |
 | `MarketAnalyzer` | `analysis.py` | 가격 추세 분석 |
 | `RetryHandler` | `retry_handler.py` | 지수 백오프 재시도 로직 |
+| `GeoSweepConfig` | `models/crawl_models.py` | 지도 sweep 파라미터 모델 |
 
 #### **Database**
 | 클래스 | 파일 | 설명 |
 |--------|------|------|
 | `ConnectionPool` | `database.py` | SQLite 커넥션 풀 (스레드 안전) |
-| `ComplexDatabase` | `database.py` | CRUD, 즐겨찾기, 매물 이력 관리 |
+| `ComplexDatabase` | `database.py` | CRUD, 즐겨찾기, 매물/크롤링 이력 관리 및 마이그레이션 |
 
 #### **UI Components**
 | 클래스 | 파일 | 설명 |
 |--------|------|------|
 | `RealEstateApp` | `app.py` | 메인 윈도우 (탭 관리 및 통합) |
 | `CrawlerTab` | `crawler_tab.py` | 크롤링 UI 및 로직 |
+| `GeoCrawlerTab` | `geo_crawler_tab.py` | 좌표 기반 지도 sweep UI |
 | `DatabaseTab` | `database_tab.py` | DB 데이터 조회 및 관리 |
 | `GroupTab` | `group_tab.py` | 단지 그룹핑 및 배치 관리 |
 | `DashboardWidget` | `dashboard.py` | 통계 대시보드 |
@@ -199,6 +240,7 @@ src/
 ## 5. File System
 ```
 Root/
+├── app_entry.py             # PyInstaller/CLI 진입점 (`--preflight` 지원)
 ├── src/                    # 소스 코드 (모듈화)
 ├── tests/                  # pytest 테스트
 ├── data/                   # 데이터 저장
@@ -210,6 +252,7 @@ Root/
 │   └── recently_viewed.json # 최근 본 매물
 ├── logs/                   # 로그 파일
 ├── naverland-scrapper.spec # PyInstaller 빌드 스펙
+├── ANTI_BOT_UPGRADE_PLAN.md # Anti-Bot / Geo 확장 계획 및 상태
 ├── pytest.ini              # 테스트/플러그인 설정
 ├── README.md               # 사용자 문서
 ├── claude.md               # 이 파일 (AI 컨텍스트)

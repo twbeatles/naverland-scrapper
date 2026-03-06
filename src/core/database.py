@@ -224,6 +224,29 @@ class ComplexDatabase:
                 f"DB 손상 감지({context}). 앱 내 DB 복원 기능으로 정상 백업본을 복원하세요."
             )
 
+    @staticmethod
+    def _column_names(cursor, table_name: str) -> set[str]:
+        try:
+            rows = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+        except Exception:
+            return set()
+        names = set()
+        for row in rows:
+            try:
+                names.add(str(row[1]))
+            except Exception:
+                try:
+                    names.add(str(row["name"]))
+                except Exception:
+                    continue
+        return names
+
+    @classmethod
+    def _ensure_column(cls, cursor, table_name: str, column_name: str, ddl: str):
+        if column_name in cls._column_names(cursor, table_name):
+            return
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}")
+
     def _fetchall_safe(self, conn, query: str, params=(), context: str = ""):
         try:
             return conn.cursor().execute(query, params).fetchall()
@@ -350,6 +373,12 @@ class ComplexDatabase:
                 complex_id TEXT,
                 trade_types TEXT,
                 item_count INTEGER,
+                engine TEXT DEFAULT '',
+                mode TEXT DEFAULT 'complex',
+                source_lat REAL DEFAULT 0,
+                source_lon REAL DEFAULT 0,
+                source_zoom INTEGER DEFAULT 0,
+                asset_type TEXT DEFAULT '',
                 crawled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
             c.execute('''CREATE TABLE IF NOT EXISTS price_snapshots (
@@ -392,6 +421,22 @@ class ComplexDatabase:
                 last_price INTEGER,
                 price_change INTEGER DEFAULT 0,
                 status TEXT DEFAULT 'active',
+                asset_type TEXT DEFAULT '',
+                source_mode TEXT DEFAULT 'complex',
+                source_lat REAL DEFAULT 0,
+                source_lon REAL DEFAULT 0,
+                source_zoom INTEGER DEFAULT 0,
+                marker_id TEXT DEFAULT '',
+                broker_office TEXT DEFAULT '',
+                broker_name TEXT DEFAULT '',
+                broker_phone1 TEXT DEFAULT '',
+                broker_phone2 TEXT DEFAULT '',
+                prev_jeonse_won INTEGER DEFAULT 0,
+                jeonse_period_years INTEGER DEFAULT 0,
+                jeonse_max_won INTEGER DEFAULT 0,
+                jeonse_min_won INTEGER DEFAULT 0,
+                gap_amount_won INTEGER DEFAULT 0,
+                gap_ratio REAL DEFAULT 0,
                 UNIQUE(article_id, complex_id)
             )''')
             # v12.0 신규: 매물 즐겨찾기 및 메모
@@ -420,17 +465,42 @@ class ComplexDatabase:
             c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_price_snapshots_lookup ON price_snapshots(complex_id, trade_type, snapshot_date DESC)')
             
-            # v12.0 마이그레이션: 기존 테이블에 status 컬럼 없을 경우 추가
-            try:
-                c.execute("SELECT status FROM article_history LIMIT 1")
-            except Exception:
-                logger.info("마이그레이션: article_history 테이블에 status 컬럼 추가...")
-                try:
-                    c.execute("ALTER TABLE article_history ADD COLUMN status TEXT DEFAULT 'active'")
-                    conn.commit()
-                    logger.info("마이그레이션 완료: status 컬럼 추가됨")
-                except Exception as me:
-                    logger.warning(f"마이그레이션 오류 (무시): {me}")
+            # additive migrations
+            migration_columns = {
+                "article_history": {
+                    "status": "TEXT DEFAULT 'active'",
+                    "asset_type": "TEXT DEFAULT ''",
+                    "source_mode": "TEXT DEFAULT 'complex'",
+                    "source_lat": "REAL DEFAULT 0",
+                    "source_lon": "REAL DEFAULT 0",
+                    "source_zoom": "INTEGER DEFAULT 0",
+                    "marker_id": "TEXT DEFAULT ''",
+                    "broker_office": "TEXT DEFAULT ''",
+                    "broker_name": "TEXT DEFAULT ''",
+                    "broker_phone1": "TEXT DEFAULT ''",
+                    "broker_phone2": "TEXT DEFAULT ''",
+                    "prev_jeonse_won": "INTEGER DEFAULT 0",
+                    "jeonse_period_years": "INTEGER DEFAULT 0",
+                    "jeonse_max_won": "INTEGER DEFAULT 0",
+                    "jeonse_min_won": "INTEGER DEFAULT 0",
+                    "gap_amount_won": "INTEGER DEFAULT 0",
+                    "gap_ratio": "REAL DEFAULT 0",
+                },
+                "crawl_history": {
+                    "engine": "TEXT DEFAULT ''",
+                    "mode": "TEXT DEFAULT 'complex'",
+                    "source_lat": "REAL DEFAULT 0",
+                    "source_lon": "REAL DEFAULT 0",
+                    "source_zoom": "INTEGER DEFAULT 0",
+                    "asset_type": "TEXT DEFAULT ''",
+                },
+            }
+            for table_name, columns in migration_columns.items():
+                for column_name, ddl in columns.items():
+                    try:
+                        self._ensure_column(c, table_name, column_name, ddl)
+                    except Exception as me:
+                        logger.warning(f"{table_name}.{column_name} 마이그레이션 오류 (무시): {me}")
             
             # status 컬럼 인덱스 생성 (마이그레이션 후)
             try:
@@ -743,7 +813,20 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
     
-    def add_crawl_history(self, name, cid, types, count):
+    def add_crawl_history(
+        self,
+        name,
+        cid,
+        types,
+        count,
+        *,
+        engine="",
+        mode="complex",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        asset_type="",
+    ):
         if self.is_write_disabled():
             return False
         conn = self._pool.get_connection()
@@ -756,8 +839,24 @@ class ComplexDatabase:
                 for attempt in range(3):
                     try:
                         conn.cursor().execute(
-                            "INSERT INTO crawl_history (complex_name, complex_id, trade_types, item_count) VALUES (?, ?, ?, ?)",
-                            (name, cid, types, count),
+                            """
+                            INSERT INTO crawl_history (
+                                complex_name, complex_id, trade_types, item_count,
+                                engine, mode, source_lat, source_lon, source_zoom, asset_type
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                name,
+                                cid,
+                                types,
+                                count,
+                                engine,
+                                mode,
+                                float(source_lat or 0),
+                                float(source_lon or 0),
+                                int(source_zoom or 0),
+                                asset_type,
+                            ),
                         )
                         conn.commit()
                         return True
@@ -1011,16 +1110,34 @@ class ComplexDatabase:
         normalized = []
         for row in rows:
             if isinstance(row, dict):
-                article_id = str(row.get("article_id", "") or "")
-                complex_id = str(row.get("complex_id", "") or "")
-                complex_name = str(row.get("complex_name", "") or "")
-                trade_type = str(row.get("trade_type", "") or "")
-                price = int(row.get("price", 0) or 0)
-                price_text = str(row.get("price_text", "") or "")
-                area = float(row.get("area", 0) or 0)
-                floor = str(row.get("floor", "") or "")
-                feature = str(row.get("feature", "") or "")
-                last_price = int(row.get("last_price", price) or price)
+                payload = {
+                    "article_id": str(row.get("article_id", "") or ""),
+                    "complex_id": str(row.get("complex_id", "") or ""),
+                    "complex_name": str(row.get("complex_name", "") or ""),
+                    "trade_type": str(row.get("trade_type", "") or ""),
+                    "price": int(row.get("price", 0) or 0),
+                    "price_text": str(row.get("price_text", "") or ""),
+                    "area_pyeong": float(row.get("area", 0) or 0),
+                    "floor_info": str(row.get("floor", "") or ""),
+                    "feature": str(row.get("feature", "") or ""),
+                    "last_price": int(row.get("last_price", row.get("price", 0)) or row.get("price", 0) or 0),
+                    "asset_type": str(row.get("asset_type", "") or ""),
+                    "source_mode": str(row.get("source_mode", "complex") or "complex"),
+                    "source_lat": float(row.get("source_lat", 0) or 0),
+                    "source_lon": float(row.get("source_lon", 0) or 0),
+                    "source_zoom": int(row.get("source_zoom", 0) or 0),
+                    "marker_id": str(row.get("marker_id", "") or ""),
+                    "broker_office": str(row.get("broker_office", "") or ""),
+                    "broker_name": str(row.get("broker_name", "") or ""),
+                    "broker_phone1": str(row.get("broker_phone1", "") or ""),
+                    "broker_phone2": str(row.get("broker_phone2", "") or ""),
+                    "prev_jeonse_won": int(row.get("prev_jeonse_won", 0) or 0),
+                    "jeonse_period_years": int(row.get("jeonse_period_years", 0) or 0),
+                    "jeonse_max_won": int(row.get("jeonse_max_won", 0) or 0),
+                    "jeonse_min_won": int(row.get("jeonse_min_won", 0) or 0),
+                    "gap_amount_won": int(row.get("gap_amount_won", 0) or 0),
+                    "gap_ratio": float(row.get("gap_ratio", 0.0) or 0.0),
+                }
             else:
                 try:
                     (
@@ -1037,23 +1154,38 @@ class ComplexDatabase:
                     ) = row
                 except Exception:
                     continue
+                payload = {
+                    "article_id": str(article_id or ""),
+                    "complex_id": str(complex_id or ""),
+                    "complex_name": str(complex_name or ""),
+                    "trade_type": str(trade_type or ""),
+                    "price": int(price or 0),
+                    "price_text": str(price_text or ""),
+                    "area_pyeong": float(area or 0),
+                    "floor_info": str(floor or ""),
+                    "feature": str(feature or ""),
+                    "last_price": int(last_price or price or 0),
+                    "asset_type": "",
+                    "source_mode": "complex",
+                    "source_lat": 0.0,
+                    "source_lon": 0.0,
+                    "source_zoom": 0,
+                    "marker_id": "",
+                    "broker_office": "",
+                    "broker_name": "",
+                    "broker_phone1": "",
+                    "broker_phone2": "",
+                    "prev_jeonse_won": 0,
+                    "jeonse_period_years": 0,
+                    "jeonse_max_won": 0,
+                    "jeonse_min_won": 0,
+                    "gap_amount_won": 0,
+                    "gap_ratio": 0.0,
+                }
 
-            if not article_id or not complex_id or price <= 0:
+            if not payload["article_id"] or not payload["complex_id"] or payload["price"] <= 0:
                 continue
-            normalized.append(
-                (
-                    article_id,
-                    complex_id,
-                    complex_name,
-                    trade_type,
-                    price,
-                    price_text,
-                    area,
-                    floor,
-                    feature,
-                    last_price,
-                )
-            )
+            normalized.append(payload)
 
         if not normalized:
             return 0
@@ -1072,8 +1204,20 @@ class ComplexDatabase:
                             INSERT INTO article_history (
                                 article_id, complex_id, complex_name, trade_type,
                                 price, price_text, area_pyeong, floor_info, feature,
-                                first_seen, last_seen, last_price, price_change, status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
+                                first_seen, last_seen, last_price, price_change, status,
+                                asset_type, source_mode, source_lat, source_lon, source_zoom, marker_id,
+                                broker_office, broker_name, broker_phone1, broker_phone2,
+                                prev_jeonse_won, jeonse_period_years, jeonse_max_won, jeonse_min_won,
+                                gap_amount_won, gap_ratio
+                            ) VALUES (
+                                :article_id, :complex_id, :complex_name, :trade_type,
+                                :price, :price_text, :area_pyeong, :floor_info, :feature,
+                                CURRENT_DATE, CURRENT_DATE, :last_price, 0, 'active',
+                                :asset_type, :source_mode, :source_lat, :source_lon, :source_zoom, :marker_id,
+                                :broker_office, :broker_name, :broker_phone1, :broker_phone2,
+                                :prev_jeonse_won, :jeonse_period_years, :jeonse_max_won, :jeonse_min_won,
+                                :gap_amount_won, :gap_ratio
+                            )
                             ON CONFLICT(article_id, complex_id) DO UPDATE SET
                                 complex_name = excluded.complex_name,
                                 trade_type = excluded.trade_type,
@@ -1082,6 +1226,22 @@ class ComplexDatabase:
                                 area_pyeong = excluded.area_pyeong,
                                 floor_info = excluded.floor_info,
                                 feature = excluded.feature,
+                                asset_type = excluded.asset_type,
+                                source_mode = excluded.source_mode,
+                                source_lat = excluded.source_lat,
+                                source_lon = excluded.source_lon,
+                                source_zoom = excluded.source_zoom,
+                                marker_id = excluded.marker_id,
+                                broker_office = excluded.broker_office,
+                                broker_name = excluded.broker_name,
+                                broker_phone1 = excluded.broker_phone1,
+                                broker_phone2 = excluded.broker_phone2,
+                                prev_jeonse_won = excluded.prev_jeonse_won,
+                                jeonse_period_years = excluded.jeonse_period_years,
+                                jeonse_max_won = excluded.jeonse_max_won,
+                                jeonse_min_won = excluded.jeonse_min_won,
+                                gap_amount_won = excluded.gap_amount_won,
+                                gap_ratio = excluded.gap_ratio,
                                 last_seen = CURRENT_DATE,
                                 last_price = article_history.price,
                                 price_change = excluded.price - article_history.price,
@@ -1206,8 +1366,8 @@ class ComplexDatabase:
         finally:
             self._pool.return_connection(conn)
 
-    def update_article_history(self, article_id, complex_id, complex_name, trade_type, 
-                             price, price_text, area, floor, feature):
+    def update_article_history(self, article_id, complex_id, complex_name, trade_type,
+                             price, price_text, area, floor, feature, extra=None):
         """매물 정보 업데이트"""
         if self.is_write_disabled():
             return False
@@ -1226,22 +1386,72 @@ class ComplexDatabase:
                 if row:
                     last_price = row['price']
                     price_change = price - last_price
+                    extra = dict(extra or {})
                     
                     c.execute("""
                         UPDATE article_history 
-                        SET price=?, price_text=?, last_seen=CURRENT_DATE, 
+                        SET complex_name=?, trade_type=?, price=?, price_text=?, area_pyeong=?, floor_info=?, feature=?,
+                            asset_type=?, source_mode=?, source_lat=?, source_lon=?, source_zoom=?, marker_id=?,
+                            broker_office=?, broker_name=?, broker_phone1=?, broker_phone2=?,
+                            prev_jeonse_won=?, jeonse_period_years=?, jeonse_max_won=?, jeonse_min_won=?,
+                            gap_amount_won=?, gap_ratio=?, last_seen=CURRENT_DATE,
                             last_price=?, price_change=?, status='active'
                         WHERE article_id=? AND complex_id=?
-                    """, (price, price_text, last_price, price_change, article_id, complex_id))
+                    """, (
+                        complex_name, trade_type, price, price_text, area, floor, feature,
+                        str(extra.get("asset_type", "") or ""),
+                        str(extra.get("source_mode", "complex") or "complex"),
+                        float(extra.get("source_lat", 0) or 0),
+                        float(extra.get("source_lon", 0) or 0),
+                        int(extra.get("source_zoom", 0) or 0),
+                        str(extra.get("marker_id", "") or ""),
+                        str(extra.get("broker_office", "") or ""),
+                        str(extra.get("broker_name", "") or ""),
+                        str(extra.get("broker_phone1", "") or ""),
+                        str(extra.get("broker_phone2", "") or ""),
+                        int(extra.get("prev_jeonse_won", 0) or 0),
+                        int(extra.get("jeonse_period_years", 0) or 0),
+                        int(extra.get("jeonse_max_won", 0) or 0),
+                        int(extra.get("jeonse_min_won", 0) or 0),
+                        int(extra.get("gap_amount_won", 0) or 0),
+                        float(extra.get("gap_ratio", 0.0) or 0.0),
+                        last_price, price_change, article_id, complex_id,
+                    ))
                 else:
+                    extra = dict(extra or {})
                     c.execute("""
                         INSERT INTO article_history (
                             article_id, complex_id, complex_name, trade_type, 
                             price, price_text, area_pyeong, floor_info, feature,
-                            first_seen, last_seen, last_price, price_change, status
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active')
-                    """, (article_id, complex_id, complex_name, trade_type, 
-                          price, price_text, area, floor, feature, price))
+                            first_seen, last_seen, last_price, price_change, status,
+                            asset_type, source_mode, source_lat, source_lon, source_zoom, marker_id,
+                            broker_office, broker_name, broker_phone1, broker_phone2,
+                            prev_jeonse_won, jeonse_period_years, jeonse_max_won, jeonse_min_won,
+                            gap_amount_won, gap_ratio
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active',
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        )
+                    """, (
+                        article_id, complex_id, complex_name, trade_type,
+                        price, price_text, area, floor, feature, price,
+                        str(extra.get("asset_type", "") or ""),
+                        str(extra.get("source_mode", "complex") or "complex"),
+                        float(extra.get("source_lat", 0) or 0),
+                        float(extra.get("source_lon", 0) or 0),
+                        int(extra.get("source_zoom", 0) or 0),
+                        str(extra.get("marker_id", "") or ""),
+                        str(extra.get("broker_office", "") or ""),
+                        str(extra.get("broker_name", "") or ""),
+                        str(extra.get("broker_phone1", "") or ""),
+                        str(extra.get("broker_phone2", "") or ""),
+                        int(extra.get("prev_jeonse_won", 0) or 0),
+                        int(extra.get("jeonse_period_years", 0) or 0),
+                        int(extra.get("jeonse_max_won", 0) or 0),
+                        int(extra.get("jeonse_min_won", 0) or 0),
+                        int(extra.get("gap_amount_won", 0) or 0),
+                        float(extra.get("gap_ratio", 0.0) or 0.0),
+                    ))
                 
                 conn.commit()
                 return True

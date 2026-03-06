@@ -24,6 +24,20 @@ hiddenimports: list[str] = [
 ]
 hiddenimports += collect_submodules("undetected_chromedriver")
 hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
+hiddenimports += collect_submodules("playwright")
+
+datas: list[tuple[str, str]] = []
+runtime_hooks = [str(project_dir / "src" / "utils" / "runtime_playwright.py")]
+try:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser_path = Path(p.chromium.executable_path)
+    browser_root = browser_path.parent.parent if browser_path.exists() else None
+    if browser_root and browser_root.exists():
+        datas.append((str(browser_root), "ms-playwright"))
+except Exception:
+    pass
 
 # Exclude obviously-unused modules to reduce bundle size.
 excludes: list[str] = [
@@ -56,11 +70,11 @@ a = Analysis(
     ["app_entry.py"],
     pathex=[str(project_dir)],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=runtime_hooks,
     excludes=excludes,
     noarchive=False,
     optimize=0,

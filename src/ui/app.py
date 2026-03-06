@@ -37,6 +37,7 @@ from src.ui.styles import get_stylesheet
 from src.utils.helpers import DateTimeHelper, get_article_url
 
 from src.ui.widgets.crawler_tab import CrawlerTab
+from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
 from src.ui.widgets.database_tab import DatabaseTab
 from src.ui.widgets.group_tab import GroupTab
 from src.ui.widgets.tabs import FavoritesTab
@@ -139,6 +140,14 @@ class RealEstateApp(QMainWindow):
             maintenance_guard=lambda: self._maintenance_mode,
         )
         self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
+
+        self.geo_tab = GeoCrawlerTab(
+            self.db,
+            history_manager=self.history_manager,
+            theme=self.current_theme,
+            maintenance_guard=lambda: self._maintenance_mode,
+        )
+        self.tabs.addTab(self.geo_tab, "🧭 지도 탐색")
         
         # 2. 단지 DB 탭
         self.db_tab = DatabaseTab(self.db)
@@ -159,6 +168,9 @@ class RealEstateApp(QMainWindow):
         self.crawler_tab.data_collected.connect(self._on_crawl_data_collected)
         self.crawler_tab.status_message.connect(self.status_bar.showMessage)
         self.crawler_tab.alert_triggered.connect(self._on_alert_triggered)
+        self.geo_tab.data_collected.connect(self._on_crawl_data_collected)
+        self.geo_tab.status_message.connect(self.status_bar.showMessage)
+        self.geo_tab.alert_triggered.connect(self._on_alert_triggered)
         self.group_tab.groups_updated.connect(self._load_schedule_groups)
         
         self.tabs.currentChanged.connect(self._refresh_tab)
@@ -796,6 +808,11 @@ class RealEstateApp(QMainWindow):
                     self.crawler_tab.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"crawler_tab 테마 적용 실패 (무시): {e}")
+            try:
+                if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'set_theme'):
+                    self.geo_tab.set_theme(new_theme)
+            except Exception as e:
+                ui_logger.debug(f"geo_tab 테마 적용 실패 (무시): {e}")
             
             try:
                 if self.dashboard_widget is not None and hasattr(self.dashboard_widget, 'set_theme'):
@@ -830,6 +847,8 @@ class RealEstateApp(QMainWindow):
             self.retry_handler.max_retries = settings.get("max_retry_count", 3)
         if hasattr(self, 'crawler_tab') and hasattr(self.crawler_tab, 'update_runtime_settings'):
             self.crawler_tab.update_runtime_settings()
+        if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'update_runtime_settings'):
+            self.geo_tab.update_runtime_settings()
     
     def _save_preset(self):
         name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")
@@ -919,6 +938,13 @@ class RealEstateApp(QMainWindow):
                     self.crawler_tab.btn_save,
                     self.crawler_tab.btn_advanced_filter,
                     self.crawler_tab.btn_clear_advanced_filter,
+                ]
+            )
+        if hasattr(self, "geo_tab"):
+            targets.extend(
+                [
+                    self.geo_tab.btn_start,
+                    self.geo_tab.btn_save,
                 ]
             )
         for action_name in (
@@ -1158,6 +1184,8 @@ class RealEstateApp(QMainWindow):
         current = self.tabs.currentWidget()
         if current is self.db_tab:
             self.db_tab.load_data()
+        elif current is self.geo_tab:
+            return
         elif current is self.group_tab:
             self.group_tab.load_groups()
         elif current is self.history_tab:
@@ -1214,6 +1242,13 @@ class RealEstateApp(QMainWindow):
                 self._is_shutting_down = False
                 ui_logger.warning("크롤링 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
                 self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 앱 종료를 시도하세요.")
+                return False
+        if hasattr(self, "geo_tab"):
+            ok = self.geo_tab.shutdown_crawl(timeout_ms=8000)
+            if not ok:
+                self._is_shutting_down = False
+                ui_logger.warning("지도 탐색 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
+                self.status_bar.showMessage("⚠️ 지도 탐색 종료 후 다시 앱 종료를 시도하세요.")
                 return False
         if hasattr(self, "schedule_timer") and self.schedule_timer:
             self.schedule_timer.stop()
@@ -1368,7 +1403,9 @@ class RealEstateApp(QMainWindow):
         else:
             card_view = CardViewWidget(is_dark=(self.current_theme=="dark"))
             card_view.set_data(recent_items)
-            card_view.article_clicked.connect(lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"))))
+            card_view.article_clicked.connect(
+                lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
+            )
             card_view.favorite_toggled.connect(self._on_favorite_toggled)
             layout.addWidget(card_view)
         

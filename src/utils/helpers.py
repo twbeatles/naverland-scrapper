@@ -80,9 +80,10 @@ def get_complex_url(complex_id):
     """단지 URL 생성"""
     return f"https://new.land.naver.com/complexes/{complex_id}"
 
-def get_article_url(complex_id, article_id):
+def get_article_url(complex_id, article_id, asset_type="APT"):
     """매물상세 URL 생성"""
-    return f"https://new.land.naver.com/complexes/{complex_id}?articleId={article_id}"
+    path = "houses" if str(asset_type or "").upper() == "VL" else "complexes"
+    return f"https://new.land.naver.com/{path}/{complex_id}?articleId={article_id}"
 
 class ChromeParamHelper:
     @staticmethod

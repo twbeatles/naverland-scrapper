@@ -28,7 +28,9 @@ except ImportError:
 from src.utils.constants import CRAWL_SPEED_PRESETS
 from src.utils.helpers import PriceConverter, ChromeParamHelper
 from src.utils.retry_handler import RetryCancelledError, RetryHandler
+from src.core.engines import PlaywrightCrawlerEngine, SeleniumCrawlerEngine
 from src.core.item_parser import ItemParser
+from src.core.models.crawl_models import GeoSweepConfig
 
 # 메모리 임계치 (MB) - 초과 시 드라이버 재시작
 MEMORY_THRESHOLD_MB = 500
@@ -43,6 +45,7 @@ class CrawlerThread(QThread):
     finished_signal = pyqtSignal(list)
     error_signal = pyqtSignal(str)
     alert_triggered_signal = pyqtSignal(str, str, str, float, int)
+    discovered_complex_signal = pyqtSignal(dict)
     BLOCKED_PAGE_PATTERNS = (
         "captcha",
         "캡차",
@@ -79,6 +82,13 @@ class CrawlerThread(QThread):
         track_disappeared=True,
         history_batch_size=200,
         negative_cache_ttl_minutes=5,
+        engine_name="playwright",
+        crawl_mode="complex",
+        geo_config=None,
+        fallback_engine_enabled=True,
+        playwright_headless=False,
+        playwright_detail_workers=12,
+        block_heavy_resources=True,
     ):
         super().__init__()
         self.targets = targets
@@ -126,6 +136,25 @@ class CrawlerThread(QThread):
             self.negative_cache_ttl_minutes = max(0, int(negative_cache_ttl_minutes))
         except (TypeError, ValueError):
             self.negative_cache_ttl_minutes = 5
+        self.engine_name = str(engine_name or "playwright").strip().lower()
+        self.crawl_mode = str(crawl_mode or "complex").strip().lower()
+        if isinstance(geo_config, GeoSweepConfig):
+            self.geo_config = geo_config
+        elif isinstance(geo_config, dict) and geo_config:
+            try:
+                self.geo_config = GeoSweepConfig(**geo_config)
+            except TypeError:
+                self.geo_config = None
+        else:
+            self.geo_config = None
+        self.fallback_engine_enabled = bool(fallback_engine_enabled)
+        self.playwright_headless = bool(playwright_headless)
+        try:
+            self.playwright_detail_workers = max(1, int(playwright_detail_workers))
+        except (TypeError, ValueError):
+            self.playwright_detail_workers = 12
+        self.block_heavy_resources = bool(block_heavy_resources)
+        self._engine = None
         self._last_batch_flush_at = time.monotonic()
         self._history_state_cache = {}
         self._alert_rules_cache = {}
@@ -157,6 +186,122 @@ class CrawlerThread(QThread):
             time.sleep(step)
             remaining -= step
         return True
+
+    def _create_engine(self):
+        if self.engine_name == "selenium":
+            return SeleniumCrawlerEngine(self)
+        return PlaywrightCrawlerEngine(self)
+
+    def _estimate_remaining_seconds(self, current: int, total: int) -> int:
+        elapsed = time.time() - self.start_time if self.start_time else 0.0
+        avg_time = elapsed / current if current > 0 else 5
+        return int(avg_time * max(0, total - current))
+
+    def _get_speed_delay(self) -> float:
+        speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
+        return random.uniform(speed_cfg["min"], speed_cfg["max"])
+
+    def register_discovered_complex(self, payload: dict):
+        if not isinstance(payload, dict):
+            return
+        cid = str(payload.get("complex_id", "") or "")
+        name = str(payload.get("complex_name", "") or "")
+        if not cid or not name:
+            return
+        status = "skipped"
+        if self.db:
+            try:
+                status = str(self.db.add_complex(name, cid, return_status=True) or "skipped")
+            except Exception as e:
+                self.log(f"⚠️ 발견 단지 자동 등록 실패: {name} ({cid}) - {e}", 30)
+                status = "error"
+        emitted = dict(payload)
+        emitted["db_status"] = status
+        self.discovered_complex_signal.emit(emitted)
+
+    def record_crawl_history(
+        self,
+        name,
+        cid,
+        types,
+        count,
+        *,
+        engine="",
+        mode="complex",
+        source_lat=None,
+        source_lon=None,
+        source_zoom=None,
+        asset_type="",
+    ):
+        if not self.db:
+            return
+        try:
+            self.db.add_crawl_history(
+                name,
+                cid,
+                types,
+                int(count or 0),
+                engine=engine or self.engine_name,
+                mode=mode or self.crawl_mode,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                asset_type=asset_type,
+            )
+            if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                self._notify_db_write_disabled()
+        except Exception as e:
+            self.log(f"⚠️ 크롤링 기록 저장 실패: {e}", 30)
+
+    def _finalize_disappeared_articles(self, processed_target_pairs):
+        if self.track_disappeared and (not self._should_stop()) and self.db:
+            try:
+                if processed_target_pairs and hasattr(self.db, "mark_disappeared_articles_for_targets"):
+                    disappeared = int(
+                        self.db.mark_disappeared_articles_for_targets(
+                            list(sorted(processed_target_pairs))
+                        )
+                        or 0
+                    )
+                else:
+                    disappeared = int(self.db.mark_disappeared_articles() or 0)
+                if disappeared > 0:
+                    self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
+            except Exception as e:
+                if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                    self._notify_db_write_disabled()
+                self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
+
+    def _process_raw_items(self, raw_items, requested_trade_type):
+        matched_count = 0
+        for raw_item in raw_items or []:
+            if not isinstance(raw_item, dict):
+                continue
+            processed_item = self._enrich_item_with_history_and_alerts(dict(raw_item))
+            trade_type = str(processed_item.get("거래유형", requested_trade_type) or requested_trade_type)
+            if self._check_filters(processed_item, trade_type):
+                self._push_item(processed_item)
+                matched_count += 1
+            else:
+                self.stats["filtered_out"] += 1
+        self._flush_history_updates(force=True)
+        self._flush_pending_items_if_needed(force=True)
+        return matched_count
+
+    def _run_fallback_selenium(self, start_name="", start_cid="", start_trade=""):
+        original_engine = self.engine_name
+        try:
+            self.engine_name = "selenium"
+            if start_name and start_cid and start_trade:
+                prefixed_targets = [(start_name, start_cid)] + [
+                    target for target in self.targets if not (target[0] == start_name and target[1] == start_cid)
+                ]
+                self.targets = prefixed_targets
+                prefixed_trades = [start_trade] + [tt for tt in self.trade_types if tt != start_trade]
+                self.trade_types = prefixed_trades
+            SeleniumCrawlerEngine(self).run()
+        finally:
+            self.engine_name = original_engine
 
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
 
@@ -246,6 +391,7 @@ class CrawlerThread(QThread):
                     area=float(row.get("area", 0) or 0),
                     floor=row.get("floor", ""),
                     feature=row.get("feature", ""),
+                    extra=row,
                 )
                 if ok:
                     saved += 1
@@ -351,6 +497,22 @@ class CrawlerThread(QThread):
                     "floor": str(data.get("층/방향", "") or ""),
                     "feature": str(data.get("타입/특징", "") or ""),
                     "last_price": prev_price if prev_price > 0 else price_int,
+                    "asset_type": str(data.get("자산유형", "") or ""),
+                    "source_mode": str(data.get("수집모드", self.crawl_mode) or self.crawl_mode),
+                    "source_lat": float(data.get("위도", 0.0) or 0.0),
+                    "source_lon": float(data.get("경도", 0.0) or 0.0),
+                    "source_zoom": int(data.get("줌", 0) or 0),
+                    "marker_id": str(data.get("마커ID", "") or ""),
+                    "broker_office": str(data.get("부동산상호", "") or ""),
+                    "broker_name": str(data.get("중개사이름", "") or ""),
+                    "broker_phone1": str(data.get("전화1", "") or ""),
+                    "broker_phone2": str(data.get("전화2", "") or ""),
+                    "prev_jeonse_won": int(data.get("기전세금(원)", 0) or 0),
+                    "jeonse_period_years": int(data.get("전세_기간(년)", 0) or 0),
+                    "jeonse_max_won": int(data.get("전세_기간내_최고(원)", 0) or 0),
+                    "jeonse_min_won": int(data.get("전세_기간내_최저(원)", 0) or 0),
+                    "gap_amount_won": int(data.get("갭금액(원)", 0) or 0),
+                    "gap_ratio": float(data.get("갭비율", 0.0) or 0.0),
                 }
             )
             self._flush_history_updates(force=False)
@@ -459,15 +621,39 @@ class CrawlerThread(QThread):
         return driver
 
     def run(self):
+        self.start_time = time.time()
+        self._engine = None
+        try:
+            self.log("🚀 크롤링 시작...")
+            self._engine = self._create_engine()
+            self._engine.run()
+            self._flush_pending_items_if_needed(force=True)
+            self._flush_history_updates(force=True)
+            self.log(f"\n{'='*50}\n✅ 완료! 총 {len(self.collected_data)}건")
+        except RetryCancelledError:
+            self.log("⏹ 중단 요청으로 크롤링을 종료했습니다.", 20)
+        except Exception as e:
+            self.log(f"❌ 치명적 오류: {e}", 40)
+            self.log(f"상세:\n{traceback.format_exc()}", 40)
+            self.error_signal.emit(str(e))
+        finally:
+            self._flush_pending_items_if_needed(force=True)
+            self._flush_history_updates(force=True)
+            if self._engine is not None:
+                try:
+                    self._engine.close()
+                except Exception as e:
+                    self.log(f"⚠️ 엔진 종료 중 오류: {e}", 30)
+            self.finished_signal.emit(self.collected_data)
+
+    def _run_selenium_loop(self):
         if not UC_AVAILABLE or not BS4_AVAILABLE:
             self.error_signal.emit("필수 라이브러리 미설치\npip install undetected-chromedriver beautifulsoup4")
             return
             
         driver = None
-        self.start_time = time.time()
         
         try:
-            self.log("🚀 크롤링 시작...")
             driver = self._init_driver()
             if not driver:
                 raise Exception("드라이버 초기화 실패")
@@ -517,10 +703,8 @@ class CrawlerThread(QThread):
                     current += 1
                     
                     # 예상 남은 시간 계산
-                    elapsed = time.time() - self.start_time
-                    avg_time = elapsed / current if current > 0 else 5
-                    remaining = int(avg_time * (total - current))
-                    
+                    remaining = self._estimate_remaining_seconds(current, total)
+
                     self.progress_signal.emit(int(current / total * 100), f"{name} ({ttype})", remaining)
                     self.log(f"\\n📍 [{current}/{total}] {name} - {ttype}")
                     
@@ -547,60 +731,34 @@ class CrawlerThread(QThread):
                                  self.log(f"⚠️ 드라이버 종료 실패 (무시): {quit_err}", 30)
                              driver = self._init_driver()
                     
-                    speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
-                    if not self._sleep_interruptible(random.uniform(speed_cfg["min"], speed_cfg["max"])):
+                    if not self._sleep_interruptible(self._get_speed_delay()):
                         break
 
                 self._flush_history_updates(force=True)
-                if self.db:
-                    try:
-                        self.db.add_crawl_history(name, cid, ",".join(self.trade_types), int(complex_count))
-                        if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
-                            self._notify_db_write_disabled()
-                    except Exception as e:
-                        self.log(f"⚠️ 크롤링 기록 저장 실패: {e}", 30)
+                self.record_crawl_history(
+                    name,
+                    cid,
+                    ",".join(self.trade_types),
+                    int(complex_count),
+                    engine="selenium",
+                    mode=self.crawl_mode,
+                )
                 
                 self.complex_finished_signal.emit(name, cid, ",".join(self.trade_types), complex_count)
                 processed_complexes += 1
 
-            # 전체 수집을 정상 종료한 경우에만 소멸 매물 처리
-            if self.track_disappeared and (not self._should_stop()) and self.db:
-                try:
-                    if processed_target_pairs and hasattr(self.db, "mark_disappeared_articles_for_targets"):
-                        disappeared = int(
-                            self.db.mark_disappeared_articles_for_targets(
-                                list(sorted(processed_target_pairs))
-                            )
-                            or 0
-                        )
-                    else:
-                        disappeared = int(self.db.mark_disappeared_articles() or 0)
-                    if disappeared > 0:
-                        self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
-                except Exception as e:
-                    if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
-                        self._notify_db_write_disabled()
-                    self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
-            
-            self._flush_pending_items_if_needed(force=True)
-            self._flush_history_updates(force=True)
-            self.log(f"\\n{'='*50}\\n✅ 완료! 총 {len(self.collected_data)}건")
+            self._finalize_disappeared_articles(processed_target_pairs)
         except RetryCancelledError:
-            self.log("⏹ 중단 요청으로 크롤링을 종료했습니다.", 20)
-        except Exception as e:
-            self.log(f"❌ 치명적 오류: {e}", 40)
-            self.log(f"상세:\\n{traceback.format_exc()}", 40)
-            self.error_signal.emit(str(e))
+            raise
+        except Exception:
+            raise
         finally:
-            self._flush_pending_items_if_needed(force=True)
-            self._flush_history_updates(force=True)
             if driver:
                 try:
                     driver.quit()
                     self.log("✅ Chrome 드라이버 종료 완료")
                 except Exception as e:
                     self.log(f"⚠️ Chrome 드라이버 종료 중 오류: {e}", 30)
-            self.finished_signal.emit(self.collected_data)
     
     def _crawl(self, driver, name, cid, ttype):
         # v12.0: 캐시 확인

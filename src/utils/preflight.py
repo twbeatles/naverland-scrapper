@@ -11,6 +11,7 @@ REQUIRED_DEPENDENCIES = [
     "PyQt6",
     "bs4",
     "matplotlib",
+    "playwright",
     "selenium",
     "undetected_chromedriver",
 ]
@@ -69,6 +70,21 @@ def find_internal_import_failures(modules: Iterable[str]) -> list[str]:
     return failures
 
 
+def find_missing_playwright_browser() -> str:
+    if importlib.util.find_spec("playwright") is None:
+        return "playwright"
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            executable = Path(p.chromium.executable_path)
+        if not executable.exists():
+            return str(executable)
+        return ""
+    except Exception as e:
+        return f"playwright browser unavailable: {e}"
+
+
 def run_preflight_checks(
     base_dir: Optional[Path] = None,
     data_dir: Optional[Path] = None,
@@ -93,6 +109,11 @@ def run_preflight_checks(
             "필수 라이브러리가 누락되었습니다: " + ", ".join(missing_required)
         )
         app_logger.error("필수 라이브러리 누락: %s", ", ".join(missing_required))
+    else:
+        missing_browser = find_missing_playwright_browser()
+        if missing_browser:
+            errors.append("Playwright Chromium 브라우저가 준비되지 않았습니다: " + missing_browser)
+            app_logger.error("Playwright Chromium 누락: %s", missing_browser)
 
     if not missing_required:
         internal_failures = find_internal_import_failures(REQUIRED_INTERNAL_IMPORTS)

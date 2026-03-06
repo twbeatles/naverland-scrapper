@@ -46,10 +46,14 @@ class CrawlerTab(QWidget):
     COL_DUP_COUNT = 7
     COL_NEW = 8
     COL_PRICE_CHANGE = 9
-    COL_COLLECTED_AT = 10
-    COL_LINK = 11
-    COL_URL = 12
-    COL_PRICE_SORT = 13
+    COL_ASSET_TYPE = 10
+    COL_PREV_JEONSE = 11
+    COL_GAP_AMOUNT = 12
+    COL_GAP_RATIO = 13
+    COL_COLLECTED_AT = 14
+    COL_LINK = 15
+    COL_URL = 16
+    COL_PRICE_SORT = 17
     
     # Signals
     data_collected = pyqtSignal(list)  # 수집 완료 시 데이터 전송
@@ -343,6 +347,16 @@ class CrawlerTab(QWidget):
     def _setup_speed_group(self, layout):
         spg = QGroupBox("5️⃣ 크롤링 속도")
         spl = QVBoxLayout()
+        engine_row = QHBoxLayout()
+        engine_row.addWidget(QLabel("엔진:"))
+        self.combo_engine = QComboBox()
+        self.combo_engine.addItems(["playwright", "selenium"])
+        self.combo_engine.setCurrentText(settings.get("crawl_engine", "playwright"))
+        self.combo_engine.currentTextChanged.connect(lambda text: settings.set("crawl_engine", text))
+        engine_row.addWidget(self.combo_engine)
+        engine_row.addStretch()
+        spl.addLayout(engine_row)
+
         self.speed_slider = SpeedSlider()
         self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
         self.speed_slider.speed_changed.connect(self._on_speed_changed)
@@ -427,10 +441,11 @@ class CrawlerTab(QWidget):
         
         # Table View
         self.result_table = QTableWidget()
-        self.result_table.setColumnCount(14)
+        self.result_table.setColumnCount(18)
         self.result_table.setHorizontalHeaderLabels([
-            "단지명", "거래", "가격", "면적", "평당가", "층/방향", "특징", 
-            "묶음", "🆕", "📊 변동", "시각", "링크", "URL", "가격(숫자)"
+            "단지명", "거래", "가격", "면적", "평당가", "층/방향", "특징",
+            "묶음", "🆕", "📊 변동", "자산", "기전세금", "갭금액", "갭비율",
+            "시각", "링크", "URL", "가격(숫자)"
         ])
         self.result_table.setColumnHidden(self.COL_URL, True)
         self.result_table.setColumnHidden(self.COL_PRICE_SORT, True)
@@ -442,7 +457,9 @@ class CrawlerTab(QWidget):
         self.view_stack.addWidget(self.result_table)
         
         self.card_view = CardViewWidget(is_dark=(self.current_theme == "dark"))
-        self.card_view.article_clicked.connect(lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"))))
+        self.card_view.article_clicked.connect(
+            lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
+        )
         self.card_view.favorite_toggled.connect(self.db.toggle_favorite)
         self.view_stack.addWidget(self.card_view)
         
@@ -510,6 +527,8 @@ class CrawlerTab(QWidget):
         except (TypeError, ValueError):
             debounce_ms = 220
         self._search_timer.setInterval(debounce_ms)
+        if hasattr(self, "combo_engine"):
+            self.combo_engine.setCurrentText(settings.get("crawl_engine", "playwright"))
         self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
         self._apply_default_sort_settings()
 
@@ -931,6 +950,12 @@ class CrawlerTab(QWidget):
             track_disappeared=settings.get("track_disappeared", True),
             history_batch_size=settings.get("history_batch_size", 200),
             negative_cache_ttl_minutes=settings.get("cache_negative_ttl_minutes", 5),
+            engine_name=settings.get("crawl_engine", "playwright"),
+            crawl_mode="complex",
+            fallback_engine_enabled=settings.get("fallback_engine_enabled", True),
+            playwright_headless=settings.get("playwright_headless", False),
+            playwright_detail_workers=settings.get("playwright_detail_workers", 12),
+            block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
@@ -1059,6 +1084,30 @@ class CrawlerTab(QWidget):
         self._row_search_cache[row] = searchable
         return searchable
 
+    @staticmethod
+    def _format_won_value(value, signed: bool = False) -> str:
+        try:
+            won = int(value or 0)
+        except (TypeError, ValueError):
+            won = 0
+        manwon = int(abs(won) / 10_000)
+        text = PriceConverter.to_string(manwon) if manwon > 0 else ""
+        if not signed:
+            return text
+        if won > 0 and text:
+            return f"+{text}"
+        if won < 0 and text:
+            return f"-{text}"
+        return text
+
+    @staticmethod
+    def _format_gap_ratio(value) -> str:
+        try:
+            ratio = float(value or 0)
+        except (TypeError, ValueError):
+            ratio = 0.0
+        return f"{ratio:.4f}" if ratio else ""
+
     def _build_row_payload_from_data(self, data, trade_type, price_int, area_val, price_change, is_new):
         payload = dict(data or {})
         payload["거래유형"] = trade_type
@@ -1115,7 +1164,7 @@ class CrawlerTab(QWidget):
                 price_change=price_change,
                 is_new=is_new,
             )
-            url = get_article_url(item.get("단지ID", ""), item.get("매물ID", ""))
+            url = get_article_url(item.get("단지ID", ""), item.get("매물ID", ""), item.get("자산유형", "APT"))
             if url:
                 lookup[url] = payload
         return lookup
@@ -1177,12 +1226,32 @@ class CrawlerTab(QWidget):
         else:
             change_text = ""
         self.result_table.setItem(row, self.COL_PRICE_CHANGE, QTableWidgetItem(change_text))
+        self.result_table.setItem(row, self.COL_ASSET_TYPE, QTableWidgetItem(str(data.get("자산유형", ""))))
+        self.result_table.setItem(
+            row,
+            self.COL_PREV_JEONSE,
+            QTableWidgetItem(self._format_won_value(data.get("기전세금(원)", 0))),
+        )
+        self.result_table.setItem(
+            row,
+            self.COL_GAP_AMOUNT,
+            QTableWidgetItem(self._format_won_value(data.get("갭금액(원)", 0), signed=True)),
+        )
+        self.result_table.setItem(
+            row,
+            self.COL_GAP_RATIO,
+            QTableWidgetItem(self._format_gap_ratio(data.get("갭비율", 0))),
+        )
 
         collect_time = str(data.get("수집시각", ""))
         self.result_table.setItem(row, self.COL_COLLECTED_AT, QTableWidgetItem(collect_time))
         self.result_table.setItem(row, self.COL_LINK, QTableWidgetItem("🔗"))
 
-        article_url = get_article_url(data.get("단지ID", ""), data.get("매물ID", ""))
+        article_url = get_article_url(
+            data.get("단지ID", ""),
+            data.get("매물ID", ""),
+            data.get("자산유형", "APT"),
+        )
         self.result_table.setItem(row, self.COL_URL, QTableWidgetItem(article_url))
         sort_item = QTableWidgetItem(str(price_int))
         sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))

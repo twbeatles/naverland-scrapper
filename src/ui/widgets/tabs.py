@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 import webbrowser
 from src.ui.widgets.components import EmptyStateWidget
 from src.utils.logger import get_logger
+from src.utils.helpers import get_article_url
 
 logger = get_logger("FavoritesTab")
 
@@ -194,5 +195,9 @@ class FavoritesTab(QWidget):
         
         item_data = item.data(Qt.ItemDataRole.UserRole)
         if item_data:
-            url = f"https://new.land.naver.com/complexes/{item_data.get('complex_id', '')}?articleId={item_data.get('article_id', '')}"
+            url = get_article_url(
+                item_data.get("complex_id", ""),
+                item_data.get("article_id", ""),
+                item_data.get("asset_type", "APT"),
+            )
             webbrowser.open(url)

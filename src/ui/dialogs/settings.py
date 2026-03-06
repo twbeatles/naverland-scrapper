@@ -57,16 +57,24 @@ class SettingsDialog(QDialog):
         cl.addWidget(QLabel("기본 속도:"), 0, 0)
         cl.addWidget(self.combo_speed, 0, 1)
 
+        cl.addWidget(QLabel("기본 엔진:"), 1, 0)
+        self.combo_engine = QComboBox()
+        self.combo_engine.addItems(["playwright", "selenium"])
+        cl.addWidget(self.combo_engine, 1, 1)
+
         self.check_retry_on_error = QCheckBox("오류 시 자동 재시도")
         self.check_retry_on_error.toggled.connect(
             lambda checked: self.spin_max_retry_count.setEnabled(bool(checked))
         )
-        cl.addWidget(self.check_retry_on_error, 1, 0, 1, 2)
+        cl.addWidget(self.check_retry_on_error, 2, 0, 1, 2)
 
-        cl.addWidget(QLabel("최대 재시도 횟수:"), 2, 0)
+        cl.addWidget(QLabel("최대 재시도 횟수:"), 3, 0)
         self.spin_max_retry_count = QSpinBox()
         self.spin_max_retry_count.setRange(0, 10)
-        cl.addWidget(self.spin_max_retry_count, 2, 1)
+        cl.addWidget(self.spin_max_retry_count, 3, 1)
+
+        self.check_fallback_engine = QCheckBox("Playwright 실패 시 Selenium fallback")
+        cl.addWidget(self.check_fallback_engine, 4, 0, 1, 2)
         cg.setLayout(cl)
         layout.addWidget(cg)
 
@@ -96,8 +104,54 @@ class SettingsDialog(QDialog):
 
         self.check_compact_duplicates = QCheckBox("동일 매물 묶어서 표시")
         pl.addWidget(self.check_compact_duplicates, 4, 0, 1, 2)
+
+        pl.addWidget(QLabel("Playwright 워커 수:"), 5, 0)
+        self.spin_playwright_workers = QSpinBox()
+        self.spin_playwright_workers.setRange(1, 32)
+        pl.addWidget(self.spin_playwright_workers, 5, 1)
+
+        self.check_playwright_headless = QCheckBox("Playwright headless 실행")
+        pl.addWidget(self.check_playwright_headless, 6, 0, 1, 2)
+
+        self.check_block_heavy_resources = QCheckBox("이미지/폰트 등 무거운 리소스 차단")
+        pl.addWidget(self.check_block_heavy_resources, 7, 0, 1, 2)
         pg.setLayout(pl)
         layout.addWidget(pg)
+
+        gg = QGroupBox("🧭 지도 탐색")
+        gl = QGridLayout()
+        gl.addWidget(QLabel("기본 줌:"), 0, 0)
+        self.spin_geo_zoom = QSpinBox()
+        self.spin_geo_zoom.setRange(12, 18)
+        gl.addWidget(self.spin_geo_zoom, 0, 1)
+
+        gl.addWidget(QLabel("그리드 링:"), 1, 0)
+        self.spin_geo_rings = QSpinBox()
+        self.spin_geo_rings.setRange(0, 6)
+        gl.addWidget(self.spin_geo_rings, 1, 1)
+
+        gl.addWidget(QLabel("그리드 간격(px):"), 2, 0)
+        self.spin_geo_step = QSpinBox()
+        self.spin_geo_step.setRange(120, 1600)
+        self.spin_geo_step.setSingleStep(40)
+        gl.addWidget(self.spin_geo_step, 2, 1)
+
+        gl.addWidget(QLabel("지점 대기(ms):"), 3, 0)
+        self.spin_geo_dwell = QSpinBox()
+        self.spin_geo_dwell.setRange(100, 5000)
+        self.spin_geo_dwell.setSingleStep(100)
+        gl.addWidget(self.spin_geo_dwell, 3, 1)
+
+        self.check_geo_asset_apt = QCheckBox("APT")
+        self.check_geo_asset_vl = QCheckBox("VL")
+        asset_layout = QHBoxLayout()
+        asset_layout.addWidget(self.check_geo_asset_apt)
+        asset_layout.addWidget(self.check_geo_asset_vl)
+        asset_layout.addStretch()
+        gl.addWidget(QLabel("자산 유형:"), 4, 0)
+        gl.addLayout(asset_layout, 4, 1)
+        gg.setLayout(gl)
+        layout.addWidget(gg)
         
         # 정렬
         og = QGroupBox("📊 결과 정렬")
@@ -127,9 +181,11 @@ class SettingsDialog(QDialog):
         self.check_confirm.setChecked(settings.get("confirm_before_close", True))
         self.check_sound.setChecked(settings.get("play_sound_on_complete", True))
         self.combo_speed.setCurrentText(settings.get("crawl_speed", "보통"))
+        self.combo_engine.setCurrentText(settings.get("crawl_engine", "playwright"))
         self.check_retry_on_error.setChecked(bool(settings.get("retry_on_error", True)))
         self.spin_max_retry_count.setValue(int(settings.get("max_retry_count", 3) or 3))
         self.spin_max_retry_count.setEnabled(self.check_retry_on_error.isChecked())
+        self.check_fallback_engine.setChecked(bool(settings.get("fallback_engine_enabled", True)))
         self.combo_sort_col.setCurrentText(settings.get("default_sort_column", "가격"))
         self.combo_sort_order.setCurrentText("오름차순" if settings.get("default_sort_order", "asc") == "asc" else "내림차순")
         self.spin_history_batch.setValue(int(settings.get("history_batch_size", 200) or 200))
@@ -137,8 +193,25 @@ class SettingsDialog(QDialog):
         self.spin_max_log_lines.setValue(int(settings.get("max_log_lines", 1500) or 1500))
         self.check_lazy_startup.setChecked(bool(settings.get("startup_lazy_noncritical_tabs", True)))
         self.check_compact_duplicates.setChecked(bool(settings.get("compact_duplicate_listings", True)))
-    
+        self.spin_playwright_workers.setValue(int(settings.get("playwright_detail_workers", 12) or 12))
+        self.check_playwright_headless.setChecked(bool(settings.get("playwright_headless", False)))
+        self.check_block_heavy_resources.setChecked(bool(settings.get("playwright_block_heavy_resources", True)))
+        self.spin_geo_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
+        self.spin_geo_rings.setValue(int(settings.get("geo_grid_rings", 1) or 1))
+        self.spin_geo_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
+        self.spin_geo_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
+        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        self.check_geo_asset_apt.setChecked("APT" in asset_types)
+        self.check_geo_asset_vl.setChecked("VL" in asset_types)
+
     def _save(self):
+        asset_types = []
+        if self.check_geo_asset_apt.isChecked():
+            asset_types.append("APT")
+        if self.check_geo_asset_vl.isChecked():
+            asset_types.append("VL")
+        if not asset_types:
+            asset_types = ["APT", "VL"]
         new = {
             "theme": self.combo_theme.currentText(),
             "minimize_to_tray": self.check_tray.isChecked(),
@@ -146,8 +219,10 @@ class SettingsDialog(QDialog):
             "confirm_before_close": self.check_confirm.isChecked(),
             "play_sound_on_complete": self.check_sound.isChecked(),
             "crawl_speed": self.combo_speed.currentText(),
+            "crawl_engine": self.combo_engine.currentText(),
             "retry_on_error": self.check_retry_on_error.isChecked(),
             "max_retry_count": self.spin_max_retry_count.value(),
+            "fallback_engine_enabled": self.check_fallback_engine.isChecked(),
             "default_sort_column": self.combo_sort_col.currentText(),
             "default_sort_order": "asc" if self.combo_sort_order.currentText() == "오름차순" else "desc",
             "history_batch_size": self.spin_history_batch.value(),
@@ -155,6 +230,14 @@ class SettingsDialog(QDialog):
             "max_log_lines": self.spin_max_log_lines.value(),
             "startup_lazy_noncritical_tabs": self.check_lazy_startup.isChecked(),
             "compact_duplicate_listings": self.check_compact_duplicates.isChecked(),
+            "playwright_detail_workers": self.spin_playwright_workers.value(),
+            "playwright_headless": self.check_playwright_headless.isChecked(),
+            "playwright_block_heavy_resources": self.check_block_heavy_resources.isChecked(),
+            "geo_default_zoom": self.spin_geo_zoom.value(),
+            "geo_grid_rings": self.spin_geo_rings.value(),
+            "geo_grid_step_px": self.spin_geo_step.value(),
+            "geo_sweep_dwell_ms": self.spin_geo_dwell.value(),
+            "geo_asset_types": asset_types,
         }
         settings.update(new)
         self.settings_changed.emit(new)

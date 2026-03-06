@@ -4,6 +4,19 @@
 
 **기능 구현 감사 리포트(2026-03-02) 전항목 반영 배치**
 
+### ✅ Anti-Bot / Geo 통합 확장 (2026-03-06)
+
+* **Playwright 기본 엔진 도입**: `CrawlerThread`를 엔진 orchestration 레이어로 정리하고, 기본 엔진을 `Playwright`로 확장. 기존 `Selenium`은 fallback 경로로 유지.
+* **엔진/모델/서비스 계층 추가**: `src/core/engines`, `src/core/models`, `src/core/services` 추가. `playwright_engine.py`, `map_geometry.py`, `response_capture.py`, `detail_fetcher.py`, `gap_analysis.py` 도입.
+* **지도 탐색 탭 추가**: `GeoCrawlerTab`에서 위도/경도/줌/링/그리드 간격/대기시간 기반 `geo sweep` 지원.
+* **자동 단지 등록**: 지도 탐색으로 발견한 `APT`, `VL` 단지를 DB에 자동 등록하고 즉시 상세 수집 흐름과 연결.
+* **모바일 상세 확장 수집**: `부동산상호`, `중개사이름`, `전화1`, `전화2`, `기전세금(원)`, `전세_기간(년)`, `전세_기간내_최고/최저(원)` 수집 추가.
+* **갭 분석 필드 반영**: `갭금액(원)`, `갭비율`, `자산유형`, `수집모드`, `좌표/줌`, `마커ID`를 UI/DB/export 전 구간에 반영.
+* **설정 확장**: `crawl_engine`, `fallback_engine_enabled`, `playwright_*`, `geo_*` 설정 추가.
+* **PyInstaller spec 확장**: Playwright hidden imports, Chromium 번들, runtime hook 추가.
+* **preflight 강화**: Playwright 패키지뿐 아니라 Chromium 브라우저 바이너리 존재 여부까지 확인.
+* **테스트 보강**: geometry, gap analysis, DB 확장 컬럼, geo tab wiring 테스트 추가.
+
 ### ✅ 핵심 반영 항목
 
 * **종료/복구 중단 안정화**: `RetryCancelledError` 도입, 재시도 대기 구간 인터럽트 가능화, `CrawlerThread.stop()`의 인터럽트 요청 연동.
@@ -23,8 +36,8 @@
 ### 🧪 검증
 
 * **회귀 테스트**: `PYTHONPATH=. pytest -q`
-* **결과**: `79 passed`
-* **PyInstaller spec 점검**: `naverland-scrapper.spec`은 이번 변경(잠금/손상 대응 포함) 기준 추가 hidden import 수정 없이 유지 가능.
+* **결과**: `87 passed`
+* **PyInstaller spec 점검**: `naverland-scrapper.spec`은 Playwright Chromium 번들 경로와 runtime hook을 포함하도록 갱신됨.
 
 ---
 

@@ -16,6 +16,7 @@ class ExcelTemplate:
     """엑셀 내보내기 템플릿 (v7.3)"""
     DEFAULT_COLUMNS = [
         ("단지명", True),
+        ("자산유형", True),
         ("거래유형", True),
         ("매매가", True),
         ("보증금", True),
@@ -25,6 +26,18 @@ class ExcelTemplate:
         ("평당가_표시", True),
         ("층/방향", True),
         ("타입/특징", True),
+        ("기전세금(원)", True),
+        ("갭금액(원)", True),
+        ("갭비율", True),
+        ("부동산상호", False),
+        ("중개사이름", False),
+        ("전화1", False),
+        ("전화2", False),
+        ("수집모드", False),
+        ("위도", False),
+        ("경도", False),
+        ("줌", False),
+        ("마커ID", False),
         ("매물ID", False),
         ("단지ID", False),
         ("수집시각", True),
@@ -35,8 +48,10 @@ class ExcelTemplate:
     @staticmethod
     def get_column_order():
         return [
-            "단지명", "거래유형", "매매가", "보증금", "월세", 
-            "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징", 
+            "단지명", "자산유형", "거래유형", "매매가", "보증금", "월세", 
+            "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징",
+            "기전세금(원)", "갭금액(원)", "갭비율", "부동산상호", "중개사이름",
+            "전화1", "전화2", "수집모드", "위도", "경도", "줌", "마커ID",
             "매물ID", "단지ID", "수집시각", "신규여부", "가격변동"
         ]
     
@@ -47,8 +62,10 @@ class ExcelTemplate:
 class DataExporter:
     # v12.0: 확장된 컬럼 (평당가, 신규, 가격변동 포함)
     COLUMNS = [
-        "단지명", "거래유형", "매매가", "보증금", "월세", 
-        "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징", 
+        "단지명", "자산유형", "거래유형", "매매가", "보증금", "월세", 
+        "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징",
+        "기전세금(원)", "갭금액(원)", "갭비율", "부동산상호", "중개사이름",
+        "전화1", "전화2", "수집모드", "위도", "경도", "줌", "마커ID",
         "매물ID", "단지ID", "수집시각", "신규여부", "가격변동"
     ]
     
@@ -74,6 +91,14 @@ class DataExporter:
     @classmethod
     def _format_price_change(cls, value):
         return PriceConverter.to_signed_string(cls._change_to_int(value), zero_text="")
+
+    @staticmethod
+    def _format_gap_ratio(value):
+        try:
+            ratio = float(value or 0)
+        except (TypeError, ValueError):
+            ratio = 0.0
+        return f"{ratio:.4f}" if ratio else ""
     
     def to_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
@@ -124,6 +149,8 @@ class DataExporter:
                         value = "🆕 신규" if item.get('is_new', False) else ""
                     elif cn == "가격변동":
                         value = self._format_price_change(item.get('price_change', 0))
+                    elif cn == "갭비율":
+                        value = self._format_gap_ratio(item.get("갭비율", 0))
                     else:
                         value = item.get(cn, "")
                     
@@ -175,6 +202,7 @@ class DataExporter:
                     row = dict(item)
                     row['신규여부'] = "신규" if item.get('is_new', False) else ""
                     row['가격변동'] = self._format_price_change(item.get('price_change', 0))
+                    row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
                     writer.writerow(row)
             return path
         except Exception as e:

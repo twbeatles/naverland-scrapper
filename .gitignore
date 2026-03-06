@@ -8,6 +8,8 @@ build/
 dist/
 *.spec
 !naverland-scrapper.spec
+htmlcov/
+.coverage*
 
 # Logs
 logs/
@@ -16,6 +18,10 @@ logs/
 # Data (Scraped data, DBs)
 data/
 *.db
+*.db-shm
+*.db-wal
+*.db.restore_tmp
+*.db.pre_restore
 *.json
 *.csv
 *.xlsx
@@ -23,10 +29,15 @@ data/
 # Backups
 backup/
 *.bak
+playwright-report/
+test-results/
+.playwright/
+ms-playwright/
 
 # IDE
 .vscode/
 .idea/
+.pytest_cache/
 
 # Environment
 .env

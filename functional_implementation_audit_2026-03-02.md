@@ -1,5 +1,7 @@
 # 기능 구현 점검 리포트 (2026-03-02)
 
+> 참고: 이 문서는 2026-03-02 시점의 감사 스냅샷입니다. 2026-03-06 Anti-Bot / Geo 확장 반영 내용은 `README.md`, `update_history.md`, `ANTI_BOT_UPGRADE_PLAN.md`를 기준으로 확인합니다.
+
 ## 범위
 - 참조 문서: `README.md`, `claude.md`, `update_history.md`
 - 점검 대상: `src/core`, `src/ui`, `src/utils`, `tests`

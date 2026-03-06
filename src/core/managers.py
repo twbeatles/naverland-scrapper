@@ -40,6 +40,16 @@ DEFAULT_SETTINGS = {
     "max_log_lines": 1500,  # 로그 최대 라인 수
     "startup_lazy_noncritical_tabs": True,  # 비핵심 탭 초기 로드 지연
     "compact_duplicate_listings": True,  # 동일 매물(가격/평수/층) 묶어서 표시
+    "crawl_engine": "playwright",
+    "fallback_engine_enabled": True,
+    "playwright_headless": False,
+    "playwright_detail_workers": 12,
+    "playwright_block_heavy_resources": True,
+    "geo_default_zoom": 15,
+    "geo_grid_rings": 1,
+    "geo_grid_step_px": 480,
+    "geo_sweep_dwell_ms": 600,
+    "geo_asset_types": ["APT", "VL"],
 }
 
 class SettingsManager:
