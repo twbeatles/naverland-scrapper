@@ -337,3 +337,18 @@ COLORS["light"] = {
 - CI:
   - push에서는 테스트 미실행 유지.
   - 테스트 실행 이벤트를 `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`로 확장.
+
+## 0-8. v15.0.4 Crawling Risk Audit + Split Refactor Notes (2026-03-07)
+- 크롤링/스크래핑 감사 리포트 추가: `crawling_scraping_risk_audit_2026-03-07.md`
+- 코드 분할 리팩토링 반영(공개 API 불변):
+  - `src/core/database_parts/*`
+  - `src/core/crawler_parts/*`
+  - `src/core/engines/playwright_parts/*`
+  - `src/ui/app_parts/*`
+  - `src/ui/widgets/crawler_tab_parts/*`
+- 운영 리스크 우선 항목:
+  - Selenium 경로의 0건 negative cache 저장 조건 강화 필요
+  - 차단 감지 누적 기반 쿨다운(circuit breaker) 필요
+  - API/DOM 변경 내성 강화를 위한 관측성(metric) 보강 필요
+- 빌드 정합:
+  - `naverland-scrapper.spec`는 현재 분할 구조에서도 추가 수정 없이 유지 가능

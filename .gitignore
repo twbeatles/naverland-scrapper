@@ -28,6 +28,7 @@ data/
 
 # Backups
 backup/
+backups/
 *.bak
 playwright-report/
 test-results/

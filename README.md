@@ -218,3 +218,13 @@ python src/main.py
 - DB 탭 삭제 UX에 확인 모달과 `관련 이력까지 삭제` 옵션(기본 off)을 추가했습니다.
 - CI는 push 시 테스트 미실행 정책을 유지하고, `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`에서 테스트를 실행합니다.
 - `naverland-scrapper.spec`은 이번 반영 범위에서 추가 수정 없이 현재 설정(Playwright hidden import/runtime hook/Chromium bundle)으로 유지합니다.
+
+## v15.0.4 Crawling Audit Notes (2026-03-07)
+
+- 크롤링/스크래핑 구현 리스크 감사 문서를 추가했습니다: `crawling_scraping_risk_audit_2026-03-07.md`.
+- 핵심 점검 결론:
+  - Selenium 경로의 0건 negative cache 저장 조건 강화 필요
+  - 차단 감지 누적 기반 쿨다운(circuit breaker) 필요
+  - Playwright 응답 매칭/상세 파싱 성공률 관측성 강화 필요
+- `.spec` 점검 결과:
+  - `naverland-scrapper.spec`는 현재 코드 구조(분할 리팩토링 포함)에서도 추가 수정 없이 유지 가능합니다.

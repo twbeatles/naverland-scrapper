@@ -1,5 +1,29 @@
 # 업데이트 히스토리
 
+## **v15.0.4 (2026-03-07)**
+
+**크롤링/스크래핑 리스크 감사 문서화 + 문서/무시규칙 정합 업데이트**
+
+### ✅ 핵심 반영
+
+* 구현 리스크 감사 문서 추가: `crawling_scraping_risk_audit_2026-03-07.md`
+* P1~P3 위험 항목 정리:
+  - Selenium 경로의 0건 negative cache 저장 조건
+  - 차단 감지 누적 기반 쿨다운(circuit breaker) 부재
+  - API 경로/DOM 구조 변경 내성 및 관측성(metric) 강화 필요
+* 코드 분할 구조를 문서에 동기화:
+  - `src/core/database_parts/*`
+  - `src/core/crawler_parts/*`
+  - `src/core/engines/playwright_parts/*`
+  - `src/ui/app_parts/*`
+  - `src/ui/widgets/crawler_tab_parts/*`
+
+### ✅ 문서/빌드/무시 규칙 점검
+
+* `.spec` 점검 결과: `naverland-scrapper.spec`는 현재 분할 구조 기준으로 추가 수정 불필요.
+* 문서 동기화: `README.md`, `claude.md`에 감사 문서 및 최신 점검 결론 반영.
+* `.gitignore` 보강: 백업 산출물 디렉토리 `backups/` 무시 규칙 추가.
+
 ## **v15.0.3 (2026-03-07)**
 
 **P0~P2 신뢰성 패치 일괄 반영 + 문서/CI 정합 보강**
@@ -18,7 +42,7 @@
 ### ✅ 문서/빌드/무시 규칙 점검
 
 * `.spec` 점검 결과: `naverland-scrapper.spec`는 현 코드 기준 추가 수정 불필요(Playwright hidden import/runtime hook/Chromium bundle 유지).
-* 문서 동기화: `README.md`, `claude.md`, `gemini.md`, `functional_implementation_deep_audit_2026-03-07.md`에 동일 정책 반영.
+* 문서 동기화: `README.md`, `claude.md`, `gemini.md`, `crawling_scraping_risk_audit_2026-03-07.md`에 동일 정책 반영.
 * `.gitignore` 점검 결과: 빌드/로그/Playwright 산출물(`build/`, `dist/`, `logs/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/`) 규칙이 이미 유효.
 
 ### ✅ 검증

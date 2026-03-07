@@ -1,0 +1,248 @@
+from __future__ import annotations
+
+
+class CrawlerStateRuntimeMixin:
+    def __init__(
+        self,
+        targets,
+        trade_types,
+        area_filter,
+        price_filter,
+        db,
+        speed="보통",
+        cache=None,
+        ui_batch_interval_ms=120,
+        ui_batch_size=30,
+        emit_legacy_item_signal=False,
+        max_retry_count=3,
+        show_new_badge=True,
+        show_price_change=True,
+        price_change_threshold=0,
+        track_disappeared=True,
+        history_batch_size=200,
+        negative_cache_ttl_minutes=5,
+        engine_name="playwright",
+        crawl_mode="complex",
+        geo_config=None,
+        fallback_engine_enabled=True,
+        playwright_headless=False,
+        playwright_detail_workers=12,
+        block_heavy_resources=True,
+        playwright_response_drain_timeout_ms=3000,
+    ):
+        super().__init__()
+        self.targets = targets
+        self.trade_types = trade_types
+        self.area_filter = area_filter
+        self.price_filter = price_filter
+        self.db = db
+        self.speed = speed
+        self.cache = cache  # v12.0: CrawlCache 인스턴스
+        self._running = True
+        self.collected_data = []
+        self.pending_items = []
+        self.stats = {
+            "total_found": 0,
+            "filtered_out": 0,
+            "cache_hits": 0,
+            "new_count": 0,
+            "price_up": 0,
+            "price_down": 0,
+            "geo_discovered_count": 0,
+            "geo_dedup_count": 0,
+            "response_drain_wait_count": 0,
+            "response_drain_timeout_count": 0,
+            "playwright_recycle_count": 0,
+            "playwright_last_recycle_reason": "",
+            "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
+        }
+        self.start_time = None
+        self.items_per_second = 0
+        try:
+            retries = max(0, int(max_retry_count))
+        except (TypeError, ValueError):
+            retries = 3
+        self.retry_handler = RetryHandler(max_retries=retries)
+        self._shutdown_mode = False
+        self.ui_batch_interval_ms = max(20, int(ui_batch_interval_ms))
+        self.ui_batch_size = max(1, int(ui_batch_size))
+        self.emit_legacy_item_signal = bool(emit_legacy_item_signal)
+        self.show_new_badge = bool(show_new_badge)
+        self.show_price_change = bool(show_price_change)
+        try:
+            self.price_change_threshold = max(0, int(price_change_threshold))
+        except (TypeError, ValueError):
+            self.price_change_threshold = 0
+        self.track_disappeared = bool(track_disappeared)
+        try:
+            self.history_batch_size = max(20, int(history_batch_size))
+        except (TypeError, ValueError):
+            self.history_batch_size = 200
+        try:
+            self.negative_cache_ttl_minutes = max(0, int(negative_cache_ttl_minutes))
+        except (TypeError, ValueError):
+            self.negative_cache_ttl_minutes = 5
+        self.engine_name = str(engine_name or "playwright").strip().lower()
+        self.crawl_mode = str(crawl_mode or "complex").strip().lower()
+        if isinstance(geo_config, GeoSweepConfig):
+            self.geo_config = geo_config
+        elif isinstance(geo_config, dict) and geo_config:
+            try:
+                self.geo_config = GeoSweepConfig(**geo_config)
+            except TypeError:
+                self.geo_config = None
+        else:
+            self.geo_config = None
+        self.fallback_engine_enabled = bool(fallback_engine_enabled)
+        self.playwright_headless = bool(playwright_headless)
+        try:
+            self.playwright_detail_workers = max(1, int(playwright_detail_workers))
+        except (TypeError, ValueError):
+            self.playwright_detail_workers = 12
+        self.block_heavy_resources = bool(block_heavy_resources)
+        try:
+            self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
+        except (TypeError, ValueError):
+            self.playwright_response_drain_timeout_ms = 3000
+        self._engine = None
+        self._last_batch_flush_at = time.monotonic()
+        self._history_state_cache = {}
+        self._alert_rules_cache = {}
+        self._pending_history_rows = []
+        self._db_write_disabled_notified = False
+        self._registered_discovered_complex_keys = set()
+        self._discovered_complex_status = {}
+        self._pair_sequence = self._build_pair_sequence()
+        self._processed_pairs = set()
+        self._current_pair = None
+        self._fallback_allowed_pairs = None
+        self._seen_item_keys = set()
+    
+    def stop(self):
+        self._running = False
+        try:
+            self.requestInterruption()
+        except Exception:
+            pass
+
+    def set_shutdown_mode(self, enabled: bool = True):
+        self._shutdown_mode = bool(enabled)
+        if self._shutdown_mode:
+            self.retry_handler.max_retries = 0
+
+    def _should_stop(self) -> bool:
+        return (not self._running) or bool(self.isInterruptionRequested())
+
+    def _sleep_interruptible(self, seconds: float, chunk_seconds: float = 0.2) -> bool:
+        remaining = max(0.0, float(seconds or 0.0))
+        chunk = min(0.2, max(0.05, float(chunk_seconds or 0.2)))
+        while remaining > 0:
+            if self._should_stop():
+                return False
+            step = chunk if remaining > chunk else remaining
+            time.sleep(step)
+            remaining -= step
+        return True
+
+    def _create_engine(self):
+        if self.engine_name == "selenium":
+            return SeleniumCrawlerEngine(self)
+        return PlaywrightCrawlerEngine(self)
+
+    def _estimate_remaining_seconds(self, current: int, total: int) -> int:
+        elapsed = time.time() - self.start_time if self.start_time else 0.0
+        avg_time = elapsed / current if current > 0 else 5
+        return int(avg_time * max(0, total - current))
+
+    def _get_speed_delay(self) -> float:
+        speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
+        return random.uniform(speed_cfg["min"], speed_cfg["max"])
+
+    def _pair_key(self, name, cid, trade_type):
+        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+
+    def _build_pair_sequence(self):
+        pairs = []
+        for name, cid in self.targets:
+            for trade_type in self.trade_types:
+                pairs.append(self._pair_key(name, cid, trade_type))
+        return pairs
+
+    def _remaining_pairs(self):
+        return [pair for pair in self._pair_sequence if pair not in self._processed_pairs]
+
+    def _mark_pair_processed(self, name, cid, trade_type):
+        self._processed_pairs.add(self._pair_key(name, cid, trade_type))
+
+    def _item_dedupe_key(self, item):
+        if not isinstance(item, dict):
+            return None
+        article_id = str(item.get("매물ID", "") or item.get("article_id", "")).strip()
+        if not article_id:
+            return None
+        complex_id = str(item.get("단지ID", "") or item.get("complex_id", "")).strip()
+        trade_type = str(item.get("거래유형", "") or item.get("trade_type", "")).strip()
+        if not complex_id or not trade_type:
+            return None
+        return (complex_id, article_id, trade_type)
+
+    def log(self, msg, level=20): self.log_signal.emit(msg, level)
+
+    def _push_item(self, item):
+        dedupe_key = self._item_dedupe_key(item)
+        if dedupe_key is not None:
+            if dedupe_key in self._seen_item_keys:
+                return
+            self._seen_item_keys.add(dedupe_key)
+        self.collected_data.append(item)
+        self.pending_items.append(item)
+        self.stats["total_found"] += 1
+        if self.emit_legacy_item_signal:
+            self.item_signal.emit(item)
+        self._flush_pending_items_if_needed()
+
+    def _flush_pending_items_if_needed(self, force=False):
+        if not self.pending_items:
+            return
+        elapsed_ms = (time.monotonic() - self._last_batch_flush_at) * 1000
+        if force or len(self.pending_items) >= self.ui_batch_size or elapsed_ms >= self.ui_batch_interval_ms:
+            batch = list(self.pending_items)
+            self.pending_items.clear()
+            self.items_signal.emit(batch)
+            self.emit_stats()
+            self._last_batch_flush_at = time.monotonic()
+
+    def _build_stats_payload(self) -> dict:
+        return {
+            "total_found": self.stats.get("total_found", 0),
+            "filtered_out": self.stats.get("filtered_out", 0),
+            "cache_hits": self.stats.get("cache_hits", 0),
+            "new_count": self.stats.get("new_count", 0),
+            "price_up": self.stats.get("price_up", 0),
+            "price_down": self.stats.get("price_down", 0),
+            "geo_discovered_count": self.stats.get("geo_discovered_count", 0),
+            "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
+            "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
+            "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
+            "playwright_recycle_count": self.stats.get("playwright_recycle_count", 0),
+            "playwright_last_recycle_reason": self.stats.get("playwright_last_recycle_reason", ""),
+            "by_trade_type": dict(self.stats.get("by_trade_type", {})),
+        }
+
+    def emit_stats(self):
+        self.stats_signal.emit(self._build_stats_payload())
+
+    @staticmethod
+    def _row_get(row, key, default=None):
+        if row is None:
+            return default
+        try:
+            if isinstance(row, dict):
+                return row.get(key, default)
+            return row[key]
+        except Exception:
+            return default
+
+    def _cache_key(self, complex_id, trade_type):
+        return (str(complex_id or ""), str(trade_type or ""))
+
