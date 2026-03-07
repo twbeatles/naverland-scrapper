@@ -14,7 +14,13 @@ project_dir = Path.cwd().resolve()
 # One-file build is now the default for distribution.
 # You can still force onedir by setting NAVERLAND_ONEFILE=0.
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "1") == "1"
+# Slim build is the default. Bundle Chromium only when explicitly requested.
+bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "0") == "1"
+windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
+
 app_name = "naverland_onefile" if build_onefile else "naverland"
+if not bundle_chromium:
+    app_name = f"{app_name}_slim"
 
 # Keep hidden-imports minimal but reliable for modules that use dynamic imports.
 hiddenimports: list[str] = [
@@ -28,16 +34,17 @@ hiddenimports += collect_submodules("playwright")
 
 datas: list[tuple[str, str]] = []
 runtime_hooks = [str(project_dir / "src" / "utils" / "runtime_playwright.py")]
-try:
-    from playwright.sync_api import sync_playwright
+if bundle_chromium:
+    try:
+        from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        browser_path = Path(p.chromium.executable_path)
-    browser_root = browser_path.parent.parent if browser_path.exists() else None
-    if browser_root and browser_root.exists():
-        datas.append((str(browser_root), "ms-playwright"))
-except Exception:
-    pass
+        with sync_playwright() as p:
+            browser_path = Path(p.chromium.executable_path)
+        browser_root = browser_path.parent.parent if browser_path.exists() else None
+        if browser_root and browser_root.exists():
+            datas.append((str(browser_root), "ms-playwright"))
+    except Exception:
+        pass
 
 # Exclude obviously-unused modules to reduce bundle size.
 excludes: list[str] = [
@@ -79,6 +86,19 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+if windows_only_selenium_manager:
+    def _keep_windows_selenium_manager(entry: tuple[str, str, str]) -> bool:
+        dest, _src, _kind = entry
+        norm = dest.replace("\\", "/")
+        if norm.startswith("selenium/webdriver/common/macos/"):
+            return False
+        if norm.startswith("selenium/webdriver/common/linux/"):
+            return False
+        return True
+
+    a.datas = [entry for entry in a.datas if _keep_windows_selenium_manager(entry)]
+    a.binaries = [entry for entry in a.binaries if _keep_windows_selenium_manager(entry)]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
