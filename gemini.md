@@ -293,3 +293,14 @@ COLORS["light"] = {
 - UI/CI:
   - DB 탭 삭제 확인 모달 + `관련 이력까지 삭제` 옵션(기본 off) 추가.
   - CI 테스트 트리거를 `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`로 확장(push 테스트 미실행 유지).
+
+## 0-5. v15.0.5 Docs/Packaging Recheck (2026-03-07)
+- `.spec` 재검토:
+  - `naverland-scrapper.spec`는 현재 코드 분할 구조(`src/core/*_parts`, `src/ui/*_parts`)에서도 추가 수정 없이 유지 가능.
+- 정책 정합 고정:
+  - Selenium fallback은 `complex` 모드 전용.
+  - `geo_sweep`는 Playwright 전용.
+- 감사 문서 정합:
+  - `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 감사 문서로 유지하고, 문서 내 추적 섹션으로 상태를 명시.
+- 무시 규칙 정합:
+  - `.gitignore`의 `build/`, `dist/`, `logs/`, `backup/`, `backups/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/` 규칙은 현 작업 기준으로 충분.

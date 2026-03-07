@@ -130,3 +130,12 @@
 
 ## 5) 참고
 - 본 문서는 2026-03-07 시점 코드 기준 정적 점검 결과이며, 실운영 트래픽·차단 패턴에 따라 우선순위는 조정될 수 있음.
+
+## 6) 문서/패키징 정합성 추적 (2026-03-07, rev2)
+- 상태:
+  - 본 감사 문서는 저장소 기준 문서로 복구/유지됨.
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`와 정책 문구를 동기화함.
+- `.spec` 재검증:
+  - `naverland-scrapper.spec`는 현재 분할 리팩토링 구조(`database_parts`, `crawler_parts`, `playwright_parts`, `app_parts`, `crawler_tab_parts`) 기준에서도 추가 수정 불필요.
+- `.gitignore` 재검증:
+  - 빌드/로그/백업/Playwright 산출물 관련 무시 규칙이 이미 충분하며, 추가 패턴은 현 시점에서 필요하지 않음.

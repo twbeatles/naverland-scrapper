@@ -352,3 +352,14 @@ COLORS["light"] = {
   - API/DOM 변경 내성 강화를 위한 관측성(metric) 보강 필요
 - 빌드 정합:
   - `naverland-scrapper.spec`는 현재 분할 구조에서도 추가 수정 없이 유지 가능
+
+## 0-9. v15.0.5 Docs/Packaging Recheck (2026-03-07)
+- `.spec` 재점검:
+  - `naverland-scrapper.spec`는 `database_parts/crawler_parts/playwright_parts/app_parts/crawler_tab_parts` 분할 구조 기준에서도 추가 hidden import/runtime hook 수정이 필요하지 않음.
+- 문서 정합성 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 동일 정책 반영.
+  - 정책 기준: Selenium fallback은 `complex` 모드 전용, `geo_sweep`는 Playwright 전용.
+- 감사 문서 상태:
+  - `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 문서로 유지하고, 문서 내 정합성 추적 섹션 추가.
+- 무시 규칙 검토:
+  - `.gitignore`의 빌드/로그/백업/Playwright 산출물 규칙(`build/`, `dist/`, `logs/`, `backup/`, `backups/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/`)은 현 상태로 충분.

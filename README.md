@@ -228,3 +228,10 @@ python src/main.py
   - Playwright 응답 매칭/상세 파싱 성공률 관측성 강화 필요
 - `.spec` 점검 결과:
   - `naverland-scrapper.spec`는 현재 코드 구조(분할 리팩토링 포함)에서도 추가 수정 없이 유지 가능합니다.
+
+## v15.0.5 Docs/Packaging Recheck (2026-03-07)
+
+- `.spec` 재점검 결과: `src/core/*_parts`, `src/ui/*_parts` 분할 리팩토링 이후에도 `naverland-scrapper.spec`는 현재 hidden import/runtime hook 구성으로 충분하며 추가 수정이 필요하지 않습니다.
+- 감사 문서 상태 정합화: `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 문서로 유지하고, 문서 내부에 정합성 추적 메모를 추가했습니다.
+- 문서 정합성 동기화: `README.md`, `claude.md`, `gemini.md`, `update_history.md`의 fallback 정책(`complex`만 Selenium fallback), `geo_sweep` 정책(Playwright 전용), 분할 리팩토링 경로 표기를 동일 기준으로 맞췄습니다.
+- `.gitignore` 재확인 결과: 현재 빌드/로그/백업/Playwright 산출물 무시 규칙으로 충분하며 추가 패턴은 필요하지 않습니다.
