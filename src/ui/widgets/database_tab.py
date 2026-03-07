@@ -1,18 +1,34 @@
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, 
-    QTableWidgetItem, QHeaderView, QInputDialog, QMessageBox, QDialog
+﻿from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QInputDialog,
+    QMessageBox,
+    QCheckBox,
 )
-from PyQt6.QtCore import Qt
 import webbrowser
+
 from src.utils.helpers import get_complex_url
 from src.ui.widgets.components import SearchBar, EmptyStateWidget
 from src.utils.logger import get_logger
 
+
 logger = get_logger("DatabaseTab")
+
 
 class DatabaseTab(QWidget):
     """단지 DB 관리 탭"""
-    
+
+    COL_ID = 0
+    COL_ASSET = 1
+    COL_NAME = 2
+    COL_COMPLEX_ID = 3
+    COL_MEMO = 4
+
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
@@ -21,70 +37,88 @@ class DatabaseTab(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        
-        # 버튼 영역
-        bl = QHBoxLayout()
-        btn_rf = QPushButton("🔄 새로고침")
-        btn_rf.clicked.connect(self.load_data)
-        btn_dl = QPushButton("🗑️ 선택 삭제")
-        btn_dl.clicked.connect(self._delete_complex)
-        btn_dlm = QPushButton("🗑️ 다중 삭제")
-        btn_dlm.clicked.connect(self._delete_complexes_multi)
-        btn_memo = QPushButton("✏️ 메모 수정")
+
+        button_layout = QHBoxLayout()
+        btn_refresh = QPushButton("새로고침")
+        btn_refresh.clicked.connect(self.load_data)
+        btn_delete = QPushButton("선택 삭제")
+        btn_delete.clicked.connect(self._delete_complex)
+        btn_delete_multi = QPushButton("다중 삭제")
+        btn_delete_multi.clicked.connect(self._delete_complexes_multi)
+        btn_memo = QPushButton("메모 수정")
         btn_memo.clicked.connect(self._edit_memo)
 
-        self.btn_delete = btn_dl
-        self.btn_delete_multi = btn_dlm
+        self.btn_delete = btn_delete
+        self.btn_delete_multi = btn_delete_multi
         self.btn_memo = btn_memo
-        
-        bl.addWidget(btn_rf)
-        bl.addWidget(btn_dl)
-        bl.addWidget(btn_dlm)
-        bl.addWidget(btn_memo)
-        bl.addStretch()
-        layout.addLayout(bl)
-        
-        # 검색
+
+        button_layout.addWidget(btn_refresh)
+        button_layout.addWidget(btn_delete)
+        button_layout.addWidget(btn_delete_multi)
+        button_layout.addWidget(btn_memo)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
         self.search_bar = SearchBar("단지 검색...")
         self.search_bar.search_changed.connect(self._filter_table)
         layout.addWidget(self.search_bar)
-        
-        # 테이블
+
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["ID", "단지명", "단지ID", "메모"])
-        self.table.setColumnHidden(0, True)
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["ID", "자산", "단지명", "단지ID", "메모"])
+        self.table.setColumnHidden(self.COL_ID, True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.doubleClicked.connect(self._open_complex_url)
         layout.addWidget(self.table)
 
-        # 빈 상태
         self.empty_label = EmptyStateWidget(
-            icon="🏢",
+            icon="📭",
             title="등록된 단지가 없습니다",
-            description="크롤러 탭에서 단지를 추가한 뒤 DB에 저장하세요."
+            description="크롤러 탭에서 단지를 추가하거나 DB로 저장해 주세요.",
         )
         self.empty_label.hide()
         layout.addWidget(self.empty_label)
 
         self.table.itemSelectionChanged.connect(self._update_action_state)
 
+    def _normalize_complex_row(self, row):
+        try:
+            seq = list(row)
+        except Exception:
+            seq = []
+
+        if len(seq) >= 5:
+            db_id, name, asset_type, complex_id, memo = seq[0], seq[1], seq[2], seq[3], seq[4]
+        elif len(seq) >= 4:
+            # Backward compatibility (old schema tuple)
+            db_id, name, complex_id, memo = seq[0], seq[1], seq[2], seq[3]
+            asset_type = "APT"
+        else:
+            db_id = getattr(row, "id", "")
+            name = getattr(row, "name", "")
+            asset_type = getattr(row, "asset_type", "APT")
+            complex_id = getattr(row, "complex_id", "")
+            memo = getattr(row, "memo", "")
+
+        return db_id, name, asset_type, complex_id, memo
+
     def load_data(self):
-        """DB에서 단지 목록 로드"""
         self.table.setUpdatesEnabled(False)
         self.table.setRowCount(0)
         try:
             complexes = self.db.get_all_complexes()
             self._update_empty_state(len(complexes))
             self.table.setRowCount(len(complexes))
-            for row, (db_id, name, cid, memo) in enumerate(complexes):
-                self.table.setItem(row, 0, QTableWidgetItem(str(db_id)))
-                self.table.setItem(row, 1, QTableWidgetItem(str(name)))
-                self.table.setItem(row, 2, QTableWidgetItem(str(cid)))
-                self.table.setItem(row, 3, QTableWidgetItem(str(memo) if memo else ""))
+            for row_idx, row_data in enumerate(complexes):
+                db_id, name, asset_type, complex_id, memo = self._normalize_complex_row(row_data)
+                self.table.setItem(row_idx, self.COL_ID, QTableWidgetItem(str(db_id)))
+                self.table.setItem(row_idx, self.COL_ASSET, QTableWidgetItem(str(asset_type or "")))
+                self.table.setItem(row_idx, self.COL_NAME, QTableWidgetItem(str(name or "")))
+                self.table.setItem(row_idx, self.COL_COMPLEX_ID, QTableWidgetItem(str(complex_id or "")))
+                self.table.setItem(row_idx, self.COL_MEMO, QTableWidgetItem(str(memo) if memo else ""))
         except Exception as e:
-            logger.error(f"로드 실패: {e}")
+            logger.error(f"load failed: {e}")
             self._update_empty_state(0)
         finally:
             self.table.setUpdatesEnabled(True)
@@ -102,38 +136,107 @@ class DatabaseTab(QWidget):
         self.btn_delete_multi.setEnabled(has_rows)
         self.btn_memo.setEnabled(has_selection)
 
+    def _confirm_delete(self, *, title: str, text: str) -> tuple[bool, bool]:
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setInformativeText("기본값은 단지/그룹매핑만 삭제이며, 이력 삭제는 선택 옵션입니다.")
+        purge_check = QCheckBox("관련 이력까지 삭제")
+        purge_check.setChecked(False)
+        msg.setCheckBox(purge_check)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        accepted = msg.exec() == QMessageBox.StandardButton.Yes
+        return accepted, bool(purge_check.isChecked())
+
     def _delete_complex(self):
         row = self.table.currentRow()
-        if row >= 0:
-            db_id = int(self.table.item(row, 0).text())
-            if self.db.delete_complex(db_id):
-                self.load_data()
+        if row < 0:
+            return
+
+        db_id_item = self.table.item(row, self.COL_ID)
+        name_item = self.table.item(row, self.COL_NAME)
+        asset_item = self.table.item(row, self.COL_ASSET)
+        cid_item = self.table.item(row, self.COL_COMPLEX_ID)
+
+        if not db_id_item:
+            return
+        db_id = int(db_id_item.text())
+        name = name_item.text() if name_item else ""
+        asset_type = asset_item.text() if asset_item else ""
+        complex_id = cid_item.text() if cid_item else ""
+
+        ok, purge_related = self._confirm_delete(
+            title="삭제 확인",
+            text=f"{name} ({asset_type}:{complex_id}) 단지를 삭제하시겠습니까?",
+        )
+        if not ok:
+            return
+
+        if self.db.delete_complex(db_id, purge_related=purge_related):
+            self.load_data()
 
     def _delete_complexes_multi(self):
-        rows = set(item.row() for item in self.table.selectedItems())
-        if rows:
-            ids = [int(self.table.item(r, 0).text()) for r in rows]
-            cnt = self.db.delete_complexes_bulk(ids)
-            QMessageBox.information(self, "삭제 완료", f"{cnt}개 단지 삭제됨")
-            self.load_data()
+        rows = sorted(set(item.row() for item in self.table.selectedItems()))
+        if not rows:
+            QMessageBox.information(self, "안내", "삭제할 행을 먼저 선택해 주세요.")
+            return
+
+        ids = []
+        for row in rows:
+            id_item = self.table.item(row, self.COL_ID)
+            if not id_item:
+                continue
+            try:
+                ids.append(int(id_item.text()))
+            except ValueError:
+                continue
+
+        if not ids:
+            return
+
+        ok, purge_related = self._confirm_delete(
+            title="다중 삭제 확인",
+            text=f"선택된 {len(ids)}개 단지를 삭제하시겠습니까?",
+        )
+        if not ok:
+            return
+
+        cnt = self.db.delete_complexes_bulk(ids, purge_related=purge_related)
+        QMessageBox.information(self, "삭제 완료", f"{cnt}개 단지 삭제")
+        self.load_data()
 
     def _edit_memo(self):
         row = self.table.currentRow()
-        if row >= 0:
-            db_id = int(self.table.item(row, 0).text())
-            old = self.table.item(row, 3).text()
-            new, ok = QInputDialog.getText(self, "메모 수정", "메모:", text=old)
-            if ok:
-                self.db.update_complex_memo(db_id, new)
-                self.load_data()
+        if row < 0:
+            return
+
+        db_id_item = self.table.item(row, self.COL_ID)
+        old_item = self.table.item(row, self.COL_MEMO)
+        if not db_id_item:
+            return
+
+        db_id = int(db_id_item.text())
+        old = old_item.text() if old_item else ""
+        new, ok = QInputDialog.getText(self, "메모 수정", "메모:", text=old)
+        if ok:
+            self.db.update_complex_memo(db_id, new)
+            self.load_data()
 
     def _filter_table(self, text):
-        for r in range(self.table.rowCount()):
-            match = any(text.lower() in (self.table.item(r, c).text().lower() if self.table.item(r, c) else "") for c in range(4))
-            self.table.setRowHidden(r, not match)
+        token = str(text or "").lower()
+        for row in range(self.table.rowCount()):
+            match = any(
+                token in (self.table.item(row, col).text().lower() if self.table.item(row, col) else "")
+                for col in range(self.table.columnCount())
+            )
+            self.table.setRowHidden(row, not match)
 
     def _open_complex_url(self):
         row = self.table.currentRow()
-        if row >= 0:
-            cid = self.table.item(row, 2).text()
-            webbrowser.open(get_complex_url(cid))
+        if row < 0:
+            return
+        cid_item = self.table.item(row, self.COL_COMPLEX_ID)
+        if cid_item:
+            webbrowser.open(get_complex_url(cid_item.text()))

@@ -546,7 +546,7 @@ class RealEstateApp(QMainWindow):
                 
                 # CrawlerTab 초기화 및 데이터 로드
                 self.crawler_tab.clear_tasks()
-                for _, name, cid, _ in self.db.get_complexes_in_group(gid):
+                for _, name, _asset_type, cid, _ in self.db.get_complexes_in_group(gid):
                     self.crawler_tab.add_task(name, cid)
                 
                 # 크롤링 시작

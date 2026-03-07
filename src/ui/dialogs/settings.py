@@ -269,7 +269,7 @@ class AlertSettingDialog(QDialog):
         add_l = QGridLayout()
         add_l.addWidget(QLabel("?⑥?:"), 0, 0)
         self.combo_complex = QComboBox()
-        for _, name, cid, _ in (self.db.get_all_complexes() if self.db else []):
+        for _, name, _asset_type, cid, _ in (self.db.get_all_complexes() if self.db else []):
             self.combo_complex.addItem(f"{name} ({cid})", (cid, name))
         add_l.addWidget(self.combo_complex, 0, 1, 1, 3)
         

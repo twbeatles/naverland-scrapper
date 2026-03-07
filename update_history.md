@@ -1,5 +1,31 @@
 # 업데이트 히스토리
 
+## **v15.0.3 (2026-03-07)**
+
+**P0~P2 신뢰성 패치 일괄 반영 + 문서/CI 정합 보강**
+
+### ✅ 핵심 반영
+
+* fallback 정합: Playwright 실패 시 Selenium fallback이 미처리 pair만 이어서 수행되도록 pair 추적 로직 도입.
+* 수집 중복 방지: `_push_item`에 `(complex_id, article_id, trade_type)` item dedupe 추가.
+* negative cache 안전화: `response_seen=True` + `drain_timed_out=False` 조건에서만 `confirmed_empty` 저장.
+* Playwright 메모리 워치독: 500MB 초과 시 browser/context/page pool recycle + 통계 emit.
+* DB 스키마 마이그레이션: `complexes`를 `(asset_type, complex_id)` 복합 unique로 전환, legacy row는 `APT` 승격.
+* DB 삭제 UX 강화: 삭제 확인 모달 및 `관련 이력까지 삭제` 옵션(기본 off), `purge_related` API 연동.
+* Playwright retry 보강: 네트워크 민감 구간 lightweight retry 추가.
+* CI 보완: push 테스트 미실행 유지 + `workflow_dispatch` + nightly `schedule(UTC 18:00)` 추가.
+
+### ✅ 문서/빌드/무시 규칙 점검
+
+* `.spec` 점검 결과: `naverland-scrapper.spec`는 현 코드 기준 추가 수정 불필요(Playwright hidden import/runtime hook/Chromium bundle 유지).
+* 문서 동기화: `README.md`, `claude.md`, `gemini.md`, `functional_implementation_deep_audit_2026-03-07.md`에 동일 정책 반영.
+* `.gitignore` 점검 결과: 빌드/로그/Playwright 산출물(`build/`, `dist/`, `logs/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/`) 규칙이 이미 유효.
+
+### ✅ 검증
+
+* `python -m unittest discover -s tests -p "test_*.py"`: pass
+* `python -m src.utils.preflight`: pass
+
 ## **v15.0.2 (2026-03-06)**
 
 **Audit+Followup 통합 수정 마감 + 문서/빌드 정합 반영**
@@ -23,9 +49,8 @@
 
 * PYTHONPATH=. pytest -q tests/test_playwright_engine_stabilization.py tests/test_managers_cache.py tests/test_database_module.py tests/test_geo_tab_wiring.py tests/test_crawler_regressions.py
 * 결과: 44 passed
-# 🔄 업데이트 히스토리
 
-## **v15.0 (최신 버전)**
+## **v15.0 (기준 릴리즈)**
 
 **기능 구현 감사 리포트(2026-03-02) 전항목 반영 배치**
 

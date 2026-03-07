@@ -1,4 +1,4 @@
-import re
+﻿import re
 import sqlite3
 import os
 from pathlib import Path
@@ -22,7 +22,7 @@ class ConnectionPool:
         self._leased_ids = set()
         self._all_connections = {}
         self._closing = False
-        logger.info(f"ConnectionPool 초기화: {self.db_path}")
+        logger.info(f"ConnectionPool 珥덇린?? {self.db_path}")
         self._initialize_pool()
     
     def _initialize_pool(self):
@@ -33,10 +33,10 @@ class ConnectionPool:
                     self._all_connections[id(conn)] = conn
                 self._pool.put(conn)
             except Exception as e:
-                logger.error(f"연결 생성 실패 ({i+1}/{self.pool_size}): {e}")
+                logger.error(f"?곌껐 ?앹꽦 ?ㅽ뙣 ({i+1}/{self.pool_size}): {e}")
     
     def _create_connection(self):
-        # 부모 디렉토리 확인/생성
+        # 遺紐??붾젆?좊━ ?뺤씤/?앹꽦
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
@@ -50,14 +50,14 @@ class ConnectionPool:
     def get_connection(self):
         with self._lease_lock:
             if self._closing:
-                raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
+                raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
         try:
             conn = self._pool.get(timeout=10)
         except Exception as e:
             with self._lease_lock:
                 if self._closing:
-                    raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
-            logger.warning(f"풀에서 연결 가져오기 실패, 새 연결 생성: {e}")
+                    raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
+            logger.warning(f"??먯꽌 ?곌껐 媛?몄삤湲??ㅽ뙣, ???곌껐 ?앹꽦: {e}")
             conn = self._create_connection()
             with self._lease_lock:
                 if self._closing:
@@ -65,7 +65,7 @@ class ConnectionPool:
                         conn.close()
                     except Exception:
                         pass
-                    raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
+                    raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
                 self._all_connections[id(conn)] = conn
         with self._lease_lock:
             if self._closing:
@@ -74,7 +74,7 @@ class ConnectionPool:
                 except Exception:
                     pass
                 self._all_connections.pop(id(conn), None)
-                raise RuntimeError("ConnectionPool is closing; 신규 연결 대여 불가")
+                raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
             self._leased_ids.add(id(conn))
         return conn
     
@@ -90,7 +90,7 @@ class ConnectionPool:
             try:
                 conn.close()
             except Exception as e:
-                logger.debug(f"연결 종료 중 오류: {e}")
+                logger.debug(f"?곌껐 醫낅즺 以??ㅻ쪟: {e}")
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
             return
@@ -100,13 +100,13 @@ class ConnectionPool:
             try:
                 conn.close()
             except Exception as e:
-                logger.debug(f"연결 종료 중 오류: {e}")
+                logger.debug(f"?곌껐 醫낅즺 以??ㅻ쪟: {e}")
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
     
     def close_all(self, timeout_ms=8000):
-        """모든 연결 안전하게 종료"""
-        logger.info("ConnectionPool 종료 시작...")
+        """紐⑤뱺 ?곌껐 ?덉쟾?섍쾶 醫낅즺"""
+        logger.info("ConnectionPool 醫낅즺 ?쒖옉...")
         closed_count = 0
         error_count = 0
 
@@ -122,7 +122,7 @@ class ConnectionPool:
                 remain = deadline - time.monotonic()
                 if remain <= 0:
                     logger.warning(
-                        f"ConnectionPool 종료 대기 타임아웃: 미반환 연결 {len(self._leased_ids)}개"
+                        f"ConnectionPool close timeout; still leased: {len(self._leased_ids)}"
                     )
                     break
                 self._lease_cond.wait(timeout=remain)
@@ -148,10 +148,10 @@ class ConnectionPool:
                 conn.close()
                 closed_count += 1
             except Exception as e:
-                logger.warning(f"연결 종료 실패: {e}")
+                logger.warning(f"?곌껐 醫낅즺 ?ㅽ뙣: {e}")
                 error_count += 1
 
-        logger.info(f"ConnectionPool 종료 완료: {closed_count}개 종료, {error_count}개 오류")
+        logger.info(f"ConnectionPool 醫낅즺 ?꾨즺: {closed_count}媛?醫낅즺, {error_count}媛??ㅻ쪟")
 
 class ComplexDatabase:
     _NUMERIC_RE = re.compile(r"-?\d+(?:\.\d+)?")
@@ -169,7 +169,7 @@ class ComplexDatabase:
 
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else DB_PATH
-        logger.info(f"ComplexDatabase 초기화: {self.db_path}")
+        logger.info(f"ComplexDatabase 珥덇린?? {self.db_path}")
         self._pool = ConnectionPool(self.db_path)
         self._write_lock = Lock()
         self._write_disabled_reason = ""
@@ -212,16 +212,16 @@ class ComplexDatabase:
         self._write_disabled_reason = str(reason or "unknown")
         if exc is not None:
             logger.critical(
-                f"DB write 비활성화: {self._write_disabled_reason} ({exc})"
+                f"DB write 鍮꾪솢?깊솕: {self._write_disabled_reason} ({exc})"
             )
         else:
-            logger.critical(f"DB write 비활성화: {self._write_disabled_reason}")
+            logger.critical(f"DB write 鍮꾪솢?깊솕: {self._write_disabled_reason}")
 
     def _log_corruption_detected(self, context: str, exc):
         if self._is_corruption_sqlite_error(exc):
             self._disable_writes("database_corruption", exc)
             logger.critical(
-                f"DB 손상 감지({context}). 앱 내 DB 복원 기능으로 정상 백업본을 복원하세요."
+                f"DB ?먯긽 媛먯?({context}). ????DB 蹂듭썝 湲곕뒫?쇰줈 ?뺤긽 諛깆뾽蹂몄쓣 蹂듭썝?섏꽭??"
             )
 
     @staticmethod
@@ -247,15 +247,236 @@ class ComplexDatabase:
             return
         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}")
 
+    @staticmethod
+    def _normalize_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token or "APT"
+
+    @classmethod
+    def _complexes_table_requires_migration(cls, cursor) -> bool:
+        columns = cls._column_names(cursor, "complexes")
+        if not columns:
+            return False
+        if "asset_type" not in columns:
+            return True
+
+        # Legacy schema had UNIQUE(complex_id). Keep migrating until composite unique is present.
+        try:
+            indexes = cursor.execute("PRAGMA index_list(complexes)").fetchall()
+        except Exception:
+            return True
+
+        has_composite_unique = False
+        has_legacy_unique = False
+        for idx in indexes:
+            try:
+                is_unique = int(idx[2]) == 1
+                idx_name = str(idx[1])
+            except Exception:
+                try:
+                    is_unique = int(idx["unique"]) == 1
+                    idx_name = str(idx["name"])
+                except Exception:
+                    continue
+            if not is_unique:
+                continue
+            try:
+                info_rows = cursor.execute(f"PRAGMA index_info({idx_name})").fetchall()
+            except Exception:
+                continue
+            idx_cols = []
+            for info in info_rows:
+                try:
+                    idx_cols.append(str(info[2]))
+                except Exception:
+                    try:
+                        idx_cols.append(str(info["name"]))
+                    except Exception:
+                        pass
+            normalized = tuple(idx_cols)
+            if normalized == ("asset_type", "complex_id"):
+                has_composite_unique = True
+            if normalized == ("complex_id",):
+                has_legacy_unique = True
+        return (not has_composite_unique) or has_legacy_unique
+
+    @classmethod
+    def _migrate_complexes_asset_type_schema(cls, cursor):
+        if not cls._complexes_table_requires_migration(cursor):
+            return
+
+        logger.info("complexes schema migration start: add asset_type + composite unique")
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        try:
+            table_names = {
+                str(row[0])
+                for row in cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            group_rows: list[tuple[int, int]] = []
+            if "group_complexes" in table_names:
+                try:
+                    group_rows = [
+                        (int(row[0]), int(row[1]))
+                        for row in cursor.execute(
+                            "SELECT group_id, complex_id FROM group_complexes"
+                        ).fetchall()
+                    ]
+                except Exception:
+                    group_rows = []
+                cursor.execute("DROP TABLE IF EXISTS group_complexes")
+
+            cursor.execute("ALTER TABLE complexes RENAME TO complexes_legacy")
+            cursor.execute(
+                """
+                CREATE TABLE complexes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    asset_type TEXT NOT NULL DEFAULT 'APT',
+                    complex_id TEXT NOT NULL,
+                    memo TEXT DEFAULT "",
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(asset_type, complex_id)
+                )
+                """
+            )
+            legacy_columns = cls._column_names(cursor, "complexes_legacy")
+            memo_expr = "COALESCE(memo, '')" if "memo" in legacy_columns else "''"
+            created_at_expr = (
+                "COALESCE(created_at, CURRENT_TIMESTAMP)"
+                if "created_at" in legacy_columns
+                else "CURRENT_TIMESTAMP"
+            )
+            if "asset_type" in legacy_columns:
+                cursor.execute(
+                    f"""
+                    INSERT INTO complexes (id, name, asset_type, complex_id, memo, created_at)
+                    SELECT
+                        id,
+                        name,
+                        CASE
+                            WHEN TRIM(COALESCE(asset_type, '')) = '' THEN 'APT'
+                            ELSE UPPER(TRIM(asset_type))
+                        END AS asset_type,
+                        complex_id,
+                        {memo_expr},
+                        {created_at_expr}
+                    FROM complexes_legacy
+                    """
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    INSERT INTO complexes (id, name, asset_type, complex_id, memo, created_at)
+                    SELECT
+                        id,
+                        name,
+                        'APT',
+                        complex_id,
+                        {memo_expr},
+                        {created_at_expr}
+                    FROM complexes_legacy
+                    """
+                )
+            cursor.execute("DROP TABLE complexes_legacy")
+
+            if "groups" in table_names:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS group_complexes (
+                        group_id INTEGER,
+                        complex_id INTEGER,
+                        PRIMARY KEY (group_id, complex_id),
+                        FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                        FOREIGN KEY (complex_id) REFERENCES complexes(id) ON DELETE CASCADE
+                    )
+                    """
+                )
+                if group_rows:
+                    cursor.executemany(
+                        "INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)",
+                        group_rows,
+                    )
+        finally:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        logger.info("complexes schema migration complete")
+
+    @staticmethod
+    def _sqlite_table_names(cursor) -> set[str]:
+        try:
+            return {
+                str(row[0])
+                for row in cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        except Exception:
+            return set()
+
+    @classmethod
+    def _ensure_group_complexes_fk_integrity(cls, cursor):
+        table_names = cls._sqlite_table_names(cursor)
+        if "group_complexes" not in table_names:
+            return
+        try:
+            fk_rows = cursor.execute("PRAGMA foreign_key_list(group_complexes)").fetchall()
+        except Exception:
+            fk_rows = []
+        fk_targets = set()
+        for row in fk_rows:
+            try:
+                fk_targets.add(str(row[2]))
+            except Exception:
+                try:
+                    fk_targets.add(str(row["table"]))
+                except Exception:
+                    continue
+        # Expected references: groups + complexes
+        if fk_targets == {"groups", "complexes"}:
+            return
+
+        try:
+            legacy_rows = [
+                (int(row[0]), int(row[1]))
+                for row in cursor.execute(
+                    "SELECT group_id, complex_id FROM group_complexes"
+                ).fetchall()
+            ]
+        except Exception:
+            legacy_rows = []
+
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        try:
+            cursor.execute("DROP TABLE IF EXISTS group_complexes")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS group_complexes (
+                    group_id INTEGER,
+                    complex_id INTEGER,
+                    PRIMARY KEY (group_id, complex_id),
+                    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                    FOREIGN KEY (complex_id) REFERENCES complexes(id) ON DELETE CASCADE
+                )
+                """
+            )
+            if legacy_rows:
+                cursor.executemany(
+                    "INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)",
+                    legacy_rows,
+                )
+        finally:
+            cursor.execute("PRAGMA foreign_keys=ON")
+
     def _fetchall_safe(self, conn, query: str, params=(), context: str = ""):
         try:
             return conn.cursor().execute(query, params).fetchall()
         except Exception as e:
             self._log_corruption_detected(context or "read", e)
             if context:
-                logger.error(f"{context} 실패: {e}")
+                logger.error(f"{context} ?ㅽ뙣: {e}")
             else:
-                logger.error(f"DB 조회 실패: {e}")
+                logger.error(f"DB 議고쉶 ?ㅽ뙣: {e}")
             return []
 
     @classmethod
@@ -269,7 +490,7 @@ class ComplexDatabase:
         text = str(value).strip().replace(",", "")
         if not text:
             return default
-        text = text.replace("평", "")
+        text = text.replace("평", "").replace("㎡", "")
         match = cls._NUMERIC_RE.search(text)
         if not match:
             return default
@@ -312,11 +533,16 @@ class ComplexDatabase:
         text = str(value).strip().replace(",", "")
         if not text:
             return default
-        if "억" in text or "만" in text:
+        if any(token in text for token in ("억", "만")):
             parsed = PriceConverter.to_int(text)
             if parsed > 0 or text in {"0", "0만", "0억"}:
                 return parsed
         return cls._coerce_int(text, default=default)
+
+    @staticmethod
+    def _is_all_filter_value(value) -> bool:
+        token = str(value or "").strip().lower()
+        return token in {"", "all", "전체", "?꾩껜"}
 
     @staticmethod
     def _row_value(row, key, index, default=None):
@@ -350,10 +576,13 @@ class ComplexDatabase:
             c.execute('''CREATE TABLE IF NOT EXISTS complexes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                complex_id TEXT NOT NULL UNIQUE,
+                asset_type TEXT NOT NULL DEFAULT 'APT',
+                complex_id TEXT NOT NULL,
                 memo TEXT DEFAULT "",
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(asset_type, complex_id)
             )''')
+            self._migrate_complexes_asset_type_schema(c)
             c.execute('''CREATE TABLE IF NOT EXISTS groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -367,6 +596,7 @@ class ComplexDatabase:
                 FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
                 FOREIGN KEY (complex_id) REFERENCES complexes(id) ON DELETE CASCADE
             )''')
+            self._ensure_group_complexes_fk_integrity(c)
             c.execute('''CREATE TABLE IF NOT EXISTS crawl_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complex_name TEXT,
@@ -404,7 +634,7 @@ class ComplexDatabase:
                 enabled INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
-            # v7.3 신규: 매물 히스토리 (신규 매물/가격 변동 추적)
+            # v7.3 ?좉퇋: 留ㅻЪ ?덉뒪?좊━ (?좉퇋 留ㅻЪ/媛寃?蹂??異붿쟻)
             c.execute('''CREATE TABLE IF NOT EXISTS article_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -439,7 +669,7 @@ class ComplexDatabase:
                 gap_ratio REAL DEFAULT 0,
                 UNIQUE(article_id, complex_id)
             )''')
-            # v12.0 신규: 매물 즐겨찾기 및 메모
+            # v12.0 ?좉퇋: 留ㅻЪ 利먭꺼李얘린 諛?硫붾え
             c.execute('''CREATE TABLE IF NOT EXISTS article_favorites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -459,7 +689,7 @@ class ComplexDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(alert_id, article_id, complex_id, notified_on)
             )''')
-            # 인덱스 추가
+            # ?몃뜳??異붽?
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
@@ -500,13 +730,13 @@ class ComplexDatabase:
                     try:
                         self._ensure_column(c, table_name, column_name, ddl)
                     except Exception as me:
-                        logger.warning(f"{table_name}.{column_name} 마이그레이션 오류 (무시): {me}")
+                        logger.warning(f"{table_name}.{column_name} 留덉씠洹몃젅?댁뀡 ?ㅻ쪟 (臾댁떆): {me}")
             
-            # status 컬럼 인덱스 생성 (마이그레이션 후)
+            # status 而щ읆 ?몃뜳???앹꽦 (留덉씠洹몃젅?댁뀡 ??
             try:
                 c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
             except Exception:
-                logger.debug("status 인덱스 생성 실패 (무시)")
+                logger.debug("status ?몃뜳???앹꽦 ?ㅽ뙣 (臾댁떆)")
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_status_last_seen ON article_history(status, last_seen)')
             
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
@@ -514,7 +744,7 @@ class ComplexDatabase:
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_log_lookup ON article_alert_log(alert_id, article_id, complex_id, notified_on)')
 
-            # v14.x: legacy price_snapshots 숫자 문자열 정규화 (예: "34평", "1억 2,000만")
+            # v14.x: legacy price_snapshots ?レ옄 臾몄옄???뺢퇋??(?? "34??, "1??2,000留?)
             try:
                 legacy_rows = c.execute(
                     """
@@ -551,11 +781,11 @@ class ComplexDatabase:
                         """,
                         updates,
                     )
-                    logger.info(f"마이그레이션 완료: price_snapshots 정규화 {len(updates)}건")
+                    logger.info(f"migration complete: normalized price_snapshots rows={len(updates)}")
             except Exception as me:
-                logger.warning(f"price_snapshots 정규화 실패 (무시): {me}")
+                logger.warning(f"price_snapshots ?뺢퇋???ㅽ뙣 (臾댁떆): {me}")
 
-            # 기존 버전에서 남아있을 수 있는 group_complexes 고아 데이터 정리
+            # 湲곗〈 踰꾩쟾?먯꽌 ?⑥븘?덉쓣 ???덈뒗 group_complexes 怨좎븘 ?곗씠???뺣━
             c.execute(
                 """
                 DELETE FROM group_complexes
@@ -565,67 +795,81 @@ class ComplexDatabase:
             )
 
             conn.commit()
-            logger.info("테이블 초기화 완료")
+            logger.info("?뚯씠釉?珥덇린???꾨즺")
         except Exception as e:
-            logger.exception(f"테이블 초기화 실패: {e}")
+            logger.exception(f"?뚯씠釉?珥덇린???ㅽ뙣: {e}")
         finally:
             self._pool.return_connection(conn)
     
-    def add_complex(self, name, complex_id, memo="", return_status: bool = False):
-        """단지 추가 - 디버깅 강화"""
+    def add_complex(
+        self,
+        name,
+        complex_id,
+        memo="",
+        *,
+        asset_type: str = "APT",
+        return_status: bool = False,
+    ):
+        """?⑥? 異붽? - ?붾쾭源?媛뺥솕"""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            # 이미 존재하는지 확인
-            c.execute("SELECT id FROM complexes WHERE complex_id = ?", (complex_id,))
+            # ?대? 議댁옱?섎뒗吏 ?뺤씤
+            normalized_asset_type = self._normalize_asset_type(asset_type)
+            c.execute(
+                "SELECT id FROM complexes WHERE asset_type = ? AND complex_id = ?",
+                (normalized_asset_type, complex_id),
+            )
             existing = c.fetchone()
             if existing:
-                logger.debug(f"단지 이미 존재: {name} ({complex_id})")
-                return "existing" if return_status else True  # 이미 존재하면 성공으로 처리
+                logger.debug(f"?⑥? ?대? 議댁옱: {name} ({complex_id})")
+                return "existing" if return_status else True  # ?대? 議댁옱?섎㈃ ?깃났?쇰줈 泥섎━
             
-            c.execute("INSERT INTO complexes (name, complex_id, memo) VALUES (?, ?, ?)", 
-                     (name, complex_id, memo))
+            c.execute(
+                "INSERT INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
+                (name, normalized_asset_type, complex_id, memo),
+            )
             conn.commit()
-            logger.info(f"단지 추가 성공: {name} ({complex_id})")
+            logger.info(f"?⑥? 異붽? ?깃났: {name} ({complex_id})")
             return "inserted" if return_status else True
         except sqlite3.IntegrityError as e:
-            logger.debug(f"단지 중복 (정상): {name} ({complex_id})")
+            logger.debug(f"?⑥? 以묐났 (?뺤긽): {name} ({complex_id})")
             return "existing" if return_status else True
         except Exception as e:
-            logger.exception(f"단지 추가 실패: {name} ({complex_id}) - {e}")
+            logger.exception(f"?⑥? 異붽? ?ㅽ뙣: {name} ({complex_id}) - {e}")
             return "error" if return_status else False
         finally:
             self._pool.return_connection(conn)
     
     def get_all_complexes(self):
-        """모든 단지 조회 - 디버깅 강화"""
+        """紐⑤뱺 ?⑥? 議고쉶 - ?붾쾭源?媛뺥솕"""
         conn = self._pool.get_connection()
         try:
             result = self._fetchall_safe(
                 conn,
-                "SELECT id, name, complex_id, memo FROM complexes ORDER BY name",
-                context="단지 조회(complexes)",
+                "SELECT id, name, asset_type, complex_id, memo FROM complexes ORDER BY name, asset_type",
+                context="?⑥? 議고쉶(complexes)",
             )
-            logger.debug(f"단지 조회: {len(result)}개")
+            logger.debug(f"complex list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("단지 조회", e)
-            logger.exception(f"단지 조회 실패: {e}")
+            self._log_corruption_detected("?⑥? 議고쉶", e)
+            logger.exception(f"?⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def get_complexes_for_stats(self):
-        """통계 탭용 단지 목록 조회 (DB + 크롤링 기록 + 스냅샷)"""
+        """?듦퀎 ??슜 ?⑥? 紐⑸줉 議고쉶 (DB + ?щ·留?湲곕줉 + ?ㅻ깄??"""
         conn = self._pool.get_connection()
         try:
             complex_map = {}
 
-            # 1) 저장된 단지 목록
+            # 1) ??λ맂 ?⑥? 紐⑸줉
             rows = self._fetchall_safe(
                 conn,
                 "SELECT name, complex_id FROM complexes ORDER BY name",
-                context="통계 단지 조회(complexes)",
+                context="?듦퀎 ?⑥? 議고쉶(complexes)",
             )
             for row in rows:
                 cid = row["complex_id"]
@@ -633,7 +877,7 @@ class ComplexDatabase:
                 if cid and name:
                     complex_map[cid] = name
 
-            # 2) 크롤링 기록(최신 이름 우선)
+            # 2) ?щ·留?湲곕줉(理쒖떊 ?대쫫 ?곗꽑)
             history_rows = self._fetchall_safe(
                 conn,
                 '''
@@ -646,65 +890,128 @@ class ComplexDatabase:
                 ) latest
                 ON ch.complex_id = latest.complex_id AND ch.crawled_at = latest.last_crawl
                 ''',
-                context="통계 단지 조회(crawl_history)",
+                context="?듦퀎 ?⑥? 議고쉶(crawl_history)",
             )
             for row in history_rows:
                 cid = row["complex_id"]
-                name = row["complex_name"] or f"단지_{cid}"
+                name = row["complex_name"] or f"?⑥?_{cid}"
                 if cid and cid not in complex_map:
                     complex_map[cid] = name
 
-            # 3) 스냅샷에만 존재하는 단지 보강
+            # 3) ?ㅻ깄?룹뿉留?議댁옱?섎뒗 ?⑥? 蹂닿컯
             snapshot_rows = self._fetchall_safe(
                 conn,
                 "SELECT DISTINCT complex_id FROM price_snapshots",
-                context="통계 단지 조회(price_snapshots)",
+                context="?듦퀎 ?⑥? 議고쉶(price_snapshots)",
             )
             for row in snapshot_rows:
                 cid = row["complex_id"]
                 if cid and cid not in complex_map:
-                    complex_map[cid] = f"단지_{cid}"
+                    complex_map[cid] = f"?⑥?_{cid}"
 
             result = [(name, cid) for cid, name in complex_map.items()]
             result.sort(key=lambda x: x[0])
-            logger.debug(f"통계 단지 조회: {len(result)}개")
+            logger.debug(f"complex stats source rows: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("통계 단지 조회", e)
-            logger.exception(f"통계 단지 조회 실패: {e}")
+            self._log_corruption_detected("?듦퀎 ?⑥? 議고쉶", e)
+            logger.exception(f"?듦퀎 ?⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
     
-    def delete_complex(self, db_id):
+    @classmethod
+    def _asset_scoped_predicate(cls, refs: list[tuple[str, str]], *, include_legacy_empty_for_apt: bool = True):
+        clauses: list[str] = []
+        params: list[str] = []
+        for asset_type, complex_id in refs:
+            asset_token = cls._normalize_asset_type(asset_type)
+            cid = str(complex_id or "").strip()
+            if not cid:
+                continue
+            if include_legacy_empty_for_apt and asset_token == "APT":
+                clauses.append("(complex_id = ? AND (asset_type = ? OR COALESCE(asset_type, '') = ''))")
+                params.extend([cid, "APT"])
+            else:
+                clauses.append("(complex_id = ? AND asset_type = ?)")
+                params.extend([cid, asset_token])
+        return clauses, params
+
+    def _purge_related_for_complex_refs(self, cursor, refs: list[tuple[str, str]]):
+        if not refs:
+            return
+
+        clauses, params = self._asset_scoped_predicate(refs)
+        if clauses:
+            where_asset = " OR ".join(clauses)
+            cursor.execute(f"DELETE FROM article_history WHERE {where_asset}", params)
+            cursor.execute(f"DELETE FROM crawl_history WHERE {where_asset}", params)
+
+        unique_complex_ids = sorted({str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()})
+        if not unique_complex_ids:
+            return
+        placeholders = ",".join("?" * len(unique_complex_ids))
+        cursor.execute(f"DELETE FROM price_snapshots WHERE complex_id IN ({placeholders})", unique_complex_ids)
+        cursor.execute(f"DELETE FROM alert_settings WHERE complex_id IN ({placeholders})", unique_complex_ids)
+        cursor.execute(f"DELETE FROM article_favorites WHERE complex_id IN ({placeholders})", unique_complex_ids)
+        cursor.execute(f"DELETE FROM article_alert_log WHERE complex_id IN ({placeholders})", unique_complex_ids)
+
+    def _fetch_complex_refs_by_db_ids(self, cursor, db_ids: list[int]) -> list[tuple[str, str]]:
+        if not db_ids:
+            return []
+        placeholders = ",".join("?" * len(db_ids))
+        rows = cursor.execute(
+            f"SELECT asset_type, complex_id FROM complexes WHERE id IN ({placeholders})",
+            db_ids,
+        ).fetchall()
+        refs = []
+        for row in rows:
+            try:
+                refs.append((str(row["asset_type"] or "APT"), str(row["complex_id"] or "")))
+            except Exception:
+                try:
+                    refs.append((str(row[0] or "APT"), str(row[1] or "")))
+                except Exception:
+                    continue
+        return refs
+
+    def delete_complex(self, db_id, *, purge_related: bool = False):
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
+            refs = self._fetch_complex_refs_by_db_ids(c, [int(db_id)]) if purge_related else []
             c.execute("DELETE FROM group_complexes WHERE complex_id = ?", (db_id,))
             c.execute("DELETE FROM complexes WHERE id = ?", (db_id,))
+            if purge_related:
+                self._purge_related_for_complex_refs(c, refs)
             conn.commit()
-            logger.info(f"단지 삭제: ID={db_id}")
+            logger.info(f"?⑥? ??젣: ID={db_id}")
             return True
         except Exception as e:
-            logger.error(f"단지 삭제 실패: {e}")
+            logger.error(f"?⑥? ??젣 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
     
-    def delete_complexes_bulk(self, db_ids):
+    def delete_complexes_bulk(self, db_ids, *, purge_related: bool = False):
         conn = self._pool.get_connection()
         try:
             if not db_ids:
                 return 0
+            normalized_ids = [int(x) for x in db_ids]
             c = conn.cursor()
-            placeholders = ','.join('?' * len(db_ids))
-            c.execute(f"DELETE FROM group_complexes WHERE complex_id IN ({placeholders})", db_ids)
-            c.execute(f"DELETE FROM complexes WHERE id IN ({placeholders})", db_ids)
+            refs = self._fetch_complex_refs_by_db_ids(c, normalized_ids) if purge_related else []
+            placeholders = ",".join("?" * len(normalized_ids))
+            c.execute(f"DELETE FROM group_complexes WHERE complex_id IN ({placeholders})", normalized_ids)
+            c.execute(f"DELETE FROM complexes WHERE id IN ({placeholders})", normalized_ids)
+            deleted_count = int(c.rowcount or 0)
+            if purge_related:
+                self._purge_related_for_complex_refs(c, refs)
             conn.commit()
-            logger.info(f"단지 일괄 삭제: {c.rowcount}개")
-            return c.rowcount
+            logger.info(f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}")
+            return deleted_count
         except Exception as e:
-            logger.error(f"단지 일괄 삭제 실패: {e}")
+            logger.error(f"?⑥? ?쇨큵 ??젣 ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -716,7 +1023,7 @@ class ComplexDatabase:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"메모 업데이트 실패: {e}")
+            logger.error(f"硫붾え ?낅뜲?댄듃 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -726,10 +1033,10 @@ class ComplexDatabase:
         try:
             conn.cursor().execute("INSERT INTO groups (name, description) VALUES (?, ?)", (name, desc))
             conn.commit()
-            logger.info(f"그룹 생성: {name}")
+            logger.info(f"洹몃９ ?앹꽦: {name}")
             return True
         except Exception as e:
-            logger.error(f"그룹 생성 실패: {e}")
+            logger.error(f"洹몃９ ?앹꽦 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -740,13 +1047,13 @@ class ComplexDatabase:
             result = self._fetchall_safe(
                 conn,
                 "SELECT id, name, description FROM groups ORDER BY name",
-                context="그룹 조회(groups)",
+                context="洹몃９ 議고쉶(groups)",
             )
-            logger.debug(f"그룹 조회: {len(result)}개")
+            logger.debug(f"group list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("그룹 조회", e)
-            logger.error(f"그룹 조회 실패: {e}")
+            self._log_corruption_detected("洹몃９ 議고쉶", e)
+            logger.error(f"洹몃９ 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -758,10 +1065,10 @@ class ComplexDatabase:
             c.execute("DELETE FROM group_complexes WHERE group_id = ?", (group_id,))
             c.execute("DELETE FROM groups WHERE id = ?", (group_id,))
             conn.commit()
-            logger.info(f"그룹 삭제: ID={group_id}")
+            logger.info(f"洹몃９ ??젣: ID={group_id}")
             return True
         except Exception as e:
-            logger.error(f"그룹 삭제 실패: {e}")
+            logger.error(f"洹몃９ ??젣 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -776,12 +1083,12 @@ class ComplexDatabase:
                     c.execute("INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)", (group_id, cid))
                     count += c.rowcount
                 except Exception as e:
-                    logger.warning(f"그룹에 단지 추가 실패: {cid} - {e}")
+                    logger.warning(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {cid} - {e}")
             conn.commit()
-            logger.info(f"그룹에 단지 추가: {count}개")
+            logger.info(f"group complexes added: {count}")
             return count
         except Exception as e:
-            logger.error(f"그룹에 단지 추가 실패: {e}")
+            logger.error(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -793,7 +1100,7 @@ class ComplexDatabase:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"그룹에서 단지 제거 실패: {e}")
+            logger.error(f"洹몃９?먯꽌 ?⑥? ?쒓굅 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -802,13 +1109,13 @@ class ComplexDatabase:
         conn = self._pool.get_connection()
         try:
             result = conn.cursor().execute(
-                'SELECT c.id, c.name, c.complex_id, c.memo FROM complexes c '
+                'SELECT c.id, c.name, c.asset_type, c.complex_id, c.memo FROM complexes c '
                 'JOIN group_complexes gc ON c.id = gc.complex_id '
                 'WHERE gc.group_id = ? ORDER BY c.name', (group_id,)
             ).fetchall()
             return result
         except Exception as e:
-            logger.error(f"그룹 내 단지 조회 실패: {e}")
+            logger.error(f"洹몃９ ???⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -870,7 +1177,7 @@ class ComplexDatabase:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"크롤링 기록 저장 실패: {e}")
+                        logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
                         return False
                     except sqlite3.DatabaseError as e:
                         try:
@@ -879,10 +1186,10 @@ class ComplexDatabase:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"크롤링 기록 저장 실패: {e}")
+                        logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
                         return False
         except Exception as e:
-            logger.error(f"크롤링 기록 저장 실패: {e}")
+            logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
             return False
         finally:
             try:
@@ -899,12 +1206,12 @@ class ComplexDatabase:
                 'SELECT complex_name, complex_id, trade_types, item_count, crawled_at '
                 'FROM crawl_history ORDER BY crawled_at DESC LIMIT ?',
                 params=(limit,),
-                context="크롤링 기록 조회(crawl_history)",
+                context="?щ·留?湲곕줉 議고쉶(crawl_history)",
             )
             return result
         except Exception as e:
-            self._log_corruption_detected("크롤링 기록 조회", e)
-            logger.error(f"크롤링 기록 조회 실패: {e}")
+            self._log_corruption_detected("?щ·留?湲곕줉 議고쉶", e)
+            logger.error(f"?щ·留?湲곕줉 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -919,7 +1226,7 @@ class ComplexDatabase:
             '''
             params = [complex_id]
 
-            if trade_type and trade_type != "전체":
+            if not self._is_all_filter_value(trade_type):
                 sql += ' AND trade_type = ?'
                 params.append(trade_type)
 
@@ -929,13 +1236,13 @@ class ComplexDatabase:
                 conn,
                 sql,
                 params=params,
-                context="가격 히스토리 조회(price_snapshots)",
+                context="媛寃??덉뒪?좊━ 議고쉶(price_snapshots)",
             )
             pyeong_filter = None
-            if pyeong and pyeong != "전체":
+            if not self._is_all_filter_value(pyeong):
                 pyeong_filter = self._coerce_float(pyeong, default=None)
                 if pyeong_filter is None:
-                    logger.debug(f"평형 값 파싱 실패: {pyeong}")
+                    logger.debug(f"?됲삎 媛??뚯떛 ?ㅽ뙣: {pyeong}")
 
             result = []
             skipped = 0
@@ -959,18 +1266,18 @@ class ComplexDatabase:
                 )
 
             if skipped:
-                logger.debug(f"가격 히스토리 비정상 스냅샷 제외: {skipped}건")
-            logger.debug(f"가격 히스토리 조회: {len(result)}개 (조건: {trade_type}, {pyeong})")
+                logger.debug(f"price history skipped malformed rows: {skipped}")
+            logger.debug(f"媛寃??덉뒪?좊━ 議고쉶: {len(result)}媛?(議곌굔: {trade_type}, {pyeong})")
             return result
         except Exception as e:
-            self._log_corruption_detected("가격 히스토리 조회", e)
-            logger.error(f"가격 히스토리 조회 실패: {e}")
+            self._log_corruption_detected("媛寃??덉뒪?좊━ 議고쉶", e)
+            logger.error(f"媛寃??덉뒪?좊━ 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
     
     def add_price_snapshot(self, complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count):
-        """가격 스냅샷 저장"""
+        """Store one price snapshot row."""
         conn = self._pool.get_connection()
         try:
             conn.cursor().execute(
@@ -981,13 +1288,13 @@ class ComplexDatabase:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"가격 스냅샷 저장 실패: {e}")
+            logger.error(f"媛寃??ㅻ깄??????ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def add_price_snapshots_bulk(self, rows):
-        """가격 스냅샷 일괄 저장"""
+        """Store price snapshots in bulk."""
         if not rows:
             return 0
         conn = self._pool.get_connection()
@@ -1003,13 +1310,13 @@ class ComplexDatabase:
             conn.commit()
             return len(rows)
         except Exception as e:
-            logger.error(f"가격 스냅샷 일괄 저장 실패: {e}")
+            logger.error(f"媛寃??ㅻ깄???쇨큵 ????ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
     
     def get_price_snapshots(self, complex_id, trade_type=None):
-        """가격 스냅샷 조회 (통계용)"""
+        """Load stored price snapshot rows."""
         conn = self._pool.get_connection()
         try:
             sql = '''
@@ -1019,7 +1326,7 @@ class ComplexDatabase:
             '''
             params = [complex_id]
             
-            if trade_type and trade_type != "전체":
+            if not self._is_all_filter_value(trade_type):
                 sql += ' AND trade_type = ?'
                 params.append(trade_type)
             
@@ -1029,7 +1336,7 @@ class ComplexDatabase:
                 conn,
                 sql,
                 params=params,
-                context="가격 스냅샷 조회(price_snapshots)",
+                context="媛寃??ㅻ깄??議고쉶(price_snapshots)",
             )
             result = []
             skipped = 0
@@ -1041,12 +1348,12 @@ class ComplexDatabase:
                 result.append(normalized)
 
             if skipped:
-                logger.debug(f"가격 스냅샷 비정상 행 제외: {skipped}건")
-            logger.debug(f"가격 스냅샷 조회: {len(result)}개")
+                logger.debug(f"price snapshot skipped malformed rows: {skipped}")
+            logger.debug(f"price snapshots loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("가격 스냅샷 조회", e)
-            logger.error(f"가격 스냅샷 조회 실패: {e}")
+            self._log_corruption_detected("媛寃??ㅻ깄??議고쉶", e)
+            logger.error(f"媛寃??ㅻ깄??議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -1059,16 +1366,16 @@ class ComplexDatabase:
                 'VALUES (?, ?, ?, ?, ?, ?, ?)', (cid, name, ttype, amin, amax, pmin, pmax)
             )
             conn.commit()
-            logger.info(f"알림 설정 추가: {name}")
+            logger.info(f"?뚮┝ ?ㅼ젙 異붽?: {name}")
             return True
         except Exception as e:
-            logger.error(f"알림 설정 추가 실패: {e}")
+            logger.error(f"?뚮┝ ?ㅼ젙 異붽? ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_article_history_state_bulk(self, complex_id, trade_type=None):
-        """단지(및 거래유형) 기준 매물 이력 상태를 일괄 조회"""
+        """?⑥?(諛?嫄곕옒?좏삎) 湲곗? 留ㅻЪ ?대젰 ?곹깭瑜??쇨큵 議고쉶"""
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -1095,13 +1402,13 @@ class ComplexDatabase:
                 }
             return result
         except Exception as e:
-            logger.error(f"매물 이력 일괄 조회 실패: {e}")
+            logger.error(f"留ㅻЪ ?대젰 ?쇨큵 議고쉶 ?ㅽ뙣: {e}")
             return {}
         finally:
             self._pool.return_connection(conn)
 
     def upsert_article_history_bulk(self, rows):
-        """매물 이력을 일괄 upsert"""
+        """留ㅻЪ ?대젰???쇨큵 upsert"""
         if not rows:
             return 0
         if self.is_write_disabled():
@@ -1261,7 +1568,7 @@ class ComplexDatabase:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+                        logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
                         return 0
                     except sqlite3.DatabaseError as e:
                         try:
@@ -1270,10 +1577,10 @@ class ComplexDatabase:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+                        logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
                         return 0
         except Exception as e:
-            logger.error(f"매물 이력 일괄 업서트 실패: {e}")
+            logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
             return 0
         finally:
             try:
@@ -1283,7 +1590,7 @@ class ComplexDatabase:
             self._pool.return_connection(conn)
 
     def get_enabled_alert_rules(self, complex_id, trade_type=None):
-        """활성화된 알림 룰을 단지/거래유형 기준으로 조회"""
+        """?쒖꽦?붾맂 ?뚮┝ 猷곗쓣 ?⑥?/嫄곕옒?좏삎 湲곗??쇰줈 議고쉶"""
         conn = self._pool.get_connection()
         try:
             sql = (
@@ -1297,13 +1604,13 @@ class ComplexDatabase:
             rows = conn.cursor().execute(sql, params).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"활성 알림 룰 조회 실패: {e}")
+            logger.error(f"?쒖꽦 ?뚮┝ 猷?議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def record_alert_notification(self, alert_id: int, article_id: str, complex_id: str, notified_on=None) -> bool:
-        """동일 매물/알림의 당일 중복 알림을 방지하기 위해 알림 기록을 저장"""
+        """Record one alert notification row with same-day dedupe."""
         alert_id = int(alert_id or 0)
         article_id = str(article_id or "").strip()
         complex_id = str(complex_id or "").strip()
@@ -1335,13 +1642,13 @@ class ComplexDatabase:
             conn.commit()
             return (c.rowcount or 0) > 0
         except Exception as e:
-            logger.error(f"알림 dedup 기록 실패: {e}")
+            logger.error(f"?뚮┝ dedup 湲곕줉 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def check_article_history(self, article_id, complex_id, current_price):
-        """매물 이력 확인 (신규/변동)"""
+        """留ㅻЪ ?대젰 ?뺤씤 (?좉퇋/蹂??"""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
@@ -1352,23 +1659,23 @@ class ComplexDatabase:
             row = c.fetchone()
             
             if not row:
-                return True, 0, 0  # 신규 매물 (is_new=True, change=0, prev=0)
+                return True, 0, 0  # ?좉퇋 留ㅻЪ (is_new=True, change=0, prev=0)
             
             last_price = row['price']
             price_change = current_price - last_price
             
-            # 가격 변동이 있거나 이미 변동이 기록된 경우
+            # 媛寃?蹂?숈씠 ?덇굅???대? 蹂?숈씠 湲곕줉??寃쎌슦
             return False, price_change, last_price
             
         except Exception as e:
-            logger.error(f"매물 이력 확인 실패: {e}")
+            logger.error(f"留ㅻЪ ?대젰 ?뺤씤 ?ㅽ뙣: {e}")
             return False, 0, 0
         finally:
             self._pool.return_connection(conn)
 
     def update_article_history(self, article_id, complex_id, complex_name, trade_type,
                              price, price_text, area, floor, feature, extra=None):
-        """매물 정보 업데이트"""
+        """留ㅻЪ ?뺣낫 ?낅뜲?댄듃"""
         if self.is_write_disabled():
             return False
         conn = self._pool.get_connection()
@@ -1376,7 +1683,7 @@ class ComplexDatabase:
             with self._write_lock:
                 c = conn.cursor()
                 
-                # 기존 정보 조회
+                # 湲곗〈 ?뺣낫 議고쉶
                 c.execute(
                     "SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ?",
                     (article_id, complex_id)
@@ -1462,19 +1769,19 @@ class ComplexDatabase:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"매물 이력 업데이트 실패: {e}")
+            logger.error(f"留ㅻЪ ?대젰 ?낅뜲?댄듃 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_article_history_stats(self, complex_id=None):
-        """매물 히스토리 통계"""
+        """留ㅻЪ ?덉뒪?좊━ ?듦퀎"""
         conn = self._pool.get_connection()
         try:
             today = DateTimeHelper.now_string("%Y-%m-%d")
             
             if complex_id:
-                # 특정 단지 통계
+                # ?뱀젙 ?⑥? ?듦퀎
                 result = conn.cursor().execute('''
                     SELECT 
                         COUNT(*) as total,
@@ -1484,7 +1791,7 @@ class ComplexDatabase:
                     FROM article_history WHERE complex_id = ?
                 ''', (today, complex_id)).fetchone()
             else:
-                # 전체 통계
+                # ?꾩껜 ?듦퀎
                 result = conn.cursor().execute('''
                     SELECT 
                         COUNT(*) as total,
@@ -1501,13 +1808,13 @@ class ComplexDatabase:
                 'price_down': result[3] or 0
             }
         except Exception as e:
-            logger.error(f"매물 통계 조회 실패: {e}")
+            logger.error(f"留ㅻЪ ?듦퀎 議고쉶 ?ㅽ뙣: {e}")
             return {'total': 0, 'new_today': 0, 'price_up': 0, 'price_down': 0}
         finally:
             self._pool.return_connection(conn)
     
     def cleanup_old_articles(self, days=30):
-        """오래된 매물 히스토리 정리"""
+        """?ㅻ옒??留ㅻЪ ?덉뒪?좊━ ?뺣━"""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
@@ -1517,16 +1824,16 @@ class ComplexDatabase:
             ''', (days,))
             deleted = c.rowcount
             conn.commit()
-            logger.info(f"오래된 매물 {deleted}개 정리 (>{days}일)")
+            logger.info(f"?ㅻ옒??留ㅻЪ {deleted}媛??뺣━ (>{days}??")
             return deleted
         except Exception as e:
-            logger.error(f"매물 정리 실패: {e}")
+            logger.error(f"留ㅻЪ ?뺣━ ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
 
     def toggle_favorite(self, article_id, complex_id, is_active=True):
-        """매물 즐겨찾기 토글"""
+        """留ㅻЪ 利먭꺼李얘린 ?좉?"""
         conn = self._pool.get_connection()
         try:
             if is_active:
@@ -1547,13 +1854,13 @@ class ComplexDatabase:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"즐겨찾기 토글 실패: {e}")
+            logger.error(f"利먭꺼李얘린 ?좉? ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def update_article_note(self, article_id, complex_id, note):
-        """매물 메모 업데이트"""
+        """留ㅻЪ 硫붾え ?낅뜲?댄듃"""
         conn = self._pool.get_connection()
         try:
             conn.cursor().execute("""
@@ -1564,13 +1871,13 @@ class ComplexDatabase:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"메모 업데이트 실패: {e}")
+            logger.error(f"硫붾え ?낅뜲?댄듃 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_favorites(self):
-        """즐겨찾기 매물 목록"""
+        """利먭꺼李얘린 留ㅻЪ 紐⑸줉"""
         conn = self._pool.get_connection()
         try:
             query = """
@@ -1585,7 +1892,7 @@ class ComplexDatabase:
             rows = conn.cursor().execute(query).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"즐겨찾기 목록 조회 실패: {e}")
+            logger.error(f"利먭꺼李얘린 紐⑸줉 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -1600,7 +1907,7 @@ class ComplexDatabase:
                 return False
             return str(row[0]).strip().lower() == "ok"
         except Exception as e:
-            logger.error(f"SQLite integrity_check 실패 ({db_path}): {e}")
+            logger.error(f"SQLite integrity_check ?ㅽ뙣 ({db_path}): {e}")
             return False
         finally:
             if conn is not None:
@@ -1615,7 +1922,7 @@ class ComplexDatabase:
             c = conn.cursor()
             row = c.execute("PRAGMA integrity_check").fetchone()
             if not row or str(row[0]).strip().lower() != "ok":
-                raise RuntimeError(f"복원 DB integrity_check 실패: {row[0] if row else 'empty'}")
+                raise RuntimeError(f"蹂듭썝 DB integrity_check ?ㅽ뙣: {row[0] if row else 'empty'}")
 
             names = {
                 r[0]
@@ -1625,7 +1932,7 @@ class ComplexDatabase:
             }
             missing = [t for t in self._RESTORE_REQUIRED_TABLES if t not in names]
             if missing:
-                raise RuntimeError(f"복원 DB 필수 테이블 누락: {', '.join(missing)}")
+                raise RuntimeError(f"蹂듭썝 DB ?꾩닔 ?뚯씠釉??꾨씫: {', '.join(missing)}")
 
             count_row = c.execute("SELECT COUNT(*) FROM complexes").fetchone()
             return int(count_row[0] if count_row else 0)
@@ -1638,7 +1945,7 @@ class ComplexDatabase:
 
         try:
             if backup_path.resolve() == self.db_path.resolve():
-                logger.error("백업 실패: 원본 DB와 동일한 경로는 사용할 수 없습니다.")
+                logger.error("諛깆뾽 ?ㅽ뙣: ?먮낯 DB? ?숈씪??寃쎈줈???ъ슜?????놁뒿?덈떎.")
                 return False
         except Exception:
             pass
@@ -1651,7 +1958,7 @@ class ComplexDatabase:
             source_conn.backup(target_conn)
             target_conn.commit()
         except Exception as e:
-            logger.error(f"백업 실패: {e}")
+            logger.error(f"諛깆뾽 ?ㅽ뙣: {e}")
             return False
         finally:
             if target_conn is not None:
@@ -1667,15 +1974,15 @@ class ComplexDatabase:
             verify_conn = sqlite3.connect(str(backup_path), timeout=30)
             row = verify_conn.cursor().execute("SELECT COUNT(*) FROM complexes").fetchone()
             if not row:
-                logger.error("백업 검증 실패: complexes 집계 결과가 비어 있습니다.")
+                logger.error("諛깆뾽 寃利??ㅽ뙣: complexes 吏묎퀎 寃곌낵媛 鍮꾩뼱 ?덉뒿?덈떎.")
                 return False
             if not self._integrity_check_file(backup_path):
-                logger.error("백업 검증 실패: integrity_check 불통과")
+                logger.error("backup validation failed: integrity_check mismatch")
                 return False
-            logger.info(f"백업 완료: {backup_path} (complexes={int(row[0])})")
+            logger.info(f"諛깆뾽 ?꾨즺: {backup_path} (complexes={int(row[0])})")
             return True
         except Exception as e:
-            logger.error(f"백업 검증 실패: {e}")
+            logger.error(f"諛깆뾽 寃利??ㅽ뙣: {e}")
             return False
         finally:
             if verify_conn is not None:
@@ -1685,15 +1992,15 @@ class ComplexDatabase:
                     pass
     
     def restore_database(self, path):
-        """DB 복원 - 유지보수/동시성 안전 복원 로직"""
+        """DB 蹂듭썝 - ?좎?蹂댁닔/?숈떆???덉쟾 蹂듭썝 濡쒖쭅"""
         restore_path = Path(path)
-        logger.info(f"복원 시작: {restore_path}")
+        logger.info(f"蹂듭썝 ?쒖옉: {restore_path}")
 
         if not restore_path.exists():
-            logger.error(f"복원 파일이 존재하지 않음: {restore_path}")
+            logger.error(f"蹂듭썝 ?뚯씪??議댁옱?섏? ?딆쓬: {restore_path}")
             return False
         if not self._integrity_check_file(restore_path):
-            logger.error(f"복원 파일 integrity_check 실패: {restore_path}")
+            logger.error(f"蹂듭썝 ?뚯씪 integrity_check ?ㅽ뙣: {restore_path}")
             return False
 
         rollback_path = self.db_path.with_suffix(".db.pre_restore")
@@ -1704,13 +2011,13 @@ class ComplexDatabase:
             if temp_restore_path.exists():
                 temp_restore_path.unlink()
         except OSError as e:
-            logger.warning(f"임시 복원 파일 정리 실패 (무시): {e}")
+            logger.warning(f"?꾩떆 蹂듭썝 ?뚯씪 ?뺣━ ?ㅽ뙣 (臾댁떆): {e}")
 
         try:
             if self.db_path.exists():
                 rollback_ready = self.backup_database(rollback_path)
                 if not rollback_ready:
-                    logger.error("복원 중단: 롤백용 사전 백업 생성 실패")
+                    logger.error("蹂듭썝 以묐떒: 濡ㅻ갚???ъ쟾 諛깆뾽 ?앹꽦 ?ㅽ뙣")
                     return False
 
             if self._pool:
@@ -1723,17 +2030,17 @@ class ComplexDatabase:
             self._init_tables()
             complex_count = self._validate_restored_database()
             self._write_disabled_reason = ""
-            logger.info(f"복원 완료! 단지 수: {complex_count}개")
+            logger.info(f"restore complete: complexes={complex_count}")
 
             if rollback_ready and rollback_path.exists():
                 try:
                     rollback_path.unlink()
                 except OSError as e:
-                    logger.debug(f"사전 백업 파일 삭제 실패 (무시): {e}")
+                    logger.debug(f"?ъ쟾 諛깆뾽 ?뚯씪 ??젣 ?ㅽ뙣 (臾댁떆): {e}")
             return True
 
         except Exception as e:
-            logger.exception(f"복원 실패: {e}")
+            logger.exception(f"蹂듭썝 ?ㅽ뙣: {e}")
             try:
                 if temp_restore_path.exists():
                     temp_restore_path.unlink()
@@ -1742,20 +2049,20 @@ class ComplexDatabase:
 
             if rollback_ready and rollback_path.exists():
                 try:
-                    logger.info("복원 실패로 롤백을 시도합니다.")
+                    logger.info("蹂듭썝 ?ㅽ뙣濡?濡ㅻ갚???쒕룄?⑸땲??")
                     os.replace(rollback_path, self.db_path)
                     self._pool = ConnectionPool(self.db_path)
                     self._init_tables()
                     self._validate_restored_database()
-                    logger.info("롤백 복구 완료")
+                    logger.info("濡ㅻ갚 蹂듦뎄 ?꾨즺")
                 except Exception as rb_e:
-                    logger.error(f"롤백 복구 실패: {rb_e}")
+                    logger.error(f"濡ㅻ갚 蹂듦뎄 ?ㅽ뙣: {rb_e}")
             elif self.db_path.exists():
                 try:
                     self._pool = ConnectionPool(self.db_path)
                     self._init_tables()
                 except Exception as reinit_e:
-                    logger.error(f"복원 실패 후 연결풀 재초기화 실패: {reinit_e}")
+                    logger.error(f"蹂듭썝 ?ㅽ뙣 ???곌껐? ?ъ큹湲고솕 ?ㅽ뙣: {reinit_e}")
             return False
 
     def get_all_alert_settings(self):
@@ -1766,7 +2073,7 @@ class ComplexDatabase:
                 'FROM alert_settings ORDER BY created_at DESC'
             ).fetchall()
         except Exception as e:
-            logger.error(f"알림 설정 조회 실패: {e}")
+            logger.error(f"?뚮┝ ?ㅼ젙 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -1777,7 +2084,7 @@ class ComplexDatabase:
             conn.cursor().execute("UPDATE alert_settings SET enabled = ? WHERE id = ?", (1 if enabled else 0, aid))
             conn.commit()
         except Exception as e:
-            logger.error(f"알림 설정 토글 실패: {e}")
+            logger.error(f"?뚮┝ ?ㅼ젙 ?좉? ?ㅽ뙣: {e}")
         finally:
             self._pool.return_connection(conn)
     
@@ -1787,7 +2094,7 @@ class ComplexDatabase:
             conn.cursor().execute("DELETE FROM alert_settings WHERE id = ?", (aid,))
             conn.commit()
         except Exception as e:
-            logger.error(f"알림 설정 삭제 실패: {e}")
+            logger.error(f"?뚮┝ ?ㅼ젙 ??젣 ?ㅽ뙣: {e}")
         finally:
             self._pool.return_connection(conn)
     
@@ -1801,13 +2108,13 @@ class ComplexDatabase:
                 (cid, ttype, area, area, price, price)
             ).fetchall()
         except Exception as e:
-            logger.error(f"알림 체크 실패: {e}")
+            logger.error(f"?뚮┝ 泥댄겕 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def get_article_favorite_info(self, article_id, complex_id):
-        """특정 매물의 즐겨찾기/메모 정보 조회"""
+        """?뱀젙 留ㅻЪ??利먭꺼李얘린/硫붾え ?뺣낫 議고쉶"""
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
@@ -1818,13 +2125,13 @@ class ComplexDatabase:
                 return dict(row)
             return {'is_favorite': 0, 'note': ''}
         except Exception as e:
-            logger.error(f"매물 즐겨찾기 정보 조회 실패: {e}")
+            logger.error(f"留ㅻЪ 利먭꺼李얘린 ?뺣낫 議고쉶 ?ㅽ뙣: {e}")
             return {'is_favorite': 0, 'note': ''}
         finally:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles(self):
-        """오늘 확인되지 않은 매물을 소멸 처리"""
+        """?ㅻ뒛 ?뺤씤?섏? ?딆? 留ㅻЪ???뚮㈇ 泥섎━"""
         if self.is_write_disabled():
             return 0
         conn = self._pool.get_connection()
@@ -1834,7 +2141,7 @@ class ComplexDatabase:
                     conn.execute("PRAGMA busy_timeout=3000")
                 except Exception:
                     pass
-                # 마지막 확인일이 오늘이 아닌 'active' 매물을 'disappeared'로 변경
+                # 留덉?留??뺤씤?쇱씠 ?ㅻ뒛???꾨땶 'active' 留ㅻЪ??'disappeared'濡?蹂寃?
                 c = conn.cursor()
                 c.execute("""
                     UPDATE article_history 
@@ -1844,7 +2151,7 @@ class ComplexDatabase:
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"소멸 매물 처리: {updated}개")
+                    logger.info(f"marked disappeared articles: {updated}")
                 return updated
         except Exception as e:
             try:
@@ -1853,7 +2160,7 @@ class ComplexDatabase:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"소멸 매물 처리 실패: {e}")
+            logger.error(f"?뚮㈇ 留ㅻЪ 泥섎━ ?ㅽ뙣: {e}")
             return 0
         finally:
             try:
@@ -1863,7 +2170,7 @@ class ComplexDatabase:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
-        """이번 실행 대상(단지ID, 거래유형) 범위에서만 소멸 매물을 처리"""
+        """?대쾲 ?ㅽ뻾 ????⑥?ID, 嫄곕옒?좏삎) 踰붿쐞?먯꽌留??뚮㈇ 留ㅻЪ??泥섎━"""
         if self.is_write_disabled():
             return 0
         normalized_pairs: list[tuple[str, str]] = []
@@ -1925,7 +2232,7 @@ class ComplexDatabase:
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"대상 범위 소멸 매물 처리: {updated}개")
+                    logger.info(f"marked disappeared (scoped): {updated}")
                 return updated
         except Exception as e:
             try:
@@ -1934,7 +2241,7 @@ class ComplexDatabase:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"대상 범위 소멸 매물 처리 실패: {e}")
+            logger.error(f"???踰붿쐞 ?뚮㈇ 留ㅻЪ 泥섎━ ?ㅽ뙣: {e}")
             return 0
         finally:
             try:
@@ -1944,7 +2251,7 @@ class ComplexDatabase:
             self._pool.return_connection(conn)
             
     def get_disappeared_articles(self, limit=50):
-        """최근 소멸된 매물 조회"""
+        """理쒓렐 ?뚮㈇??留ㅻЪ 議고쉶"""
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -1955,13 +2262,13 @@ class ComplexDatabase:
             rows = conn.cursor().execute(sql, (limit,)).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"소멸 매물 조회 실패: {e}")
+            logger.error(f"?뚮㈇ 留ㅻЪ 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def count_disappeared_articles(self):
-        """소멸 매물 개수 조회"""
+        """?뚮㈇ 留ㅻЪ 媛쒖닔 議고쉶"""
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
@@ -1969,15 +2276,16 @@ class ComplexDatabase:
             ).fetchone()
             return row[0] if row else 0
         except Exception as e:
-            logger.error(f"소멸 매물 개수 조회 실패: {e}")
+            logger.error(f"?뚮㈇ 留ㅻЪ 媛쒖닔 議고쉶 ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
 
     def close(self):
-        """DB 연결 풀 종료"""
+        """DB ?곌껐 ? 醫낅즺"""
         try:
             if self._pool:
                 self._pool.close_all()
         except Exception as e:
-            logger.debug(f"DB 종료 실패 (무시): {e}")
+            logger.debug(f"DB 醫낅즺 ?ㅽ뙣 (臾댁떆): {e}")
+

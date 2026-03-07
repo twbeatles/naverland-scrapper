@@ -2,7 +2,7 @@
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.response_capture import TRADE_CODE_MAP
@@ -43,8 +43,13 @@ class _CacheStub:
         self.get_calls.append((str(complex_id), str(trade_type), dict(ctx)))
         return self._store.get(self._key(complex_id, trade_type, ctx))
 
-    def set(self, complex_id, trade_type, raw_items, ttl_seconds=None, **ctx):
-        self.set_calls.append((str(complex_id), str(trade_type), list(raw_items), dict(ctx)))
+    def set(self, complex_id, trade_type, raw_items, ttl_seconds=None, reason="", **ctx):
+        payload_ctx = dict(ctx)
+        if reason:
+            payload_ctx["reason"] = str(reason)
+        if ttl_seconds is not None:
+            payload_ctx["ttl_seconds"] = ttl_seconds
+        self.set_calls.append((str(complex_id), str(trade_type), list(raw_items), payload_ctx))
         self._store[self._key(complex_id, trade_type, ctx)] = list(raw_items)
 
 
@@ -220,7 +225,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     return_value={"매물ID": "A1", "留ㅻЪID": "A1"},
                 ),
             ):
-                raw_items = await engine._collect_target_raw_items(
+                collect_result = await engine._collect_target_raw_items(
                     "테스트단지",
                     "12345",
                     trade_type,
@@ -230,6 +235,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         finally:
             engine._loop.close()
 
+        raw_items = list(collect_result.get("raw_items", []) or [])
+        self.assertTrue(collect_result.get("response_seen"))
+        self.assertFalse(collect_result.get("drain_timed_out"))
         self.assertEqual(len(raw_items), 1)
         article_id = raw_items[0].get("매물ID") or raw_items[0].get("留ㅻЪID")
         self.assertEqual(article_id, "A1")
@@ -249,8 +257,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     delay_sec=0.05,
                 )
             )
-            wait_count = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_1")
+            wait_count, timed_out = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_1")
             self.assertEqual(wait_count, 1)
+            self.assertFalse(timed_out)
             self.assertIn("APT:1001", discovered)
             self.assertEqual(len(thread.registered), 1)
 
@@ -261,7 +270,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     delay_sec=0.01,
                 )
             )
-            await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_2")
+            _wait_count2, _timed_out2 = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_2")
             self.assertEqual(int(stats.get("dedup_skipped", 0)), 1)
             self.assertEqual(len(thread.registered), 1)
 
@@ -272,7 +281,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     delay_sec=0.01,
                 )
             )
-            await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_3")
+            _wait_count3, _timed_out3 = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_3")
             self.assertEqual(int(discovered["APT:1001"]["count"]), 5)
             self.assertEqual(len(thread.registered), 2)
         finally:
@@ -347,7 +356,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(asyncio.sleep(1.0))
         pending = {task}
         try:
-            wait_count = await engine._drain_pending_response_tasks(
+            wait_count, timed_out = await engine._drain_pending_response_tasks(
                 pending,
                 label="timeout_case",
                 timeout_ms=1,
@@ -356,6 +365,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             engine._loop.close()
 
         self.assertEqual(wait_count, 1)
+        self.assertTrue(timed_out)
         self.assertEqual(int(thread.stats.get("response_drain_wait_count", 0)), 1)
         self.assertEqual(int(thread.stats.get("response_drain_timeout_count", 0)), 1)
         self.assertGreaterEqual(thread.stats_emitted, 1)
@@ -418,6 +428,79 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["cache_hit"])
         self.assertEqual(result["raw_count"], 1)
+
+    async def test_negative_cache_written_only_on_confirmed_empty(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        cache = _CacheStub()
+        thread.cache = cache
+        thread.negative_cache_ttl_minutes = 7
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _collect_confirmed_empty(*_args, **_kwargs):
+            return {"raw_items": [], "response_seen": True, "drain_timed_out": False}
+
+        engine._collect_target_raw_items = _collect_confirmed_empty
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "55555", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(result["count"], 0)
+        self.assertFalse(result["cache_hit"])
+        self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
+
+    async def test_negative_cache_skipped_on_drain_timeout(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        cache = _CacheStub()
+        thread.cache = cache
+        thread.negative_cache_ttl_minutes = 7
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _collect_timeout_empty(*_args, **_kwargs):
+            return {"raw_items": [], "response_seen": True, "drain_timed_out": True}
+
+        engine._collect_target_raw_items = _collect_timeout_empty
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "66666", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(result["count"], 0)
+        self.assertFalse(result["cache_hit"])
+        self.assertFalse(cache.set_calls)
+
+    async def test_memory_watchdog_recycles_context_and_emits_stats(self):
+        thread = _ThreadStub()
+        thread.stats["playwright_recycle_count"] = 0
+        thread.stats["playwright_last_recycle_reason"] = ""
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._shutdown_async = AsyncMock(return_value=None)
+        engine._ensure_started = AsyncMock(return_value=None)
+
+        class _MemInfo:
+            rss = int(700 * 1024 * 1024)
+
+        class _Proc:
+            @staticmethod
+            def memory_info():
+                return _MemInfo()
+
+        with (
+            patch("src.core.engines.playwright_engine.PSUTIL_AVAILABLE", True),
+            patch("src.core.engines.playwright_engine.psutil.Process", return_value=_Proc()),
+        ):
+            await engine._check_memory_and_recycle_if_needed("unit_test")
+
+        try:
+            engine._shutdown_async.assert_awaited_once()
+            engine._ensure_started.assert_awaited_once()
+            self.assertEqual(int(thread.stats.get("playwright_recycle_count", 0)), 1)
+            self.assertIn("unit_test", str(thread.stats.get("playwright_last_recycle_reason", "")))
+            self.assertGreaterEqual(thread.stats_emitted, 1)
+        finally:
+            engine._loop.close()
 
 
 if __name__ == "__main__":

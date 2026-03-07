@@ -108,7 +108,7 @@ class TestGeoTabWiring(unittest.TestCase):
             def __init__(self):
                 self.calls = 0
 
-            def add_complex(self, name, cid, return_status=False):
+            def add_complex(self, name, cid, *, asset_type="APT", return_status=False):
                 self.calls += 1
                 return "inserted"
 

@@ -113,6 +113,8 @@ class CrawlerThread(QThread):
             "geo_dedup_count": 0,
             "response_drain_wait_count": 0,
             "response_drain_timeout_count": 0,
+            "playwright_recycle_count": 0,
+            "playwright_last_recycle_reason": "",
             "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
         }
         self.start_time = None
@@ -171,6 +173,11 @@ class CrawlerThread(QThread):
         self._db_write_disabled_notified = False
         self._registered_discovered_complex_keys = set()
         self._discovered_complex_status = {}
+        self._pair_sequence = self._build_pair_sequence()
+        self._processed_pairs = set()
+        self._current_pair = None
+        self._fallback_allowed_pairs = None
+        self._seen_item_keys = set()
     
     def stop(self):
         self._running = False
@@ -212,6 +219,34 @@ class CrawlerThread(QThread):
         speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
         return random.uniform(speed_cfg["min"], speed_cfg["max"])
 
+    def _pair_key(self, name, cid, trade_type):
+        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+
+    def _build_pair_sequence(self):
+        pairs = []
+        for name, cid in self.targets:
+            for trade_type in self.trade_types:
+                pairs.append(self._pair_key(name, cid, trade_type))
+        return pairs
+
+    def _remaining_pairs(self):
+        return [pair for pair in self._pair_sequence if pair not in self._processed_pairs]
+
+    def _mark_pair_processed(self, name, cid, trade_type):
+        self._processed_pairs.add(self._pair_key(name, cid, trade_type))
+
+    def _item_dedupe_key(self, item):
+        if not isinstance(item, dict):
+            return None
+        article_id = str(item.get("매물ID", "") or item.get("article_id", "")).strip()
+        if not article_id:
+            return None
+        complex_id = str(item.get("단지ID", "") or item.get("complex_id", "")).strip()
+        trade_type = str(item.get("거래유형", "") or item.get("trade_type", "")).strip()
+        if not complex_id or not trade_type:
+            return None
+        return (complex_id, article_id, trade_type)
+
     def register_discovered_complex(self, payload: dict):
         if not isinstance(payload, dict):
             return
@@ -226,7 +261,15 @@ class CrawlerThread(QThread):
             self._registered_discovered_complex_keys.add(dedupe_key)
             if self.db:
                 try:
-                    status = str(self.db.add_complex(name, cid, return_status=True) or "skipped")
+                    status = str(
+                        self.db.add_complex(
+                            name,
+                            cid,
+                            asset_type=asset_type,
+                            return_status=True,
+                        )
+                        or "skipped"
+                    )
                 except Exception as e:
                     self.log(f"⚠️ 발견 단지 자동 등록 실패: {name} ({cid}) - {e}", 30)
                     status = "error"
@@ -306,22 +349,26 @@ class CrawlerThread(QThread):
 
     def _run_fallback_selenium(self, start_name="", start_cid="", start_trade=""):
         original_engine = self.engine_name
+        original_allowed_pairs = self._fallback_allowed_pairs
         try:
-            self.engine_name = "selenium"
+            allowed_pairs = set(self._remaining_pairs())
             if start_name and start_cid and start_trade:
-                prefixed_targets = [(start_name, start_cid)] + [
-                    target for target in self.targets if not (target[0] == start_name and target[1] == start_cid)
-                ]
-                self.targets = prefixed_targets
-                prefixed_trades = [start_trade] + [tt for tt in self.trade_types if tt != start_trade]
-                self.trade_types = prefixed_trades
+                allowed_pairs.add(self._pair_key(start_name, start_cid, start_trade))
+            self._fallback_allowed_pairs = allowed_pairs
+            self.engine_name = "selenium"
             SeleniumCrawlerEngine(self).run()
         finally:
+            self._fallback_allowed_pairs = original_allowed_pairs
             self.engine_name = original_engine
 
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
 
     def _push_item(self, item):
+        dedupe_key = self._item_dedupe_key(item)
+        if dedupe_key is not None:
+            if dedupe_key in self._seen_item_keys:
+                return
+            self._seen_item_keys.add(dedupe_key)
         self.collected_data.append(item)
         self.pending_items.append(item)
         self.stats["total_found"] += 1
@@ -352,6 +399,8 @@ class CrawlerThread(QThread):
             "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
             "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
             "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
+            "playwright_recycle_count": self.stats.get("playwright_recycle_count", 0),
+            "playwright_last_recycle_reason": self.stats.get("playwright_last_recycle_reason", ""),
             "by_trade_type": dict(self.stats.get("by_trade_type", {})),
         }
 
@@ -684,7 +733,11 @@ class CrawlerThread(QThread):
             if not driver:
                 raise Exception("드라이버 초기화 실패")
             
-            total = len(self.targets) * len(self.trade_types)
+            allowed_pairs = self._fallback_allowed_pairs
+            total = len(allowed_pairs) if allowed_pairs is not None else len(self.targets) * len(self.trade_types)
+            if total <= 0:
+                self.log("ℹ️ Selenium fallback 대상 pair가 없어 종료합니다.", 10)
+                return
             current = 0
             processed_complexes = 0  # 처리한 단지 수
             processed_target_pairs = set()
@@ -721,11 +774,14 @@ class CrawlerThread(QThread):
                         raise Exception("드라이버 재시작 실패")
                 
                 complex_count = 0
+                complex_trade_types = []
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
-                    if cid and ttype:
-                        processed_target_pairs.add((str(cid), str(ttype)))
+                    pair_key = self._pair_key(name, cid, ttype)
+                    if allowed_pairs is not None and pair_key not in allowed_pairs:
+                        continue
+                    self._current_pair = pair_key
                     current += 1
                     
                     # 예상 남은 시간 계산
@@ -738,7 +794,11 @@ class CrawlerThread(QThread):
                         batch_result = self._crawl(driver, name, cid, ttype)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
+                        complex_trade_types.append(ttype)
+                        if cid and ttype:
+                            processed_target_pairs.add((str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
+                        self._mark_pair_processed(name, cid, ttype)
                         self.log(f"   ✅ {count}건 수집")
                     except RetryCancelledError:
                         self.log("   ⏹ 중단 요청으로 현재 작업을 종료합니다.", 20)
@@ -761,16 +821,18 @@ class CrawlerThread(QThread):
                         break
 
                 self._flush_history_updates(force=True)
+                if not complex_trade_types:
+                    continue
                 self.record_crawl_history(
                     name,
                     cid,
-                    ",".join(self.trade_types),
+                    ",".join(complex_trade_types),
                     int(complex_count),
                     engine="selenium",
                     mode=self.crawl_mode,
                 )
                 
-                self.complex_finished_signal.emit(name, cid, ",".join(self.trade_types), complex_count)
+                self.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), complex_count)
                 processed_complexes += 1
 
             self._finalize_disappeared_articles(processed_target_pairs)
@@ -779,6 +841,7 @@ class CrawlerThread(QThread):
         except Exception:
             raise
         finally:
+            self._current_pair = None
             if driver:
                 try:
                     driver.quit()

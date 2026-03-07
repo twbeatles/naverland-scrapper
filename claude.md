@@ -318,3 +318,22 @@ COLORS["light"] = {
 - fallback 정책 정합: Selenium fallback은 `complex` 모드 전용, `geo_sweep`는 Playwright 전용
 - 캐시 정책 정합: `complex` 모드 컨텍스트는 `mode=complex`, `asset_type=APT`, `marker_id=""`로 엔진 공통 정규화
 - 레거시 캐시 정책: legacy complex 키는 읽기 호환만 제공하고 적중 시 정규 키로 재저장
+
+## 0-7. v15.0 Reliability Patch (2026-03-07)
+- `CrawlerThread`:
+  - pair 단위 큐(`name/cid/trade_type`) 추적으로 Playwright 실패 시 Selenium fallback을 미처리 pair만 수행.
+  - `_push_item` dedupe(`complex_id`, `article_id`, `trade_type`) 추가.
+- `PlaywrightCrawlerEngine`:
+  - negative cache 저장 조건을 `response_seen=True` + `drain_timed_out=False`로 제한.
+  - cache payload `reason` 메타(`confirmed_empty`) 저장, timeout 시 negative cache skip.
+  - lightweight retry 래퍼를 `goto`/핵심 wait/모바일 상세 구간에 적용.
+  - psutil 사용 가능 시 500MB 메모리 워치독으로 browser/context/page pool recycle 수행.
+- `ComplexDatabase`:
+  - `complexes` unique 키를 `(asset_type, complex_id)`로 전환하는 자동 마이그레이션 도입.
+  - `add_complex(..., asset_type='APT')` 계약 반영.
+  - 삭제 API에 `purge_related` 플래그 반영.
+- UI:
+  - DB 탭 삭제 UX에 확인 모달 + `관련 이력까지 삭제` 옵션(기본 off) 추가.
+- CI:
+  - push에서는 테스트 미실행 유지.
+  - 테스트 실행 이벤트를 `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`로 확장.

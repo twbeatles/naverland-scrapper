@@ -171,6 +171,47 @@ class TestCrawlerRegressions(unittest.TestCase):
         self.assertTrue(calls)
         self.assertTrue(all(flag is False for flag in calls))
 
+    def test_fallback_resumes_only_remaining_pairs(self):
+        thread = CrawlerThread(
+            targets=[("단지A", "10001"), ("단지B", "20002")],
+            trade_types=["매매", "전세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        thread._mark_pair_processed("단지A", "10001", "매매")
+
+        captured = {}
+
+        def _fake_run(engine_self):
+            captured["allowed_pairs"] = set(engine_self.thread._fallback_allowed_pairs or set())
+
+        with patch("src.core.crawler.SeleniumCrawlerEngine.run", new=_fake_run):
+            thread._run_fallback_selenium(start_name="단지A", start_cid="10001", start_trade="전세")
+
+        expected = {
+            thread._pair_key("단지A", "10001", "전세"),
+            thread._pair_key("단지B", "20002", "매매"),
+            thread._pair_key("단지B", "20002", "전세"),
+        }
+        self.assertEqual(captured.get("allowed_pairs"), expected)
+        self.assertIsNone(thread._fallback_allowed_pairs)
+
+    def test_push_item_dedupes_only_when_article_id_exists(self):
+        thread = self._build_thread(price_filter={"enabled": False})
+
+        item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매"}
+        thread._push_item(dict(item))
+        thread._push_item(dict(item))
+        self.assertEqual(len(thread.collected_data), 1)
+
+        no_article_id = {"단지ID": "12345", "거래유형": "매매"}
+        thread._push_item(dict(no_article_id))
+        thread._push_item(dict(no_article_id))
+        self.assertEqual(len(thread.collected_data), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

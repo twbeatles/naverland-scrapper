@@ -229,6 +229,7 @@ class CrawlCache:
         trade_type: str,
         raw_items: List[dict],
         ttl_seconds: Optional[int] = None,
+        reason: str = "",
         *,
         mode: str = "",
         asset_type: str = "",
@@ -269,6 +270,9 @@ class CrawlCache:
                 ttl = 0
             if ttl > 0:
                 payload["ttl_seconds"] = ttl
+            reason_token = str(reason or "").strip()
+            if reason_token:
+                payload["reason"] = reason_token
             self._cache[key] = payload
             self._evict_if_needed()
             self._dirty = True

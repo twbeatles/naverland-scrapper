@@ -22,10 +22,21 @@ except ImportError:
     async_playwright = None
     PLAYWRIGHT_AVAILABLE = False
 
+try:
+    import psutil
+
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
+
 
 logger = get_logger("PlaywrightEngine")
 
 _TRADE_TO_CODE = {value: key for key, value in TRADE_CODE_MAP.items()}
+PLAYWRIGHT_MEMORY_THRESHOLD_MB = 500
+PLAYWRIGHT_RETRY_ATTEMPTS = 3
+PLAYWRIGHT_RETRY_BASE_DELAY_SEC = 0.35
 
 
 class PlaywrightCrawlerEngine(CrawlerEngine):
@@ -46,6 +57,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
     def run(self) -> None:
         if not PLAYWRIGHT_AVAILABLE:
             raise RuntimeError("playwright is not installed")
+        self._ensure_runtime_stats()
         if self.thread.crawl_mode == "geo_sweep":
             self._run(self._run_geo())
             return
@@ -67,6 +79,63 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
         except Exception:
             pass
         return self._loop.run_until_complete(coro)
+
+    def _ensure_runtime_stats(self):
+        stats = getattr(self.thread, "stats", None)
+        if not isinstance(stats, dict):
+            return
+        stats.setdefault("playwright_recycle_count", 0)
+        stats.setdefault("playwright_last_recycle_reason", "")
+
+    async def _sleep_async_interruptible(self, seconds: float, chunk: float = 0.1) -> bool:
+        remaining = max(0.0, float(seconds or 0.0))
+        unit = min(0.2, max(0.05, float(chunk or 0.1)))
+        while remaining > 0:
+            if self.thread._should_stop():
+                return False
+            step = unit if remaining > unit else remaining
+            await asyncio.sleep(step)
+            remaining -= step
+        return True
+
+    async def _async_retry(self, label: str, func, *, attempts: int = PLAYWRIGHT_RETRY_ATTEMPTS):
+        last_exc = None
+        tries = max(1, int(attempts or 1))
+        for attempt in range(1, tries + 1):
+            if self.thread._should_stop():
+                raise RuntimeError(f"{label} aborted by stop request")
+            try:
+                return await func()
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= tries:
+                    break
+                self.thread.log(f"   retry in {PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt:.1f}s ({attempt}/{tries - 1}): {label}", 10)
+                if not await self._sleep_async_interruptible(PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt):
+                    raise RuntimeError(f"{label} aborted during retry backoff") from exc
+        self.thread.log(f"   ⚠️ retry exhausted: {label} ({last_exc})", 30)
+        raise last_exc if last_exc is not None else RuntimeError(f"{label} failed")
+
+    async def _check_memory_and_recycle_if_needed(self, reason: str):
+        self._ensure_runtime_stats()
+        if not PSUTIL_AVAILABLE:
+            return
+        try:
+            memory_mb = psutil.Process().memory_info().rss / (1024 * 1024)
+        except Exception:
+            return
+        if memory_mb <= PLAYWRIGHT_MEMORY_THRESHOLD_MB:
+            return
+
+        self.thread.stats["playwright_recycle_count"] = int(self.thread.stats.get("playwright_recycle_count", 0)) + 1
+        self.thread.stats["playwright_last_recycle_reason"] = f"{reason}:{memory_mb:.0f}MB"
+        self.thread.log(
+            f"⚠️ Playwright memory {memory_mb:.0f}MB > {PLAYWRIGHT_MEMORY_THRESHOLD_MB}MB, recycling browser context...",
+            30,
+        )
+        await self._shutdown_async()
+        await self._ensure_started()
+        self.thread.emit_stats()
 
     async def _ensure_started(self):
         if self._started:
@@ -160,10 +229,11 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
         *,
         label: str,
         timeout_ms: int | None = None,
-    ) -> int:
+    ) -> tuple[int, bool]:
         wait_count = len(pending_tasks)
+        timed_out = False
         if wait_count <= 0:
-            return 0
+            return 0, False
         if timeout_ms is None:
             try:
                 timeout_ms = int(getattr(self.thread, "playwright_response_drain_timeout_ms", 3000))
@@ -179,6 +249,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                 timeout=max(0.1, float(timeout_ms) / 1000.0),
             )
         except asyncio.TimeoutError:
+            timed_out = True
             self.thread.stats["response_drain_timeout_count"] = (
                 int(self.thread.stats.get("response_drain_timeout_count", 0)) + 1
             )
@@ -189,7 +260,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                 await asyncio.gather(*list(pending_tasks), return_exceptions=True)
             self.thread.log(f"   타깃 응답 처리 대기 타임아웃 ({label}): {wait_count}", 30)
         self.thread.emit_stats()
-        return wait_count
+        return wait_count, timed_out
 
     async def _run_complex_mode(self):
         await self._ensure_started()
@@ -200,10 +271,12 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             if self.thread._should_stop():
                 break
             complex_count = 0
+            complex_trade_types = []
             for trade_type in self.thread.trade_types:
                 if self.thread._should_stop():
                     break
-                processed_pairs.add((str(cid), str(trade_type)))
+                await self._check_memory_and_recycle_if_needed("complex_loop")
+                self.thread._current_pair = self.thread._pair_key(name, cid, trade_type)
                 current += 1
                 self.thread.progress_signal.emit(
                     int(current / total * 100) if total else 0,
@@ -215,9 +288,12 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                     result = await self._crawl_target_with_cache(name, cid, trade_type)
                     count = int(result.get("count", 0))
                     complex_count += count
+                    complex_trade_types.append(trade_type)
+                    processed_pairs.add((str(cid), str(trade_type)))
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
+                    self.thread._mark_pair_processed(name, cid, trade_type)
                     self.thread.log(f"   ??{count}嫄??섏쭛")
                 except Exception as exc:
                     self.thread.log(f"   ???ㅻ쪟: {exc}", 40)
@@ -225,19 +301,23 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                         self._fallback_used = True
                         self.thread.log("   ??Selenium fallback?쇰줈 ?꾪솚?⑸땲??", 30)
                         self.thread._run_fallback_selenium(start_name=name, start_cid=cid, start_trade=trade_type)
+                        self.thread._current_pair = None
                         return
                 if not self.thread._sleep_interruptible(self.thread._get_speed_delay()):
                     break
             self.thread._flush_history_updates(force=True)
+            if not complex_trade_types:
+                continue
             self.thread.record_crawl_history(
                 name,
                 cid,
-                ",".join(self.thread.trade_types),
+                ",".join(complex_trade_types),
                 int(complex_count),
                 engine=self.engine_name,
                 mode=self.thread.crawl_mode,
             )
-            self.thread.complex_finished_signal.emit(name, cid, ",".join(self.thread.trade_types), int(complex_count))
+            self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
+        self.thread._current_pair = None
         self.thread._finalize_disappeared_articles(processed_pairs)
 
     async def _run_geo(self):
@@ -271,12 +351,14 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                 self._desktop_page.remove_listener("response", marker_handler)
             except Exception:
                 pass
-            marker_wait_count = await self._drain_pending_response_tasks(
+            marker_wait_count, marker_drain_timed_out = await self._drain_pending_response_tasks(
                 marker_pending_tasks,
                 label="geo_marker",
             )
 
         dedup_removed = int(marker_stats.get("dedup_skipped", 0))
+        if marker_drain_timed_out:
+            self.thread.log("   ⚠️ geo marker drain timeout occurred", 30)
         self.thread.log(
             f"?뱄툘 吏???먯깋 ?붿빟: 諛쒓껄 ?⑥? ??{len(discovered)}, 以묐났 ?쒓굅 ??{dedup_removed}, ?묐떟 泥섎━ ?湲???{marker_wait_count}",
             10,
@@ -297,11 +379,12 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             cid = str(row.get("complex_id", ""))
             asset_type = str(row.get("asset_type", "APT"))
             complex_count = 0
+            complex_trade_types = []
             for trade_type in self.thread.trade_types:
                 if self.thread._should_stop():
                     break
+                await self._check_memory_and_recycle_if_needed("geo_loop")
                 current += 1
-                processed_pairs.add((asset_type, cid, trade_type))
                 self.thread.progress_signal.emit(
                     int(current / total * 100) if total else 0,
                     f"{name} ({trade_type})",
@@ -321,6 +404,8 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                     )
                     count = int(result.get("count", 0))
                     complex_count += count
+                    complex_trade_types.append(trade_type)
+                    processed_pairs.add((asset_type, cid, trade_type))
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
@@ -329,7 +414,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             self.thread.record_crawl_history(
                 name,
                 cid,
-                ",".join(self.thread.trade_types),
+                ",".join(complex_trade_types),
                 int(complex_count),
                 engine=self.engine_name,
                 mode="geo_sweep",
@@ -338,7 +423,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                 source_zoom=zoom,
                 asset_type=asset_type,
             )
-            self.thread.complex_finished_signal.emit(name, cid, ",".join(self.thread.trade_types), int(complex_count))
+            self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
         self.thread.stats["geo_discovered_count"] = len(discovered)
         self.thread.stats["geo_dedup_count"] = dedup_removed
         self.thread.emit_stats()
@@ -401,9 +486,15 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             f"https://new.land.naver.com/{base_kind}?"
             + urlencode({"ms": f"{lat},{lon},{zoom}", "a": asset_type, "tradeTypes": trade_code})
         )
-        await self._desktop_page.goto(url, wait_until="domcontentloaded")
+        await self._async_retry(
+            f"geo goto {asset_type}/{trade_type}",
+            lambda: self._desktop_page.goto(url, wait_until="domcontentloaded"),
+        )
         try:
-            await self._desktop_page.wait_for_selector("canvas", timeout=15000)
+            await self._async_retry(
+                "geo canvas wait",
+                lambda: self._desktop_page.wait_for_selector("canvas", timeout=15000),
+            )
         except Exception:
             self.thread.log("geo canvas wait timeout", 10)
         await self._human_like_recenter(lat, lon, zoom)
@@ -469,7 +560,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                 matched = self.thread._process_raw_items(cached, trade_type)
                 return {"count": matched, "raw_count": len(cached), "cache_hit": True}
 
-        raw_items = await self._collect_target_raw_items(
+        collect_result = await self._collect_target_raw_items(
             name,
             cid,
             trade_type,
@@ -480,15 +571,33 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             source_zoom=source_zoom,
             marker_id=cache_marker_id if is_complex_mode else marker_id,
         )
+        raw_items = list(collect_result.get("raw_items", []) or [])
+        response_seen = bool(collect_result.get("response_seen", False))
+        drain_timed_out = bool(collect_result.get("drain_timed_out", False))
         if cache:
             if raw_items:
                 cache.set(cid, trade_type, raw_items, **cache_ctx)
             else:
                 ttl_seconds = int(max(0, self.thread.negative_cache_ttl_minutes) * 60)
-                if ttl_seconds > 0:
-                    cache.set(cid, trade_type, [], ttl_seconds=ttl_seconds, **cache_ctx)
+                if response_seen and not drain_timed_out and ttl_seconds > 0:
+                    cache.set(
+                        cid,
+                        trade_type,
+                        [],
+                        ttl_seconds=ttl_seconds,
+                        reason="confirmed_empty",
+                        **cache_ctx,
+                    )
+                elif drain_timed_out:
+                    self.thread.log("   ⚠️ drain timeout detected, negative cache skipped", 30)
         matched = self.thread._process_raw_items(raw_items, trade_type)
-        return {"count": matched, "raw_count": len(raw_items), "cache_hit": False}
+        return {
+            "count": matched,
+            "raw_count": len(raw_items),
+            "cache_hit": False,
+            "response_seen": response_seen,
+            "drain_timed_out": drain_timed_out,
+        }
 
     async def _collect_target_raw_items(
         self,
@@ -502,10 +611,12 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
         source_lon: float | None = None,
         source_zoom: int | None = None,
         marker_id: str = "",
-    ) -> list[dict]:
+    ) -> dict:
         await self._ensure_started()
         raw_items: list[dict] = []
         seen_ids: set[str] = set()
+        response_seen = False
+        drain_timed_out = False
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
             page = self._desktop_page
@@ -514,10 +625,12 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
             pending_tasks: set[asyncio.Task] = set()
 
             async def _consume(response):
+                nonlocal response_seen
                 url = response.url
                 expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
                 if expected not in url:
                     return
+                response_seen = True
                 try:
                     payload = await response.json()
                 except Exception:
@@ -539,7 +652,7 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                         zoom=source_zoom,
                         marker_id=payload_marker_id,
                     )
-                    aid = str(item.get("留ㅻЪID", "") or "")
+                    aid = str(item.get("매물ID", "") or item.get("留ㅻЪID", "") or "")
                     if not aid or aid in seen_ids:
                         continue
                     seen_ids.add(aid)
@@ -563,9 +676,15 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                         }
                     )
                 )
-                await page.goto(url, wait_until="domcontentloaded")
+                await self._async_retry(
+                    f"article goto {base_kind}/{cid}",
+                    lambda: page.goto(url, wait_until="domcontentloaded"),
+                )
                 try:
-                    await page.wait_for_load_state("networkidle", timeout=6000)
+                    await self._async_retry(
+                        f"article load {base_kind}/{cid}",
+                        lambda: page.wait_for_load_state("networkidle", timeout=6000),
+                    )
                 except Exception:
                     pass
                 for text in ["留ㅻЪ", trade_type]:
@@ -580,16 +699,26 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
                     page.remove_listener("response", _handle)
                 except Exception:
                     pass
-                await self._drain_pending_response_tasks(
+                _, timed_out = await self._drain_pending_response_tasks(
                     pending_tasks,
                     label=f"article_capture:{base_kind}/{cid}",
                 )
+                drain_timed_out = drain_timed_out or bool(timed_out)
             if raw_items:
                 break
 
         if not raw_items:
-            return []
-        return await self._enrich_items_with_mobile_details(raw_items)
+            return {
+                "raw_items": [],
+                "response_seen": response_seen,
+                "drain_timed_out": drain_timed_out,
+            }
+        enriched = await self._enrich_items_with_mobile_details(raw_items)
+        return {
+            "raw_items": enriched,
+            "response_seen": response_seen,
+            "drain_timed_out": drain_timed_out,
+        }
 
     async def _enrich_items_with_mobile_details(self, items: list[dict]) -> list[dict]:
         if not items or self._page_pool is None:
@@ -598,7 +727,11 @@ class PlaywrightCrawlerEngine(CrawlerEngine):
         async def _fetch_one(item: dict) -> dict:
             page = await self._page_pool.get()
             try:
-                detail = await fetch_mobile_article_detail(page, str(item.get("留ㅻЪID", "")))
+                article_no = str(item.get("매물ID", "") or item.get("留ㅻЪID", ""))
+                detail = await self._async_retry(
+                    f"mobile detail {article_no}",
+                    lambda: fetch_mobile_article_detail(page, article_no),
+                )
             except Exception:
                 detail = {}
             finally:

@@ -614,7 +614,7 @@ class CrawlerTab(QWidget):
         if not complexes:
             QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
             return
-        items = [(f"{name} ({cid})", (name, cid)) for _, name, cid, _ in complexes]
+        items = [(f"{name} ({asset_type}:{cid})", (name, cid)) for _, name, asset_type, cid, _ in complexes]
         dlg = MultiSelectDialog("DB에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             for name, cid in dlg.selected_items():
@@ -629,7 +629,7 @@ class CrawlerTab(QWidget):
         dlg = MultiSelectDialog("그룹에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             for gid in dlg.selected_items():
-                for _, name, cid, _ in self.db.get_complexes_in_group(gid):
+                for _, name, _asset_type, cid, _ in self.db.get_complexes_in_group(gid):
                     self.add_task(name, cid)
 
     def _show_recent_search_dialog(self):

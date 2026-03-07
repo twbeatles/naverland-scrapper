@@ -276,3 +276,20 @@ COLORS["light"] = {
 - cache 정책: `complex` 모드는 `mode=complex`, `asset_type=APT`, `marker_id=""` 컨텍스트로 엔진 공통 정규화
 - legacy cache 정책: 기존 complex 키는 읽기 호환만 유지하고 hit 시 정규 키로 재저장
 - 운영 가시성: Geo 통계(`geo_discovered_count`, `geo_dedup_count`, `response_drain_wait_count`, `response_drain_timeout_count`)는 로그/상태바 기준으로 확인
+
+## 0-4. Reliability Patch (2026-03-07)
+- `CrawlerThread`:
+  - 실행 pair 큐(`name/cid/trade_type`) 추적으로 fallback 시 미처리 pair만 Selenium으로 전달.
+  - `_push_item` dedupe(`complex_id`, `article_id`, `trade_type`) 적용.
+- `PlaywrightCrawlerEngine`:
+  - negative cache 저장을 `response_seen=True` + `drain_timed_out=False` 조건으로 제한.
+  - cache payload에 `reason=confirmed_empty` 메타 기록, timeout 케이스는 저장 skip.
+  - `goto`/핵심 wait/모바일 상세 구간에 lightweight retry 적용.
+  - psutil 가능 시 500MB 메모리 워치독으로 browser/context/page pool recycle.
+- `ComplexDatabase`:
+  - `complexes` unique 키 `(asset_type, complex_id)` 자동 마이그레이션.
+  - `add_complex(..., asset_type='APT')` 인터페이스 확장.
+  - 삭제 API `purge_related` 플래그로 이력 purge 제어.
+- UI/CI:
+  - DB 탭 삭제 확인 모달 + `관련 이력까지 삭제` 옵션(기본 off) 추가.
+  - CI 테스트 트리거를 `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`로 확장(push 테스트 미실행 유지).

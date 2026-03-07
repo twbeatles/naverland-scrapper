@@ -4,6 +4,9 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *"
 
 jobs:
   quality:
@@ -38,4 +41,5 @@ jobs:
         run: python -m src.utils.preflight
 
       - name: Run tests
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         run: python -m unittest discover -s tests -p "test_*.py"
