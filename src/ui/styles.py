@@ -21,6 +21,13 @@ COLORS = {
         "bg_progress": "rgba(40, 50, 80, 0.6)",
         "bg_tooltip": "rgba(30, 30, 50, 0.95)",
         "bg_menu": "rgba(30, 30, 50, 0.98)",
+        "dropdown_bg": "rgba(30, 30, 50, 0.98)",
+        "dropdown_text": "#f0f0f0",
+        "dropdown_border": "rgba(245, 158, 11, 0.25)",
+        "dropdown_hover": "rgba(245, 158, 11, 0.15)",
+        "dropdown_selected_bg": "rgba(245, 158, 11, 0.28)",
+        "dropdown_selected_text": "#ffffff",
+        "dropdown_disabled_text": "#7a7a88",
         "bg_statusbar": "rgba(15, 15, 26, 0.95)",
         "bg_disabled": "rgba(50, 50, 70, 0.5)",
         "bg_search": "rgba(35, 35, 55, 0.9)",
@@ -95,6 +102,13 @@ COLORS = {
         "bg_progress": "#e2e8f0",
         "bg_tooltip": "#ffffff",
         "bg_menu": "#ffffff",
+        "dropdown_bg": "#ffffff",
+        "dropdown_text": "#0f172a",
+        "dropdown_border": "#cbd5e1",
+        "dropdown_hover": "#f1f5f9",
+        "dropdown_selected_bg": "#e0f2fe",
+        "dropdown_selected_text": "#0c4a6e",
+        "dropdown_disabled_text": "#94a3b8",
         "bg_statusbar": "#f1f5f9",
         "bg_disabled": "#f1f5f9",
         "bg_search": "#ffffff",
@@ -318,6 +332,29 @@ QLineEdit#searchInput:focus {{
 }}
 QAbstractItemView {{
     outline: none;
+}}
+QComboBox QAbstractItemView {{
+    background-color: {c['dropdown_bg']};
+    color: {c['dropdown_text']};
+    border: 1px solid {c['dropdown_border']};
+    selection-background-color: {c['dropdown_selected_bg']};
+    selection-color: {c['dropdown_selected_text']};
+    outline: none;
+}}
+QComboBox QAbstractItemView::item {{
+    min-height: 24px;
+    padding: 6px 10px;
+}}
+QComboBox QAbstractItemView::item:hover {{
+    background-color: {c['dropdown_hover']};
+    color: {c['dropdown_text']};
+}}
+QComboBox QAbstractItemView::item:selected {{
+    background-color: {c['dropdown_selected_bg']};
+    color: {c['dropdown_selected_text']};
+}}
+QComboBox QAbstractItemView::item:disabled {{
+    color: {c['dropdown_disabled_text']};
 }}
 QComboBox::drop-down {{
     border: none;

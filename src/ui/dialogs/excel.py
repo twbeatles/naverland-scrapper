@@ -80,7 +80,10 @@ class ExcelTemplateDialog(QDialog):
     
     def _set_all(self, checked):
         for i in range(self.column_list.count()):
-            self.column_list.item(i).setCheckState(
+            item = self.column_list.item(i)
+            if item is None:
+                continue
+            item.setCheckState(
                 Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
             )
     
@@ -98,6 +101,8 @@ class ExcelTemplateDialog(QDialog):
         column_order = []
         for i in range(self.column_list.count()):
             item = self.column_list.item(i)
+            if item is None:
+                continue
             name = item.text()
             enabled = item.checkState() == Qt.CheckState.Checked
             template[name] = enabled

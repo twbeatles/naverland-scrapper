@@ -106,7 +106,9 @@ class URLBatchDialog(QDialog):
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(4)
         self.result_table.setHorizontalHeaderLabels(["✓", "단지 ID", "단지명", "상태"])
-        self.result_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        batch_header = self.result_table.horizontalHeader()
+        if batch_header is not None:
+            batch_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.result_table.setColumnWidth(0, 30)
         self.result_table.setColumnWidth(1, 100)
         self.result_table.setColumnWidth(3, 120)
@@ -192,7 +194,7 @@ class URLBatchDialog(QDialog):
             return
 
         chk = self.result_table.cellWidget(row, 0)
-        if chk:
+        if isinstance(chk, QCheckBox):
             chk.setChecked(is_verified)
         self.result_table.setItem(row, 1, QTableWidgetItem(str(cid)))
         self.result_table.setItem(row, 2, QTableWidgetItem(str(name)))
@@ -229,7 +231,8 @@ class URLBatchDialog(QDialog):
             except Exception:
                 pass
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
+        event = a0
         if self._parsing:
             self._cancel_lookup()
             self._cleanup_worker(wait=True)
@@ -238,14 +241,14 @@ class URLBatchDialog(QDialog):
     def _select_all(self):
         for row in range(self.result_table.rowCount()):
             chk = self.result_table.cellWidget(row, 0)
-            if chk:
+            if isinstance(chk, QCheckBox):
                 chk.setChecked(True)
 
     def _add_selected(self):
         selected = []
         for row in range(self.result_table.rowCount()):
             chk = self.result_table.cellWidget(row, 0)
-            if chk and chk.isChecked():
+            if isinstance(chk, QCheckBox) and chk.isChecked():
                 cid_item = self.result_table.item(row, 1)
                 name_item = self.result_table.item(row, 2)
                 if not cid_item or not name_item:

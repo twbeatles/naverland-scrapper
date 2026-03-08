@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.widgets.crawler_tab import *  # noqa: F403
+
 
 class CrawlerTabResultRenderMixin:
-    def _toggle_compact_duplicates(self, enabled):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _toggle_compact_duplicates(self: Any, enabled):
         self._compact_duplicates = bool(enabled)
         settings.set("compact_duplicate_listings", self._compact_duplicates)
         self._rebuild_result_views_from_collected_data()
 
-    def _update_advanced_filter_badge(self):
+    def _update_advanced_filter_badge(self: Any):
         if not hasattr(self, "lbl_advanced_filter"):
             return
         if self._advanced_filters:
@@ -17,14 +25,14 @@ class CrawlerTabResultRenderMixin:
             self.lbl_advanced_filter.setText("고급필터: OFF")
             self.lbl_advanced_filter.setStyleSheet("color: #888;")
 
-    def _apply_advanced_filter_items(self, items):
+    def _apply_advanced_filter_items(self: Any, items):
         if not items:
             return []
         if not self._advanced_filters:
             return list(items)
         return [item for item in items if self._check_advanced_filter(item)]
 
-    def set_advanced_filters(self, filters):
+    def set_advanced_filters(self: Any, filters):
         next_filters = filters or None
         if next_filters and self._is_default_advanced_filter(next_filters):
             next_filters = None
@@ -45,7 +53,7 @@ class CrawlerTabResultRenderMixin:
         except (TypeError, ValueError):
             return 0.0
 
-    def _extract_price_values(self, data):
+    def _extract_price_values(self: Any, data):
         trade_type = str(data.get("거래유형", "") or "")
         if trade_type == "매매":
             price_text = str(data.get("매매가", "") or "")
@@ -57,7 +65,7 @@ class CrawlerTabResultRenderMixin:
             price_int = PriceConverter.to_int(deposit)
         return trade_type, price_text, int(price_int or 0)
 
-    def _get_compact_key(self, data):
+    def _get_compact_key(self: Any, data):
         trade_type, price_text, _ = self._extract_price_values(data)
         return (
             str(data.get("단지명", "") or ""),
@@ -77,7 +85,7 @@ class CrawlerTabResultRenderMixin:
         except (TypeError, ValueError):
             return 0
 
-    def _merge_compact_item(self, existing, incoming):
+    def _merge_compact_item(self: Any, existing, incoming):
         existing["duplicate_count"] = int(existing.get("duplicate_count", 1) or 1) + 1
         existing["수집시각"] = incoming.get("수집시각", existing.get("수집시각", ""))
         if bool(incoming.get("is_new") or incoming.get("신규여부")):
@@ -89,7 +97,7 @@ class CrawlerTabResultRenderMixin:
             existing["price_change"] = in_change
             existing["가격변동"] = in_change
 
-    def _reset_result_state(self):
+    def _reset_result_state(self: Any):
         self.result_table.setRowCount(0)
         self._row_search_cache = []
         self._row_payload_cache = []
@@ -97,7 +105,7 @@ class CrawlerTabResultRenderMixin:
         self._compact_items_by_key = {}
         self._compact_rows_data = []
 
-    def _rebuild_result_views_from_collected_data(self):
+    def _rebuild_result_views_from_collected_data(self: Any):
         self._reset_result_state()
         display_data = self._apply_advanced_filter_items(self.collected_data)
         if not display_data:
@@ -114,7 +122,7 @@ class CrawlerTabResultRenderMixin:
                 self.card_view.set_data(display_data)
         self._filter_results(self._pending_search_text)
 
-    def _toggle_view_mode(self):
+    def _toggle_view_mode(self: Any):
         if self.btn_view_mode.isChecked():
             self.view_mode = "card"
             self.btn_view_mode.setText("📄 테이블")
@@ -132,7 +140,7 @@ class CrawlerTabResultRenderMixin:
             self.view_stack.setCurrentWidget(self.result_table)
         settings.set("view_mode", self.view_mode)
 
-    def append_log(self, msg, level=20):
+    def append_log(self: Any, msg, level=20):
         theme_colors = COLORS[self.current_theme]
         color = theme_colors["text_primary"]
         
@@ -157,7 +165,7 @@ class CrawlerTabResultRenderMixin:
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
 
-    def _on_items_batch(self, items):
+    def _on_items_batch(self: Any, items):
         if not items:
             return
         self.collected_data.extend(items)
@@ -175,7 +183,7 @@ class CrawlerTabResultRenderMixin:
         if self.view_mode == "card" and (self._advanced_filters or self._pending_search_text or self._compact_duplicates):
             self._apply_card_filters(self._pending_search_text)
 
-    def _sync_row_search_cache(self, row):
+    def _sync_row_search_cache(self: Any, row):
         values = []
         for col in range(self.result_table.columnCount()):
             item = self.result_table.item(row, col)
@@ -211,7 +219,7 @@ class CrawlerTabResultRenderMixin:
             ratio = 0.0
         return f"{ratio:.4f}" if ratio else ""
 
-    def _build_row_payload_from_data(self, data, trade_type, price_int, area_val, price_change, is_new):
+    def _build_row_payload_from_data(self: Any, data, trade_type, price_int, area_val, price_change, is_new):
         payload = dict(data or {})
         payload["거래유형"] = trade_type
         payload["price_int"] = int(price_int or 0)
@@ -222,7 +230,7 @@ class CrawlerTabResultRenderMixin:
         payload["price_change"] = int(price_change or 0)
         return payload
 
-    def _build_row_payload_from_table(self, row):
+    def _build_row_payload_from_table(self: Any, row):
         def _text(col):
             item = self.result_table.item(row, col)
             return item.text().strip() if item else ""
@@ -248,7 +256,7 @@ class CrawlerTabResultRenderMixin:
         }
         return payload
 
-    def _build_payload_lookup_by_url(self):
+    def _build_payload_lookup_by_url(self: Any):
         if self._compact_duplicates:
             source = list(self._compact_rows_data)
         else:
@@ -272,7 +280,7 @@ class CrawlerTabResultRenderMixin:
                 lookup[url] = payload
         return lookup
 
-    def _apply_current_filter_to_row(self, row):
+    def _apply_current_filter_to_row(self: Any, row):
         text_lower = (self._pending_search_text or "").lower()
         searchable = self._row_search_cache[row] if row < len(self._row_search_cache) else ""
         hidden_by_text = bool(text_lower) and text_lower not in searchable
@@ -285,7 +293,7 @@ class CrawlerTabResultRenderMixin:
             self.result_table.setRowHidden(row, hidden)
             self._row_hidden_state[row] = hidden
 
-    def _set_result_row(self, row, data):
+    def _set_result_row(self: Any, row, data):
         trade_type, price_text, price_int = self._extract_price_values(data)
         area_val = self._area_float(data.get("면적(평)", 0))
         price_change = self._normalize_price_change(data.get("price_change", data.get("가격변동", 0)))
@@ -371,7 +379,7 @@ class CrawlerTabResultRenderMixin:
             self._row_payload_cache.append({})
         self._row_payload_cache[row] = payload
 
-    def _append_rows_compact_batch(self, items):
+    def _append_rows_compact_batch(self: Any, items):
         for item in items:
             key = self._get_compact_key(item)
             if key in self._compact_items_by_key:
@@ -382,7 +390,7 @@ class CrawlerTabResultRenderMixin:
                 self._compact_items_by_key[key] = compact_item
         self._render_compact_rows()
 
-    def _sort_compact_rows(self, rows):
+    def _sort_compact_rows(self: Any, rows):
         criterion = self.combo_sort.currentText()
         key = criterion.split(" ")[0]
         is_asc = "↑" in criterion
@@ -396,7 +404,7 @@ class CrawlerTabResultRenderMixin:
         else:
             rows.sort(key=lambda d: str(d.get("단지명", "")), reverse=not is_asc)
 
-    def _render_compact_rows(self):
+    def _render_compact_rows(self: Any):
         rows = list(self._compact_items_by_key.values())
         self._sort_compact_rows(rows)
         self._compact_rows_data = rows
@@ -415,7 +423,7 @@ class CrawlerTabResultRenderMixin:
 
         self.result_table.setUpdatesEnabled(True)
 
-    def _append_rows_batch(self, items):
+    def _append_rows_batch(self: Any, items):
         start_row = self.result_table.rowCount()
         row_count = len(items)
         if row_count == 0:

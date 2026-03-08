@@ -61,7 +61,8 @@ class SearchBar(QWidget):
         layout.addWidget(self.input)
     def text(self): return self.input.text()
     def clear(self): self.input.clear()
-    def setFocus(self): self.input.setFocus()
+    def setFocus(self, reason: Qt.FocusReason = Qt.FocusReason.OtherFocusReason):
+        self.input.setFocus(reason)
 
 class SpeedSlider(QWidget):
     speed_changed = pyqtSignal(str)

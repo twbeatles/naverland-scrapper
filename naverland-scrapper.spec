@@ -17,6 +17,8 @@ build_onefile = os.environ.get("NAVERLAND_ONEFILE", "1") == "1"
 # Slim build is the default. Bundle Chromium only when explicitly requested.
 bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "0") == "1"
 windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
+# Keep windowed mode by default. Enable console explicitly when debugging startup failures.
+enable_console = os.environ.get("NAVERLAND_CONSOLE", "0") == "1"
 
 app_name = "naverland_onefile" if build_onefile else "naverland"
 if not bundle_chromium:
@@ -24,9 +26,9 @@ if not bundle_chromium:
 
 # Keep hidden-imports minimal but reliable for modules that use dynamic imports.
 hiddenimports: list[str] = [
-    # Matplotlib Qt backend is imported conditionally in `src/ui/widgets/chart.py`.
+    # Matplotlib Qt backend is imported conditionally in `src/ui/widgets/chart.py`
+    # and `src/ui/widgets/dashboard.py`.
     "matplotlib.backends.backend_qtagg",
-    "matplotlib.backends.backend_qt5agg",
 ]
 hiddenimports += collect_submodules("undetected_chromedriver")
 hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
@@ -43,8 +45,10 @@ if bundle_chromium:
         browser_root = browser_path.parent.parent if browser_path.exists() else None
         if browser_root and browser_root.exists():
             datas.append((str(browser_root), "ms-playwright"))
-    except Exception:
-        pass
+        else:
+            print("[spec] NAVERLAND_BUNDLE_CHROMIUM=1 but Chromium executable was not found.")
+    except Exception as exc:
+        print(f"[spec] Chromium bundle detection failed: {exc}")
 
 # Exclude obviously-unused modules to reduce bundle size.
 excludes: list[str] = [
@@ -114,7 +118,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    console=enable_console,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

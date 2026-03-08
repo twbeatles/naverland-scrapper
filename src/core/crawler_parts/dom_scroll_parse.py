@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.crawler import *  # noqa: F403
+
 
 class CrawlerDomScrollParseMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def _detect_block_signal(self, title, page_source):
         title_lower = str(title or "").lower()
         source_lower = str(page_source or "").lower()

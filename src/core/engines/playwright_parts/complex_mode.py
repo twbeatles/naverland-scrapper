@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.engines.playwright_engine import *  # noqa: F403
+
+_TRADE_TO_CODE: dict[str, str] = {}
+
 
 class PlaywrightComplexModeMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     async def _run_complex_mode(self):
         await self._ensure_started()
         total = len(self.thread.targets) * len(self.thread.trade_types)

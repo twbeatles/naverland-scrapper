@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 
 class ComplexDatabaseArticleOpsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def get_article_history_state_bulk(self, complex_id, trade_type=None):
         """?⑥?(諛?嫄곕옒?좏삎) 湲곗? 留ㅻЪ ?대젰 ?곹깭瑜??쇨큵 議고쉶"""
         conn = self._pool.get_connection()

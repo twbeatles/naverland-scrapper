@@ -42,7 +42,9 @@ class FavoritesTab(QWidget):
         self.table.setHorizontalHeaderLabels([
             "단지명", "거래유형", "가격", "면적", "층/방향", "메모", "추가일", "링크"
         ])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        favorites_header = self.table.horizontalHeader()
+        if favorites_header is not None:
+            favorites_header.setStretchLastSection(True)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.itemSelectionChanged.connect(self._update_action_state)

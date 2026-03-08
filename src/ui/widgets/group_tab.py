@@ -73,7 +73,9 @@ class GroupTab(QWidget):
         self.complex_table.setColumnCount(5)
         self.complex_table.setHorizontalHeaderLabels(["ID", "자산", "단지명", "단지ID", "메모"])
         self.complex_table.setColumnHidden(0, True)
-        self.complex_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        complex_header = self.complex_table.horizontalHeader()
+        if complex_header is not None:
+            complex_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.complex_table.setAlternatingRowColors(True)
         right_l.addWidget(self.complex_table)
         splitter.addWidget(right_w)

@@ -11,12 +11,9 @@ try:
     from matplotlib.figure import Figure
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
-    try:
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-        from matplotlib.figure import Figure
-        MATPLOTLIB_AVAILABLE = True
-    except ImportError:
-        MATPLOTLIB_AVAILABLE = False
+    FigureCanvas = None
+    Figure = None
+    MATPLOTLIB_AVAILABLE = False
 
 from src.utils.constants import TRADE_COLORS
 from src.utils.helpers import PriceConverter
@@ -94,7 +91,7 @@ class DashboardWidget(QWidget):
         # 거래유형별 파이 차트
         self.trade_chart_frame = QGroupBox("🏠 거래유형별 분포")
         trade_chart_layout = QVBoxLayout(self.trade_chart_frame)
-        if MATPLOTLIB_AVAILABLE:
+        if MATPLOTLIB_AVAILABLE and Figure is not None and FigureCanvas is not None:
             self.trade_figure = Figure(figsize=(4, 3), facecolor='none')
             self.trade_canvas = FigureCanvas(self.trade_figure)
             # Make background transparent
@@ -107,7 +104,7 @@ class DashboardWidget(QWidget):
         # 가격대별 히스토그램
         self.price_chart_frame = QGroupBox("💰 가격대별 분포")
         price_chart_layout = QVBoxLayout(self.price_chart_frame)
-        if MATPLOTLIB_AVAILABLE:
+        if MATPLOTLIB_AVAILABLE and Figure is not None and FigureCanvas is not None:
             self.price_figure = Figure(figsize=(5, 3), facecolor='none')
             self.price_canvas = FigureCanvas(self.price_figure)
             self.price_figure.patch.set_alpha(0)
@@ -238,7 +235,7 @@ class DashboardWidget(QWidget):
         safe_set_text(self.disappeared_card, "value", str(disappeared))
         
         # 차트 업데이트
-        if MATPLOTLIB_AVAILABLE:
+        if MATPLOTLIB_AVAILABLE and Figure is not None and FigureCanvas is not None:
             try:
                 self._update_trade_chart(trade_counts)
                 self._update_price_chart()
@@ -257,6 +254,8 @@ class DashboardWidget(QWidget):
         self._stat_cols = cols
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
+            if item is None:
+                continue
             w = item.widget()
             if w:
                 w.setParent(None)
@@ -264,8 +263,8 @@ class DashboardWidget(QWidget):
             row, col = divmod(i, cols)
             self.cards_layout.addWidget(card, row, col)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+    def resizeEvent(self, a0):
+        super().resizeEvent(a0)
         self._relayout_stats()
     
     def _update_trade_chart(self, trade_counts: dict):
@@ -302,7 +301,15 @@ class DashboardWidget(QWidget):
                 # Set text color based on theme - simplified logic
                 text_color = 'white' if self._theme == 'dark' else 'black'
                 
-                wedges, texts, autotexts = ax.pie(sizes, labels=labels, colors=colors[:len(sizes)], autopct='%1.1f%%', startangle=90)
+                pie_result = ax.pie(
+                    sizes,
+                    labels=labels,
+                    colors=colors[:len(sizes)],
+                    autopct='%1.1f%%',
+                    startangle=90,
+                )
+                texts = pie_result[1]
+                autotexts = pie_result[2] if len(pie_result) > 2 else []
                 ax.axis('equal')
                 
                 for text in texts + autotexts:
@@ -503,10 +510,10 @@ class ArticleCard(QFrame):
         self.fav_btn.setText("★" if is_fav else "☆")
         self.favorite_toggled.emit(article_id, complex_id, is_fav)
     
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+    def mousePressEvent(self, a0):
+        if a0 is not None and a0.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.data)
-        super().mousePressEvent(event)
+        super().mousePressEvent(a0)
 
 
 class CardViewWidget(QScrollArea):
@@ -545,7 +552,9 @@ class CardViewWidget(QScrollArea):
         self.empty_label.setStyleSheet("color: #888; padding: 40px;")
         self.grid_layout.addWidget(self.empty_label, 0, 0)
         self.empty_label.hide()
-        self.verticalScrollBar().valueChanged.connect(self._on_scroll)
+        scroll_bar = self.verticalScrollBar()
+        if scroll_bar is not None:
+            scroll_bar.valueChanged.connect(self._on_scroll)
 
     @staticmethod
     def _build_search_text(article: dict) -> str:
@@ -589,7 +598,8 @@ class CardViewWidget(QScrollArea):
             self._render_next_page()
 
     def _calc_columns(self) -> int:
-        available = max(1, self.viewport().width())
+        viewport = self.viewport()
+        available = max(1, viewport.width() if viewport is not None else self.width())
         cols = max(1, available // (self._card_width + self._card_spacing))
         return cols
 
@@ -626,6 +636,8 @@ class CardViewWidget(QScrollArea):
 
     def _on_scroll(self, value: int):
         scroll_bar = self.verticalScrollBar()
+        if scroll_bar is None:
+            return
         if scroll_bar.maximum() <= 0:
             return
         if value >= (scroll_bar.maximum() - 220):
@@ -658,8 +670,8 @@ class CardViewWidget(QScrollArea):
         self._render_cursor = end
         self._last_columns = cols
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+    def resizeEvent(self, a0):
+        super().resizeEvent(a0)
         if self._filtered_data:
             cols = self._calc_columns()
             if cols != self._last_columns:

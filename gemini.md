@@ -304,3 +304,16 @@ COLORS["light"] = {
   - `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 감사 문서로 유지하고, 문서 내 추적 섹션으로 상태를 명시.
 - 무시 규칙 정합:
   - `.gitignore`의 `build/`, `dist/`, `logs/`, `backup/`, `backups/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/` 규칙은 현 작업 기준으로 충분.
+
+## 0-6. v15.0.6 UI/Typing/Packaging Stabilization (2026-03-08)
+- UI 사용성 정합:
+  - 검색 조건 패널(좌/우 + 내부 섹션) 리사이즈 상태 저장/복원 적용.
+  - 전역 wheel-guard로 `QSpinBox/QDoubleSpinBox/QComboBox` 휠 오입력 방지.
+  - 콤보박스는 팝업 열린 상태에서만 휠 선택 허용.
+  - 라이트/다크 모드 드롭다운 팝업 대비(기본/hover/selected/disabled) 정리.
+- 타입 안정화:
+  - `src/` 전역 타입 정리를 수행하고 `npx pyright src` 기준 `0 errors` 달성.
+- `.spec` 보강:
+  - hidden import를 `matplotlib.backends.backend_qtagg` 기준으로 유지.
+  - `NAVERLAND_CONSOLE=1` 빌드 스위치 추가(콘솔 디버깅).
+  - `NAVERLAND_BUNDLE_CHROMIUM=1`에서 Chromium 탐지 실패 시 경고 출력.

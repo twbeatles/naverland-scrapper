@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.widgets.crawler_tab import *  # noqa: F403
+
 
 class CrawlerTabFiltersSearchMixin:
-    def _on_search_text_changed(self, text):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _on_search_text_changed(self: Any, text):
         self._pending_search_text = text
         self._search_timer.start()
 
-    def _apply_search_filter(self):
+    def _apply_search_filter(self: Any):
         self._filter_results(self._pending_search_text)
 
-    def _rebuild_row_search_cache_from_table(self):
+    def _rebuild_row_search_cache_from_table(self: Any):
         rows = self.result_table.rowCount()
         self._row_search_cache = []
         self._row_payload_cache = []
@@ -72,7 +80,7 @@ class CrawlerTabFiltersSearchMixin:
             return "mid"
         return "high"
 
-    def _check_advanced_filter(self, d):
+    def _check_advanced_filter(self: Any, d):
         if not self._advanced_filters:
             return True
         f = self._advanced_filters
@@ -127,7 +135,7 @@ class CrawlerTabFiltersSearchMixin:
             return False
         return True
 
-    def _advanced_filtered_data_for_cards(self):
+    def _advanced_filtered_data_for_cards(self: Any):
         if self._compact_duplicates:
             base = list(self._compact_rows_data)
         else:
@@ -152,7 +160,7 @@ class CrawlerTabFiltersSearchMixin:
                 filtered.append(item)
         return filtered
 
-    def _apply_card_filters(self, text):
+    def _apply_card_filters(self: Any, text):
         if self._advanced_filters:
             self.card_view.set_data(self._advanced_filtered_data_for_cards())
         elif self._compact_duplicates:
@@ -161,15 +169,15 @@ class CrawlerTabFiltersSearchMixin:
             self.card_view.set_data(list(self.collected_data))
         self.card_view.filter_cards(text)
 
-    def open_advanced_filter_dialog(self):
+    def open_advanced_filter_dialog(self: Any):
         dialog = AdvancedFilterDialog(self, current_filters=self._advanced_filters)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.set_advanced_filters(dialog.get_filters())
 
-    def clear_advanced_filters(self):
+    def clear_advanced_filters(self: Any):
         self.set_advanced_filters(None)
 
-    def _filter_results(self, text):
+    def _filter_results(self: Any, text):
         self._pending_search_text = text or ""
         rows = self.result_table.rowCount()
         for r in range(rows):
@@ -187,7 +195,7 @@ class CrawlerTabFiltersSearchMixin:
         # Card filtering
         self._apply_card_filters(self._pending_search_text)
 
-    def _sort_results(self, criterion):
+    def _sort_results(self: Any, criterion):
         col_map = {
             "단지명": self.COL_COMPLEX,
             "가격": self.COL_PRICE_SORT,

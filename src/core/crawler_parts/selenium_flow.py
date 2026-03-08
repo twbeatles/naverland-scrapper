@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.crawler import *  # noqa: F403
+
 
 class CrawlerSeleniumFlowMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def _init_driver(self):
         """Chrome 드라이버 초기화 및 설정"""
         

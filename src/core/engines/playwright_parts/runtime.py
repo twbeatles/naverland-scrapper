@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.engines.playwright_engine import *  # noqa: F403
+
 
 class PlaywrightRuntimeMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def __init__(self, thread):
         self.thread = thread
         self._loop = asyncio.new_event_loop()

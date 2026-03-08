@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.widgets.crawler_tab import *  # noqa: F403
+
 
 class CrawlerTabCrawlControlMixin:
-    def _add_complex(self):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _add_complex(self: Any):
         name = self.input_name.text().strip()
         cid = self.input_id.text().strip()
         if not name or not cid:
@@ -16,27 +24,27 @@ class CrawlerTabCrawlControlMixin:
         self.input_name.clear()
         self.input_id.clear()
 
-    def add_task(self, name, cid):
+    def add_task(self: Any, name, cid):
         row = self.table_list.rowCount()
         self.table_list.insertRow(row)
         self.table_list.setItem(row, 0, QTableWidgetItem(str(name)))
         self.table_list.setItem(row, 1, QTableWidgetItem(str(cid)))
         
-    def _add_row(self, name, cid):
+    def _add_row(self: Any, name, cid):
         self.add_task(name, cid)
     
-    def clear_tasks(self):
+    def clear_tasks(self: Any):
         self.table_list.setRowCount(0)
 
-    def _delete_complex(self):
+    def _delete_complex(self: Any):
         row = self.table_list.currentRow()
         if row >= 0:
             self.table_list.removeRow(row)
     
-    def _clear_list(self):
+    def _clear_list(self: Any):
         self.table_list.setRowCount(0)
 
-    def _save_to_db(self):
+    def _save_to_db(self: Any):
         inserted_count = 0
         existing_count = 0
         failed_count = 0
@@ -57,7 +65,7 @@ class CrawlerTabCrawlControlMixin:
             f"신규 저장: {inserted_count}개\n기존 존재: {existing_count}개\n실패: {failed_count}개",
         )
 
-    def _show_db_load_dialog(self):
+    def _show_db_load_dialog(self: Any):
         complexes = self.db.get_all_complexes()
         if not complexes:
             QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
@@ -68,7 +76,7 @@ class CrawlerTabCrawlControlMixin:
             for name, cid in dlg.selected_items():
                 self._add_row(name, cid)
 
-    def _show_group_load_dialog(self):
+    def _show_group_load_dialog(self: Any):
         groups = self.db.get_all_groups()
         if not groups:
             QMessageBox.information(self, "알림", "저장된 그룹이 없습니다.")
@@ -80,7 +88,7 @@ class CrawlerTabCrawlControlMixin:
                 for _, name, _asset_type, cid, _ in self.db.get_complexes_in_group(gid):
                     self.add_task(name, cid)
 
-    def _show_recent_search_dialog(self):
+    def _show_recent_search_dialog(self: Any):
         if not self.history_manager:
             return
         
@@ -135,7 +143,7 @@ class CrawlerTabCrawlControlMixin:
             QMessageBox.critical(self, "오류", f"최근 검색 기록을 불러오는 중 오류가 발생했습니다:\n{e}")
             logger.error(f"Recent search load failed: {e}")
 
-    def _show_url_batch_dialog(self):
+    def _show_url_batch_dialog(self: Any):
         dlg = URLBatchDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             selected = dlg.get_selected_complexes()
@@ -147,7 +155,7 @@ class CrawlerTabCrawlControlMixin:
             urls = dlg.get_urls()
             self._add_complexes_from_url(urls)
 
-    def _add_complexes_from_url(self, urls):
+    def _add_complexes_from_url(self: Any, urls):
         count = 0
         for url in urls:
             m = re.search(r'/complexes/(\d+)', url)
@@ -157,13 +165,13 @@ class CrawlerTabCrawlControlMixin:
                 count += 1
         self.status_message.emit(f"{count}개 URL 등록 완료")
 
-    def _open_complex_url(self):
+    def _open_complex_url(self: Any):
         item = self.table_list.item(self.table_list.currentRow(), 1)
         if item:
             url = f"https://new.land.naver.com/complexes/{item.text()}"
             webbrowser.open(url)
 
-    def start_crawling(self):
+    def start_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
             self.status_message.emit("이미 크롤링이 실행 중입니다.")
@@ -288,13 +296,13 @@ class CrawlerTabCrawlControlMixin:
         
         self.crawling_started.emit()
 
-    def stop_crawling(self):
+    def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.crawler_thread.stop()
             self.append_log("🛑 중지 요청 중...", 30)
             self.btn_stop.setEnabled(False)
 
-    def shutdown_crawl(self, timeout_ms: int = 8000) -> bool:
+    def shutdown_crawl(self: Any, timeout_ms: int = 8000) -> bool:
         thread = self.crawler_thread
         if not thread:
             return True
@@ -316,7 +324,7 @@ class CrawlerTabCrawlControlMixin:
         self.append_log(f"⚠️ 크롤링 종료 대기 타임아웃 ({wait_ms}ms)", 30)
         return False
 
-    def _on_crawl_finished(self, data):
+    def _on_crawl_finished(self: Any, data):
         try:
             self.btn_save.setEnabled(True)
             self.progress_widget.complete()
@@ -348,17 +356,17 @@ class CrawlerTabCrawlControlMixin:
             self.btn_stop.setEnabled(False)
             self.crawler_thread = None
 
-    def _on_complex_finished(self, name, cid, trade_types, count):
+    def _on_complex_finished(self: Any, name, cid, trade_types, count):
         self.append_log(f"📌 단지 완료: {name} ({cid}) {count}건", 10)
 
-    def _on_alert_triggered(self, complex_name, trade_type, price_text, area_pyeong, alert_id):
+    def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
         self.append_log(
             f"🔔 알림 조건 충족: {complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)",
             30,
         )
         self.alert_triggered.emit(complex_name, trade_type, price_text, area_pyeong, int(alert_id or 0))
 
-    def _update_stats_ui(self, stats):
+    def _update_stats_ui(self: Any, stats):
         self.summary_card.update_stats(
             total=stats["total_found"],
             trade=stats["by_trade_type"].get("매매", 0),
@@ -370,7 +378,7 @@ class CrawlerTabCrawlControlMixin:
             price_down=stats.get("price_down", 0),
         )
 
-    def _save_price_snapshots(self):
+    def _save_price_snapshots(self: Any):
         """크롤링 결과를 가격 스냅샷으로 저장"""
         if not self.collected_data:
             return
@@ -409,13 +417,13 @@ class CrawlerTabCrawlControlMixin:
         self.append_log(f"📊 가격 스냅샷 {saved}건 저장", 10)
 
 
-    def _show_excel_template_dialog(self):
+    def _show_excel_template_dialog(self: Any):
         current_template = settings.get("excel_template")
         dlg = ExcelTemplateDialog(self, current_template=current_template)
         dlg.template_saved.connect(lambda t: settings.set("excel_template", t))
         dlg.exec()
         
-    def _open_article_url(self):
+    def _open_article_url(self: Any):
         row = self.result_table.currentRow()
         if row < 0:
             return

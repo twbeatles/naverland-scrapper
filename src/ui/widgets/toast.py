@@ -4,7 +4,9 @@ Toast 알림 위젯 (v14.0)
 - 슬라이드 효과
 - 비침습적 알림
 """
-from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGraphicsOpacityEffect
+from typing import Any, cast
+
+from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGraphicsOpacityEffect, QPushButton
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
 from src.utils.logger import get_logger
 
@@ -63,12 +65,14 @@ class ToastWidget(QWidget):
         layout.addWidget(msg_label, 1)
         
         # 닫기 버튼
-        close_btn = QLabel("×")
+        close_btn = QPushButton("×")
         close_btn.setStyleSheet(
-            "color: rgba(255,255,255,0.6); font-size: 16px; font-weight: 700; padding: 0 4px;"
+            "color: rgba(255,255,255,0.6); font-size: 16px; font-weight: 700; "
+            "padding: 0 4px; background: transparent; border: none;"
         )
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.mousePressEvent = lambda e: self.fade_out()
+        close_btn.setFlat(True)
+        close_btn.clicked.connect(self.fade_out)
         layout.addWidget(close_btn)
         
         # 스타일 적용
@@ -143,10 +147,12 @@ class ToastWidget(QWidget):
     def _on_fade_out_finished(self):
         """페이드 아웃 완료 시"""
         self.close()
-        if self.parent():
+        parent = self.parent()
+        if parent:
             try:
-                self.parent().toast_widgets.remove(self)
-                self.parent()._reposition_toasts()
+                owner = cast(Any, parent)
+                owner.toast_widgets.remove(self)
+                owner._reposition_toasts()
             except (AttributeError, ValueError) as e:
                 logger.debug(f"Toast 정리 실패 (무시): {e}")
         self.deleteLater()
@@ -156,13 +162,13 @@ class ToastWidget(QWidget):
         self.auto_close_timer.stop()
         super().enterEvent(event)
     
-    def leaveEvent(self, event):
+    def leaveEvent(self, a0):
         """마우스 떠날 시 타이머 재시작"""
         self.auto_close_timer.start(1500)  # 호버 후 1.5초 뒤 닫힘
-        super().leaveEvent(event)
+        super().leaveEvent(a0)
     
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, a0):
         """클릭 시 즉시 닫기"""
-        if event.button() == Qt.MouseButton.LeftButton:
+        if a0 is not None and a0.button() == Qt.MouseButton.LeftButton:
             self.fade_out()
-        super().mousePressEvent(event)
+        super().mousePressEvent(a0)

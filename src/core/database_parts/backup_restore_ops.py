@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 
 class ComplexDatabaseBackupRestoreOpsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     @staticmethod
     def _integrity_check_file(db_path: Path) -> bool:
         conn = None

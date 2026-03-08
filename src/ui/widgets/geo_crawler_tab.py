@@ -86,7 +86,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.discovered_table = QTableWidget()
         self.discovered_table.setColumnCount(5)
         self.discovered_table.setHorizontalHeaderLabels(["상태", "자산", "단지명", "ID", "매물수"])
-        self.discovered_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        discovered_header = self.discovered_table.horizontalHeader()
+        if discovered_header is not None:
+            discovered_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         grid.addWidget(QLabel("발견 단지:"), 7, 0, 1, 2)
         grid.addWidget(self.discovered_table, 8, 0, 1, 2)
 

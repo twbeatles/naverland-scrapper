@@ -1,5 +1,32 @@
 # 업데이트 히스토리
 
+## **v15.0.6 (2026-03-08)**
+
+**UI 안정화 + 타입 정리 + 패키징 디버그 경로 보강**
+
+### ✅ 핵심 반영
+
+* 검색 조건 UI 리사이즈 확장:
+  - 수집 탭 좌/우 패널과 내부 조건 섹션에 `QSplitter`를 적용하고 비율 상태를 저장/복원하도록 정리.
+* 입력 휠 오입력 방지:
+  - `QSpinBox/QDoubleSpinBox/QComboBox` 전역 wheel-guard를 추가해 스크롤 중 값 변경을 방지.
+  - 콤보박스는 팝업이 열린 경우에만 휠 선택 허용.
+* 드롭다운 테마 가독성:
+  - 라이트/다크 테마별 `QComboBox QAbstractItemView` 배경/텍스트/hover/selected 색상 분리 적용.
+* 전역 타입 정리:
+  - `npx pyright src` 기준 `0 errors` 달성(`src/` 기준).
+
+### ✅ .spec 점검/수정
+
+* Matplotlib Qt hidden import를 `matplotlib.backends.backend_qtagg` 기준으로 정리(현 코드 기준).
+* `NAVERLAND_CONSOLE=1` 환경변수로 콘솔 빌드를 선택 가능하게 해 GUI 조용한 실패 디버깅 경로를 제공.
+* `NAVERLAND_BUNDLE_CHROMIUM=1`에서 Chromium 번들 탐지 실패 시 spec 단계 경고를 출력하도록 개선.
+
+### ✅ 문서 정합성
+
+* `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 동일한 기준으로 UI/타입/.spec 변경사항을 동기화.
+* 빌드 가이드에 콘솔 디버그 빌드(`NAVERLAND_CONSOLE=1`)를 추가.
+
 ## **v15.0.5 (2026-03-07)**
 
 **.spec/문서 정합성 재점검 + 감사 문서 복구 + 무시 규칙 재확인**

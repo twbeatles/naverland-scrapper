@@ -5,15 +5,12 @@ try:
     import matplotlib.dates as mdates
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
-    try:
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-        from matplotlib.figure import Figure
-        import matplotlib.dates as mdates
-        MATPLOTLIB_AVAILABLE = True
-    except ImportError:
-        MATPLOTLIB_AVAILABLE = False
+    FigureCanvas = None
+    Figure = None
+    mdates = None
+    MATPLOTLIB_AVAILABLE = False
 from datetime import datetime
-from typing import List, Tuple, Optional, Iterable
+from typing import Optional, Iterable, Any, cast
 
 from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
 
@@ -23,7 +20,7 @@ class ChartWidget(QWidget):
         super().__init__(parent)
         self._korean_font_ok = False
         layout = QVBoxLayout(self)
-        if MATPLOTLIB_AVAILABLE:
+        if MATPLOTLIB_AVAILABLE and Figure is not None and FigureCanvas is not None:
             self._korean_font_ok = bool(setup_korean_font())
             self.figure = Figure(figsize=(5, 3), dpi=100, facecolor='#2b2b2b')
             self.canvas = FigureCanvas(self.figure)
@@ -55,7 +52,7 @@ class ChartWidget(QWidget):
         max_vals: Optional[Iterable[float]] = None,
         title: str = "Price Trend",
     ):
-        if not MATPLOTLIB_AVAILABLE:
+        if not MATPLOTLIB_AVAILABLE or mdates is None:
             return
         title_text = str(title or "Price Trend")
         if not self._korean_font_ok:
@@ -71,14 +68,22 @@ class ChartWidget(QWidget):
             if not data:
                 return
             data.sort(key=lambda x: x[0])
-            parsed = [(self._parse_date(d[0]), d[1]) for d in data]
-            parsed = [p for p in parsed if p[0] is not None]
-            if not parsed:
+            parsed_points: list[tuple[datetime, float]] = []
+            for raw_date, raw_price in data:
+                parsed_date = self._parse_date(raw_date)
+                if parsed_date is None:
+                    continue
+                try:
+                    parsed_price = float(raw_price)
+                except (TypeError, ValueError):
+                    parsed_price = 0.0
+                parsed_points.append((parsed_date, parsed_price))
+            if not parsed_points:
                 return
-            x = [p[0] for p in parsed]
-            y = [p[1] for p in parsed]
+            x = [p[0] for p in parsed_points]
+            y = [p[1] for p in parsed_points]
             self.ax.clear()
-            self.ax.plot(x, y, marker='o', linestyle='-', color='#3498db', linewidth=2)
+            self.ax.plot(cast(Any, x), cast(Any, y), marker='o', linestyle='-', color='#3498db', linewidth=2)
             self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
             self.ax.grid(True, linestyle='--', alpha=0.3)
             self.ax.set_title(title_text, color='white')
@@ -89,37 +94,52 @@ class ChartWidget(QWidget):
         min_list = list(min_vals) if min_vals is not None else None
         max_list = list(max_vals) if max_vals is not None else None
 
+        parsed_series: list[tuple[datetime, float, float | None, float | None]] = []
         if min_list is None or max_list is None:
             merged = list(zip(dates_list, avg_list))
             merged.sort(key=lambda x: x[0])
-            parsed = []
             for d, a in merged:
                 parsed_date = self._parse_date(d)
                 if parsed_date is None:
                     continue
-                parsed.append((parsed_date, a, None, None))
+                try:
+                    avg_value = float(a)
+                except (TypeError, ValueError):
+                    avg_value = 0.0
+                parsed_series.append((parsed_date, avg_value, None, None))
         else:
             merged = list(zip(dates_list, avg_list, min_list, max_list))
             merged.sort(key=lambda x: x[0])
-            parsed = []
             for d, a, mi, ma in merged:
                 parsed_date = self._parse_date(d)
                 if parsed_date is None:
                     continue
-                parsed.append((parsed_date, a, mi, ma))
+                try:
+                    avg_value = float(a)
+                except (TypeError, ValueError):
+                    avg_value = 0.0
+                try:
+                    min_value = float(mi)
+                except (TypeError, ValueError):
+                    min_value = None
+                try:
+                    max_value = float(ma)
+                except (TypeError, ValueError):
+                    max_value = None
+                parsed_series.append((parsed_date, avg_value, min_value, max_value))
 
-        if not parsed:
+        if not parsed_series:
             return
 
-        x = [p[0] for p in parsed]
-        y_avg = [p[1] for p in parsed]
-        y_min = [p[2] for p in parsed] if min_list is not None else []
-        y_max = [p[3] for p in parsed] if max_list is not None else []
+        x = [p[0] for p in parsed_series]
+        y_avg = [p[1] for p in parsed_series]
+        y_min = [float(p[2]) for p in parsed_series if p[2] is not None] if min_list is not None else []
+        y_max = [float(p[3]) for p in parsed_series if p[3] is not None] if max_list is not None else []
 
         self.ax.clear()
-        if y_min and y_max:
-            self.ax.fill_between(x, y_min, y_max, color='#3498db', alpha=0.15)
-        self.ax.plot(x, y_avg, marker='o', linestyle='-', color='#3498db', linewidth=2)
+        if y_min and y_max and len(y_min) == len(x) and len(y_max) == len(x):
+            self.ax.fill_between(cast(Any, x), cast(Any, y_min), cast(Any, y_max), color='#3498db', alpha=0.15)
+        self.ax.plot(cast(Any, x), cast(Any, y_avg), marker='o', linestyle='-', color='#3498db', linewidth=2)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
         self.ax.grid(True, linestyle='--', alpha=0.3)
         self.ax.set_title(title_text, color='white')

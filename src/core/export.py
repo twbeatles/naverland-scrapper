@@ -9,6 +9,11 @@ try:
     from openpyxl.utils import get_column_letter
     OPENPYXL_AVAILABLE = True
 except ImportError:
+    Workbook = None
+    Font = None
+    PatternFill = None
+    Alignment = None
+    get_column_letter = None
     OPENPYXL_AVAILABLE = False
 logger = get_logger("Export")
 
@@ -102,10 +107,20 @@ class DataExporter:
     
     def to_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
-        if not OPENPYXL_AVAILABLE: return None
+        if (
+            not OPENPYXL_AVAILABLE
+            or Workbook is None
+            or Font is None
+            or PatternFill is None
+            or Alignment is None
+            or get_column_letter is None
+        ):
+            return None
         try:
             wb = Workbook()
             ws = wb.active
+            if ws is None:
+                return None
             ws.title = "매물 데이터"
             
             # 템플릿에서 컬럼 결정

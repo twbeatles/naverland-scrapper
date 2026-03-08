@@ -38,6 +38,10 @@ def should_skip_playwright_browser_check() -> bool:
     return _is_truthy_env(os.environ.get("NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK"))
 
 
+def should_require_playwright_browser() -> bool:
+    return _is_truthy_env(os.environ.get("NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER"))
+
+
 def find_conflict_markers(
     base_dir: Path, target_dirs: Optional[Iterable[str]] = None
 ) -> list[str]:
@@ -121,8 +125,12 @@ def run_preflight_checks(
     elif not should_skip_playwright_browser_check():
         missing_browser = find_missing_playwright_browser()
         if missing_browser:
-            errors.append("Playwright Chromium 브라우저가 준비되지 않았습니다: " + missing_browser)
-            app_logger.error("Playwright Chromium 누락: %s", missing_browser)
+            message = "Playwright Chromium 브라우저가 준비되지 않았습니다: " + missing_browser
+            if should_require_playwright_browser():
+                errors.append(message)
+                app_logger.error("Playwright Chromium 누락: %s", missing_browser)
+            else:
+                app_logger.warning("%s", message)
 
     if not missing_required:
         internal_failures = find_internal_import_failures(REQUIRED_INTERNAL_IMPORTS)

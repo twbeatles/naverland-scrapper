@@ -67,7 +67,9 @@ class DatabaseTab(QWidget):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["ID", "자산", "단지명", "단지ID", "메모"])
         self.table.setColumnHidden(self.COL_ID, True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table_header = self.table.horizontalHeader()
+        if table_header is not None:
+            table_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.doubleClicked.connect(self._open_complex_url)
         layout.addWidget(self.table)
@@ -227,10 +229,11 @@ class DatabaseTab(QWidget):
     def _filter_table(self, text):
         token = str(text or "").lower()
         for row in range(self.table.rowCount()):
-            match = any(
-                token in (self.table.item(row, col).text().lower() if self.table.item(row, col) else "")
-                for col in range(self.table.columnCount())
-            )
+            def _cell_text(col: int) -> str:
+                cell = self.table.item(row, col)
+                return cell.text().lower() if cell is not None else ""
+
+            match = any(token in _cell_text(col) for col in range(self.table.columnCount()))
             self.table.setRowHidden(row, not match)
 
     def _open_complex_url(self):

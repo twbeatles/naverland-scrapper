@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.app import *  # noqa: F403
+
 
 class AppLifecycleMixin:
-    def __init__(self):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def __init__(self: Any):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(1400, 900)
@@ -38,9 +46,11 @@ class AppLifecycleMixin:
         
         self.current_theme = settings.get("theme", "dark")
         self.setStyleSheet(get_stylesheet(self.current_theme))
+        self._input_wheel_guard = install_global_wheel_guard(QApplication.instance())
         
         # UI 초기화
         self._init_ui()
+        apply_wheel_guard_recursively(self, self._input_wheel_guard)
         self._init_menu()
         self._init_shortcuts()
         self._init_tray()
@@ -52,7 +62,7 @@ class AppLifecycleMixin:
         
         self.show_toast(f"환영합니다! {APP_TITLE} {APP_VERSION}입니다.")
 
-    def _restore_window_geometry(self):
+    def _restore_window_geometry(self: Any):
         geo = settings.get("window_geometry")
         if not geo:
             return
@@ -65,7 +75,7 @@ class AppLifecycleMixin:
             # Best-effort only; invalid saved geometry should not prevent startup.
             return
     
-    def _init_menu(self):
+    def _init_menu(self: Any):
         menubar = self.menuBar()
         
         # 파일 메뉴
@@ -83,12 +93,14 @@ class AppLifecycleMixin:
         
         # 테마 메뉴
         theme_menu = view_menu.addMenu("🎨 테마")
-        self.action_theme_dark = QAction("🌙 다크 모드", self, checkable=True)
+        self.action_theme_dark = QAction("🌙 다크 모드", self)
+        self.action_theme_dark.setCheckable(True)
         self.action_theme_dark.setChecked(self.current_theme == "dark")
         self.action_theme_dark.triggered.connect(lambda: self._toggle_theme("dark"))
         theme_menu.addAction(self.action_theme_dark)
         
-        self.action_theme_light = QAction("☀️ 라이트 모드", self, checkable=True)
+        self.action_theme_light = QAction("☀️ 라이트 모드", self)
+        self.action_theme_light.setCheckable(True)
         self.action_theme_light.setChecked(self.current_theme == "light")
         self.action_theme_light.triggered.connect(lambda: self._toggle_theme("light"))
         theme_menu.addAction(self.action_theme_light)
@@ -110,7 +122,7 @@ class AppLifecycleMixin:
         help_menu.addAction("⌨️ 단축키", self._show_shortcuts)
         help_menu.addAction("ℹ️ 정보", self._show_about)
     
-    def _init_shortcuts(self):
+    def _init_shortcuts(self: Any):
         self._register_shortcut(SHORTCUTS["start_crawl"], self._start_crawling)
         self._register_shortcut(SHORTCUTS["stop_crawl"], self._stop_crawling)
         self._register_shortcut(SHORTCUTS["save_excel"], self._save_excel)
@@ -122,41 +134,42 @@ class AppLifecycleMixin:
         self._register_shortcut(SHORTCUTS["quit"], self._quit_app)
         self._register_shortcut(SHORTCUTS["settings"], self._show_settings)
 
-    def _register_shortcut(self, key_sequence, callback):
-        shortcut = QShortcut(QKeySequence(key_sequence), self, callback)
+    def _register_shortcut(self: Any, key_sequence, callback):
+        shortcut = QShortcut(QKeySequence(key_sequence), self)
+        shortcut.activated.connect(callback)
         self._shortcuts[key_sequence] = shortcut
 
     # Shortcut handlers (delegate to modular widgets)
-    def _start_crawling(self):
+    def _start_crawling(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.start_crawling()
 
-    def _stop_crawling(self):
+    def _stop_crawling(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.stop_crawling()
 
-    def _save_excel(self):
+    def _save_excel(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.save_excel()
 
-    def _save_csv(self):
+    def _save_csv(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.save_csv()
 
-    def _save_json(self):
+    def _save_json(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.save_json()
     
-    def _init_tray(self):
+    def _init_tray(self: Any):
         self.tray_icon = None
         if QSystemTrayIcon.isSystemTrayAvailable():
-            self.tray_icon = QSystemTrayIcon(self)
-            self.tray_icon.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
+            icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+            self.tray_icon = QSystemTrayIcon(icon, self)
             tray_menu = QMenu()
             tray_menu.addAction("🔼 열기", self._show_from_tray)
             tray_menu.addAction("❌ 종료", self._quit_app)
@@ -164,12 +177,12 @@ class AppLifecycleMixin:
             self.tray_icon.activated.connect(self._tray_activated)
             self.tray_icon.show()
     
-    def _init_timers(self):
+    def _init_timers(self: Any):
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self._check_schedule)
         self.schedule_timer.start(60000)
     
-    def _load_initial_data(self):
+    def _load_initial_data(self: Any):
         # self._load_db_complexes() - Handled by DatabaseTab
         # self._load_all_groups() - Handled by GroupTab
         if hasattr(self, 'db_tab'): self.db_tab.load_data()
@@ -191,7 +204,7 @@ class AppLifecycleMixin:
             pass
         self.stats_complex_combo.currentIndexChanged.connect(self._on_stats_complex_changed)
 
-    def _on_crawl_data_collected(self, data):
+    def _on_crawl_data_collected(self: Any, data):
         self.collected_data = list(data) if data else []
         self._load_history()
         self._noncritical_loaded["history"] = True
@@ -206,12 +219,12 @@ class AppLifecycleMixin:
             self._noncritical_loaded["favorites"] = True
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
 
-    def _on_alert_triggered(self, complex_name, trade_type, price_text, area_pyeong, alert_id):
+    def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
         message = f"{complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)"
         self.show_toast(f"🔔 조건 매물 발견: {message}")
         self.show_notification("조건 매물 알림", message)
 
-    def _on_dashboard_warning(self, message: str):
+    def _on_dashboard_warning(self: Any, message: str):
         text = str(message or "").strip()
         if not text:
             return
@@ -230,35 +243,35 @@ class AppLifecycleMixin:
     # _delete_group, _load_group_complexes, _add_to_group, _add_to_group_multi, _remove_from_group
 
     
-    def _show_shortcuts(self):
+    def _show_shortcuts(self: Any):
         ShortcutsDialog(self).exec()
     
-    def _show_about(self):
+    def _show_about(self: Any):
         AboutDialog(self, theme=self.current_theme).exec()
 
-    def _focus_search(self):
+    def _focus_search(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             if hasattr(self.crawler_tab, "result_search"):
                 self.crawler_tab.result_search.setFocus()
 
-    def _minimize_to_tray(self):
+    def _minimize_to_tray(self: Any):
         if not self.tray_icon:
             self.status_bar.showMessage("시스템 트레이를 사용할 수 없습니다.")
             return
         self.hide()
         self.tray_icon.showMessage("알림", "트레이로 최소화되었습니다.", QSystemTrayIcon.MessageIcon.Information, 2000)
 
-    def _show_from_tray(self):
+    def _show_from_tray(self: Any):
         self.show()
         self.raise_()
         self.activateWindow()
 
-    def _tray_activated(self, reason):
+    def _tray_activated(self: Any, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self.show()
 
-    def _shutdown(self) -> bool:
+    def _shutdown(self: Any) -> bool:
         if self._is_shutting_down:
             return True
         self._is_shutting_down = True
@@ -287,7 +300,7 @@ class AppLifecycleMixin:
             self.tray_icon.hide()
         return True
 
-    def _quit_app(self, skip_confirm=False):
+    def _quit_app(self: Any, skip_confirm=False):
         if not skip_confirm and settings.get("confirm_before_close"):
             if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
                 return
@@ -300,7 +313,8 @@ class AppLifecycleMixin:
             return
         QApplication.quit()
 
-    def closeEvent(self, event):
+    def closeEvent(self: Any, a0):
+        event = a0
         if self._is_shutting_down:
             event.accept()
             return
@@ -337,7 +351,7 @@ class AppLifecycleMixin:
             self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 창 닫기를 시도하세요.")
         event.ignore()
 
-    def show_toast(self, message, duration=3000):
+    def show_toast(self: Any, message, duration=3000):
         # 화면 우측 하단에 표시
         toast = ToastWidget(message, self)
         
@@ -356,16 +370,18 @@ class AppLifecycleMixin:
         QTimer.singleShot(duration + 500, lambda: self.toast_widgets.remove(toast) if toast in self.toast_widgets else None)
         QTimer.singleShot(duration + 500, self._reposition_toasts)
 
-    def _reposition_toasts(self):
-        # 유효하지 않은 위젯 제거
-        try:
-            import sip
-            self.toast_widgets = [t for t in self.toast_widgets if not sip.isdeleted(t)]
-        except ImportError:
-            # sip을 임포트할 수 없는 경우 (PySide6 등) 예외 처리
-            pass
-        except Exception:
-            pass
+    def _reposition_toasts(self: Any):
+        # ?????? ??? ??? ???
+        alive = []
+        for toast in list(self.toast_widgets):
+            try:
+                toast.isVisible()
+                alive.append(toast)
+            except RuntimeError:
+                continue
+            except Exception:
+                continue
+        self.toast_widgets = alive
 
         margin = 20
         y = self.height() - margin
@@ -385,16 +401,21 @@ class AppLifecycleMixin:
 
 
 
-    def _toggle_view_mode(self):
+    def _toggle_view_mode(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab._toggle_view_mode()
             return
         ui_logger.warning("CrawlerTab unavailable for _toggle_view_mode.")
         
-    def show_notification(self, title: str, message: str):
+    def show_notification(self: Any, title: str, message: str):
         """시스템 트레이 알림 표시"""
-        if settings.get("show_notifications", True) and NOTIFICATION_AVAILABLE:
+        if (
+            settings.get("show_notifications", True)
+            and NOTIFICATION_AVAILABLE
+            and notification is not None
+            and hasattr(notification, "notify")
+        ):
             try:
                 notification.notify(
                     title=title,
@@ -406,7 +427,7 @@ class AppLifecycleMixin:
             except Exception as e:
                 ui_logger.warning(f"알림 표시 실패: {e}")
 
-    def _show_recently_viewed_dialog(self):
+    def _show_recently_viewed_dialog(self: Any):
         """최근 본 매물 다이얼로그 (v13.0)"""
         dlg = QDialog(self)
         dlg.setWindowTitle("🕐 최근 본 매물")

@@ -363,3 +363,17 @@ COLORS["light"] = {
   - `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 문서로 유지하고, 문서 내 정합성 추적 섹션 추가.
 - 무시 규칙 검토:
   - `.gitignore`의 빌드/로그/백업/Playwright 산출물 규칙(`build/`, `dist/`, `logs/`, `backup/`, `backups/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/`)은 현 상태로 충분.
+
+## 0-10. v15.0.6 UI/Typing/Packaging Stabilization (2026-03-08)
+- UI 사용성 정합:
+  - 수집 탭 검색 조건 패널에 내부/외부 `QSplitter` 상태 저장/복원 적용.
+  - 전역 wheel-guard(`QSpinBox/QDoubleSpinBox/QComboBox`)로 휠 오입력 변경 방지.
+  - 콤보박스는 팝업 열린 상태에서만 휠 선택 허용.
+  - 라이트/다크 테마별 드롭다운 팝업(`QComboBox QAbstractItemView`) 색상 대비 보정.
+- 타입 안정화:
+  - `src/` 전역 Pylance/Pyright 오류를 구조 보강 중심으로 정리.
+  - 기준: `npx pyright src` -> `0 errors`.
+- 패키징 안정화:
+  - `.spec` hidden import를 `matplotlib.backends.backend_qtagg` 기준으로 정리.
+  - `NAVERLAND_CONSOLE=1` 빌드 스위치 추가(조용한 GUI 실패 디버깅용 콘솔 출력).
+  - `NAVERLAND_BUNDLE_CHROMIUM=1`에서 Chromium 탐지 실패 시 spec 경고 로그 출력.

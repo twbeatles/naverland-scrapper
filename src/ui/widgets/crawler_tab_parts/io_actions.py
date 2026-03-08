@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.widgets.crawler_tab import *  # noqa: F403
+
 
 class CrawlerTabIOActionsMixin:
-    def get_filter_state(self):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def get_filter_state(self: Any):
         """현재 필터 상태 반환"""
         return {
             "area": {
@@ -26,7 +34,7 @@ class CrawlerTabIOActionsMixin:
             # Add other settings...
         }
 
-    def set_filter_state(self, state):
+    def set_filter_state(self: Any, state):
         """필터 상태 적용"""
         if "area" in state:
             area = state["area"]
@@ -51,7 +59,7 @@ class CrawlerTabIOActionsMixin:
                 p.get("monthly_rent_max", p.get("monthly_max", 5000))
             )
         
-    def show_save_menu(self):
+    def show_save_menu(self: Any):
         menu = QMenu(self)
         menu.addAction("📊 Excel로 저장", self.save_excel)
         menu.addAction("📄 CSV로 저장", self.save_csv)
@@ -60,7 +68,7 @@ class CrawlerTabIOActionsMixin:
         menu.addAction("⚙️ 엑셀 템플릿 설정", self._show_excel_template_dialog)
         menu.exec(self.btn_save.mapToGlobal(self.btn_save.rect().bottomLeft()))
 
-    def save_excel(self):
+    def save_excel(self: Any):
         if not self.collected_data: return
         path, _ = QFileDialog.getSaveFileName(self, "Excel 저장", f"부동산_{DateTimeHelper.file_timestamp()}.xlsx", "Excel (*.xlsx)")
         if path:
@@ -73,7 +81,7 @@ class CrawlerTabIOActionsMixin:
                 QMessageBox.critical(self, "저장 실패", f"Excel 저장 중 오류가 발생했습니다:\n{e}")
                 logger.error(f"Excel Save Error: {e}")
 
-    def save_csv(self):
+    def save_csv(self: Any):
         if not self.collected_data: return
         path, _ = QFileDialog.getSaveFileName(self, "CSV 저장", f"부동산_{DateTimeHelper.file_timestamp()}.csv", "CSV (*.csv)")
         if path:
@@ -86,7 +94,7 @@ class CrawlerTabIOActionsMixin:
                 QMessageBox.critical(self, "저장 실패", f"CSV 저장 중 오류가 발생했습니다:\n{e}")
                 logger.error(f"CSV Save Error: {e}")
 
-    def save_json(self):
+    def save_json(self: Any):
         if not self.collected_data: return
         path, _ = QFileDialog.getSaveFileName(self, "JSON 저장", f"부동산_{DateTimeHelper.file_timestamp()}.json", "JSON (*.json)")
         if path:

@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.crawler import *  # noqa: F403
+
 
 class CrawlerHistoryAlertsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def register_discovered_complex(self, payload: dict):
         if not isinstance(payload, dict):
             return

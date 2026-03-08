@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 import sqlite3
 import time
 from pathlib import Path
@@ -11,6 +16,9 @@ from src.utils.logger import get_logger
 logger = get_logger("DB")
 
 class ConnectionPool:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def __init__(self, db_path, pool_size=5):
         self.db_path = Path(db_path)
         self.pool_size = pool_size
@@ -20,7 +28,7 @@ class ConnectionPool:
         self._leased_ids = set()
         self._all_connections = {}
         self._closing = False
-        logger.info(f"ConnectionPool 珥덇린?? {self.db_path}")
+        logger.info(f"ConnectionPool initialized: {self.db_path}")
         self._initialize_pool()
     
     def _initialize_pool(self):
@@ -31,10 +39,10 @@ class ConnectionPool:
                     self._all_connections[id(conn)] = conn
                 self._pool.put(conn)
             except Exception as e:
-                logger.error(f"?곌껐 ?앹꽦 ?ㅽ뙣 ({i+1}/{self.pool_size}): {e}")
+                logger.error(f"Connection creation failed ({i+1}/{self.pool_size}): {e}")
     
     def _create_connection(self):
-        # 遺紐??붾젆?좊━ ?뺤씤/?앹꽦
+        # Ensure parent directory exists before opening SQLite file.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
@@ -48,14 +56,14 @@ class ConnectionPool:
     def get_connection(self):
         with self._lease_lock:
             if self._closing:
-                raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
+                raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
         try:
             conn = self._pool.get(timeout=10)
         except Exception as e:
             with self._lease_lock:
                 if self._closing:
-                    raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
-            logger.warning(f"??먯꽌 ?곌껐 媛?몄삤湲??ㅽ뙣, ???곌껐 ?앹꽦: {e}")
+                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
+            logger.warning(f"Pool acquisition failed, creating fallback connection: {e}")
             conn = self._create_connection()
             with self._lease_lock:
                 if self._closing:
@@ -63,7 +71,7 @@ class ConnectionPool:
                         conn.close()
                     except Exception:
                         pass
-                    raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
+                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
                 self._all_connections[id(conn)] = conn
         with self._lease_lock:
             if self._closing:
@@ -72,7 +80,7 @@ class ConnectionPool:
                 except Exception:
                     pass
                 self._all_connections.pop(id(conn), None)
-                raise RuntimeError("ConnectionPool is closing; ?좉퇋 ?곌껐 ???遺덇?")
+                raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
             self._leased_ids.add(id(conn))
         return conn
     
@@ -88,7 +96,7 @@ class ConnectionPool:
             try:
                 conn.close()
             except Exception as e:
-                logger.debug(f"?곌껐 醫낅즺 以??ㅻ쪟: {e}")
+                logger.debug(f"Connection close ignored: {e}")
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
             return
@@ -98,13 +106,13 @@ class ConnectionPool:
             try:
                 conn.close()
             except Exception as e:
-                logger.debug(f"?곌껐 醫낅즺 以??ㅻ쪟: {e}")
+                logger.debug(f"Connection close ignored: {e}")
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
     
     def close_all(self, timeout_ms=8000):
-        """紐⑤뱺 ?곌껐 ?덉쟾?섍쾶 醫낅즺"""
-        logger.info("ConnectionPool 醫낅즺 ?쒖옉...")
+        """Close all tracked pool/leased connections."""
+        logger.info("ConnectionPool shutdown started...")
         closed_count = 0
         error_count = 0
 
@@ -146,8 +154,8 @@ class ConnectionPool:
                 conn.close()
                 closed_count += 1
             except Exception as e:
-                logger.warning(f"?곌껐 醫낅즺 ?ㅽ뙣: {e}")
+                logger.warning(f"Connection close failed: {e}")
                 error_count += 1
 
-        logger.info(f"ConnectionPool 醫낅즺 ?꾨즺: {closed_count}媛?醫낅즺, {error_count}媛??ㅻ쪟")
+        logger.info(f"ConnectionPool shutdown complete: closed={closed_count}, errors={error_count}")
 

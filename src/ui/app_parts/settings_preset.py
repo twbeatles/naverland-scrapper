@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.app import *  # noqa: F403
+
 
 class AppSettingsPresetMixin:
-    def _toggle_theme(self, theme=None):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _toggle_theme(self: Any, theme=None):
         if theme in ("dark", "light"):
             new_theme = theme
         else:
@@ -23,15 +31,15 @@ class AppSettingsPresetMixin:
         settings.set("theme", new_theme)
         self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")
     
-    def _show_settings(self):
+    def _show_settings(self: Any):
         dlg = SettingsDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._apply_settings()
     
-    def _apply_settings(self):
+    def _apply_settings(self: Any):
         """설정 변경 후 적용"""
         # 테마 변경 체크
-        new_theme = settings.get("theme", "dark")
+        new_theme = str(settings.get("theme", "dark") or "dark")
         if new_theme != self.current_theme:
             self.current_theme = new_theme
             self.setStyleSheet(get_stylesheet(new_theme))
@@ -84,7 +92,7 @@ class AppSettingsPresetMixin:
         if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'update_runtime_settings'):
             self.geo_tab.update_runtime_settings()
     
-    def _save_preset(self):
+    def _save_preset(self: Any):
         name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")
         if ok and name:
             ct = self.crawler_tab
@@ -110,7 +118,7 @@ class AppSettingsPresetMixin:
             if self.preset_manager.save_preset(name, config):
                 self.show_toast(f"프리셋 '{name}' 저장 완료")
     
-    def _load_preset(self):
+    def _load_preset(self: Any):
         dialog = PresetDialog(self, self.preset_manager)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_preset:
             preset_name = dialog.selected_preset
@@ -148,10 +156,10 @@ class AppSettingsPresetMixin:
             )
             self.show_toast("프리셋을 불러왔습니다")
     
-    def _show_alert_settings(self):
+    def _show_alert_settings(self: Any):
         AlertSettingDialog(self, self.db).exec()
     
-    def _show_advanced_filter(self):
+    def _show_advanced_filter(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.open_advanced_filter_dialog()
@@ -159,26 +167,26 @@ class AppSettingsPresetMixin:
         ui_logger.warning("CrawlerTab unavailable for advanced filter dialog.")
         self.status_bar.showMessage("고급 필터를 열 수 없습니다.")
 
-    def _apply_advanced_filter(self):
+    def _apply_advanced_filter(self: Any):
         self._show_advanced_filter()
 
-    def _filter_results_advanced(self):
+    def _filter_results_advanced(self: Any):
         self._show_advanced_filter()
 
-    def _clear_advanced_filter(self):
+    def _clear_advanced_filter(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
             self.crawler_tab.clear_advanced_filters()
             return
         ui_logger.warning("CrawlerTab unavailable for clearing advanced filter.")
 
-    def _render_results(self, data, render_only=True):
+    def _render_results(self: Any, data, render_only=True):
         ui_logger.warning("Deprecated app-level _render_results invoked; ignoring.")
 
-    def _restore_summary(self):
+    def _restore_summary(self: Any):
         ui_logger.warning("Deprecated app-level _restore_summary invoked; ignoring.")
 
-    def _is_default_advanced_filter(self, filters: dict) -> bool:
+    def _is_default_advanced_filter(self: Any, filters: dict) -> bool:
         defaults = {
             "price_min": 0,
             "price_max": 9999999,
@@ -200,7 +208,7 @@ class AppSettingsPresetMixin:
             return False
         return True
 
-    def _refresh_favorite_keys(self):
+    def _refresh_favorite_keys(self: Any):
         try:
             favorites = self.db.get_favorites()
             keys = set()
@@ -214,7 +222,7 @@ class AppSettingsPresetMixin:
             ui_logger.debug(f"즐겨찾기 키 로드 실패 (무시): {e}")
             self.favorite_keys = set()
 
-    def _on_favorite_toggled(self, article_id, complex_id, is_fav):
+    def _on_favorite_toggled(self: Any, article_id, complex_id, is_fav):
         if not article_id or not complex_id:
             return
         try:
@@ -228,12 +236,12 @@ class AppSettingsPresetMixin:
             if hasattr(self, 'favorites_tab'):
                 self.favorites_tab.refresh()
     
-    def _check_advanced_filter(self, d):
+    def _check_advanced_filter(self: Any, d):
         if hasattr(self, "crawler_tab"):
             return self.crawler_tab._check_advanced_filter(d)
         return True
 
-    def _show_url_batch_dialog(self):
+    def _show_url_batch_dialog(self: Any):
         # Legacy compatibility: delegate to active CrawlerTab.
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
@@ -241,13 +249,13 @@ class AppSettingsPresetMixin:
             return
         ui_logger.warning("CrawlerTab unavailable for URL batch dialog.")
     
-    def _add_complexes_from_url(self, urls):
+    def _add_complexes_from_url(self: Any, urls):
         if hasattr(self, "crawler_tab"):
             self.crawler_tab._add_complexes_from_url(urls)
             return
         ui_logger.warning("CrawlerTab unavailable for _add_complexes_from_url.")
 
-    def _add_complexes_from_dialog(self, complexes):
+    def _add_complexes_from_dialog(self: Any, complexes):
         if hasattr(self, "crawler_tab"):
             for name, cid in complexes:
                 self.crawler_tab.add_task(name, cid)
@@ -256,13 +264,13 @@ class AppSettingsPresetMixin:
             return
         ui_logger.warning("CrawlerTab unavailable for _add_complexes_from_dialog.")
 
-    def _show_excel_template_dialog(self):
+    def _show_excel_template_dialog(self: Any):
         current_template = settings.get("excel_template")
         dlg = ExcelTemplateDialog(self, current_template=current_template)
         dlg.template_saved.connect(self._save_excel_template)
         dlg.exec()
 
-    def _save_excel_template(self, template):
+    def _save_excel_template(self: Any, template):
         settings.set("excel_template", template)
         self.show_toast("엑셀 템플릿이 저장되었습니다")
 

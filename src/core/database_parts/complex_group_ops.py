@@ -1,7 +1,20 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 
 class ComplexDatabaseComplexGroupOpsMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
+    @staticmethod
+    def _normalize_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
+
     def add_complex(
         self,
         name,

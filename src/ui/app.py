@@ -1,4 +1,5 @@
 import sys, os, re, json, csv, time, random, shutil, logging, sqlite3, webbrowser
+import importlib
 from queue import Queue, Empty as QueueEmpty, Full as QueueFull
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -24,9 +25,11 @@ from PyQt6.QtCore import Qt, QTimer, QTime, QThread, pyqtSignal, QUrl, QPoint
 from PyQt6.QtGui import QAction, QColor, QShortcut, QKeySequence, QFont, QDesktopServices, QCursor
 
 try:
-    from plyer import notification
-    NOTIFICATION_AVAILABLE = True
-except ImportError:
+    _plyer_module = importlib.import_module("plyer")
+    notification = getattr(_plyer_module, "notification", None)
+    NOTIFICATION_AVAILABLE = notification is not None
+except Exception:
+    notification = None
     NOTIFICATION_AVAILABLE = False
 
 from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
@@ -34,6 +37,7 @@ from src.utils.logger import get_logger
 from src.core.database import ComplexDatabase
 from src.core.managers import SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
 from src.ui.styles import get_stylesheet
+from src.ui.input_wheel_guard import install_global_wheel_guard, apply_wheel_guard_recursively
 from src.utils.helpers import DateTimeHelper, get_article_url
 
 from src.ui.widgets.crawler_tab import CrawlerTab
@@ -42,7 +46,7 @@ from src.ui.widgets.database_tab import DatabaseTab
 from src.ui.widgets.group_tab import GroupTab
 from src.ui.widgets.tabs import FavoritesTab
 
-from src.ui.widgets.dashboard import DashboardWidget
+from src.ui.widgets.dashboard import DashboardWidget, CardViewWidget
 from src.ui.widgets.chart import ChartWidget
 from src.ui.widgets.components import SortableTableWidgetItem
 from src.ui.dialogs import (

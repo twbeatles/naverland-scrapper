@@ -118,8 +118,10 @@ python src/main.py
 * onedir 강제: PowerShell에서 `$env:NAVERLAND_ONEFILE='0'; pyinstaller naverland-scrapper.spec`
 * onefile 복귀: PowerShell에서 `$env:NAVERLAND_ONEFILE='1'; pyinstaller naverland-scrapper.spec`
 * Chromium 번들 포함(onefile): PowerShell에서 `$env:NAVERLAND_BUNDLE_CHROMIUM='1'; pyinstaller naverland-scrapper.spec`
+* 콘솔 디버깅 빌드(onefile): PowerShell에서 `$env:NAVERLAND_CONSOLE='1'; pyinstaller naverland-scrapper.spec`
 
-현재 spec은 Playwright hidden imports를 포함하며, Chromium 번들은 `NAVERLAND_BUNDLE_CHROMIUM=1`일 때만 포함합니다.
+현재 spec은 Playwright hidden imports를 포함하며, Chromium 번들은 `NAVERLAND_BUNDLE_CHROMIUM=1`일 때만 포함합니다.  
+`NAVERLAND_CONSOLE=1`을 주면 GUI 빌드에서도 콘솔 창을 띄워 시작 실패 로그를 직접 확인할 수 있습니다.
 
 빌드 산출물 이름은 모드에 따라 다릅니다.
 
@@ -237,3 +239,16 @@ python src/main.py
 - 감사 문서 상태 정합화: `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 문서로 유지하고, 문서 내부에 정합성 추적 메모를 추가했습니다.
 - 문서 정합성 동기화: `README.md`, `claude.md`, `gemini.md`, `update_history.md`의 fallback 정책(`complex`만 Selenium fallback), `geo_sweep` 정책(Playwright 전용), 분할 리팩토링 경로 표기를 동일 기준으로 맞췄습니다.
 - `.gitignore` 재확인 결과: 현재 빌드/로그/백업/Playwright 산출물 무시 규칙으로 충분하며 추가 패턴은 필요하지 않습니다.
+
+## v15.0.6 UI/Typing/Packaging Stabilization (2026-03-08)
+
+- UI 사용성 정합화:
+  - 검색 조건 좌/우 패널 + 내부 조건 섹션을 스플리터로 조절하고, 분할 비율을 설정에 저장/복원합니다.
+  - 입력 위젯 전역 wheel-guard를 도입해 `QSpinBox/QDoubleSpinBox/QComboBox`에서 휠 오입력 변경을 방지합니다(콤보는 팝업 열린 경우만 휠 허용).
+  - 라이트/다크 테마별 드롭다운 팝업 가독성을 보정했습니다(`QComboBox QAbstractItemView` 상태별 색상 분리).
+- 타입 안정화:
+  - `npx pyright src` 기준 `0 errors`를 달성하도록 `src/` 전역 타입 오류를 정리했습니다.
+- 패키징 점검:
+  - `.spec`에서 Matplotlib Qt backend hidden import를 `backend_qtagg` 기준으로 정리했습니다.
+  - `NAVERLAND_CONSOLE=1` 빌드 스위치를 추가해 GUI 실행 실패 시 콘솔 로그 확인 경로를 열었습니다.
+  - Chromium 번들 탐지 실패(`NAVERLAND_BUNDLE_CHROMIUM=1`)가 조용히 묻히지 않도록 spec 단계 경고 메시지를 출력합니다.

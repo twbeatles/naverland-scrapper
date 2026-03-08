@@ -14,6 +14,7 @@ htmlcov/
 # Logs
 logs/
 *.log
+pyright_errors*.txt
 
 # Data (Scraped data, DBs)
 data/

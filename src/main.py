@@ -1,19 +1,72 @@
-import sys
+import locale
 import os
+import sys
+from pathlib import Path
 
-# Add project root to sys.path to allow running this script directly
+# Add project root to sys.path to allow running this script directly.
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src.utils.logger import get_logger, setup_logger, cleanup_old_logs
+from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
 from src.utils.paths import ensure_directories
 from src.utils.plot import setup_korean_font
 from src.utils.preflight import run_preflight_checks
 
 
+def _configure_stdio_encoding() -> None:
+    """Align stdout/stderr encoding with the current terminal on Windows."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is None or not hasattr(stream, "reconfigure"):
+            continue
+
+        encoding = None
+        try:
+            fileno = stream.fileno()
+            encoding = os.device_encoding(fileno)
+        except Exception:
+            encoding = None
+
+        if not encoding:
+            encoding = locale.getpreferredencoding(False) or "utf-8"
+
+        try:
+            stream.reconfigure(encoding=encoding, errors="replace")
+        except Exception:
+            continue
+
+
+def _configure_qt_font_dir() -> None:
+    """Point Qt to a real font directory in packaged Windows environments."""
+    if os.name != "nt":
+        return
+    if os.environ.get("QT_QPA_FONTDIR"):
+        return
+
+    candidates = [
+        Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts",
+        Path("C:/Windows/Fonts"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            os.environ["QT_QPA_FONTDIR"] = str(candidate)
+            return
+
+
+def _apply_default_app_font(app) -> None:
+    from PyQt6.QtGui import QFont
+
+    font = QFont("Malgun Gothic", 10)
+    if font.pointSize() <= 0 and font.pixelSize() <= 0:
+        font.setPointSize(10)
+    app.setFont(font)
+
+
 def main():
-    # 경로 및 로깅 설정
+    _configure_stdio_encoding()
+    _configure_qt_font_dir()
+
     ensure_directories()
     setup_logger()
     logger = get_logger("Main")
@@ -31,20 +84,13 @@ def main():
         sys.__excepthook__(exc_type, exc, tb)
 
     sys.excepthook = _excepthook
-
-    # Matplotlib 폰트 설정
     setup_korean_font()
 
     from PyQt6.QtWidgets import QApplication
     from src.ui.app import RealEstateApp
 
     app = QApplication(sys.argv)
-
-    # 폰트 설정 (옵션)
-    from PyQt6.QtGui import QFont
-
-    font = QFont("Malgun Gothic", 10)
-    app.setFont(font)
+    _apply_default_app_font(app)
 
     window = RealEstateApp()
     window.show()

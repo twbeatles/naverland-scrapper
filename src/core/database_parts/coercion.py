@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+import re
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 
 class ComplexDatabaseCoercionMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+    _NUMERIC_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else DB_PATH
-        logger.info(f"ComplexDatabase 珥덇린?? {self.db_path}")
+        logger.info(f"ComplexDatabase initialized: {self.db_path}")
         self._pool = ConnectionPool(self.db_path)
         self._write_lock = Lock()
         self._write_disabled_reason = ""
@@ -47,16 +57,16 @@ class ComplexDatabaseCoercionMixin:
         self._write_disabled_reason = str(reason or "unknown")
         if exc is not None:
             logger.critical(
-                f"DB write 鍮꾪솢?깊솕: {self._write_disabled_reason} ({exc})"
+                f"DB writes disabled: {self._write_disabled_reason} ({exc})"
             )
         else:
-            logger.critical(f"DB write 鍮꾪솢?깊솕: {self._write_disabled_reason}")
+            logger.critical(f"DB writes disabled: {self._write_disabled_reason}")
 
     def _log_corruption_detected(self, context: str, exc):
         if self._is_corruption_sqlite_error(exc):
             self._disable_writes("database_corruption", exc)
             logger.critical(
-                f"DB ?먯긽 媛먯?({context}). ????DB 蹂듭썝 湲곕뒫?쇰줈 ?뺤긽 諛깆뾽蹂몄쓣 蹂듭썝?섏꽭??"
+                f"DB corruption detected ({context}). Recover from backup or recreate the database."
             )
 
     @staticmethod
@@ -309,13 +319,13 @@ class ComplexDatabaseCoercionMixin:
         except Exception as e:
             self._log_corruption_detected(context or "read", e)
             if context:
-                logger.error(f"{context} ?ㅽ뙣: {e}")
+                logger.error(f"{context} query failed: {e}")
             else:
-                logger.error(f"DB 議고쉶 ?ㅽ뙣: {e}")
+                logger.error(f"DB query failed: {e}")
             return []
 
     @classmethod
-    def _coerce_float(cls, value, default=0.0):
+    def _coerce_float(cls, value, default: float | None = 0.0):
         if value is None:
             return default
         if isinstance(value, bool):
@@ -325,7 +335,7 @@ class ComplexDatabaseCoercionMixin:
         text = str(value).strip().replace(",", "")
         if not text:
             return default
-        text = text.replace("평", "").replace("㎡", "")
+        text = text.strip()
         match = cls._NUMERIC_RE.search(text)
         if not match:
             return default
@@ -368,16 +378,16 @@ class ComplexDatabaseCoercionMixin:
         text = str(value).strip().replace(",", "")
         if not text:
             return default
-        if any(token in text for token in ("억", "만")):
-            parsed = PriceConverter.to_int(text)
-            if parsed > 0 or text in {"0", "0만", "0억"}:
-                return parsed
+        parsed = PriceConverter.to_int(text)
+        if parsed > 0:
+            return parsed
+        if text in {"0", "0.0"}:
+            return 0
         return cls._coerce_int(text, default=default)
-
     @staticmethod
     def _is_all_filter_value(value) -> bool:
         token = str(value or "").strip().lower()
-        return token in {"", "all", "전체", "?꾩껜"}
+        return token in {"", "all", "전체"}
 
     @staticmethod
     def _row_value(row, key, index, default=None):

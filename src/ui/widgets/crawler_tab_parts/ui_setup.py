@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.widgets.crawler_tab import *  # noqa: F403
+
 
 class CrawlerTabUISetupMixin:
-    def __init__(self, db, history_manager=None, theme="dark", parent=None, maintenance_guard=None):
-        super().__init__(parent)
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def __init__(self: Any, db, history_manager=None, theme="dark", parent=None, maintenance_guard=None):
+        base_init: Any = super().__init__
+        base_init(parent)
         self.db = db
         self.history_manager = history_manager
         self.current_theme = theme
@@ -29,14 +38,18 @@ class CrawlerTabUISetupMixin:
             debounce_ms = 220
         self._search_timer.setInterval(debounce_ms)
         self._search_timer.timeout.connect(self._apply_search_filter)
+        self._splitter_save_timer = QTimer(self)
+        self._splitter_save_timer.setSingleShot(True)
+        self._splitter_save_timer.setInterval(250)
+        self._splitter_save_timer.timeout.connect(self._save_splitter_state)
         
         # UI Setup
         self._init_ui()
         self._load_state()
 
-    def _init_ui(self):
+    def _init_ui(self: Any):
         layout = QHBoxLayout(self)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # Left Panel (Controls)
         scroll = QScrollArea()
@@ -46,17 +59,31 @@ class CrawlerTabUISetupMixin:
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
-        left.setSpacing(10)
-        
-        self._setup_options_group(left)
-        self._setup_filter_group(left)
-        self._setup_complex_list_group(left)
-        self._setup_speed_group(left)
-        self._setup_action_group(left)
-        
-        left.addStretch()
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(8)
+
+        self.controls_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.controls_splitter.setChildrenCollapsible(False)
+        self.controls_splitter.setHandleWidth(8)
+
+        def _section(setup_fn):
+            section = QWidget()
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(0)
+            setup_fn(section_layout)
+            section_layout.addStretch(1)
+            return section
+
+        self.controls_splitter.addWidget(_section(self._setup_options_group))
+        self.controls_splitter.addWidget(_section(self._setup_filter_group))
+        self.controls_splitter.addWidget(_section(self._setup_complex_list_group))
+        self.controls_splitter.addWidget(_section(self._setup_speed_group))
+        self.controls_splitter.addWidget(_section(self._setup_action_group))
+        left.addWidget(self.controls_splitter, 1)
+
         scroll.setWidget(scroll_content)
-        splitter.addWidget(scroll)
+        self.main_splitter.addWidget(scroll)
         
         # Right Panel (Results)
         right_w = QWidget()
@@ -68,20 +95,62 @@ class CrawlerTabUISetupMixin:
         
         self._setup_result_area(right)
         
-        splitter.addWidget(right_w)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([520, 880])
-        layout.addWidget(splitter)
+        self.main_splitter.addWidget(right_w)
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.setStretchFactor(0, 0)
+        self.main_splitter.setStretchFactor(1, 1)
+        self.main_splitter.setSizes([520, 880])
+        self.main_splitter.splitterMoved.connect(lambda *_: self._queue_splitter_state_save())
+        self.controls_splitter.splitterMoved.connect(lambda *_: self._queue_splitter_state_save())
+        layout.addWidget(self.main_splitter)
 
-    def _configure_filter_spinbox(self, spinbox):
+    def _queue_splitter_state_save(self: Any):
+        self._splitter_save_timer.start()
+
+    def _save_splitter_state(self: Any):
+        if not hasattr(self, "main_splitter") or not hasattr(self, "controls_splitter"):
+            return
+        settings.update(
+            {
+                "crawler_main_splitter_sizes": list(self.main_splitter.sizes()),
+                "crawler_controls_splitter_sizes": list(self.controls_splitter.sizes()),
+            }
+        )
+
+    def _restore_splitter_state(self: Any):
+        main_default = [520, 880]
+        control_count = int(getattr(self.controls_splitter, "count", lambda: 0)())
+        control_default = [170, 300, 340, 140, 120]
+        if control_count != len(control_default):
+            control_default = [1 for _ in range(max(control_count, 1))]
+
+        main_sizes = settings.get("crawler_main_splitter_sizes", main_default) or main_default
+        control_sizes = settings.get("crawler_controls_splitter_sizes", control_default) or control_default
+        try:
+            main_values = [max(1, int(v)) for v in main_sizes]
+        except (TypeError, ValueError):
+            main_values = main_default
+        try:
+            control_values = [max(1, int(v)) for v in control_sizes]
+        except (TypeError, ValueError):
+            control_values = control_default
+
+        if len(main_values) != 2:
+            main_values = main_default
+        if len(control_values) != control_count:
+            control_values = control_default
+
+        self.main_splitter.setSizes(main_values)
+        self.controls_splitter.setSizes(control_values)
+
+    def _configure_filter_spinbox(self: Any, spinbox):
         """Compact spinbox policy for narrow control panel / HiDPI scaling."""
         spinbox.setMinimumWidth(80)
         spinbox.setMaximumWidth(180)
         spinbox.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         spinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-    def _setup_options_group(self, layout):
+    def _setup_options_group(self: Any, layout):
         # 1. 거래유형
         tg = QGroupBox("1️⃣ 거래 유형")
         tl = QHBoxLayout()
@@ -97,7 +166,7 @@ class CrawlerTabUISetupMixin:
         tg.setLayout(tl)
         layout.addWidget(tg)
 
-    def _setup_filter_group(self, layout):
+    def _setup_filter_group(self: Any, layout):
         # 2. 면적 필터
         ag = QGroupBox("2️⃣ 면적 필터")
         al = QVBoxLayout()
@@ -220,7 +289,7 @@ class CrawlerTabUISetupMixin:
         pg.setLayout(pl)
         layout.addWidget(pg)
 
-    def _setup_complex_list_group(self, layout):
+    def _setup_complex_list_group(self: Any, layout):
         cg = QGroupBox("4️⃣ 단지 목록")
         cl = QVBoxLayout()
         
@@ -259,7 +328,9 @@ class CrawlerTabUISetupMixin:
         self.table_list = QTableWidget()
         self.table_list.setColumnCount(2)
         self.table_list.setHorizontalHeaderLabels(["단지명", "ID"])
-        self.table_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        table_list_header = self.table_list.horizontalHeader()
+        if table_list_header is not None:
+            table_list_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_list.setMinimumHeight(130)
         self.table_list.setAlternatingRowColors(True)
         self.table_list.doubleClicked.connect(self._open_complex_url)
@@ -284,7 +355,7 @@ class CrawlerTabUISetupMixin:
         cg.setLayout(cl)
         layout.addWidget(cg)
 
-    def _setup_speed_group(self, layout):
+    def _setup_speed_group(self: Any, layout):
         spg = QGroupBox("5️⃣ 크롤링 속도")
         spl = QVBoxLayout()
         engine_row = QHBoxLayout()
@@ -304,7 +375,7 @@ class CrawlerTabUISetupMixin:
         spg.setLayout(spl)
         layout.addWidget(spg)
 
-    def _setup_action_group(self, layout):
+    def _setup_action_group(self: Any, layout):
         eg = QGroupBox("6️⃣ 실행")
         el = QHBoxLayout()
         el.setSpacing(10)
@@ -332,7 +403,7 @@ class CrawlerTabUISetupMixin:
         eg.setLayout(el)
         layout.addWidget(eg)
 
-    def _setup_result_area(self, layout):
+    def _setup_result_area(self: Any, layout):
         # Search & Sort
         search_sort = QHBoxLayout()
         self.check_compact_duplicates = QCheckBox("동일 매물 묶기")
@@ -424,23 +495,24 @@ class CrawlerTabUISetupMixin:
         self.progress_widget = ProgressWidget()
         layout.addWidget(self.progress_widget)
 
-    def _load_state(self):
+    def _load_state(self: Any):
         # Load any persisted state if needed
         logger.debug("CrawlerTab 상태 로드 없음 (기본값 사용)")
+        self._restore_splitter_state()
         self.update_runtime_settings()
         self._update_advanced_filter_badge()
 
-    def set_theme(self, theme):
+    def set_theme(self: Any, theme):
         self.current_theme = theme
         if hasattr(self, 'summary_card'):
             self.summary_card.set_theme(theme)
         if hasattr(self, 'card_view'):
             self.card_view.is_dark = (theme == "dark")
 
-    def _on_speed_changed(self, speed):
+    def _on_speed_changed(self: Any, speed):
         settings.set("crawl_speed", speed)
 
-    def _default_sort_criterion(self):
+    def _default_sort_criterion(self: Any):
         column = str(settings.get("default_sort_column", "가격") or "가격")
         order = str(settings.get("default_sort_order", "asc") or "asc").lower()
         if column == "거래":
@@ -450,7 +522,7 @@ class CrawlerTabUISetupMixin:
         arrow = "↑" if order == "asc" else "↓"
         return f"{column} {arrow}"
 
-    def _apply_default_sort_settings(self):
+    def _apply_default_sort_settings(self: Any):
         criterion = self._default_sort_criterion()
         idx = self.combo_sort.findText(criterion)
         if idx < 0:
@@ -461,7 +533,7 @@ class CrawlerTabUISetupMixin:
         if self.result_table.rowCount() > 0:
             self._sort_results(self.combo_sort.currentText())
 
-    def update_runtime_settings(self):
+    def update_runtime_settings(self: Any):
         try:
             debounce_ms = max(80, int(settings.get("result_filter_debounce_ms", 220)))
         except (TypeError, ValueError):
@@ -475,12 +547,12 @@ class CrawlerTabUISetupMixin:
         compact = bool(settings.get("compact_duplicate_listings", True))
         self.check_compact_duplicates.setChecked(compact)
         
-    def _toggle_area_filter(self, state):
+    def _toggle_area_filter(self: Any, state):
         enabled = state == Qt.CheckState.Checked.value
         self.spin_area_min.setEnabled(enabled)
         self.spin_area_max.setEnabled(enabled)
         
-    def _toggle_price_filter(self, state):
+    def _toggle_price_filter(self: Any, state):
         enabled = state == Qt.CheckState.Checked.value
         for w in [
             self.spin_trade_min,

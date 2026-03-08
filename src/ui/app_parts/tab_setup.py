@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.app import *  # noqa: F403
+
 
 class AppTabSetupMixin:
-    def _init_ui(self):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _init_ui(self: Any):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         layout = QVBoxLayout(main_widget)
@@ -60,7 +68,7 @@ class AppTabSetupMixin:
     # _setup_crawler_tab, _setup_db_tab, _setup_groups_tab removed
 
     
-    def _setup_schedule_tab(self):
+    def _setup_schedule_tab(self: Any):
         self.schedule_tab = QWidget()
         layout = QVBoxLayout(self.schedule_tab)
         sg = QGroupBox("⏰ 예약 크롤링")
@@ -90,7 +98,7 @@ class AppTabSetupMixin:
         layout.addStretch()
         self.tabs.addTab(self.schedule_tab, "⏰ 예약 설정")
     
-    def _setup_history_tab(self):
+    def _setup_history_tab(self: Any):
         self.history_tab = QWidget()
         layout = QVBoxLayout(self.history_tab)
         bl = QHBoxLayout()
@@ -102,12 +110,14 @@ class AppTabSetupMixin:
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(5)
         self.history_table.setHorizontalHeaderLabels(["단지명", "단지ID", "거래유형", "수집건수", "수집시각"])
-        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        history_header = self.history_table.horizontalHeader()
+        if history_header is not None:
+            history_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
         layout.addWidget(self.history_table)
         self.tabs.addTab(self.history_tab, "📜 히스토리")
     
-    def _setup_stats_tab(self):
+    def _setup_stats_tab(self: Any):
         self.stats_tab = QWidget()
         layout = QVBoxLayout(self.stats_tab)
         fl = QHBoxLayout()
@@ -132,7 +142,9 @@ class AppTabSetupMixin:
         self.stats_table = QTableWidget()
         self.stats_table.setColumnCount(6)
         self.stats_table.setHorizontalHeaderLabels(["날짜", "유형", "평형", "최저가", "최고가", "평균가"])
-        self.stats_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        stats_header = self.stats_table.horizontalHeader()
+        if stats_header is not None:
+            stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.stats_table.setAlternatingRowColors(True)
         
         # v10.0: Chart Integration
@@ -147,7 +159,7 @@ class AppTabSetupMixin:
         layout.addWidget(self.stats_splitter)
         self.tabs.addTab(self.stats_tab, "📈 통계/변동")
     
-    def _setup_dashboard_tab(self):
+    def _setup_dashboard_tab(self: Any):
         """v13.0: 분석 대시보드 탭 (lazy load)"""
         self.dashboard_tab = QWidget()
         self.dashboard_layout = QVBoxLayout(self.dashboard_tab)
@@ -157,14 +169,14 @@ class AppTabSetupMixin:
         self.dashboard_widget = None
         self.tabs.addTab(self.dashboard_tab, "📊 대시보드")
     
-    def _setup_favorites_tab(self):
+    def _setup_favorites_tab(self: Any):
         """v13.0: 즐겨찾기 탭"""
         self.favorites_tab = FavoritesTab(
             self.db, theme=self.current_theme, favorite_toggled=self._on_favorite_toggled
         )
         self.tabs.addTab(self.favorites_tab, "⭐ 즐겨찾기")
     
-    def _setup_guide_tab(self):
+    def _setup_guide_tab(self: Any):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         browser = QTextBrowser()
@@ -201,7 +213,7 @@ class AppTabSetupMixin:
         layout.addWidget(browser)
         self.tabs.addTab(tab, "📖 가이드")
     
-    def _ensure_chart_widget(self):
+    def _ensure_chart_widget(self: Any):
         if self.chart_widget is not None:
             return
         self.chart_widget = ChartWidget()
@@ -213,7 +225,7 @@ class AppTabSetupMixin:
         self.chart_placeholder.hide()
         self.chart_placeholder.deleteLater()
 
-    def _ensure_dashboard_widget(self):
+    def _ensure_dashboard_widget(self: Any):
         if self.dashboard_widget is not None:
             return
         self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
@@ -225,7 +237,7 @@ class AppTabSetupMixin:
         if self.collected_data:
             self.dashboard_widget.set_data(self.collected_data)
 
-    def _refresh_tab(self):
+    def _refresh_tab(self: Any):
         current = self.tabs.currentWidget()
         if current is self.db_tab:
             self.db_tab.load_data()

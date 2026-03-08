@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.app import *  # noqa: F403
+
 
 class AppStatsScheduleMixin:
-    def _load_schedule_groups(self):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _load_schedule_groups(self: Any):
         self.schedule_group_combo.clear()
         for gid, name, _ in self.db.get_all_groups():
             self.schedule_group_combo.addItem(name, gid)
         self._update_schedule_state()
     
-    def _check_schedule(self):
+    def _check_schedule(self: Any):
         if not self.check_schedule.isChecked(): return
         if self.schedule_group_combo.count() == 0: return
         now = QTime.currentTime()
@@ -22,7 +30,7 @@ class AppStatsScheduleMixin:
         else:
             self.is_scheduled_run = False
     
-    def _run_scheduled(self):
+    def _run_scheduled(self: Any):
         gid = self.schedule_group_combo.currentData()
         if gid:
             if hasattr(self, 'crawler_tab'):
@@ -45,7 +53,7 @@ class AppStatsScheduleMixin:
                 self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
 
 
-    def _update_group_empty_state(self):
+    def _update_group_empty_state(self: Any):
         has_groups = self.group_list.count() > 0
         if hasattr(self, "group_empty_label"):
             self.group_empty_label.setVisible(not has_groups)
@@ -54,7 +62,7 @@ class AppStatsScheduleMixin:
             self.group_complex_table.setRowCount(0)
             self._update_group_complex_empty_state(0)
 
-    def _update_group_action_state(self):
+    def _update_group_action_state(self: Any):
         has_selection = self.group_list.currentRow() >= 0
         has_groups = self.group_list.count() > 0
         if hasattr(self, "group_btn_delete"):
@@ -67,18 +75,18 @@ class AppStatsScheduleMixin:
             if hasattr(self, "group_btn_remove"):
                 self.group_btn_remove.setEnabled(False)
 
-    def _update_group_complex_empty_state(self, count):
+    def _update_group_complex_empty_state(self: Any, count):
         is_empty = count == 0
         if hasattr(self, "group_complex_empty_label"):
             self.group_complex_empty_label.setVisible(is_empty)
         self.group_complex_table.setEnabled(not is_empty)
 
-    def _update_group_complex_action_state(self):
+    def _update_group_complex_action_state(self: Any):
         has_selection = self.group_complex_table.currentRow() >= 0
         if hasattr(self, "group_btn_remove"):
             self.group_btn_remove.setEnabled(has_selection)
 
-    def _update_schedule_state(self):
+    def _update_schedule_state(self: Any):
         has_groups = self.schedule_group_combo.count() > 0
         self.check_schedule.setEnabled(has_groups)
         self.time_edit.setEnabled(has_groups)
@@ -87,7 +95,7 @@ class AppStatsScheduleMixin:
             self.schedule_empty_label.setVisible(not has_groups)
     
     # History Tab handlers
-    def _load_history(self):
+    def _load_history(self: Any):
         self.history_table.setUpdatesEnabled(False)
         try:
             self.history_table.setRowCount(0)
@@ -128,7 +136,7 @@ class AppStatsScheduleMixin:
             return str(value)
 
     # Stats Tab handlers
-    def _load_stats_complexes(self):
+    def _load_stats_complexes(self: Any):
         current_cid = self.stats_complex_combo.currentData()
         self.stats_complex_combo.blockSignals(True)
         try:
@@ -147,7 +155,7 @@ class AppStatsScheduleMixin:
         finally:
             self.stats_complex_combo.blockSignals(False)
     
-    def _load_stats(self):
+    def _load_stats(self: Any):
         cid = self.stats_complex_combo.currentData()
         if not cid:
             return
@@ -222,7 +230,7 @@ class AppStatsScheduleMixin:
                 title
             )
     
-    def _on_stats_complex_changed(self, index):
+    def _on_stats_complex_changed(self: Any, index):
         """통계 탭 단지 변경 시 평형 콤보박스 업데이트"""
         cid = self.stats_complex_combo.currentData()
         if not cid:

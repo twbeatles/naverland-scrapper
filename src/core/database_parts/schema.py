@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.database import *  # noqa: F403
+
 
 class ComplexDatabaseSchemaMixin:
+    if TYPE_CHECKING:
+        def __getattr__(self, name: str) -> Any: ...
+
     def _init_tables(self):
         conn = self._pool.get_connection()
         try:
@@ -67,7 +75,7 @@ class ComplexDatabaseSchemaMixin:
                 enabled INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
-            # v7.3 ?좉퇋: 留ㅻЪ ?덉뒪?좊━ (?좉퇋 留ㅻЪ/媛寃?蹂??異붿쟻)
+            # v7.3: listing history table (initial listing + previous-price baseline)
             c.execute('''CREATE TABLE IF NOT EXISTS article_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -102,7 +110,7 @@ class ComplexDatabaseSchemaMixin:
                 gap_ratio REAL DEFAULT 0,
                 UNIQUE(article_id, complex_id)
             )''')
-            # v12.0 ?좉퇋: 留ㅻЪ 利먭꺼李얘린 諛?硫붾え
+            # v12.0: cache table for query-level response reuse
             c.execute('''CREATE TABLE IF NOT EXISTS article_favorites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
@@ -122,7 +130,7 @@ class ComplexDatabaseSchemaMixin:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(alert_id, article_id, complex_id, notified_on)
             )''')
-            # ?몃뜳??異붽?
+            # Alert log table
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
@@ -163,13 +171,13 @@ class ComplexDatabaseSchemaMixin:
                     try:
                         self._ensure_column(c, table_name, column_name, ddl)
                     except Exception as me:
-                        logger.warning(f"{table_name}.{column_name} 留덉씠洹몃젅?댁뀡 ?ㅻ쪟 (臾댁떆): {me}")
+                        logger.warning(f"{table_name}.{column_name} column migration failed (ignored): {me}")
             
-            # status 而щ읆 ?몃뜳???앹꽦 (留덉씠洹몃젅?댁뀡 ??
+            # status column backfill (best effort; do not block startup)
             try:
                 c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
             except Exception:
-                logger.debug("status ?몃뜳???앹꽦 ?ㅽ뙣 (臾댁떆)")
+                logger.debug("status column backfill failed (ignored)")
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_status_last_seen ON article_history(status, last_seen)')
             
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
@@ -177,7 +185,7 @@ class ComplexDatabaseSchemaMixin:
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_alert_log_lookup ON article_alert_log(alert_id, article_id, complex_id, notified_on)')
 
-            # v14.x: legacy price_snapshots ?レ옄 臾몄옄???뺢퇋??(?? "34??, "1??2,000留?)
+            # v14.x: normalize legacy price_snapshots string values (for example, "34?", "1?2,000?")
             try:
                 legacy_rows = c.execute(
                     """
@@ -216,9 +224,9 @@ class ComplexDatabaseSchemaMixin:
                     )
                     logger.info(f"migration complete: normalized price_snapshots rows={len(updates)}")
             except Exception as me:
-                logger.warning(f"price_snapshots ?뺢퇋???ㅽ뙣 (臾댁떆): {me}")
+                logger.warning(f"price_snapshots cleanup failed (ignored): {me}")
 
-            # 湲곗〈 踰꾩쟾?먯꽌 ?⑥븘?덉쓣 ???덈뒗 group_complexes 怨좎븘 ?곗씠???뺣━
+            # Remove orphan rows from group_complexes when FK constraints were missing in old schemas
             c.execute(
                 """
                 DELETE FROM group_complexes
@@ -228,9 +236,9 @@ class ComplexDatabaseSchemaMixin:
             )
 
             conn.commit()
-            logger.info("?뚯씠釉?珥덇린???꾨즺")
+            logger.info("Database tables initialized")
         except Exception as e:
-            logger.exception(f"?뚯씠釉?珥덇린???ㅽ뙣: {e}")
+            logger.exception(f"Database table initialization failed: {e}")
         finally:
             self._pool.return_connection(conn)
     

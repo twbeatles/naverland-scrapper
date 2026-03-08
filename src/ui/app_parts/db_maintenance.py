@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.ui.app import *  # noqa: F403
+
 
 class AppDatabaseMaintenanceMixin:
-    def _enter_maintenance_mode(self, reason: str):
+    if TYPE_CHECKING:
+        def __getattr__(self: Any, name: str) -> Any: ...
+
+    def _enter_maintenance_mode(self: Any, reason: str):
         if self._maintenance_mode:
             return
         self._maintenance_mode = True
@@ -48,7 +56,7 @@ class AppDatabaseMaintenanceMixin:
                 continue
         self.status_bar.showMessage(f"🛠️ 유지보수 모드: {self._maintenance_reason}")
 
-    def _exit_maintenance_mode(self):
+    def _exit_maintenance_mode(self: Any):
         if not self._maintenance_mode:
             return
         for target, was_enabled in self._maintenance_enabled_snapshot:
@@ -60,7 +68,7 @@ class AppDatabaseMaintenanceMixin:
         self._maintenance_mode = False
         self._maintenance_reason = ""
     
-    def _backup_db(self):
+    def _backup_db(self: Any):
         path, _ = QFileDialog.getSaveFileName(self, "DB 백업", f"backup_{DateTimeHelper.file_timestamp()}.db", "Database (*.db)")
         if path:
             if self.db.backup_database(Path(path)):
@@ -68,7 +76,7 @@ class AppDatabaseMaintenanceMixin:
             else:
                 QMessageBox.critical(self, "실패", "DB 백업에 실패했습니다.")
 
-    def _restore_db(self):
+    def _restore_db(self: Any):
         """DB 복원 - 유지보수 모드 + 안전한 UI 처리"""
         path, _ = QFileDialog.getOpenFileName(self, "DB 복원", "", "Database (*.db)")
         if not path:

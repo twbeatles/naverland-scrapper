@@ -12,6 +12,8 @@ DEFAULT_SETTINGS = {
     "play_sound_on_complete": True, "default_sort_column": "가격",
     "default_sort_order": "asc", "max_search_history": 20,
     "window_geometry": None, "splitter_sizes": None,
+    "crawler_main_splitter_sizes": None,
+    "crawler_controls_splitter_sizes": None,
     # v7.3 설정
     "excel_template": None,  # 엑셀 컬럼 템플릿
     "show_new_badge": True,  # 신규 매물 배지 표시
@@ -66,24 +68,48 @@ class SettingsManager:
     def __init__(self):
         if self._initialized: return
         self._initialized = True
-        self._settings = DEFAULT_SETTINGS.copy()
+        self._settings: dict[str, Any] = DEFAULT_SETTINGS.copy()
         self._load()
+
+    @staticmethod
+    def _backup_broken_settings(path: Path) -> Path | None:
+        try:
+            suffix = DateTimeHelper.now_string().replace(":", "").replace(" ", "_")
+            backup_path = path.with_suffix(path.suffix + f".broken.{suffix}")
+            path.replace(backup_path)
+            return backup_path
+        except OSError:
+            return None
+
     def _load(self):
+        logger = get_logger("SettingsManager")
         if SETTINGS_PATH.exists():
             try:
                 with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
                     self._settings.update(json.load(f))
             except (OSError, json.JSONDecodeError) as e:
-                get_logger('SettingsManager').warning(f"설정 로드 실패: {e}")
+                backup = self._backup_broken_settings(SETTINGS_PATH)
+                logger.warning(f"설정 로드 실패, 기본값으로 복구합니다: {e}")
+                if backup:
+                    logger.warning(f"손상된 설정 파일 백업: {backup}")
+                self._settings = DEFAULT_SETTINGS.copy()
+                self._save()
     def _save(self):
         try:
             with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
                 json.dump(self._settings, f, ensure_ascii=False, indent=2)
         except OSError as e:
             get_logger('SettingsManager').warning(f"설정 저장 실패: {e}")
-    def get(self, key, default=None): return self._settings.get(key, default)
-    def set(self, key, value): self._settings[key] = value; self._save()
-    def update(self, data): self._settings.update(data); self._save()
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._settings.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        self._settings[key] = value
+        self._save()
+
+    def update(self, data: dict[str, Any]) -> None:
+        self._settings.update(data)
+        self._save()
 
 class FilterPresetManager:
     def __init__(self):
