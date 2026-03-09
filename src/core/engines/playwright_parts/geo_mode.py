@@ -16,15 +16,15 @@ class PlaywrightGeoModeMixin:
         await self._ensure_started()
         geo = self.thread.geo_config
         if not geo:
-            raise RuntimeError("geo_config媛 ?놁뒿?덈떎.")
+            raise RuntimeError("geo_config가 없습니다.")
         if not self._desktop_page:
-            raise RuntimeError("desktop page 珥덇린???ㅽ뙣")
+            raise RuntimeError("desktop page 초기화 실패")
 
         lat, lon = clamp_korea(geo.lat, geo.lon)
         zoom = int(geo.zoom or 15)
         discovered: dict[str, dict] = {}
         self.thread.log(
-            f"?㎛ 吏???먯깋 ?쒖옉: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, ?먯궛={','.join(geo.asset_types)}"
+            f"지도 탐색 시작: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, 자산={','.join(geo.asset_types)}"
         )
 
         marker_handler, marker_pending_tasks, marker_stats = self._build_marker_handler(discovered)
@@ -52,13 +52,13 @@ class PlaywrightGeoModeMixin:
         if marker_drain_timed_out:
             self.thread.log("   ⚠️ geo marker drain timeout occurred", 30)
         self.thread.log(
-            f"?뱄툘 吏???먯깋 ?붿빟: 諛쒓껄 ?⑥? ??{len(discovered)}, 以묐났 ?쒓굅 ??{dedup_removed}, ?묐떟 泥섎━ ?湲???{marker_wait_count}",
+            f"지도 탐색 요약: 발견 단지 {len(discovered)}, 중복 제거 {dedup_removed}, 응답 처리 대기 {marker_wait_count}",
             10,
         )
 
         ordered = sorted(discovered.values(), key=lambda row: (-int(row.get("count", 0)), row.get("complex_name", "")))
         if not ordered:
-            self.thread.log("?뱄툘 吏???먯깋 寃곌낵 ?⑥?瑜?李얠? 紐삵뻽?듬땲??", 30)
+            self.thread.log("지도 탐색 결과 단지를 찾지 못했습니다.", 30)
             return
 
         processed_pairs = set()
@@ -102,7 +102,7 @@ class PlaywrightGeoModeMixin:
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
                 except Exception as exc:
-                    self.thread.log(f"   ??{name}({trade_type}) ?섏쭛 ?ㅽ뙣: {exc}", 40)
+                    self.thread.log(f"   {name}({trade_type}) 수집 실패: {exc}", 40)
             self.thread.record_crawl_history(
                 name,
                 cid,
@@ -197,7 +197,7 @@ class PlaywrightGeoModeMixin:
         for idx, (target_lat, target_lon) in enumerate(coords, 1):
             if self.thread._should_stop():
                 break
-            self.thread.log(f"   ??{asset_type}/{trade_type} sweep {idx}/{total}", 10)
+            self.thread.log(f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10)
             await self._drag_to_latlon(target_lat, target_lon)
             try:
                 await self._desktop_page.mouse.wheel(0, -40)

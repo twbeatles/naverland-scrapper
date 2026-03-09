@@ -1,5 +1,37 @@
 # 업데이트 히스토리
 
+## **v15.0.7 (2026-03-09)**
+
+**인코딩 정리 + Python 3.9 preflight 호환 + 문서 정합 재점검**
+
+### ✅ 핵심 반영
+
+* 인코딩 깨짐 정리:
+  - `src/core/database_parts/*`의 매물/알림/백업/그룹/스냅샷 mixin에서 mojibake 상태의 docstring, 주석, 로그, corruption context 라벨을 의미 기준으로 복구.
+  - `src/core/engines/playwright_parts/complex_mode.py`, `geo_mode.py`의 런타임 로그와 사이트 텍스트(`매매`)를 정상 문자열로 복원.
+* 레거시 키 읽기 호환 유지:
+  - canonical payload 키는 계속 `매물ID`를 사용.
+  - 과거 깨진 매물 ID key는 escaped constant 기반 fallback으로만 읽고, 새 코드에서는 더 이상 emit하지 않도록 정리.
+* Python 3.9 preflight 호환:
+  - `src/core/managers.py`, `src/ui/widgets/chart.py`에 postponed annotations를 적용해 `python -m src.utils.preflight`의 3.9 import 오류를 해소.
+
+### ✅ 문서/.spec/.gitignore 정합성
+
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 동일 기준으로 인코딩 정리/레거시 키 호환/Python 3.9 호환 점검 결과를 반영.
+* `.spec` 재점검:
+  - `naverland-scrapper.spec`는 이번 범위에서 추가 hidden import/runtime hook 수정이 필요하지 않음을 재확인.
+* `.gitignore` 재점검:
+  - 현재 빌드/로그/백업/Playwright 산출물 무시 규칙으로 충분하며 신규 패턴 추가는 불필요.
+
+### ✅ 검증
+
+* `python -m src.utils.preflight`: pass
+* `python -m unittest discover -s tests -p "test_*.py"`: pass
+* 신규 회귀 테스트:
+  - `tests/test_mojibake_scan.py`
+  - `tests/test_python39_annotation_compat.py`
+
 ## **v15.0.6 (2026-03-08)**
 
 **UI 안정화 + 타입 정리 + 패키징 디버그 경로 보강**

@@ -377,3 +377,16 @@ COLORS["light"] = {
   - `.spec` hidden import를 `matplotlib.backends.backend_qtagg` 기준으로 정리.
   - `NAVERLAND_CONSOLE=1` 빌드 스위치 추가(조용한 GUI 실패 디버깅용 콘솔 출력).
   - `NAVERLAND_BUNDLE_CHROMIUM=1`에서 Chromium 탐지 실패 시 spec 경고 로그 출력.
+
+## 0-11. v15.0.7 Encoding/Compatibility Cleanup (2026-03-09)
+- 인코딩 정리:
+  - `src/core/database_parts/*`, `src/core/engines/playwright_parts/*`의 mojibake 문구를 의미 기준으로 복구.
+  - payload canonical key는 `매물ID` 유지, 과거 깨진 key는 legacy-read fallback만 유지.
+- Python 3.9 preflight 호환:
+  - `src/core/managers.py`, `src/ui/widgets/chart.py`에 postponed annotations 적용.
+  - `tests/test_python39_annotation_compat.py`로 3.9에서 위험한 PEP 604 annotation 회귀를 차단.
+- 텍스트 회귀 방지:
+  - `tests/test_mojibake_scan.py` 추가.
+- `.spec`/무시 규칙 재점검:
+  - `naverland-scrapper.spec`는 추가 수정 불필요.
+  - `.gitignore`는 현 규칙(build/logs/backup/Playwright 산출물)으로 충분.

@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
 
 _TRADE_TO_CODE: dict[str, str] = {}
+_LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 
 class PlaywrightComplexModeMixin:
@@ -33,7 +34,7 @@ class PlaywrightComplexModeMixin:
                     f"{name} ({trade_type})",
                     self.thread._estimate_remaining_seconds(current, total),
                 )
-                self.thread.log(f"\n?뱧 [{current}/{total}] {name} - {trade_type}")
+                self.thread.log(f"\n[{current}/{total}] {name} - {trade_type}")
                 try:
                     result = await self._crawl_target_with_cache(name, cid, trade_type)
                     count = int(result.get("count", 0))
@@ -44,12 +45,12 @@ class PlaywrightComplexModeMixin:
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
                     self.thread._mark_pair_processed(name, cid, trade_type)
-                    self.thread.log(f"   ??{count}嫄??섏쭛")
+                    self.thread.log(f"   {count}건 수집")
                 except Exception as exc:
-                    self.thread.log(f"   ???ㅻ쪟: {exc}", 40)
+                    self.thread.log(f"   오류: {exc}", 40)
                     if self.thread.fallback_engine_enabled and not self._fallback_used:
                         self._fallback_used = True
-                        self.thread.log("   ??Selenium fallback?쇰줈 ?꾪솚?⑸땲??", 30)
+                        self.thread.log("   Selenium fallback으로 전환합니다.", 30)
                         self.thread._run_fallback_selenium(start_name=name, start_cid=cid, start_trade=trade_type)
                         self.thread._current_pair = None
                         return
@@ -112,7 +113,7 @@ class PlaywrightComplexModeMixin:
                     cached = legacy_cached
                     break
             if cached is not None:
-                self.thread.log(f"   ?뮶 罹먯떆 ?덊듃! {len(cached)}嫄?濡쒕뱶")
+                self.thread.log(f"   캐시 히트: {len(cached)}건 로드")
                 self.thread.stats["cache_hits"] = self.thread.stats.get("cache_hits", 0) + 1
                 matched = self.thread._process_raw_items(cached, trade_type)
                 return {"count": matched, "raw_count": len(cached), "cache_hit": True}
@@ -209,7 +210,7 @@ class PlaywrightComplexModeMixin:
                         zoom=source_zoom,
                         marker_id=payload_marker_id,
                     )
-                    aid = str(item.get("매물ID", "") or item.get("留ㅻЪID", "") or "")
+                    aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
                     if not aid or aid in seen_ids:
                         continue
                     seen_ids.add(aid)
@@ -244,7 +245,7 @@ class PlaywrightComplexModeMixin:
                     )
                 except Exception:
                     pass
-                for text in ["留ㅻЪ", trade_type]:
+                for text in ["매매", trade_type]:
                     try:
                         await page.locator(f"text={text}").first.click(timeout=1000)
                         await page.wait_for_timeout(400)
@@ -284,7 +285,7 @@ class PlaywrightComplexModeMixin:
         async def _fetch_one(item: dict) -> dict:
             page = await self._page_pool.get()
             try:
-                article_no = str(item.get("매물ID", "") or item.get("留ㅻЪID", ""))
+                article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
                 detail = await self._async_retry(
                     f"mobile detail {article_no}",
                     lambda: fetch_mobile_article_detail(page, article_no),

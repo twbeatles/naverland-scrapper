@@ -34,6 +34,7 @@ except ImportError:
 logger = get_logger("PlaywrightEngine")
 
 _TRADE_TO_CODE = {value: key for key, value in TRADE_CODE_MAP.items()}
+_LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 PLAYWRIGHT_MEMORY_THRESHOLD_MB = 500
 PLAYWRIGHT_RETRY_ATTEMPTS = 3
 PLAYWRIGHT_RETRY_BASE_DELAY_SEC = 0.35

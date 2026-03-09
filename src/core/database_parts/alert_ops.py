@@ -18,16 +18,16 @@ class ComplexDatabaseAlertOpsMixin:
                 'VALUES (?, ?, ?, ?, ?, ?, ?)', (cid, name, ttype, amin, amax, pmin, pmax)
             )
             conn.commit()
-            logger.info(f"?뚮┝ ?ㅼ젙 異붽?: {name}")
+            logger.info(f"알림 설정 추가: {name}")
             return True
         except Exception as e:
-            logger.error(f"?뚮┝ ?ㅼ젙 異붽? ?ㅽ뙣: {e}")
+            logger.error(f"알림 설정 추가 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_enabled_alert_rules(self, complex_id, trade_type=None):
-        """?쒖꽦?붾맂 ?뚮┝ 猷곗쓣 ?⑥?/嫄곕옒?좏삎 湲곗??쇰줈 議고쉶"""
+        """활성 알림 규칙을 단지/거래유형 기준으로 조회한다."""
         conn = self._pool.get_connection()
         try:
             sql = (
@@ -41,7 +41,7 @@ class ComplexDatabaseAlertOpsMixin:
             rows = conn.cursor().execute(sql, params).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"?쒖꽦 ?뚮┝ 猷?議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"활성 알림 규칙 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -79,7 +79,7 @@ class ComplexDatabaseAlertOpsMixin:
             conn.commit()
             return (c.rowcount or 0) > 0
         except Exception as e:
-            logger.error(f"?뚮┝ dedup 湲곕줉 ?ㅽ뙣: {e}")
+            logger.error(f"알림 dedup 기록 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -92,7 +92,7 @@ class ComplexDatabaseAlertOpsMixin:
                 'FROM alert_settings ORDER BY created_at DESC'
             ).fetchall()
         except Exception as e:
-            logger.error(f"?뚮┝ ?ㅼ젙 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"알림 설정 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -103,7 +103,7 @@ class ComplexDatabaseAlertOpsMixin:
             conn.cursor().execute("UPDATE alert_settings SET enabled = ? WHERE id = ?", (1 if enabled else 0, aid))
             conn.commit()
         except Exception as e:
-            logger.error(f"?뚮┝ ?ㅼ젙 ?좉? ?ㅽ뙣: {e}")
+            logger.error(f"알림 설정 변경 실패: {e}")
         finally:
             self._pool.return_connection(conn)
     
@@ -113,7 +113,7 @@ class ComplexDatabaseAlertOpsMixin:
             conn.cursor().execute("DELETE FROM alert_settings WHERE id = ?", (aid,))
             conn.commit()
         except Exception as e:
-            logger.error(f"?뚮┝ ?ㅼ젙 ??젣 ?ㅽ뙣: {e}")
+            logger.error(f"알림 설정 삭제 실패: {e}")
         finally:
             self._pool.return_connection(conn)
     
@@ -127,7 +127,7 @@ class ComplexDatabaseAlertOpsMixin:
                 (cid, ttype, area, area, price, price)
             ).fetchall()
         except Exception as e:
-            logger.error(f"?뚮┝ 泥댄겕 ?ㅽ뙣: {e}")
+            logger.error(f"알림 체크 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)

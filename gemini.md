@@ -317,3 +317,16 @@ COLORS["light"] = {
   - hidden import를 `matplotlib.backends.backend_qtagg` 기준으로 유지.
   - `NAVERLAND_CONSOLE=1` 빌드 스위치 추가(콘솔 디버깅).
   - `NAVERLAND_BUNDLE_CHROMIUM=1`에서 Chromium 탐지 실패 시 경고 출력.
+
+## 0-7. v15.0.7 Encoding/Compatibility Cleanup (2026-03-09)
+- 인코딩 정리:
+  - `src/core/database_parts/*`, `src/core/engines/playwright_parts/*`의 깨진 문자열을 의미 기준으로 복구.
+  - canonical payload key는 `매물ID`, 과거 깨진 key는 legacy-read fallback만 유지.
+- Python 3.9 preflight 호환:
+  - `src/core/managers.py`, `src/ui/widgets/chart.py`에 postponed annotations 적용.
+  - `tests/test_python39_annotation_compat.py` 추가.
+- 텍스트 회귀 방지:
+  - `tests/test_mojibake_scan.py` 추가.
+- `.spec`/무시 규칙 재점검:
+  - `naverland-scrapper.spec`는 추가 변경 불필요.
+  - `.gitignore`는 현재 규칙으로 충분.

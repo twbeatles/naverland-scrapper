@@ -11,7 +11,7 @@ class ComplexDatabaseArticleOpsMixin:
         def __getattr__(self, name: str) -> Any: ...
 
     def get_article_history_state_bulk(self, complex_id, trade_type=None):
-        """?⑥?(諛?嫄곕옒?좏삎) 湲곗? 留ㅻЪ ?대젰 ?곹깭瑜??쇨큵 議고쉶"""
+        """단지(및 거래유형) 기준 매물 이력 상태를 일괄 조회."""
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -38,13 +38,13 @@ class ComplexDatabaseArticleOpsMixin:
                 }
             return result
         except Exception as e:
-            logger.error(f"留ㅻЪ ?대젰 ?쇨큵 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"매물 이력 일괄 조회 실패: {e}")
             return {}
         finally:
             self._pool.return_connection(conn)
 
     def upsert_article_history_bulk(self, rows):
-        """留ㅻЪ ?대젰???쇨큵 upsert"""
+        """매물 이력을 일괄 upsert."""
         if not rows:
             return 0
         if self.is_write_disabled():
@@ -204,7 +204,7 @@ class ComplexDatabaseArticleOpsMixin:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
+                        logger.error(f"매물 이력 일괄 upsert 실패: {e}")
                         return 0
                     except sqlite3.DatabaseError as e:
                         try:
@@ -213,10 +213,10 @@ class ComplexDatabaseArticleOpsMixin:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
+                        logger.error(f"매물 이력 일괄 upsert 실패: {e}")
                         return 0
         except Exception as e:
-            logger.error(f"留ㅻЪ ?대젰 ?쇨큵 ?낆꽌???ㅽ뙣: {e}")
+            logger.error(f"매물 이력 일괄 upsert 실패: {e}")
             return 0
         finally:
             try:
@@ -226,7 +226,7 @@ class ComplexDatabaseArticleOpsMixin:
             self._pool.return_connection(conn)
 
     def check_article_history(self, article_id, complex_id, current_price):
-        """留ㅻЪ ?대젰 ?뺤씤 (?좉퇋/蹂??"""
+        """매물 이력 확인 (신규/변동)."""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
@@ -237,23 +237,23 @@ class ComplexDatabaseArticleOpsMixin:
             row = c.fetchone()
             
             if not row:
-                return True, 0, 0  # ?좉퇋 留ㅻЪ (is_new=True, change=0, prev=0)
+                return True, 0, 0  # 신규 매물 (is_new=True, change=0, prev=0)
             
             last_price = row['price']
             price_change = current_price - last_price
             
-            # 媛寃?蹂?숈씠 ?덇굅???대? 蹂?숈씠 湲곕줉??寃쎌슦
+            # 가격 변동 여부와 관계없이 최근 가격 정보를 반환한다.
             return False, price_change, last_price
             
         except Exception as e:
-            logger.error(f"留ㅻЪ ?대젰 ?뺤씤 ?ㅽ뙣: {e}")
+            logger.error(f"매물 이력 확인 실패: {e}")
             return False, 0, 0
         finally:
             self._pool.return_connection(conn)
 
     def update_article_history(self, article_id, complex_id, complex_name, trade_type,
                              price, price_text, area, floor, feature, extra=None):
-        """留ㅻЪ ?뺣낫 ?낅뜲?댄듃"""
+        """매물 이력을 업데이트한다."""
         if self.is_write_disabled():
             return False
         conn = self._pool.get_connection()
@@ -261,7 +261,7 @@ class ComplexDatabaseArticleOpsMixin:
             with self._write_lock:
                 c = conn.cursor()
                 
-                # 湲곗〈 ?뺣낫 議고쉶
+                # 기존 이력을 조회해 가격 변동을 계산한다.
                 c.execute(
                     "SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ?",
                     (article_id, complex_id)
@@ -347,19 +347,19 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"留ㅻЪ ?대젰 ?낅뜲?댄듃 ?ㅽ뙣: {e}")
+            logger.error(f"매물 이력 업데이트 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_article_history_stats(self, complex_id=None):
-        """留ㅻЪ ?덉뒪?좊━ ?듦퀎"""
+        """매물 이력 통계를 조회한다."""
         conn = self._pool.get_connection()
         try:
             today = DateTimeHelper.now_string("%Y-%m-%d")
             
             if complex_id:
-                # ?뱀젙 ?⑥? ?듦퀎
+                # 특정 단지 통계
                 result = conn.cursor().execute('''
                     SELECT 
                         COUNT(*) as total,
@@ -369,7 +369,7 @@ class ComplexDatabaseArticleOpsMixin:
                     FROM article_history WHERE complex_id = ?
                 ''', (today, complex_id)).fetchone()
             else:
-                # ?꾩껜 ?듦퀎
+                # 전체 통계
                 result = conn.cursor().execute('''
                     SELECT 
                         COUNT(*) as total,
@@ -386,13 +386,13 @@ class ComplexDatabaseArticleOpsMixin:
                 'price_down': result[3] or 0
             }
         except Exception as e:
-            logger.error(f"留ㅻЪ ?듦퀎 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"매물 통계 조회 실패: {e}")
             return {'total': 0, 'new_today': 0, 'price_up': 0, 'price_down': 0}
         finally:
             self._pool.return_connection(conn)
     
     def cleanup_old_articles(self, days=30):
-        """?ㅻ옒??留ㅻЪ ?덉뒪?좊━ ?뺣━"""
+        """오래된 매물 이력을 정리한다."""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
@@ -402,16 +402,16 @@ class ComplexDatabaseArticleOpsMixin:
             ''', (days,))
             deleted = c.rowcount
             conn.commit()
-            logger.info(f"?ㅻ옒??留ㅻЪ {deleted}媛??뺣━ (>{days}??")
+            logger.info(f"오래된 매물 {deleted}건 정리 (>{days}일)")
             return deleted
         except Exception as e:
-            logger.error(f"留ㅻЪ ?뺣━ ?ㅽ뙣: {e}")
+            logger.error(f"매물 정리 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
 
     def toggle_favorite(self, article_id, complex_id, is_active=True):
-        """留ㅻЪ 利먭꺼李얘린 ?좉?"""
+        """매물 즐겨찾기 상태를 변경한다."""
         conn = self._pool.get_connection()
         try:
             if is_active:
@@ -432,13 +432,13 @@ class ComplexDatabaseArticleOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"利먭꺼李얘린 ?좉? ?ㅽ뙣: {e}")
+            logger.error(f"즐겨찾기 변경 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def update_article_note(self, article_id, complex_id, note):
-        """留ㅻЪ 硫붾え ?낅뜲?댄듃"""
+        """매물 메모를 업데이트한다."""
         conn = self._pool.get_connection()
         try:
             conn.cursor().execute("""
@@ -449,13 +449,13 @@ class ComplexDatabaseArticleOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"硫붾え ?낅뜲?댄듃 ?ㅽ뙣: {e}")
+            logger.error(f"메모 업데이트 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_favorites(self):
-        """利먭꺼李얘린 留ㅻЪ 紐⑸줉"""
+        """즐겨찾기 매물 목록을 조회한다."""
         conn = self._pool.get_connection()
         try:
             query = """
@@ -470,13 +470,13 @@ class ComplexDatabaseArticleOpsMixin:
             rows = conn.cursor().execute(query).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"利먭꺼李얘린 紐⑸줉 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"즐겨찾기 목록 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def get_article_favorite_info(self, article_id, complex_id):
-        """?뱀젙 留ㅻЪ??利먭꺼李얘린/硫붾え ?뺣낫 議고쉶"""
+        """특정 매물의 즐겨찾기/메모 정보를 조회한다."""
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
@@ -487,13 +487,13 @@ class ComplexDatabaseArticleOpsMixin:
                 return dict(row)
             return {'is_favorite': 0, 'note': ''}
         except Exception as e:
-            logger.error(f"留ㅻЪ 利먭꺼李얘린 ?뺣낫 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"매물 즐겨찾기 정보 조회 실패: {e}")
             return {'is_favorite': 0, 'note': ''}
         finally:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles(self):
-        """?ㅻ뒛 ?뺤씤?섏? ?딆? 留ㅻЪ???뚮㈇ 泥섎━"""
+        """오늘 확인되지 않은 매물을 사라짐 상태로 변경한다."""
         if self.is_write_disabled():
             return 0
         conn = self._pool.get_connection()
@@ -503,7 +503,7 @@ class ComplexDatabaseArticleOpsMixin:
                     conn.execute("PRAGMA busy_timeout=3000")
                 except Exception:
                     pass
-                # 留덉?留??뺤씤?쇱씠 ?ㅻ뒛???꾨땶 'active' 留ㅻЪ??'disappeared'濡?蹂寃?
+                # 마지막 확인일이 오늘 이전인 active 매물을 disappeared로 변경한다.
                 c = conn.cursor()
                 c.execute("""
                     UPDATE article_history 
@@ -513,7 +513,7 @@ class ComplexDatabaseArticleOpsMixin:
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"marked disappeared articles: {updated}")
+                    logger.info(f"사라진 매물 처리: {updated}건")
                 return updated
         except Exception as e:
             try:
@@ -522,7 +522,7 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"?뚮㈇ 留ㅻЪ 泥섎━ ?ㅽ뙣: {e}")
+            logger.error(f"사라진 매물 처리 실패: {e}")
             return 0
         finally:
             try:
@@ -532,7 +532,7 @@ class ComplexDatabaseArticleOpsMixin:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
-        """?대쾲 ?ㅽ뻾 ????⑥?ID, 嫄곕옒?좏삎) 踰붿쐞?먯꽌留??뚮㈇ 留ㅻЪ??泥섎━"""
+        """이번 실행 대상 범위에서만 사라진 매물을 처리한다."""
         if self.is_write_disabled():
             return 0
         normalized_pairs: list[tuple[str, str]] = []
@@ -594,7 +594,7 @@ class ComplexDatabaseArticleOpsMixin:
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"marked disappeared (scoped): {updated}")
+                    logger.info(f"대상 범위 사라진 매물 처리: {updated}건")
                 return updated
         except Exception as e:
             try:
@@ -603,7 +603,7 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"???踰붿쐞 ?뚮㈇ 留ㅻЪ 泥섎━ ?ㅽ뙣: {e}")
+            logger.error(f"대상 범위 사라진 매물 처리 실패: {e}")
             return 0
         finally:
             try:
@@ -613,7 +613,7 @@ class ComplexDatabaseArticleOpsMixin:
             self._pool.return_connection(conn)
             
     def get_disappeared_articles(self, limit=50):
-        """理쒓렐 ?뚮㈇??留ㅻЪ 議고쉶"""
+        """최근 사라진 매물을 조회한다."""
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -624,13 +624,13 @@ class ComplexDatabaseArticleOpsMixin:
             rows = conn.cursor().execute(sql, (limit,)).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"?뚮㈇ 留ㅻЪ 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"사라진 매물 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def count_disappeared_articles(self):
-        """?뚮㈇ 留ㅻЪ 媛쒖닔 議고쉶"""
+        """사라진 매물 개수를 조회한다."""
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
@@ -638,7 +638,7 @@ class ComplexDatabaseArticleOpsMixin:
             ).fetchone()
             return row[0] if row else 0
         except Exception as e:
-            logger.error(f"?뚮㈇ 留ㅻЪ 媛쒖닔 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"사라진 매물 개수 조회 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)

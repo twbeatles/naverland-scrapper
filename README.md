@@ -252,3 +252,17 @@ python src/main.py
   - `.spec`에서 Matplotlib Qt backend hidden import를 `backend_qtagg` 기준으로 정리했습니다.
   - `NAVERLAND_CONSOLE=1` 빌드 스위치를 추가해 GUI 실행 실패 시 콘솔 로그 확인 경로를 열었습니다.
   - Chromium 번들 탐지 실패(`NAVERLAND_BUNDLE_CHROMIUM=1`)가 조용히 묻히지 않도록 spec 단계 경고 메시지를 출력합니다.
+
+## v15.0.7 Encoding/Compatibility Cleanup (2026-03-09)
+
+- 인코딩 정리:
+  - `src/core/database_parts/*`와 `src/core/engines/playwright_parts/*`의 mojibake 문자열을 의미 기준으로 복구했습니다.
+  - canonical payload 키는 `매물ID`로 유지하고, 과거 깨진 key는 legacy-read fallback으로만 허용합니다.
+- Python 3.9 호환:
+  - `python -m src.utils.preflight` 경로에서 발생하던 3.9 타입 annotation import 오류를 수정했습니다.
+  - 회귀 방지용 테스트 `tests/test_python39_annotation_compat.py`를 추가했습니다.
+- 텍스트 회귀 방지:
+  - `tests/test_mojibake_scan.py`를 추가해 `src/`, `tests/` Python 파일에 replacement char/Hangul Jamo/CJK compatibility ideograph가 남아 있으면 실패하도록 했습니다.
+- `.spec`/`.gitignore` 재점검:
+  - `naverland-scrapper.spec`는 이번 범위에서 추가 수정이 필요하지 않았습니다.
+  - `.gitignore`는 현행 빌드/로그/백업/Playwright 산출물 규칙으로 충분해 변경하지 않았습니다.

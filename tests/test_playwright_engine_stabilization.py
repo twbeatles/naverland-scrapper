@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import time
 import unittest
 from types import SimpleNamespace
@@ -6,6 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.response_capture import TRADE_CODE_MAP
+
+
+LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 
 class _SignalStub:
@@ -222,7 +225,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                 patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
-                    return_value={"매물ID": "A1", "留ㅻЪID": "A1"},
+                    return_value={"매물ID": "A1"},
                 ),
             ):
                 collect_result = await engine._collect_target_raw_items(
@@ -239,9 +242,64 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(collect_result.get("response_seen"))
         self.assertFalse(collect_result.get("drain_timed_out"))
         self.assertEqual(len(raw_items), 1)
-        article_id = raw_items[0].get("매물ID") or raw_items[0].get("留ㅻЪID")
+        article_id = raw_items[0].get("매물ID")
         self.assertEqual(article_id, "A1")
         self.assertTrue(any("article_capture:complexes/12345" in msg for msg, _ in thread.logged))
+
+    async def test_collect_target_raw_items_accepts_legacy_article_id_key(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        page = _FakePage(
+            responses=[
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                    payload={
+                        "articleList": [
+                            {
+                                "articleNo": "A1",
+                                "tradeTypeCode": "A1",
+                                "dealOrWarrantPrc": "10000",
+                                "area1": 84.0,
+                            }
+                        ]
+                    },
+                    delay_sec=0.05,
+                )
+            ]
+        )
+        engine._desktop_page = page
+
+        async def _noop_started():
+            return None
+
+        async def _passthrough(items):
+            return items
+
+        engine._ensure_started = _noop_started
+        engine._enrich_items_with_mobile_details = _passthrough
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    return_value={LEGACY_ARTICLE_ID_KEY: "A1"},
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        raw_items = list(collect_result.get("raw_items", []) or [])
+        self.assertEqual(len(raw_items), 1)
+        self.assertEqual(raw_items[0].get(LEGACY_ARTICLE_ID_KEY), "A1")
 
     async def test_marker_handler_drains_and_applies_dedupe_rules(self):
         thread = _ThreadStub()
@@ -338,7 +396,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         start = time.monotonic()
         with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
             result = await engine._enrich_items_with_mobile_details(
-                [{"매물ID": "1", "留ㅻЪID": "1"}, {"매물ID": "2", "留ㅻЪID": "2"}]
+                [{"매물ID": "1"}, {"매물ID": "2"}]
             )
         elapsed = time.monotonic() - start
 

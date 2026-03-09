@@ -24,11 +24,11 @@ class ComplexDatabaseComplexGroupOpsMixin:
         asset_type: str = "APT",
         return_status: bool = False,
     ):
-        """?⑥? 異붽? - ?붾쾭源?媛뺥솕"""
+        """단지 추가 - 중복 처리를 강화한다."""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            # ?대? 議댁옱?섎뒗吏 ?뺤씤
+            # 이미 존재하는 단지인지 먼저 확인한다.
             normalized_asset_type = self._normalize_asset_type(asset_type)
             c.execute(
                 "SELECT id FROM complexes WHERE asset_type = ? AND complex_id = ?",
@@ -36,54 +36,54 @@ class ComplexDatabaseComplexGroupOpsMixin:
             )
             existing = c.fetchone()
             if existing:
-                logger.debug(f"?⑥? ?대? 議댁옱: {name} ({complex_id})")
-                return "existing" if return_status else True  # ?대? 議댁옱?섎㈃ ?깃났?쇰줈 泥섎━
-            
+                logger.debug(f"단지 이미 존재: {name} ({complex_id})")
+                return "existing" if return_status else True  # 이미 존재하면 성공으로 처리
+
             c.execute(
                 "INSERT INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
                 (name, normalized_asset_type, complex_id, memo),
             )
             conn.commit()
-            logger.info(f"?⑥? 異붽? ?깃났: {name} ({complex_id})")
+            logger.info(f"단지 추가 성공: {name} ({complex_id})")
             return "inserted" if return_status else True
         except sqlite3.IntegrityError as e:
-            logger.debug(f"?⑥? 以묐났 (?뺤긽): {name} ({complex_id})")
+            logger.debug(f"단지 중복 (정상): {name} ({complex_id})")
             return "existing" if return_status else True
         except Exception as e:
-            logger.exception(f"?⑥? 異붽? ?ㅽ뙣: {name} ({complex_id}) - {e}")
+            logger.exception(f"단지 추가 실패: {name} ({complex_id}) - {e}")
             return "error" if return_status else False
         finally:
             self._pool.return_connection(conn)
     
     def get_all_complexes(self):
-        """紐⑤뱺 ?⑥? 議고쉶 - ?붾쾭源?媛뺥솕"""
+        """모든 단지를 조회한다."""
         conn = self._pool.get_connection()
         try:
             result = self._fetchall_safe(
                 conn,
                 "SELECT id, name, asset_type, complex_id, memo FROM complexes ORDER BY name, asset_type",
-                context="?⑥? 議고쉶(complexes)",
+                context="단지 조회(complexes)",
             )
             logger.debug(f"complex list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("?⑥? 議고쉶", e)
-            logger.exception(f"?⑥? 議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("단지 조회", e)
+            logger.exception(f"단지 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def get_complexes_for_stats(self):
-        """?듦퀎 ??슜 ?⑥? 紐⑸줉 議고쉶 (DB + ?щ·留?湲곕줉 + ?ㅻ깄??"""
+        """통계용 단지 목록을 조회한다 (DB + 크롤링 이력 + 스냅샷)."""
         conn = self._pool.get_connection()
         try:
             complex_map = {}
 
-            # 1) ??λ맂 ?⑥? 紐⑸줉
+            # 1) 단지 기본 목록
             rows = self._fetchall_safe(
                 conn,
                 "SELECT name, complex_id FROM complexes ORDER BY name",
-                context="?듦퀎 ?⑥? 議고쉶(complexes)",
+                context="통계 단지 조회(complexes)",
             )
             for row in rows:
                 cid = row["complex_id"]
@@ -91,7 +91,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
                 if cid and name:
                     complex_map[cid] = name
 
-            # 2) ?щ·留?湲곕줉(理쒖떊 ?대쫫 ?곗꽑)
+            # 2) 크롤링 이력(최신 이름 우선)
             history_rows = self._fetchall_safe(
                 conn,
                 '''
@@ -104,32 +104,32 @@ class ComplexDatabaseComplexGroupOpsMixin:
                 ) latest
                 ON ch.complex_id = latest.complex_id AND ch.crawled_at = latest.last_crawl
                 ''',
-                context="?듦퀎 ?⑥? 議고쉶(crawl_history)",
+                context="통계 단지 조회(crawl_history)",
             )
             for row in history_rows:
                 cid = row["complex_id"]
-                name = row["complex_name"] or f"?⑥?_{cid}"
+                name = row["complex_name"] or f"단지_{cid}"
                 if cid and cid not in complex_map:
                     complex_map[cid] = name
 
-            # 3) ?ㅻ깄?룹뿉留?議댁옱?섎뒗 ?⑥? 蹂닿컯
+            # 3) 스냅샷에만 남아 있는 단지 보강
             snapshot_rows = self._fetchall_safe(
                 conn,
                 "SELECT DISTINCT complex_id FROM price_snapshots",
-                context="?듦퀎 ?⑥? 議고쉶(price_snapshots)",
+                context="통계 단지 조회(price_snapshots)",
             )
             for row in snapshot_rows:
                 cid = row["complex_id"]
                 if cid and cid not in complex_map:
-                    complex_map[cid] = f"?⑥?_{cid}"
+                    complex_map[cid] = f"단지_{cid}"
 
             result = [(name, cid) for cid, name in complex_map.items()]
             result.sort(key=lambda x: x[0])
             logger.debug(f"complex stats source rows: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("?듦퀎 ?⑥? 議고쉶", e)
-            logger.exception(f"?듦퀎 ?⑥? 議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("통계 단지 조회", e)
+            logger.exception(f"통계 단지 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -199,10 +199,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
             if purge_related:
                 self._purge_related_for_complex_refs(c, refs)
             conn.commit()
-            logger.info(f"?⑥? ??젣: ID={db_id}")
+            logger.info(f"단지 삭제: ID={db_id}")
             return True
         except Exception as e:
-            logger.error(f"?⑥? ??젣 ?ㅽ뙣: {e}")
+            logger.error(f"단지 삭제 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -225,7 +225,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}")
             return deleted_count
         except Exception as e:
-            logger.error(f"?⑥? ?쇨큵 ??젣 ?ㅽ뙣: {e}")
+            logger.error(f"단지 일괄 삭제 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -237,7 +237,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"硫붾え ?낅뜲?댄듃 ?ㅽ뙣: {e}")
+            logger.error(f"메모 업데이트 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -247,10 +247,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
         try:
             conn.cursor().execute("INSERT INTO groups (name, description) VALUES (?, ?)", (name, desc))
             conn.commit()
-            logger.info(f"洹몃９ ?앹꽦: {name}")
+            logger.info(f"그룹 생성: {name}")
             return True
         except Exception as e:
-            logger.error(f"洹몃９ ?앹꽦 ?ㅽ뙣: {e}")
+            logger.error(f"그룹 생성 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -261,13 +261,13 @@ class ComplexDatabaseComplexGroupOpsMixin:
             result = self._fetchall_safe(
                 conn,
                 "SELECT id, name, description FROM groups ORDER BY name",
-                context="洹몃９ 議고쉶(groups)",
+                context="그룹 조회(groups)",
             )
             logger.debug(f"group list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("洹몃９ 議고쉶", e)
-            logger.error(f"洹몃９ 議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("그룹 조회", e)
+            logger.error(f"그룹 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -279,10 +279,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
             c.execute("DELETE FROM group_complexes WHERE group_id = ?", (group_id,))
             c.execute("DELETE FROM groups WHERE id = ?", (group_id,))
             conn.commit()
-            logger.info(f"洹몃９ ??젣: ID={group_id}")
+            logger.info(f"그룹 삭제: ID={group_id}")
             return True
         except Exception as e:
-            logger.error(f"洹몃９ ??젣 ?ㅽ뙣: {e}")
+            logger.error(f"그룹 삭제 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -297,12 +297,12 @@ class ComplexDatabaseComplexGroupOpsMixin:
                     c.execute("INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)", (group_id, cid))
                     count += c.rowcount
                 except Exception as e:
-                    logger.warning(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {cid} - {e}")
+                    logger.warning(f"그룹 단지 추가 실패: {cid} - {e}")
             conn.commit()
             logger.info(f"group complexes added: {count}")
             return count
         except Exception as e:
-            logger.error(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {e}")
+            logger.error(f"그룹 단지 추가 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -314,7 +314,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"洹몃９?먯꽌 ?⑥? ?쒓굅 ?ㅽ뙣: {e}")
+            logger.error(f"그룹에서 단지 제거 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -329,7 +329,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             ).fetchall()
             return result
         except Exception as e:
-            logger.error(f"洹몃９ ???⑥? 議고쉶 ?ㅽ뙣: {e}")
+            logger.error(f"그룹 내 단지 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)

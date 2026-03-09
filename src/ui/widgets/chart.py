@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas

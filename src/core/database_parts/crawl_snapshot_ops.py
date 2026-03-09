@@ -67,7 +67,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
+                        logger.error(f"크롤링 이력 저장 실패: {e}")
                         return False
                     except sqlite3.DatabaseError as e:
                         try:
@@ -76,10 +76,10 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
+                        logger.error(f"크롤링 이력 저장 실패: {e}")
                         return False
         except Exception as e:
-            logger.error(f"?щ·留?湲곕줉 ????ㅽ뙣: {e}")
+            logger.error(f"크롤링 이력 저장 실패: {e}")
             return False
         finally:
             try:
@@ -96,12 +96,12 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 'SELECT complex_name, complex_id, trade_types, item_count, crawled_at '
                 'FROM crawl_history ORDER BY crawled_at DESC LIMIT ?',
                 params=(limit,),
-                context="?щ·留?湲곕줉 議고쉶(crawl_history)",
+                context="크롤링 이력 조회(crawl_history)",
             )
             return result
         except Exception as e:
-            self._log_corruption_detected("?щ·留?湲곕줉 議고쉶", e)
-            logger.error(f"?щ·留?湲곕줉 議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("크롤링 이력 조회", e)
+            logger.error(f"크롤링 이력 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -126,13 +126,13 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 conn,
                 sql,
                 params=params,
-                context="媛寃??덉뒪?좊━ 議고쉶(price_snapshots)",
+                context="가격 히스토리 조회(price_snapshots)",
             )
             pyeong_filter = None
             if not self._is_all_filter_value(pyeong):
                 pyeong_filter = self._coerce_float(pyeong, default=None)
                 if pyeong_filter is None:
-                    logger.debug(f"?됲삎 媛??뚯떛 ?ㅽ뙣: {pyeong}")
+                    logger.debug(f"평형 값 파싱 실패: {pyeong}")
 
             result = []
             skipped = 0
@@ -157,11 +157,11 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
 
             if skipped:
                 logger.debug(f"price history skipped malformed rows: {skipped}")
-            logger.debug(f"媛寃??덉뒪?좊━ 議고쉶: {len(result)}媛?(議곌굔: {trade_type}, {pyeong})")
+            logger.debug(f"가격 히스토리 조회: {len(result)}건 (조건: {trade_type}, {pyeong})")
             return result
         except Exception as e:
-            self._log_corruption_detected("媛寃??덉뒪?좊━ 議고쉶", e)
-            logger.error(f"媛寃??덉뒪?좊━ 議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("가격 히스토리 조회", e)
+            logger.error(f"가격 히스토리 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -178,7 +178,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"媛寃??ㅻ깄??????ㅽ뙣: {e}")
+            logger.error(f"가격 스냅샷 저장 실패: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -200,7 +200,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             conn.commit()
             return len(rows)
         except Exception as e:
-            logger.error(f"媛寃??ㅻ깄???쇨큵 ????ㅽ뙣: {e}")
+            logger.error(f"가격 스냅샷 일괄 저장 실패: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -226,7 +226,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 conn,
                 sql,
                 params=params,
-                context="媛寃??ㅻ깄??議고쉶(price_snapshots)",
+                context="가격 스냅샷 조회(price_snapshots)",
             )
             result = []
             skipped = 0
@@ -242,8 +242,8 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             logger.debug(f"price snapshots loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("媛寃??ㅻ깄??議고쉶", e)
-            logger.error(f"媛寃??ㅻ깄??議고쉶 ?ㅽ뙣: {e}")
+            self._log_corruption_detected("가격 스냅샷 조회", e)
+            logger.error(f"가격 스냅샷 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
