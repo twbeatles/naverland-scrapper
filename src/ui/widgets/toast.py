@@ -31,7 +31,7 @@ class ToastWidget(QWidget):
             Qt.WindowType.Tool | 
             Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # WA_TranslucentBackground는 라이트모드에서 배경이 사라지므로 제거
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         
         self._type = toast_type
@@ -41,21 +41,29 @@ class ToastWidget(QWidget):
     
     def _setup_ui(self):
         """UI 구성"""
-        color_info = self.TOAST_TYPES.get(self._type, self.TOAST_TYPES["info"])
+        # 라이트모드 호환: solid 배경색 사용 (투명도 제거)
+        TOAST_COLORS = {
+            "success": {"bg": "#16a34a", "border": "#22c55e"},
+            "error":   {"bg": "#dc2626", "border": "#ef4444"},
+            "warning": {"bg": "#d97706", "border": "#f59e0b"},
+            "info":    {"bg": "#2563eb", "border": "#3b82f6"},
+        }
+        color_info_raw = self.TOAST_TYPES.get(self._type, self.TOAST_TYPES["info"])
+        solid = TOAST_COLORS.get(self._type, TOAST_COLORS["info"])
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 12, 14, 12)
         layout.setSpacing(12)
         
         # 아이콘
-        icon_label = QLabel(color_info["icon"])
-        icon_label.setStyleSheet("font-size: 20px;")
+        icon_label = QLabel(color_info_raw["icon"])
+        icon_label.setStyleSheet("font-size: 20px; color: white;")
         layout.addWidget(icon_label)
         
         # 메시지
         msg_label = QLabel(self._message)
         msg_label.setStyleSheet(
-            "color: white; font-size: 13px; font-weight: 600; padding: 0;"
+            "color: white; font-size: 13px; font-weight: 600; padding: 0; background: transparent;"
         )
         msg_label.setWordWrap(True)
         msg_font = QFont()
@@ -67,7 +75,7 @@ class ToastWidget(QWidget):
         # 닫기 버튼
         close_btn = QPushButton("×")
         close_btn.setStyleSheet(
-            "color: rgba(255,255,255,0.6); font-size: 16px; font-weight: 700; "
+            "color: rgba(255,255,255,0.8); font-size: 18px; font-weight: 700; "
             "padding: 0 4px; background: transparent; border: none;"
         )
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -75,18 +83,21 @@ class ToastWidget(QWidget):
         close_btn.clicked.connect(self.fade_out)
         layout.addWidget(close_btn)
         
-        # 스타일 적용
+        # solid 배경 적용 (라이트/다크 모두 동작)
         self.setStyleSheet(f"""
             ToastWidget {{
-                background-color: {color_info["bg"]};
+                background-color: {solid["bg"]};
                 border-radius: 12px;
-                border: 1.5px solid {color_info["border"]};
+                border: 2px solid {solid["border"]};
             }}
+            QLabel {{ background: transparent; }}
+            QPushButton {{ background: transparent; border: none; }}
         """)
         
         self.setMinimumWidth(320)
         self.setMaximumWidth(500)
         self.adjustSize()
+
     
     def _setup_animations(self):
         """애니메이션 설정"""

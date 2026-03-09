@@ -1,8 +1,9 @@
-﻿from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QPushButton,
+    QGroupBox,
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
@@ -36,21 +37,37 @@ class GroupTab(QWidget):
 
         left_w = QWidget()
         left_l = QVBoxLayout(left_w)
-        left_l.addWidget(QLabel("그룹 목록"))
 
-        left_btn = QHBoxLayout()
-        btn_new = QPushButton("새 그룹")
-        btn_new.clicked.connect(self._create_group)
-        btn_del = QPushButton("삭제")
-        btn_del.clicked.connect(self._delete_group)
-        left_btn.addWidget(btn_new)
-        left_btn.addWidget(btn_del)
-        left_l.addLayout(left_btn)
+        # 그룹 목록 섹션 (QGroupBox로 변경)
+        gl = QGroupBox("그룹 목록")
+        gl_layout = QVBoxLayout(gl)
+        gl_layout.setSpacing(6)
 
         self.group_list = QListWidget()
         self.group_list.setAlternatingRowColors(True)
+        self.group_list.setToolTip("선택한 그룹의 단지 목록을 확인할 수 있습니다.") # Tooltip added
         self.group_list.itemClicked.connect(self._load_group_complexes)
-        left_l.addWidget(self.group_list)
+        gl_layout.addWidget(self.group_list)
+
+        # 그룹 버튼
+        group_btns = QHBoxLayout()
+        group_btns.setSpacing(4)
+        self.btn_create_group = QPushButton("➕ 생성")
+        self.btn_create_group.setObjectName("primaryBtn")
+        self.btn_create_group.setToolTip("새 단지 그룹을 생성합니다.") # Tooltip added
+        self.btn_create_group.clicked.connect(self._create_group)
+        self.btn_delete_group = QPushButton("🗑 삭제")
+        self.btn_delete_group.setObjectName("dangerBtn")
+        self.btn_delete_group.setToolTip("선택한 그룹을 삭제합니다.") # Tooltip added
+        self.btn_delete_group.clicked.connect(self._delete_group)
+        group_btns.addWidget(self.btn_create_group)
+        group_btns.addWidget(self.btn_delete_group)
+        gl_layout.addLayout(group_btns)
+
+        hint_grp = QLabel("💡 그룹을 만들면 예약 구동에도 사용할 수 있습니다.")
+        hint_grp.setObjectName("hintLabel")
+        gl_layout.addWidget(hint_grp)
+        left_l.addWidget(gl) # Add the QGroupBox to the left_l layout
         splitter.addWidget(left_w)
 
         right_w = QWidget()
@@ -59,10 +76,13 @@ class GroupTab(QWidget):
 
         right_btn = QHBoxLayout()
         btn_add = QPushButton("단지 추가")
+        btn_add.setObjectName("secondaryBtn")
         btn_add.clicked.connect(self._add_to_group)
         btn_add_multi = QPushButton("다중 추가")
+        btn_add_multi.setObjectName("secondaryBtn")
         btn_add_multi.clicked.connect(self._add_to_group_multi)
         btn_rm = QPushButton("제거")
+        btn_rm.setObjectName("dangerBtn")
         btn_rm.clicked.connect(self._remove_from_group)
         right_btn.addWidget(btn_add)
         right_btn.addWidget(btn_add_multi)

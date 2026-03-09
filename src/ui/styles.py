@@ -50,13 +50,21 @@ COLORS = {
         "accent_bg_hover": "rgba(245, 158, 11, 0.25)",
         "accent_bg_strong": "rgba(245, 158, 11, 0.35)",
         "accent_border": "rgba(245, 158, 11, 0.3)",
-        "success": "#22c55e",
+        "success": "#16a34a",
+        "success_light": "#22c55e",
         "success_bg": "rgba(34, 197, 94, 0.15)",
-        "success_border": "rgba(34, 197, 94, 0.3)",
+        "success_border": "rgba(34, 197, 94, 0.35)",
+        "success_hover": "#15803d",
+        "success_hover_light": "#16a34a",
+        "success_pressed": "#14532d",
         "warning": "#f59e0b",
-        "error": "#ef4444",
+        "error": "#dc2626",
+        "error_light": "#ef4444",
         "error_bg": "rgba(239, 68, 68, 0.15)",
-        "error_border": "rgba(239, 68, 68, 0.3)",
+        "error_border": "rgba(220, 38, 38, 0.35)",
+        "error_hover": "#b91c1c",
+        "error_hover_light": "#dc2626",
+        "error_pressed": "#7f1d1d",
         "scrollbar": "rgba(245, 158, 11, 0.3)",
         "scrollbar_hover": "rgba(245, 158, 11, 0.5)",
         "scrollbar_bg": "transparent",
@@ -131,13 +139,21 @@ COLORS = {
         "accent_bg_hover": "#e2e8f0",
         "accent_bg_strong": "#cbd5e1",
         "accent_border": "#e2e8f0",
-        "success": "#16a34a",
+        "success": "#15803d",
+        "success_light": "#16a34a",
         "success_bg": "#f0fdf4",
-        "success_border": "#bbf7d0",
+        "success_border": "#86efac",
+        "success_hover": "#166534",
+        "success_hover_light": "#15803d",
+        "success_pressed": "#14532d",
         "warning": "#f59e0b",
-        "error": "#dc2626",
+        "error": "#b91c1c",
+        "error_light": "#dc2626",
         "error_bg": "#fef2f2",
-        "error_border": "#fecaca",
+        "error_border": "#fca5a5",
+        "error_hover": "#991b1b",
+        "error_hover_light": "#b91c1c",
+        "error_pressed": "#7f1d1d",
         "scrollbar": "#cbd5e1",
         "scrollbar_hover": "#94a3b8",
         "scrollbar_bg": "#f1f5f9",
@@ -223,21 +239,22 @@ QFrame {{
 QGroupBox {{
     background-color: {c['bg_card']};
     border: 1px solid {c['border_subtle']};
-    border-radius: 16px;
-    margin-top: 1.2em;
-    padding: 18px;
-    padding-top: 28px;
+    border-radius: 12px;
+    margin-top: 0.8em;
+    padding: 10px;
+    padding-top: 22px;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 6px 14px;
+    padding: 4px 12px;
     color: {c['accent']};
     background: transparent;
     font-weight: 700;
-    letter-spacing: 0.3px;
+    font-size: 12px;
+    letter-spacing: 0.2px;
 }}
 
 /* === Buttons === */
@@ -245,10 +262,10 @@ QPushButton {{
     background-color: {c['accent_bg']};
     color: {c['accent']};
     border: 1px solid {c['accent_border']};
-    padding: 10px 20px;
-    border-radius: 8px;
+    padding: 7px 14px;
+    border-radius: 7px;
     font-weight: 600;
-    min-height: 28px;
+    min-height: 26px;
 }}
 QPushButton:checked {{
     background-color: {checked_bg};
@@ -309,13 +326,14 @@ QPushButton#saveButton:hover {{
 
 /* === Input Fields === */
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTimeEdit {{
-    padding: 10px 14px;
+    padding: 7px 11px;
     border: 1px solid {c['border']};
-    border-radius: 8px;
+    border-radius: 7px;
     background-color: {c['bg_input']};
     color: {c['text_primary']};
     selection-background-color: {c['accent']};
     selection-color: {select_text};
+    min-height: 24px;
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
     border: {focus_border_width} solid {c['border_focus']};
@@ -694,7 +712,157 @@ QLabel#statCardValue {{
     font-size: 24px;
     font-weight: 800;
 }}
+
+/* === Section Header (v15.1) === */
+QLabel#sectionHeader {{
+    font-size: 11px;
+    font-weight: 700;
+    color: {c['accent']};
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+    border-bottom: 1px solid {c['border_subtle']};
+}}
+
+/* === Hint / Helper Label (v15.1) === */
+QLabel#hintLabel {{
+    font-size: 11px;
+    color: {c['text_secondary']};
+    font-style: italic;
+    line-height: 1.5;
+}}
+
+/* === Step Badge (v15.1) === */
+QLabel#stepBadge {{
+    font-size: 11px;
+    font-weight: 700;
+    color: {c['bg_primary']};
+    background-color: {c['accent']};
+    border-radius: 10px;
+    padding: 2px 7px;
+    min-width: 18px;
+}}
+
+/* === Icon-only small button (v15.1) === */
+QPushButton#iconButton {{
+    background-color: {c['accent_bg']};
+    color: {c['accent']};
+    border: 1px solid {c['accent_border']};
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    min-height: 24px;
+    min-width: 28px;
+    max-width: 52px;
+}}
+QPushButton#iconButton:hover {{
+    background-color: {c['accent_bg_hover']};
+    border-color: {c['accent']};
+}}
+
+/* === Result Toolbar panel (v15.1) === */
+QWidget#resultToolbar {{
+    background-color: {c['bg_header']};
+    border: 1px solid {c['border_subtle']};
+    border-radius: 8px;
+    padding: 4px 8px;
+}}
+
+/* === Control Row (labeled row inside group) === */
+QWidget#controlRow {{
+    background-color: transparent;
+}}
+
+/* === Filter Badge === */
+QLabel#filterBadgeOn {{
+    font-size: 11px;
+    font-weight: 700;
+    color: {c['bg_primary']};
+    background-color: {c['accent']};
+    border-radius: 10px;
+    padding: 2px 8px;
+}}
+QLabel#filterBadgeOff {{
+    font-size: 11px;
+    color: {c['text_secondary']};
+    background-color: transparent;
+    padding: 2px 8px;
+}}
+
+/* === Semantic Button Roles === */
+QPushButton#primaryBtn {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {c['success_light']}, stop:1 {c['success']});
+    color: #ffffff;
+    border: 1px solid {c['success_border']};
+    border-radius: 7px;
+    padding: 7px 18px;
+    font-weight: 700;
+    font-size: 13px;
+    min-height: 32px;
+}}
+QPushButton#primaryBtn:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {c['success_hover_light']}, stop:1 {c['success_hover']});
+}}
+QPushButton#primaryBtn:pressed {{
+    background: {c['success_pressed']};
+}}
+QPushButton#primaryBtn:disabled {{
+    background: {c['bg_disabled']};
+    color: {c['text_disabled']};
+    border-color: transparent;
+}}
+
+QPushButton#dangerBtn {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {c['error_light']}, stop:1 {c['error']});
+    color: #ffffff;
+    border: 1px solid {c['error_border']};
+    border-radius: 7px;
+    padding: 7px 18px;
+    font-weight: 700;
+    font-size: 13px;
+    min-height: 32px;
+}}
+QPushButton#dangerBtn:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {c['error_hover_light']}, stop:1 {c['error_hover']});
+}}
+QPushButton#dangerBtn:pressed {{
+    background: {c['error_pressed']};
+}}
+QPushButton#dangerBtn:disabled {{
+    background: {c['bg_disabled']};
+    color: {c['text_disabled']};
+    border-color: transparent;
+}}
+
+QPushButton#secondaryBtn {{
+    background: {c['accent_bg']};
+    color: {c['accent_bright']};
+    border: 1px solid {c['accent_bg_hover']};
+    border-radius: 7px;
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 12px;
+    min-height: 28px;
+}}
+QPushButton#secondaryBtn:hover {{
+    background: {c['accent_bg_hover']};
+    border-color: {c['accent']};
+}}
+QPushButton#secondaryBtn:pressed {{
+    background: {c['accent_pressed']};
+    color: #ffffff;
+}}
+QPushButton#secondaryBtn:disabled {{
+    background: {c['bg_disabled']};
+    color: {c['text_disabled']};
+    border-color: transparent;
+}}
 """
+
 
 
 def get_dark_stylesheet() -> str:

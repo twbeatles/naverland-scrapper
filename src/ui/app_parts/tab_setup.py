@@ -71,42 +71,67 @@ class AppTabSetupMixin:
     def _setup_schedule_tab(self: Any):
         self.schedule_tab = QWidget()
         layout = QVBoxLayout(self.schedule_tab)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
         sg = QGroupBox("⏰ 예약 크롤링")
         sl = QVBoxLayout()
+        sl.setSpacing(10)
+
         self.check_schedule = QCheckBox("예약 실행 활성화")
+        self.check_schedule.setToolTip("설정한 시간에 자동으로 대상 그룹을 크롤링합니다.")
         sl.addWidget(self.check_schedule)
+
         tl = QHBoxLayout()
-        tl.addWidget(QLabel("실행 시간:"))
+        lbl_time = QLabel("실행 시간")
+        lbl_time.setStyleSheet("font-size: 12px; color: #888;")
+        tl.addWidget(lbl_time)
         self.time_edit = QTimeEdit()
         self.time_edit.setTime(QTime(9, 0))
+        self.time_edit.setToolTip("크롤링을 시작할 시간을 설정합니다.")
         tl.addWidget(self.time_edit)
         tl.addStretch()
         sl.addLayout(tl)
+
         gl = QHBoxLayout()
-        gl.addWidget(QLabel("대상 그룹:"))
+        lbl_grp = QLabel("대상 그룹")
+        lbl_grp.setStyleSheet("font-size: 12px; color: #888;")
+        gl.addWidget(lbl_grp)
         self.schedule_group_combo = QComboBox()
-        gl.addWidget(self.schedule_group_combo)
+        self.schedule_group_combo.setToolTip("예약 크롤링을 실행할 단지 그룹을 선택합니다.")
+        gl.addWidget(self.schedule_group_combo, 1)
         gl.addStretch()
         sl.addLayout(gl)
+
+        hint = QLabel("💡 그룹 관리 탭에서 그룹을 먼저 생성하세요.")
+        hint.setObjectName("hintLabel")
+        sl.addWidget(hint)
+
         sg.setLayout(sl)
         layout.addWidget(sg)
-        self.schedule_empty_label = QLabel("예약할 그룹이 없습니다.\n먼저 그룹을 생성하세요.")
+
+        self.schedule_empty_label = QLabel("예약할 그룹이 없습니다.\n그룹 관리 탭에서 그룹을 먼저 생성하세요.")
         self.schedule_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.schedule_empty_label.setStyleSheet("color: #888; padding: 20px;")
+        self.schedule_empty_label.setStyleSheet("color: #888; padding: 20px; font-size: 13px;")
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
-        self.tabs.addTab(self.schedule_tab, "⏰ 예약 설정")
+        self.tabs.addTab(self.schedule_tab, "⏰ 예약")
     
     def _setup_history_tab(self: Any):
         self.history_tab = QWidget()
         layout = QVBoxLayout(self.history_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
         bl = QHBoxLayout()
         btn_rf = QPushButton("🔄 새로고침")
+        btn_rf.setToolTip("크롤링 이력을 다시 불러옵니다.")
         btn_rf.clicked.connect(self._load_history)
         bl.addWidget(btn_rf)
         bl.addStretch()
         layout.addLayout(bl)
+
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(5)
         self.history_table.setHorizontalHeaderLabels(["단지명", "단지ID", "거래유형", "수집건수", "수집시각"])
@@ -115,30 +140,48 @@ class AppTabSetupMixin:
             history_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
         layout.addWidget(self.history_table)
+
+        self.history_empty_label = QLabel("크롤링 이력이 없습니다.\n데이터 수집 탭에서 크롤링을 실행해 보세요.")
+        self.history_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.history_empty_label.setStyleSheet("color: #888; font-size: 13px; padding: 40px;")
+        layout.addWidget(self.history_empty_label)
+        self.history_empty_label.hide()
+
         self.tabs.addTab(self.history_tab, "📜 히스토리")
     
     def _setup_stats_tab(self: Any):
         self.stats_tab = QWidget()
         layout = QVBoxLayout(self.stats_tab)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
         fl = QHBoxLayout()
-        fl.addWidget(QLabel("단지:"))
+        fl.setSpacing(8)
+        lbl_cplx = QLabel("단지")
+        lbl_cplx.setStyleSheet("font-size: 12px; color: #888;")
+        fl.addWidget(lbl_cplx)
         self.stats_complex_combo = QComboBox()
+        self.stats_complex_combo.setToolTip("통계를 볼 단지를 선택합니다.")
         fl.addWidget(self.stats_complex_combo)
-        fl.addWidget(QLabel("유형:"))
+        lbl_type = QLabel("유형")
+        lbl_type.setStyleSheet("font-size: 12px; color: #888;")
+        fl.addWidget(lbl_type)
         self.stats_type_combo = QComboBox()
         self.stats_type_combo.addItems(["전체", "매매", "전세", "월세"])
         fl.addWidget(self.stats_type_combo)
-        
-        fl.addWidget(QLabel("면적:"))
+        lbl_area = QLabel("면적")
+        lbl_area.setStyleSheet("font-size: 12px; color: #888;")
+        fl.addWidget(lbl_area)
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")
         fl.addWidget(self.stats_pyeong_combo)
-        
         btn_load = QPushButton("📊 조회")
+        btn_load.setToolTip("선택한 조건으로 가격 시세 데이터를 불러옵니다.")
         btn_load.clicked.connect(self._load_stats)
         fl.addWidget(btn_load)
         fl.addStretch()
         layout.addLayout(fl)
+
         self.stats_table = QTableWidget()
         self.stats_table.setColumnCount(6)
         self.stats_table.setHorizontalHeaderLabels(["날짜", "유형", "평형", "최저가", "최고가", "평균가"])
@@ -155,7 +198,6 @@ class AppTabSetupMixin:
         self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.stats_splitter.addWidget(self.chart_placeholder)
         self.stats_splitter.setSizes([320, 280])
-        
         layout.addWidget(self.stats_splitter)
         self.tabs.addTab(self.stats_tab, "📈 통계/변동")
     
@@ -179,37 +221,190 @@ class AppTabSetupMixin:
     def _setup_guide_tab(self: Any):
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
         browser = QTextBrowser()
         browser.setOpenExternalLinks(True)
         browser.setHtml("""
-        <h2>📖 사용 가이드</h2>
-        <h3>🔍 단지 ID 찾는 방법</h3>
-        <ol>
-            <li>네이버 부동산 (<a href="https://new.land.naver.com">new.land.naver.com</a>) 접속</li>
-            <li>원하는 아파트 단지 검색</li>
-            <li>URL에서 <code>/complexes/</code> 뒤의 숫자가 단지 ID입니다</li>
-            <li>예: <code>https://new.land.naver.com/complexes/<b>12345</b></code> → ID: 12345</li>
-        </ol>
-        <h3>⌨️ 단축키</h3>
-        <table border="1" cellpadding="8" style="border-collapse: collapse;">
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {
+                    font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+                    font-size: 13px;
+                    line-height: 1.7;
+                    color: inherit;
+                    background: transparent;
+                    padding: 16px 24px;
+                    max-width: 800px;
+                }
+                h2 {
+                    font-size: 18px;
+                    font-weight: 800;
+                    color: #d97706;
+                    border-bottom: 2px solid rgba(217,119,6,0.35);
+                    padding-bottom: 8px;
+                    margin-top: 24px;
+                }
+                h3 {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #6b7280;
+                    margin-top: 18px;
+                    margin-bottom: 6px;
+                }
+                .step {
+                    background: rgba(217,119,6,0.07);
+                    border: 1px solid rgba(217,119,6,0.25);
+                    border-radius: 10px;
+                    padding: 14px 16px;
+                    margin: 10px 0;
+                }
+                .step-num {
+                    background: #d97706;
+                    color: #fff;
+                    border-radius: 50%;
+                    width: 22px;
+                    height: 22px;
+                    display: inline-block;
+                    text-align: center;
+                    font-weight: 800;
+                    font-size: 12px;
+                    line-height: 22px;
+                    margin-right: 10px;
+                }
+                .step-title { font-weight: 700; margin-bottom: 4px; }
+                .step-desc { font-size: 12px; color: #6b7280; }
+                code {
+                    background: rgba(217,119,6,0.12);
+                    color: #b45309;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                }
+                .shortcut-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 8px 0;
+                }
+                .shortcut-table th {
+                    background: rgba(217,119,6,0.12);
+                    color: #d97706;
+                    padding: 7px 12px;
+                    text-align: left;
+                    font-size: 12px;
+                    font-weight: 700;
+                    border-bottom: 1px solid rgba(217,119,6,0.2);
+                }
+                .shortcut-table td {
+                    padding: 6px 12px;
+                    border-bottom: 1px solid rgba(128,128,128,0.1);
+                    font-size: 12px;
+                }
+                kbd {
+                    background: rgba(128,128,128,0.12);
+                    border: 1px solid rgba(128,128,128,0.3);
+                    border-radius: 4px;
+                    padding: 1px 6px;
+                    font-size: 11px;
+                    font-family: monospace;
+                }
+                .tip {
+                    background: rgba(34,197,94,0.07);
+                    border-left: 3px solid #16a34a;
+                    padding: 8px 14px;
+                    border-radius: 0 6px 6px 0;
+                    margin: 8px 0;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+                .warn {
+                    background: rgba(217,119,6,0.07);
+                    border-left: 3px solid #d97706;
+                    padding: 8px 14px;
+                    border-radius: 0 6px 6px 0;
+                    margin: 8px 0;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+                a { color: #2563eb; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                ul { padding-left: 20px; color: #6b7280; }
+                li { margin: 4px 0; }
+            </style>
+        </head>
+        <body>
+
+        <h2>🚀 빠른 시작 가이드</h2>
+
+        <div class="step">
+            <span class="step-num">1</span>
+            <span class="step-title">단지 ID 찾기</span><br>
+            <span class="step-desc">
+                <a href="https://new.land.naver.com">네이버 부동산</a>에서 아파트를 검색하세요.<br>
+                URL에서 <code>/complexes/</code> 뒤의 숫자가 <b>단지 ID</b>입니다.<br>
+                예시: <code>new.land.naver.com/complexes/<b>123456</b></code>
+            </span>
+        </div>
+
+        <div class="step">
+            <span class="step-num">2</span>
+            <span class="step-title">단지 목록에 추가</span><br>
+            <span class="step-desc">
+                <b>데이터 수집 탭</b> 좌측 패널에서<br>
+                ① 단지 ID를 입력하고 ➕ 버튼을 클릭하세요.<br>
+                ② 또는 네이버 URL을 붙여넣어 <b>🔗 URL 버튼</b>을 사용하세요.
+            </span>
+        </div>
+
+        <div class="step">
+            <span class="step-num">3</span>
+            <span class="step-title">거래 유형 선택</span><br>
+            <span class="step-desc">
+                수집할 거래 유형(<b>매매/전세/월세</b>)을 체크하세요.<br>
+                가격 필터를 설정하면 해당 범위의 매물만 수집합니다.
+            </span>
+        </div>
+
+        <div class="step">
+            <span class="step-num">4</span>
+            <span class="step-title">▶ 크롤링 시작</span><br>
+            <span class="step-desc">
+                <b>▶ 크롤링 시작</b> 버튼을 클릭하세요.<br>
+                수집 완료 후 <b>💾 저장</b> 버튼으로 Excel/CSV로 내보내세요.
+            </span>
+        </div>
+
+        <div class="warn">
+            ⚠️ 속도를 너무 빠르게 설정하면 서버에서 차단될 수 있습니다. '보통' 이상을 권장합니다.
+        </div>
+
+        <h2>⌨️ 단축키</h2>
+        <table class="shortcut-table">
             <tr><th>기능</th><th>단축키</th></tr>
-            <tr><td>🚀 크롤링 시작</td><td>Ctrl+R</td></tr>
-            <tr><td>⏹️ 크롤링 중지</td><td>Ctrl+Shift+R</td></tr>
-            <tr><td>💾 Excel 저장</td><td>Ctrl+S</td></tr>
-            <tr><td>📄 CSV 저장</td><td>Ctrl+Shift+S</td></tr>
-            <tr><td>🔍 검색</td><td>Ctrl+F</td></tr>
-            <tr><td>⚙️ 설정</td><td>Ctrl+,</td></tr>
-            <tr><td>🎨 테마 변경</td><td>Ctrl+T</td></tr>
-            <tr><td>📥 트레이 최소화</td><td>Ctrl+M</td></tr>
+            <tr><td>크롤링 시작</td><td><kbd>Ctrl</kbd>+<kbd>R</kbd></td></tr>
+            <tr><td>크롤링 중지</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td></tr>
+            <tr><td>Excel 저장</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>CSV 저장</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td></tr>
+            <tr><td>결과 검색</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td></tr>
+            <tr><td>설정</td><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td></tr>
+            <tr><td>테마 변경</td><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td></tr>
+            <tr><td>트레이 최소화</td><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td></tr>
         </table>
-        <h3>💡 팁</h3>
+
+        <h2>💡 팁</h2>
         <ul>
-            <li>🖱️ 결과 테이블에서 <b>더블클릭</b>하면 해당 매물 페이지로 이동합니다</li>
-            <li>📊 요약 카드에서 실시간 수집 현황을 확인할 수 있습니다</li>
-            <li>⏱️ 예상 남은 시간을 참고하여 작업 시간을 예측하세요</li>
-            <li>🔔 알림 설정을 통해 원하는 조건의 매물을 알림받을 수 있습니다</li>
+            <li>결과 테이블에서 <b>더블클릭</b>하면 해당 매물 페이지로 이동합니다</li>
+            <li>좌측 패널 슬라이더로 <b>패널 넓이</b>를 조절할 수 있습니다</li>
+            <li>예약 실행에는 먼저 <b>그룹 관리 탭</b>에서 단지 그룹을 생성하세요</li>
+            <li><b>데이터베이스 저장</b> 후 재실행하면 신규/변동 매물을 추적할 수 있습니다</li>
+            <li>대시보드 탭에서 <b>상승/하락/소멸 매물</b> 통계를 확인할 수 있습니다</li>
         </ul>
+
+        </body>
+        </html>
         """)
+
         layout.addWidget(browser)
         self.tabs.addTab(tab, "📖 가이드")
     

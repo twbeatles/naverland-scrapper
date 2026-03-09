@@ -93,6 +93,7 @@ class GeoCrawlerTab(CrawlerTab):
         grid.addWidget(self.discovered_table, 8, 0, 1, 2)
 
         save_defaults = QPushButton("💾 기본값 저장")
+        save_defaults.setObjectName("secondaryBtn")
         save_defaults.clicked.connect(self._save_geo_defaults)
         grid.addWidget(save_defaults, 9, 0, 1, 2)
 

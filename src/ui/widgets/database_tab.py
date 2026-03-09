@@ -1,4 +1,4 @@
-﻿from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -39,21 +39,29 @@ class DatabaseTab(QWidget):
         layout = QVBoxLayout(self)
 
         button_layout = QHBoxLayout()
-        btn_refresh = QPushButton("새로고침")
-        btn_refresh.clicked.connect(self.load_data)
-        btn_delete = QPushButton("선택 삭제")
-        btn_delete.clicked.connect(self._delete_complex)
+        button_layout.setSpacing(6)
+        self.btn_refresh_db = QPushButton("🔄 새로고침")
+        self.btn_refresh_db.setObjectName("primaryBtn")
+        self.btn_refresh_db.setToolTip("데이터베이스에서 단지 목록을 다시 불러옵니다.")
+        self.btn_refresh_db.clicked.connect(self.load_data) # Changed from _load_complexes to load_data to match existing method
+        self.btn_delete_db = QPushButton("🗑 삭제")
+        self.btn_delete_db.setObjectName("dangerBtn")
+        self.btn_delete_db.setToolTip("선택한 단지와 해당 매물 데이터를 데이터베이스에서 삭제합니다.")
+        self.btn_delete_db.clicked.connect(self._delete_complex) # Changed from _delete_selected to _delete_complex to match existing method
+
         btn_delete_multi = QPushButton("다중 삭제")
+        btn_delete_multi.setObjectName("dangerBtn")
         btn_delete_multi.clicked.connect(self._delete_complexes_multi)
         btn_memo = QPushButton("메모 수정")
+        btn_memo.setObjectName("secondaryBtn")
         btn_memo.clicked.connect(self._edit_memo)
 
-        self.btn_delete = btn_delete
+        self.btn_delete = self.btn_delete_db # Update reference to the new button
         self.btn_delete_multi = btn_delete_multi
         self.btn_memo = btn_memo
 
-        button_layout.addWidget(btn_refresh)
-        button_layout.addWidget(btn_delete)
+        button_layout.addWidget(self.btn_refresh_db)
+        button_layout.addWidget(self.btn_delete_db)
         button_layout.addWidget(btn_delete_multi)
         button_layout.addWidget(btn_memo)
         button_layout.addStretch()
