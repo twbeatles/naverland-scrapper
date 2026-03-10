@@ -61,19 +61,74 @@ class TestComplexDatabase(unittest.TestCase):
     def test_get_complexes_for_stats_returns_partial_when_one_source_fails(self):
         def _fake_fetchall_safe(_conn, _query, params=(), context=""):
             if "complexes" in context:
-                return [{"name": "ComplexA", "complex_id": "11111"}]
+                return [{"name": "ComplexA", "asset_type": "APT", "complex_id": "11111"}]
             if "crawl_history" in context:
                 return []
             if "price_snapshots" in context:
-                return [{"complex_id": "22222"}]
+                return [{"asset_type": "VL", "complex_id": "22222"}]
             return []
 
         with patch.object(self.db, "_fetchall_safe", side_effect=_fake_fetchall_safe):
             rows = self.db.get_complexes_for_stats()
 
         self.assertEqual(len(rows), 2)
-        self.assertIn(("ComplexA", "11111"), rows)
-        self.assertTrue(any(cid == "22222" for _name, cid in rows))
+        self.assertIn(("ComplexA", "APT", "11111"), rows)
+        self.assertTrue(any(asset == "VL" and cid == "22222" for _name, asset, cid in rows))
+
+    def test_price_snapshots_are_separated_by_asset_type(self):
+        saved = self.db.add_price_snapshots_bulk(
+            [
+                ("70007", "매매", 34.0, 10000, 12000, 11000, 2, "APT"),
+                ("70007", "매매", 34.0, 20000, 24000, 22000, 2, "VL"),
+            ]
+        )
+        self.assertEqual(saved, 2)
+
+        apt_rows = self.db.get_price_snapshots("70007", "매매", asset_type="APT")
+        vl_rows = self.db.get_price_snapshots("70007", "매매", asset_type="VL")
+        all_rows = self.db.get_price_snapshots("70007", "매매")
+
+        self.assertEqual(len(apt_rows), 1)
+        self.assertEqual(len(vl_rows), 1)
+        self.assertEqual(len(all_rows), 2)
+        self.assertEqual(int(apt_rows[0][5]), 11000)
+        self.assertEqual(int(vl_rows[0][5]), 22000)
+
+    def test_add_price_snapshots_bulk_accepts_legacy_and_asset_rows(self):
+        saved = self.db.add_price_snapshots_bulk(
+            [
+                ("71001", "전세", 24.0, 30000, 36000, 33000, 3),
+                ("VL", "71001", "전세", 24.0, 20000, 24000, 22000, 2),
+            ]
+        )
+        self.assertEqual(saved, 2)
+        apt_rows = self.db.get_price_snapshots("71001", "전세", asset_type="APT")
+        vl_rows = self.db.get_price_snapshots("71001", "전세", asset_type="VL")
+        self.assertEqual(len(apt_rows), 1)
+        self.assertEqual(len(vl_rows), 1)
+        self.assertEqual(int(apt_rows[0][5]), 33000)
+        self.assertEqual(int(vl_rows[0][5]), 22000)
+
+    def test_delete_complex_purge_related_respects_snapshot_asset_scope(self):
+        self.db.add_complex("ScopeApt", "88008", asset_type="APT")
+        self.db.add_complex("ScopeVl", "88008", asset_type="VL")
+        rows = self.db.get_all_complexes()
+        apt_db_id = next(int(row["id"]) for row in rows if row["complex_id"] == "88008" and row["asset_type"] == "APT")
+
+        saved = self.db.add_price_snapshots_bulk(
+            [
+                ("88008", "매매", 33.0, 10000, 12000, 11000, 1, "APT"),
+                ("88008", "매매", 33.0, 20000, 22000, 21000, 1, "VL"),
+            ]
+        )
+        self.assertEqual(saved, 2)
+
+        self.assertTrue(self.db.delete_complex(apt_db_id, purge_related=True))
+
+        apt_rows = self.db.get_price_snapshots("88008", "매매", asset_type="APT")
+        vl_rows = self.db.get_price_snapshots("88008", "매매", asset_type="VL")
+        self.assertEqual(len(apt_rows), 0)
+        self.assertEqual(len(vl_rows), 1)
 
     def test_write_circuit_breaker_blocks_core_writes(self):
         self.db._disable_writes("database_corruption")

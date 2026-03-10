@@ -271,6 +271,76 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_crawler_tab_db_load_excludes_vl_targets(self):
+        from PyQt6.QtWidgets import QDialog
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        class _DialogStub:
+            def __init__(self, _title, items, _parent):
+                self._selected = [payload for _label, payload in items]
+
+            def exec(self):
+                return QDialog.DialogCode.Accepted
+
+            def selected_items(self):
+                return list(self._selected)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_db_load_filter.db"))
+            db.add_complex("APT단지", "11001", asset_type="APT")
+            db.add_complex("VL단지", "11002", asset_type="VL")
+            tab = CrawlerTab(db)
+
+            with patch("src.ui.widgets.crawler_tab.MultiSelectDialog", _DialogStub):
+                tab._show_db_load_dialog()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(tab.table_list.item(0, 1).text(), "11001")
+            self.assertIn("APT만 지원", tab.log_browser.toPlainText())
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_group_load_excludes_vl_targets(self):
+        from PyQt6.QtWidgets import QDialog
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        class _DialogStub:
+            def __init__(self, _title, items, _parent):
+                self._selected = [payload for _label, payload in items]
+
+            def exec(self):
+                return QDialog.DialogCode.Accepted
+
+            def selected_items(self):
+                return list(self._selected)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_group_load_filter.db"))
+            db.add_complex("APT단지", "12001", asset_type="APT")
+            db.add_complex("VL단지", "12002", asset_type="VL")
+            rows = db.get_all_complexes()
+            apt_id = next(int(row["id"]) for row in rows if row["asset_type"] == "APT")
+            vl_id = next(int(row["id"]) for row in rows if row["asset_type"] == "VL")
+            db.create_group("관심단지", "")
+            gid = int(db.get_all_groups()[0]["id"])
+            db.add_complexes_to_group(gid, [apt_id, vl_id])
+
+            tab = CrawlerTab(db)
+            with patch("src.ui.widgets.crawler_tab.MultiSelectDialog", _DialogStub):
+                tab._show_group_load_dialog()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(tab.table_list.item(0, 1).text(), "12001")
+            self.assertIn("APT만 지원", tab.log_browser.toPlainText())
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_crawler_tab_advanced_filter_applies_and_clears(self):
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -467,6 +537,69 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_scheduled_run_filters_vl_targets_in_complex_mode(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.schedule_group_combo.clear()
+        app.schedule_group_combo.addItem("테스트그룹", 10)
+
+        with (
+            patch.object(
+                app.db,
+                "get_complexes_in_group",
+                return_value=[
+                    (1, "APT단지", "APT", "11111", ""),
+                    (2, "VL단지", "VL", "22222", ""),
+                ],
+            ),
+            patch.object(app.crawler_tab, "start_crawling") as mock_start,
+        ):
+            app._run_scheduled()
+
+        self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
+        self.assertEqual(app.crawler_tab.table_list.item(0, 1).text(), "11111")
+        self.assertIn("APT만 지원", app.crawler_tab.log_browser.toPlainText())
+        mock_start.assert_called_once()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_scheduled_run_skips_when_group_has_only_vl_targets(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.schedule_group_combo.clear()
+        app.schedule_group_combo.addItem("테스트그룹", 11)
+
+        with (
+            patch.object(
+                app.db,
+                "get_complexes_in_group",
+                return_value=[(1, "VL단지", "VL", "22222", "")],
+            ),
+            patch.object(app.crawler_tab, "start_crawling") as mock_start,
+        ):
+            app._run_scheduled()
+
+        self.assertEqual(app.crawler_tab.table_list.rowCount(), 0)
+        mock_start.assert_not_called()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
     def test_app_advanced_filter_wiring_to_crawler_tab(self):
         from src.ui.app import RealEstateApp
 
@@ -626,7 +759,12 @@ class TestUIWiring(unittest.TestCase):
                 app.db._pool.return_connection(conn)
 
             app._load_stats_complexes()
-            idx = app.stats_complex_combo.findData("90001")
+            idx = -1
+            for i in range(app.stats_complex_combo.count()):
+                data = app.stats_complex_combo.itemData(i)
+                if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "90001":
+                    idx = i
+                    break
             self.assertGreaterEqual(idx, 0)
 
             app.stats_complex_combo.setCurrentIndex(idx)
@@ -644,6 +782,25 @@ class TestUIWiring(unittest.TestCase):
                 app.db.close()
             app.deleteLater()
             self._qt_app.processEvents()
+
+    def test_settings_dialog_preserves_zero_values(self):
+        from src.ui.dialogs.settings import SettingsDialog
+
+        def _settings_get(key, default=None):
+            overrides = {
+                "max_retry_count": 0,
+                "geo_grid_rings": 0,
+            }
+            return overrides.get(key, default)
+
+        with patch("src.ui.dialogs.settings.settings.get", side_effect=_settings_get):
+            dialog = SettingsDialog()
+
+        self.assertEqual(dialog.spin_max_retry_count.value(), 0)
+        self.assertEqual(dialog.spin_geo_rings.value(), 0)
+
+        dialog.deleteLater()
+        self._qt_app.processEvents()
 
     def test_stats_tab_repeated_entry_after_data_collection(self):
         from src.core.database import ComplexDatabase

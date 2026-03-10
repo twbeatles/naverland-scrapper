@@ -110,18 +110,87 @@ class CrawlerHistoryAlertsMixin:
         self._flush_pending_items_if_needed(force=True)
         return matched_count
 
-    def _run_fallback_selenium(self, start_name="", start_cid="", start_trade=""):
+    def _run_fallback_selenium(
+        self,
+        start_name="",
+        start_cid="",
+        start_trade="",
+        *,
+        prefill_complex=None,
+        prefill_processed_target_pairs=None,
+        reason="",
+    ):
         original_engine = self.engine_name
         original_allowed_pairs = self._fallback_allowed_pairs
+        original_prefill_complexes = self._fallback_prefill_complexes
+        original_prefill_pairs = self._fallback_prefill_processed_target_pairs
         try:
             allowed_pairs = set(self._remaining_pairs())
             if start_name and start_cid and start_trade:
                 allowed_pairs.add(self._pair_key(start_name, start_cid, start_trade))
+
+            prefill_complexes: dict[tuple[str, str], dict[str, Any]] = {}
+            for key, payload in dict(original_prefill_complexes or {}).items():
+                if not isinstance(key, tuple) or len(key) < 2 or not isinstance(payload, dict):
+                    continue
+                ttypes = payload.get("trade_types", [])
+                prefill_complexes[(str(key[0]), str(key[1]))] = {
+                    "name": str(payload.get("name", "") or key[0]),
+                    "cid": str(payload.get("cid", "") or key[1]),
+                    "count": int(payload.get("count", 0) or 0),
+                    "trade_types": {str(x) for x in (ttypes or []) if str(x)},
+                }
+            if isinstance(prefill_complex, dict):
+                entry_name = str(prefill_complex.get("name", "") or "")
+                entry_cid = str(prefill_complex.get("cid", "") or "")
+                if entry_name and entry_cid:
+                    key = (entry_name, entry_cid)
+                    existing = prefill_complexes.get(key)
+                    incoming_types = {
+                        str(x)
+                        for x in (prefill_complex.get("trade_types", []) or [])
+                        if str(x)
+                    }
+                    incoming_count = int(prefill_complex.get("count", 0) or 0)
+                    if isinstance(existing, dict):
+                        existing["count"] = int(existing.get("count", 0) or 0) + incoming_count
+                        existing_types = {
+                            str(x)
+                            for x in (existing.get("trade_types", []) or [])
+                            if str(x)
+                        }
+                        existing_types.update(incoming_types)
+                        existing["trade_types"] = existing_types
+                    else:
+                        prefill_complexes[key] = {
+                            "name": entry_name,
+                            "cid": entry_cid,
+                            "count": incoming_count,
+                            "trade_types": incoming_types,
+                        }
+
+            prefill_pairs = set()
+            for pair in set(original_prefill_pairs or set()):
+                if not isinstance(pair, tuple) or len(pair) < 2:
+                    continue
+                prefill_pairs.add((str(pair[0]), str(pair[1])))
+            for pair in set(prefill_processed_target_pairs or set()):
+                if not isinstance(pair, tuple) or len(pair) < 2:
+                    continue
+                prefill_pairs.add((str(pair[0]), str(pair[1])))
+
             self._fallback_allowed_pairs = allowed_pairs
+            self._fallback_prefill_complexes = prefill_complexes
+            self._fallback_prefill_processed_target_pairs = prefill_pairs
+            self.stats["fallback_trigger_count"] = int(self.stats.get("fallback_trigger_count", 0)) + 1
+            self.stats["fallback_last_reason"] = str(reason or "unknown_error")
+            self.emit_stats()
             self.engine_name = "selenium"
             SeleniumCrawlerEngine(self).run()
         finally:
             self._fallback_allowed_pairs = original_allowed_pairs
+            self._fallback_prefill_complexes = original_prefill_complexes
+            self._fallback_prefill_processed_target_pairs = original_prefill_pairs
             self.engine_name = original_engine
 
     def _get_history_state_map(self, complex_id, trade_type):

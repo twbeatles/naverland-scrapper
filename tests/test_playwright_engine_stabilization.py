@@ -64,6 +64,8 @@ class _ThreadStub:
         self.block_heavy_resources = False
         self.cache = None
         self.negative_cache_ttl_minutes = 5
+        self.targets = [("테스트단지", "12345")]
+        self.fallback_engine_enabled = True
         self.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
         self.geo_config = SimpleNamespace(
             lat=37.55,
@@ -78,16 +80,29 @@ class _ThreadStub:
             "by_trade_type": {self.trade_types[0]: 0, self.trade_types[1]: 0, TRADE_CODE_MAP.get("B2", "월세"): 0},
             "response_drain_wait_count": 0,
             "response_drain_timeout_count": 0,
+            "response_seen_count": 0,
+            "detail_fetch_total": 0,
+            "detail_fetch_success": 0,
+            "fallback_trigger_count": 0,
+            "fallback_last_reason": "",
+            "block_detect_count": 0,
+            "block_cooldown_count": 0,
             "geo_discovered_count": 0,
             "geo_dedup_count": 0,
         }
         self.logged = []
         self.registered = []
+        self.history_calls = []
         self.progress_signal = _SignalStub()
         self.complex_finished_signal = _SignalStub()
         self.stop_flag = False
         self.finalized_pairs = None
         self.stats_emitted = 0
+        self._current_pair = None
+        self._fallback_prefill_processed_target_pairs = set()
+        self.fallback_calls = []
+        self.processed_marks = []
+        self._block_cooldown_seconds = 60
 
     def _should_stop(self):
         return bool(self.stop_flag)
@@ -101,6 +116,31 @@ class _ThreadStub:
     def _estimate_remaining_seconds(self, current, total):
         return 0
 
+    def _pair_key(self, name, cid, trade_type):
+        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+
+    def _mark_pair_processed(self, name, cid, trade_type):
+        self.processed_marks.append(self._pair_key(name, cid, trade_type))
+
+    def _run_fallback_selenium(self, **kwargs):
+        self.fallback_calls.append(dict(kwargs))
+
+    def _get_speed_delay(self):
+        return 0
+
+    def _sleep_interruptible(self, _seconds):
+        return True
+
+    def _is_block_like_error(self, error):
+        return "blocked" in str(error or "").lower()
+
+    def _register_block_detection(self, reason: str = "") -> bool:
+        self.stats["block_detect_count"] = int(self.stats.get("block_detect_count", 0)) + 1
+        return False
+
+    def _reset_block_detection_streak(self):
+        return None
+
     def _process_raw_items(self, raw_items, trade_type):
         return len(raw_items or [])
 
@@ -108,6 +148,7 @@ class _ThreadStub:
         return 0
 
     def record_crawl_history(self, *args, **kwargs):
+        self.history_calls.append((args, kwargs))
         return None
 
     def _finalize_disappeared_articles(self, processed_pairs):
@@ -528,6 +569,127 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["count"], 0)
         self.assertFalse(result["cache_hit"])
         self.assertFalse(cache.set_calls)
+
+    async def test_response_seen_counter_increments(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _collect(*_args, **_kwargs):
+            return {"raw_items": [], "response_seen": True, "drain_timed_out": False}
+
+        engine._collect_target_raw_items = _collect
+        try:
+            await engine._crawl_target_with_cache("테스트", "10101", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(int(thread.stats.get("response_seen_count", 0)), 1)
+
+    async def test_detail_fetch_metrics_track_total_and_success(self):
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._page_pool = asyncio.Queue()
+        await engine._page_pool.put(object())
+        await engine._page_pool.put(object())
+
+        async def _fake_fetch(_page, article_id):
+            if str(article_id) == "A1":
+                return {"ok": True}
+            return {}
+
+        with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
+            result = await engine._enrich_items_with_mobile_details(
+                [{"매물ID": "A1"}, {"매물ID": "A2"}]
+            )
+        try:
+            self.assertEqual(len(result), 2)
+            self.assertEqual(int(thread.stats.get("detail_fetch_total", 0)), 2)
+            self.assertEqual(int(thread.stats.get("detail_fetch_success", 0)), 1)
+        finally:
+            engine._loop.close()
+
+    async def test_complex_mode_fallback_passes_partial_prefill(self):
+        thread = _ThreadStub()
+        thread.targets = [("단지A", "10001")]
+        thread.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
+        thread.stats["by_trade_type"] = {
+            thread.trade_types[0]: 0,
+            thread.trade_types[1]: 0,
+            TRADE_CODE_MAP.get("B2", "월세"): 0,
+        }
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _noop_started():
+            return None
+
+        async def _crawl(name, cid, trade_type):
+            if trade_type == thread.trade_types[0]:
+                return {"count": 2}
+            raise RuntimeError("network fail")
+
+        engine._ensure_started = _noop_started
+        engine._crawl_target_with_cache = _crawl
+        try:
+            await engine._run_complex_mode()
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(len(thread.fallback_calls), 1)
+        call = thread.fallback_calls[0]
+        self.assertEqual(call.get("start_name"), "단지A")
+        self.assertEqual(call.get("start_cid"), "10001")
+        self.assertEqual(call.get("start_trade"), thread.trade_types[1])
+        prefill = call.get("prefill_complex") or {}
+        self.assertEqual(int(prefill.get("count", 0)), 2)
+        self.assertIn(thread.trade_types[0], list(prefill.get("trade_types", [])))
+        self.assertIn(("10001", thread.trade_types[0]), set(call.get("prefill_processed_target_pairs", set())))
+
+    async def test_geo_mode_skips_history_when_all_trade_attempts_fail(self):
+        thread = _ThreadStub()
+        thread.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
+        thread.geo_config = SimpleNamespace(
+            lat=37.55,
+            lon=126.99,
+            zoom=15,
+            rings=0,
+            step_px=320,
+            dwell_ms=100,
+            asset_types=["APT"],
+        )
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+
+        async def _noop_started():
+            return None
+
+        async def _noop_scan(*_args, **_kwargs):
+            return None
+
+        async def _always_fail(*_args, **_kwargs):
+            raise RuntimeError("temporary network error")
+
+        def _fake_marker_builder(discovered):
+            discovered["APT:1001"] = {
+                "complex_name": "단지A",
+                "complex_id": "1001",
+                "asset_type": "APT",
+                "count": 5,
+                "marker_id": "M1",
+            }
+            return (lambda _response: None), set(), {"dedup_skipped": 0}
+
+        engine._ensure_started = _noop_started
+        engine._scan_geo_asset_type = _noop_scan
+        engine._crawl_target_with_cache = _always_fail
+        engine._build_marker_handler = _fake_marker_builder
+        try:
+            await engine._run_geo()
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(thread.history_calls, [])
+        self.assertEqual(thread.complex_finished_signal.calls, [])
 
     async def test_memory_watchdog_recycles_context_and_emits_stats(self):
         thread = _ThreadStub()

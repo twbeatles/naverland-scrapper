@@ -171,6 +171,44 @@ class TestGeoTabWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_geo_tab_preserves_zero_settings_and_disables_retry_when_configured(self):
+        from src.core.database import ComplexDatabase
+
+        try:
+            from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+        except ImportError as exc:
+            if "_imaging" in str(exc):
+                self.skipTest("Pillow DLL blocked in this environment")
+            raise
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "geo_zero_settings.db"))
+
+            def _settings_get(key, default=None):
+                overrides = {
+                    "geo_grid_rings": 0,
+                    "retry_on_error": False,
+                    "max_retry_count": 9,
+                    "cache_enabled": False,
+                    "fallback_engine_enabled": False,
+                }
+                return overrides.get(key, default)
+
+            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+                tab = GeoCrawlerTab(db)
+                self.assertEqual(tab.spin_rings.value(), 0)
+                tab.check_trade.setChecked(True)
+
+                with patch("src.core.crawler.CrawlerThread.start", return_value=None):
+                    tab.start_crawling()
+
+                self.assertIsNotNone(tab.crawler_thread)
+                self.assertEqual(tab.crawler_thread.retry_handler.max_retries, 0)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_geo_final_summary_log_on_finish(self):
         from src.core.database import ComplexDatabase
 

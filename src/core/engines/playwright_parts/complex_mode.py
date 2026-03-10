@@ -18,6 +18,10 @@ class PlaywrightComplexModeMixin:
         total = len(self.thread.targets) * len(self.thread.trade_types)
         current = 0
         processed_pairs = set()
+        for pair in set(getattr(self.thread, "_fallback_prefill_processed_target_pairs", set()) or set()):
+            if not isinstance(pair, tuple) or len(pair) < 2:
+                continue
+            processed_pairs.add((str(pair[0]), str(pair[1])))
         for name, cid in self.thread.targets:
             if self.thread._should_stop():
                 break
@@ -39,19 +43,51 @@ class PlaywrightComplexModeMixin:
                     result = await self._crawl_target_with_cache(name, cid, trade_type)
                     count = int(result.get("count", 0))
                     complex_count += count
-                    complex_trade_types.append(trade_type)
-                    processed_pairs.add((str(cid), str(trade_type)))
+                    if trade_type not in complex_trade_types:
+                        complex_trade_types.append(trade_type)
+                    processed_pair = (str(cid), str(trade_type))
+                    processed_pairs.add(processed_pair)
+                    self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
                     self.thread._mark_pair_processed(name, cid, trade_type)
+                    self.thread._reset_block_detection_streak()
                     self.thread.log(f"   {count}건 수집")
                 except Exception as exc:
                     self.thread.log(f"   오류: {exc}", 40)
+                    block_like = self.thread._is_block_like_error(exc)
+                    if block_like:
+                        should_cooldown = self.thread._register_block_detection(str(exc))
+                        if should_cooldown:
+                            self.thread.log(
+                                f"   ⏸️ 차단 신호 3회 연속 감지, {int(self.thread._block_cooldown_seconds)}초 쿨다운",
+                                30,
+                            )
+                            if not await self._sleep_async_interruptible(self.thread._block_cooldown_seconds):
+                                self.thread._current_pair = None
+                                return
+                    else:
+                        self.thread._reset_block_detection_streak()
                     if self.thread.fallback_engine_enabled and not self._fallback_used:
                         self._fallback_used = True
                         self.thread.log("   Selenium fallback으로 전환합니다.", 30)
-                        self.thread._run_fallback_selenium(start_name=name, start_cid=cid, start_trade=trade_type)
+                        prefill_payload = None
+                        if complex_trade_types:
+                            prefill_payload = {
+                                "name": name,
+                                "cid": cid,
+                                "count": int(complex_count),
+                                "trade_types": list(complex_trade_types),
+                            }
+                        self.thread._run_fallback_selenium(
+                            start_name=name,
+                            start_cid=cid,
+                            start_trade=trade_type,
+                            prefill_complex=prefill_payload,
+                            prefill_processed_target_pairs=set(processed_pairs),
+                            reason=str(exc),
+                        )
                         self.thread._current_pair = None
                         return
                 if not self.thread._sleep_interruptible(self.thread._get_speed_delay()):
@@ -132,6 +168,8 @@ class PlaywrightComplexModeMixin:
         raw_items = list(collect_result.get("raw_items", []) or [])
         response_seen = bool(collect_result.get("response_seen", False))
         drain_timed_out = bool(collect_result.get("drain_timed_out", False))
+        if response_seen:
+            self.thread.stats["response_seen_count"] = int(self.thread.stats.get("response_seen_count", 0)) + 1
         if cache:
             if raw_items:
                 cache.set(cid, trade_type, raw_items, **cache_ctx)
@@ -286,10 +324,15 @@ class PlaywrightComplexModeMixin:
             page = await self._page_pool.get()
             try:
                 article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
+                self.thread.stats["detail_fetch_total"] = int(self.thread.stats.get("detail_fetch_total", 0)) + 1
                 detail = await self._async_retry(
                     f"mobile detail {article_no}",
                     lambda: fetch_mobile_article_detail(page, article_no),
                 )
+                if detail:
+                    self.thread.stats["detail_fetch_success"] = (
+                        int(self.thread.stats.get("detail_fetch_success", 0)) + 1
+                    )
             except Exception:
                 detail = {}
             finally:

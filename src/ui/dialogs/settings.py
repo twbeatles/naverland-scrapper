@@ -193,6 +193,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _load(self):
+        def _int_setting(key, default):
+            raw = settings.get(key, default)
+            if raw is None:
+                return int(default)
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return int(default)
+
         self.combo_theme.setCurrentText(settings.get("theme", "dark"))
         self.check_tray.setChecked(settings.get("minimize_to_tray", True))
         self.check_notify.setChecked(settings.get("show_notifications", True))
@@ -201,7 +210,7 @@ class SettingsDialog(QDialog):
         self.combo_speed.setCurrentText(settings.get("crawl_speed", "보통"))
         self.combo_engine.setCurrentText(settings.get("crawl_engine", "playwright"))
         self.check_retry_on_error.setChecked(bool(settings.get("retry_on_error", True)))
-        self.spin_max_retry_count.setValue(int(settings.get("max_retry_count", 3) or 3))
+        self.spin_max_retry_count.setValue(max(0, _int_setting("max_retry_count", 3)))
         self.spin_max_retry_count.setEnabled(self.check_retry_on_error.isChecked())
         self.check_fallback_engine.setChecked(
             bool(settings.get("fallback_engine_enabled", True))
@@ -236,7 +245,7 @@ class SettingsDialog(QDialog):
             int(settings.get("playwright_response_drain_timeout_ms", 3000) or 3000)
         )
         self.spin_geo_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
-        self.spin_geo_rings.setValue(int(settings.get("geo_grid_rings", 1) or 1))
+        self.spin_geo_rings.setValue(max(0, _int_setting("geo_grid_rings", 1)))
         self.spin_geo_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
         self.spin_geo_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
         asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]

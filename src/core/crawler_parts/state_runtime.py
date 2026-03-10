@@ -60,8 +60,15 @@ class CrawlerStateRuntimeMixin:
             "geo_dedup_count": 0,
             "response_drain_wait_count": 0,
             "response_drain_timeout_count": 0,
+            "response_seen_count": 0,
+            "detail_fetch_total": 0,
+            "detail_fetch_success": 0,
             "playwright_recycle_count": 0,
             "playwright_last_recycle_reason": "",
+            "fallback_trigger_count": 0,
+            "fallback_last_reason": "",
+            "block_detect_count": 0,
+            "block_cooldown_count": 0,
             "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
         }
         self.start_time = None
@@ -124,8 +131,13 @@ class CrawlerStateRuntimeMixin:
         self._processed_pairs = set()
         self._current_pair = None
         self._fallback_allowed_pairs = None
+        self._fallback_prefill_complexes = {}
+        self._fallback_prefill_processed_target_pairs = set()
         self._seen_item_keys = set()
-    
+        self._consecutive_block_detect_count = 0
+        self._block_cooldown_threshold = 3
+        self._block_cooldown_seconds = 60
+
     def stop(self):
         self._running = False
         try:
@@ -232,8 +244,15 @@ class CrawlerStateRuntimeMixin:
             "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
             "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
             "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
+            "response_seen_count": self.stats.get("response_seen_count", 0),
+            "detail_fetch_total": self.stats.get("detail_fetch_total", 0),
+            "detail_fetch_success": self.stats.get("detail_fetch_success", 0),
             "playwright_recycle_count": self.stats.get("playwright_recycle_count", 0),
             "playwright_last_recycle_reason": self.stats.get("playwright_last_recycle_reason", ""),
+            "fallback_trigger_count": self.stats.get("fallback_trigger_count", 0),
+            "fallback_last_reason": self.stats.get("fallback_last_reason", ""),
+            "block_detect_count": self.stats.get("block_detect_count", 0),
+            "block_cooldown_count": self.stats.get("block_cooldown_count", 0),
             "by_trade_type": dict(self.stats.get("by_trade_type", {})),
         }
 
@@ -253,4 +272,32 @@ class CrawlerStateRuntimeMixin:
 
     def _cache_key(self, complex_id, trade_type):
         return (str(complex_id or ""), str(trade_type or ""))
+
+    def _is_block_like_error(self, error) -> bool:
+        text = str(error or "").lower()
+        if not text:
+            return False
+        if "temporary blocked page detected" in text:
+            return True
+        if "blocked page" in text:
+            return True
+        for pattern in getattr(self, "BLOCKED_PAGE_PATTERNS", ()):
+            token = str(pattern or "").lower()
+            if token and token in text:
+                return True
+        return False
+
+    def _register_block_detection(self, reason: str = "") -> bool:
+        self.stats["block_detect_count"] = int(self.stats.get("block_detect_count", 0)) + 1
+        self._consecutive_block_detect_count += 1
+        if reason:
+            self.log(f"   ⚠️ 차단 신호 누적 {self._consecutive_block_detect_count}/{self._block_cooldown_threshold}: {reason}", 30)
+        if self._consecutive_block_detect_count < int(self._block_cooldown_threshold):
+            return False
+        self._consecutive_block_detect_count = 0
+        self.stats["block_cooldown_count"] = int(self.stats.get("block_cooldown_count", 0)) + 1
+        return True
+
+    def _reset_block_detection_streak(self):
+        self._consecutive_block_detect_count = 0
 

@@ -27,6 +27,16 @@ settings = SettingsManager()
 
 
 class GeoCrawlerTab(CrawlerTab):
+    @staticmethod
+    def _int_setting(key, default):
+        raw = settings.get(key, default)
+        if raw is None:
+            return int(default)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return int(default)
+
     def _setup_complex_list_group(self, layout):
         group = QGroupBox("4️⃣ 지리 탐색")
         grid = QGridLayout()
@@ -47,27 +57,27 @@ class GeoCrawlerTab(CrawlerTab):
 
         self.spin_zoom = QSpinBox()
         self.spin_zoom.setRange(12, 18)
-        self.spin_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
+        self.spin_zoom.setValue(self._int_setting("geo_default_zoom", 15))
         grid.addWidget(QLabel("줌:"), 2, 0)
         grid.addWidget(self.spin_zoom, 2, 1)
 
         self.spin_rings = QSpinBox()
         self.spin_rings.setRange(0, 6)
-        self.spin_rings.setValue(int(settings.get("geo_grid_rings", 1) or 1))
+        self.spin_rings.setValue(max(0, self._int_setting("geo_grid_rings", 1)))
         grid.addWidget(QLabel("링 수:"), 3, 0)
         grid.addWidget(self.spin_rings, 3, 1)
 
         self.spin_step = QSpinBox()
         self.spin_step.setRange(120, 1600)
         self.spin_step.setSingleStep(40)
-        self.spin_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
+        self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
         grid.addWidget(QLabel("간격(px):"), 4, 0)
         grid.addWidget(self.spin_step, 4, 1)
 
         self.spin_dwell = QSpinBox()
         self.spin_dwell.setRange(100, 5000)
         self.spin_dwell.setSingleStep(100)
-        self.spin_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
+        self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
         grid.addWidget(QLabel("대기(ms):"), 5, 0)
         grid.addWidget(self.spin_dwell, 5, 1)
 
@@ -120,10 +130,10 @@ class GeoCrawlerTab(CrawlerTab):
 
     def update_runtime_settings(self):
         super().update_runtime_settings()
-        self.spin_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
-        self.spin_rings.setValue(int(settings.get("geo_grid_rings", 1) or 1))
-        self.spin_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
-        self.spin_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
+        self.spin_zoom.setValue(self._int_setting("geo_default_zoom", 15))
+        self.spin_rings.setValue(max(0, self._int_setting("geo_grid_rings", 1)))
+        self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
+        self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
         asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
         self.check_asset_apt.setChecked("APT" in asset_types)
         self.check_asset_vl.setChecked("VL" in asset_types)
@@ -198,6 +208,10 @@ class GeoCrawlerTab(CrawlerTab):
                 max_entries=settings.get("cache_max_entries", 2000),
             )
 
+        configured_retry_count = max(0, self._int_setting("max_retry_count", 3))
+        retry_on_error = bool(settings.get("retry_on_error", True))
+        max_retry_count = configured_retry_count if retry_on_error else 0
+
         geo_config = GeoSweepConfig(
             lat=self.spin_lat.value(),
             lon=self.spin_lon.value(),
@@ -217,7 +231,7 @@ class GeoCrawlerTab(CrawlerTab):
             cache=self.crawl_cache,
             ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
             ui_batch_size=settings.get("ui_batch_size", 30),
-            max_retry_count=max(0, int(settings.get("max_retry_count", 3) or 3)),
+            max_retry_count=max_retry_count,
             show_new_badge=settings.get("show_new_badge", True),
             show_price_change=settings.get("show_price_change", True),
             price_change_threshold=settings.get("price_change_threshold", 0),

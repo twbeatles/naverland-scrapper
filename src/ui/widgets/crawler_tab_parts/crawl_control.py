@@ -70,7 +70,24 @@ class CrawlerTabCrawlControlMixin:
         if not complexes:
             QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
             return
-        items = [(f"{name} ({asset_type}:{cid})", (name, cid)) for _, name, asset_type, cid, _ in complexes]
+        apt_complexes = []
+        excluded_vl = 0
+        for _, name, asset_type, cid, _ in complexes:
+            asset_token = str(asset_type or "APT").strip().upper() or "APT"
+            if asset_token != "APT":
+                excluded_vl += 1
+                continue
+            apt_complexes.append((name, cid))
+        if not apt_complexes:
+            QMessageBox.information(self, "알림", "complex 모드에서 불러올 수 있는 APT 단지가 없습니다.")
+            if excluded_vl > 0:
+                self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
+                self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
+            return
+        if excluded_vl > 0:
+            self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
+            self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
+        items = [(f"{name} (APT:{cid})", (name, cid)) for name, cid in apt_complexes]
         dlg = MultiSelectDialog("DB에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             for name, cid in dlg.selected_items():
@@ -84,9 +101,17 @@ class CrawlerTabCrawlControlMixin:
         items = [(name, gid) for gid, name, _ in groups]
         dlg = MultiSelectDialog("그룹에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
+            excluded_vl = 0
             for gid in dlg.selected_items():
-                for _, name, _asset_type, cid, _ in self.db.get_complexes_in_group(gid):
+                for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
+                    asset_token = str(asset_type or "APT").strip().upper() or "APT"
+                    if asset_token != "APT":
+                        excluded_vl += 1
+                        continue
                     self.add_task(name, cid)
+            if excluded_vl > 0:
+                self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
+                self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
 
     def _show_recent_search_dialog(self: Any):
         if not self.history_manager:
@@ -391,6 +416,9 @@ class CrawlerTabCrawlControlMixin:
             cid = item.get("단지ID", "")
             ttype = item.get("거래유형", "")
             pyeong = item.get("면적(평)", 0)
+            asset_type = str(item.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+            if asset_type not in {"APT", "VL"}:
+                asset_type = "APT"
             
             # 가격 추출
             if ttype == "매매":
@@ -401,17 +429,17 @@ class CrawlerTabCrawlControlMixin:
             if cid and ttype and price > 0:
                 # 평형 그룹화 (5평 단위)
                 pyeong_group = round(pyeong / 5) * 5
-                key = (cid, ttype, pyeong_group)
+                key = (asset_type, cid, ttype, pyeong_group)
                 grouped[key].append(price)
         
         # 스냅샷 저장
         rows = []
-        for (cid, ttype, pyeong), prices in grouped.items():
+        for (asset_type, cid, ttype, pyeong), prices in grouped.items():
             if prices:
                 min_price = min(prices)
                 max_price = max(prices)
                 avg_price = sum(prices) // len(prices)
-                rows.append((cid, ttype, pyeong, min_price, max_price, avg_price, len(prices)))
+                rows.append((cid, ttype, pyeong, min_price, max_price, avg_price, len(prices), asset_type))
 
         saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
         self.append_log(f"📊 가격 스냅샷 {saved}건 저장", 10)

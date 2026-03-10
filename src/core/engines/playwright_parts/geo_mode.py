@@ -101,8 +101,24 @@ class PlaywrightGeoModeMixin:
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
+                    self.thread._reset_block_detection_streak()
                 except Exception as exc:
                     self.thread.log(f"   {name}({trade_type}) 수집 실패: {exc}", 40)
+                    block_like = self.thread._is_block_like_error(exc)
+                    if block_like:
+                        should_cooldown = self.thread._register_block_detection(str(exc))
+                        if should_cooldown:
+                            self.thread.log(
+                                f"   ⏸️ 차단 신호 3회 연속 감지, {int(self.thread._block_cooldown_seconds)}초 쿨다운",
+                                30,
+                            )
+                            if not await self._sleep_async_interruptible(self.thread._block_cooldown_seconds):
+                                break
+                    else:
+                        self.thread._reset_block_detection_streak()
+            if not complex_trade_types:
+                self.thread.log(f"   {name}({asset_type}) 거래 성공 없음: 이력 기록을 생략합니다.", 30)
+                continue
             self.thread.record_crawl_history(
                 name,
                 cid,

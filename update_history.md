@@ -1,5 +1,55 @@
 # 업데이트 히스토리
 
+## **v15.0.8 (2026-03-10)**
+
+**기능 감사 계획 전면 반영 + 문서/패키징 정합성 재점검**
+
+### ✅ 핵심 반영
+
+* fallback 경계 정합성:
+  - Playwright 성공 pair를 thread 범위에서 누적하고, fallback 전환 시 현재 단지의 부분 성공(`count`, `trade_types`)과 processed pair를 Selenium으로 prefill 전달.
+  - fallback 통계 `fallback_trigger_count`, `fallback_last_reason`를 `stats_signal` payload에 추가.
+* Selenium negative cache 안전화:
+  - Selenium 경로에 `confirmed_empty` 판정(`_is_confirmed_empty_state`)을 추가.
+  - `raw_items=[]`라도 `confirmed_empty=False`면 negative cache 저장을 생략.
+* 설정값 `0` 보존:
+  - `max_retry_count`, `geo_grid_rings` 로딩 경로의 `or default` 패턴 제거.
+  - `retry_on_error=False`일 때 Geo도 `max_retry_count=0` 전달을 보장.
+* 스냅샷 자산 분리:
+  - `price_snapshots.asset_type` 컬럼/인덱스 마이그레이션 추가(legacy 빈 값은 `APT` backfill).
+  - 스냅샷 저장/조회/API를 `asset_type` 기준으로 분리.
+  - `add_price_snapshots_bulk`가 legacy 7-tuple과 asset 포함 8-tuple을 모두 수용.
+  - 통계 단지 소스 반환형을 `(name, asset_type, complex_id)`로 확장.
+  - purge 관련 삭제에서 snapshot도 `(asset_type, complex_id)` 스코프를 준수.
+* complex 모드 정책 강제:
+  - DB/그룹/예약 로딩에서 VL 엔트리를 제외하고 UI 로그/상태바로 안내.
+  - `complex`는 APT-only, VL은 `geo_sweep` 경로만 허용.
+* Geo 이력 노이즈 정리:
+  - 단지별 trade 성공이 0개면 `record_crawl_history`/`complex_finished_signal` 생략.
+* 차단 누적 쿨다운 + 관측성:
+  - block-like 신호 연속 3회 감지 시 interruptible 60초 쿨다운.
+  - 신규 지표 `block_detect_count`, `block_cooldown_count`, `response_seen_count`, `detail_fetch_total`, `detail_fetch_success` 추가.
+
+### ✅ 테스트/검증
+
+* 회귀 테스트 확장:
+  - `tests/test_crawler_regressions.py`
+  - `tests/test_playwright_engine_stabilization.py`
+  - `tests/test_database_module.py`
+  - `tests/test_geo_tab_wiring.py`
+  - `tests/test_ui_wiring.py`
+* 실행 결과:
+  - `python -m unittest discover -s tests -p "test_*.py"`: pass (`Ran 120 tests`)
+
+### ✅ 문서/.spec/.gitignore 정합성
+
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_functional_audit_2026-03-10.md`, `update_history.md`에 동일 기준으로 정책/동작 변경사항 반영.
+* `.spec` 재점검:
+  - `naverland-scrapper.spec`는 이번 범위에서 hidden import/runtime hook/번들 경로 추가 수정이 필요하지 않음을 확인.
+* `.gitignore` 재점검:
+  - 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분하여 추가 패턴 수정 없음.
+
 ## **v15.0.7 (2026-03-09)**
 
 **인코딩 정리 + Python 3.9 preflight 호환 + 문서 정합 재점검**

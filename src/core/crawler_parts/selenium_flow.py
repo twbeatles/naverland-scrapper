@@ -97,6 +97,11 @@ class CrawlerSeleniumFlowMixin:
             current = 0
             processed_complexes = 0  # 처리한 단지 수
             processed_target_pairs = set()
+            for pair in set(self._fallback_prefill_processed_target_pairs or set()):
+                if not isinstance(pair, tuple) or len(pair) < 2:
+                    continue
+                processed_target_pairs.add((str(pair[0]), str(pair[1])))
+            prefill_complexes = dict(self._fallback_prefill_complexes or {})
             
             for name, cid in self.targets:
                 if self._should_stop():
@@ -129,8 +134,24 @@ class CrawlerSeleniumFlowMixin:
                     if not driver:
                         raise Exception("드라이버 재시작 실패")
                 
-                complex_count = 0
-                complex_trade_types = []
+                prefill_payload = prefill_complexes.get((str(name), str(cid)))
+                if isinstance(prefill_payload, dict):
+                    try:
+                        complex_count = int(prefill_payload.get("count", 0) or 0)
+                    except (TypeError, ValueError):
+                        complex_count = 0
+                    prefill_types = {
+                        str(x)
+                        for x in (prefill_payload.get("trade_types", []) or [])
+                        if str(x)
+                    }
+                    complex_trade_types = [trade for trade in self.trade_types if trade in prefill_types]
+                    for trade in sorted(prefill_types):
+                        if trade not in complex_trade_types:
+                            complex_trade_types.append(trade)
+                else:
+                    complex_count = 0
+                    complex_trade_types = []
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
@@ -150,11 +171,13 @@ class CrawlerSeleniumFlowMixin:
                         batch_result = self._crawl(driver, name, cid, ttype)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
-                        complex_trade_types.append(ttype)
+                        if ttype not in complex_trade_types:
+                            complex_trade_types.append(ttype)
                         if cid and ttype:
                             processed_target_pairs.add((str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
                         self._mark_pair_processed(name, cid, ttype)
+                        self._reset_block_detection_streak()
                         self.log(f"   ✅ {count}건 수집")
                     except RetryCancelledError:
                         self.log("   ⏹ 중단 요청으로 현재 작업을 종료합니다.", 20)
@@ -163,6 +186,18 @@ class CrawlerSeleniumFlowMixin:
                     except Exception as e:
                         self.log(f"   ❌ 오류: {e}", 40)
                         self.log(f"   상세: {traceback.format_exc()}", 40)
+                        block_like = self._is_block_like_error(e)
+                        if block_like:
+                            should_cooldown = self._register_block_detection(str(e))
+                            if should_cooldown:
+                                self.log(
+                                    f"   ⏸️ 차단 신호 3회 연속 감지, {int(self._block_cooldown_seconds)}초 쿨다운",
+                                    30,
+                                )
+                                if not self._sleep_interruptible(self._block_cooldown_seconds):
+                                    break
+                        else:
+                            self._reset_block_detection_streak()
                         
                         # 치명적 오류(세션 종료 등) 발생 시 드라이버 재시작 시도
                         if "SessionNotCreatedException" in str(e) or "NoSuchWindowException" in str(e) or "WebDriverException" in str(e):
@@ -198,6 +233,8 @@ class CrawlerSeleniumFlowMixin:
             raise
         finally:
             self._current_pair = None
+            self._fallback_prefill_complexes = {}
+            self._fallback_prefill_processed_target_pairs = set()
             if driver:
                 try:
                     driver.quit()
@@ -253,7 +290,7 @@ class CrawlerSeleniumFlowMixin:
         
         # v14.2: 필터 통과 여부와 무관하게 raw_items 캐시 저장
         if self.cache:
-            raw_items = parse_result.get("raw_items", [])
+            raw_items = list(parse_result.get("raw_items", []) or [])
             if raw_items:
                 self.cache.set(
                     cid,
@@ -265,14 +302,22 @@ class CrawlerSeleniumFlowMixin:
             else:
                 negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
                 if negative_ttl_seconds > 0:
-                    self.cache.set(
-                        cid,
-                        ttype,
-                        [],
-                        ttl_seconds=negative_ttl_seconds,
-                        mode=self.crawl_mode,
-                        asset_type="APT",
-                    )
+                    confirmed_empty = bool(parse_result.get("confirmed_empty", False))
+                    if confirmed_empty:
+                        self.cache.set(
+                            cid,
+                            ttype,
+                            [],
+                            ttl_seconds=negative_ttl_seconds,
+                            reason="confirmed_empty",
+                            mode=self.crawl_mode,
+                            asset_type="APT",
+                        )
+                    else:
+                        self.log(
+                            "   ⚠️ 빈 결과가 확정되지 않아 negative cache 저장을 건너뜁니다.",
+                            30,
+                        )
         
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
@@ -280,6 +325,7 @@ class CrawlerSeleniumFlowMixin:
             "count": count,
             "cache_hit": False,
             "raw_count": int(parse_result.get("raw_count", 0)),
+            "confirmed_empty": bool(parse_result.get("confirmed_empty", False)),
         }
 
     def _crawl_once(self, driver, name, cid, ttype, url):
@@ -315,5 +361,66 @@ class CrawlerSeleniumFlowMixin:
         self._assert_not_blocked_page(driver, context="스크롤 완료")
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        return self._parse(soup, name, cid, ttype)
+        parse_result = self._parse(soup, name, cid, ttype)
+        raw_items = list(parse_result.get("raw_items", []) or [])
+        if raw_items:
+            parse_result["confirmed_empty"] = False
+        else:
+            parse_result["confirmed_empty"] = self._is_confirmed_empty_state(driver)
+        return parse_result
+
+    def _is_confirmed_empty_state(self, driver) -> bool:
+        try:
+            title = str(driver.title or "")
+        except Exception:
+            title = ""
+        try:
+            page_source = str(driver.page_source or "")
+        except Exception:
+            page_source = ""
+
+        if self._detect_block_signal(title, page_source):
+            return False
+
+        lower_source = page_source.lower()
+        empty_keywords = (
+            "매물이 없습니다",
+            "등록된 매물이 없습니다",
+            "검색 결과가 없습니다",
+            "조건에 맞는 매물이 없습니다",
+            "조건에 맞는 매물",
+            "no listings",
+            "no listing",
+            "no articles",
+        )
+        if any(token in lower_source for token in empty_keywords):
+            return True
+
+        selectors = [
+            ".list_empty",
+            ".article_none",
+            ".no_result",
+            ".result_none",
+            "[class*='empty']",
+            "[class*='no_data']",
+            "[class*='noResult']",
+        ]
+        script = """
+            const selectors = arguments[0] || [];
+            for (const sel of selectors) {
+                const node = document.querySelector(sel);
+                if (!node) {
+                    continue;
+                }
+                const text = String(node.textContent || '').trim();
+                if (text.length > 0 || node.children.length === 0) {
+                    return true;
+                }
+            }
+            return false;
+        """
+        try:
+            return bool(driver.execute_script(script, selectors))
+        except Exception:
+            return False
 

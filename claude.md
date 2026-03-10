@@ -9,6 +9,7 @@
     - 다중 단지 크롤링 & 그룹 관리
     - Playwright 기본 엔진 + Selenium fallback(일반 단지 수집 `complex` 모드 전용, `geo_sweep`은 Playwright 전용)
     - 지도 탐색 탭 기반 좌표 sweep (APT/VL, 매매/전세/월세)
+    - `complex` 모드 APT-only 정책(입력/예약 로딩에서 VL 제외, VL은 `geo_sweep` 경로만 허용)
     - 응답 가로채기 기반 고속 목록 수집 + 모바일 상세 병렬 수집
     - 실시간 가격 추세 분석 & 시각화 (히스토그램, 파이차트)
     - Excel/CSV/JSON 내보내기 (템플릿 지원)
@@ -390,3 +391,29 @@ COLORS["light"] = {
 - `.spec`/무시 규칙 재점검:
   - `naverland-scrapper.spec`는 추가 수정 불필요.
   - `.gitignore`는 현 규칙(build/logs/backup/Playwright 산출물)으로 충분.
+
+## 0-12. v15.0.8 Functional Audit Execution (2026-03-10)
+- fallback 경계 정합:
+  - Playwright에서 누적한 성공 pair를 fallback 경로로 전달하고, 현재 단지 부분 성공(`count`, `trade_types`)을 prefill해 Selenium에서 단일 완료 이력으로 마무리.
+  - fallback 지표 `fallback_trigger_count`, `fallback_last_reason`를 `stats_signal` payload에 노출.
+- Selenium negative cache 강화:
+  - `confirmed_empty` 판정(`명시적 empty + 비차단`)이 참일 때만 `[]` negative cache를 저장.
+- 설정값 `0` 보존:
+  - `max_retry_count`, `geo_grid_rings` 로딩에서 `or default` 패턴 제거.
+  - `retry_on_error=False`일 때 Geo도 `max_retry_count=0`을 그대로 전달.
+- 스냅샷 자산 분리:
+  - `price_snapshots.asset_type` 컬럼/인덱스 마이그레이션, legacy 빈 값 `APT` backfill.
+  - 스냅샷 저장/조회/API/통계 단지 소스를 자산 기준으로 분리.
+  - `add_price_snapshots_bulk`는 7-tuple(legacy)/8-tuple(asset 포함) 모두 수용.
+- `complex` 모드 정책 강제:
+  - DB/그룹/예약 로딩에서 VL을 제외하고 사용자에게 로그/상태바 안내.
+- Geo 이력 노이즈 정리:
+  - 단지별 trade 성공이 0개면 `record_crawl_history`/`complex_finished_signal` 생략.
+- 차단 쿨다운/관측성:
+  - block-like 신호 연속 3회 감지 시 interruptible 60초 쿨다운.
+  - 신규 지표 `block_detect_count`, `block_cooldown_count`, `response_seen_count`, `detail_fetch_total`, `detail_fetch_success` 추가.
+- 검증:
+  - `python -m unittest discover -s tests -p "test_*.py"` 기준 `Ran 120 tests` pass.
+- `.spec`/`.gitignore` 정합:
+  - `naverland-scrapper.spec`는 이번 변경 범위에서 추가 hidden import/runtime hook 수정 불필요.
+  - `.gitignore`는 현재 규칙으로 충분(추가 패턴 없음).

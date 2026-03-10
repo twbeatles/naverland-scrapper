@@ -143,6 +143,7 @@ python src/main.py
    * 월세는 `보증금 범위`와 `월세 금액 범위`를 각각 설정하며, 두 조건을 모두 만족해야 결과에 포함됩니다.
    * 기본 엔진은 설정 또는 수집 탭에서 `playwright` / `selenium`을 선택할 수 있습니다.
    * 지도 탐색 탭에서는 `APT`, `VL`, 줌, 링 수, 그리드 간격, 지점 대기시간을 조정할 수 있습니다.
+   * 일반 단지 수집(`complex`) 모드는 `APT`만 지원하며, `VL`은 `geo sweep` 경로에서만 수집합니다.
    * 지도 탐색(`geo sweep`) 모드는 Playwright 전용이며 Selenium fallback은 지원하지 않습니다.
    * 고급 필터가 필요하면 상단 메뉴 **`🔍 필터 > ⚙️ 고급 결과 필터`** 또는 수집 결과 영역의 **`⚙️ 고급필터`** 버튼으로 진입합니다.
    * 고급 필터 해제는 메뉴 **`🔍 필터 > 🧹 고급 필터 해제`** 또는 결과 영역 **`🧹 필터해제`** 버튼으로 수행합니다.
@@ -266,3 +267,23 @@ python src/main.py
 - `.spec`/`.gitignore` 재점검:
   - `naverland-scrapper.spec`는 이번 범위에서 추가 수정이 필요하지 않았습니다.
   - `.gitignore`는 현행 빌드/로그/백업/Playwright 산출물 규칙으로 충분해 변경하지 않았습니다.
+
+## v15.0.8 Functional Audit Execution (2026-03-10)
+
+- 감사 계획 항목 일괄 반영:
+  - fallback 경계 정합성(부분 성공 prefill 전달 + processed pair 누적) 복구
+  - Selenium negative cache를 `confirmed_empty` 조건으로 제한
+  - `max_retry_count=0`, `geo_grid_rings=0` 설정값 보존 경로 정리
+  - `price_snapshots.asset_type` 마이그레이션/조회 분리/API 확장
+  - `complex` 모드 APT-only 정책(DB/그룹/예약 로딩에서 VL 제외 + 안내 로그)
+  - Geo trade 전부 실패 시 이력/완료 신호 생략
+  - 연속 차단 3회 감지 시 60초 쿨다운 + observability 지표 확장
+- 운영 지표(`stats_signal`) 확장:
+  - `fallback_trigger_count`, `fallback_last_reason`
+  - `block_detect_count`, `block_cooldown_count`
+  - `response_seen_count`, `detail_fetch_total`, `detail_fetch_success`
+- 검증:
+  - `python -m unittest discover -s tests -p "test_*.py"` 기준 `Ran 120 tests` pass
+- `.spec`/`.gitignore` 재점검:
+  - `naverland-scrapper.spec`는 이번 반영 범위에서 추가 수정이 필요하지 않았습니다.
+  - `.gitignore`는 현재 규칙으로 충분하여 변경하지 않았습니다.

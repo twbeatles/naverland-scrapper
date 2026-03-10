@@ -61,6 +61,7 @@ class ComplexDatabaseSchemaMixin:
                 max_price INTEGER,
                 avg_price INTEGER,
                 item_count INTEGER,
+                asset_type TEXT DEFAULT 'APT',
                 snapshot_date DATE DEFAULT CURRENT_DATE
             )''')
             c.execute('''CREATE TABLE IF NOT EXISTS alert_settings (
@@ -165,6 +166,9 @@ class ComplexDatabaseSchemaMixin:
                     "source_zoom": "INTEGER DEFAULT 0",
                     "asset_type": "TEXT DEFAULT ''",
                 },
+                "price_snapshots": {
+                    "asset_type": "TEXT DEFAULT 'APT'",
+                },
             }
             for table_name, columns in migration_columns.items():
                 for column_name, ddl in columns.items():
@@ -172,6 +176,13 @@ class ComplexDatabaseSchemaMixin:
                         self._ensure_column(c, table_name, column_name, ddl)
                     except Exception as me:
                         logger.warning(f"{table_name}.{column_name} column migration failed (ignored): {me}")
+            try:
+                c.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_price_snapshots_asset_lookup "
+                    "ON price_snapshots(asset_type, complex_id, trade_type, snapshot_date DESC)"
+                )
+            except Exception as me:
+                logger.warning(f"price_snapshots asset lookup index migration failed (ignored): {me}")
             
             # status column backfill (best effort; do not block startup)
             try:
@@ -187,6 +198,13 @@ class ComplexDatabaseSchemaMixin:
 
             # v14.x: normalize legacy price_snapshots string values (for example, "34?", "1?2,000?")
             try:
+                c.execute(
+                    """
+                    UPDATE price_snapshots
+                    SET asset_type = 'APT'
+                    WHERE TRIM(COALESCE(asset_type, '')) = ''
+                    """
+                )
                 legacy_rows = c.execute(
                     """
                     SELECT id, pyeong, min_price, max_price, avg_price, item_count

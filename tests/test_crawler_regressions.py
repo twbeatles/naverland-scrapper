@@ -27,13 +27,21 @@ class _DBStub:
 
 
 class _CacheStub:
-    def __init__(self, items):
-        self._items = list(items)
+    def __init__(self, items=None, *, cache_hit=True):
+        self._items = list(items or [])
+        self._cache_hit = bool(cache_hit)
+        self.set_calls = []
 
     def get(self, _cid, _ttype, **_kwargs):
+        if not self._cache_hit:
+            return None
         return list(self._items)
 
     def set(self, _cid, _ttype, _items, ttl_seconds=None, **_kwargs):
+        payload = dict(_kwargs)
+        if ttl_seconds is not None:
+            payload["ttl_seconds"] = ttl_seconds
+        self.set_calls.append((_cid, _ttype, list(_items), payload))
         return None
 
 
@@ -187,9 +195,23 @@ class TestCrawlerRegressions(unittest.TestCase):
 
         def _fake_run(engine_self):
             captured["allowed_pairs"] = set(engine_self.thread._fallback_allowed_pairs or set())
+            captured["prefill_pairs"] = set(engine_self.thread._fallback_prefill_processed_target_pairs or set())
+            captured["prefill_complexes"] = dict(engine_self.thread._fallback_prefill_complexes or {})
 
         with patch("src.core.crawler.SeleniumCrawlerEngine.run", new=_fake_run):
-            thread._run_fallback_selenium(start_name="단지A", start_cid="10001", start_trade="전세")
+            thread._run_fallback_selenium(
+                start_name="단지A",
+                start_cid="10001",
+                start_trade="전세",
+                prefill_complex={
+                    "name": "단지A",
+                    "cid": "10001",
+                    "count": 2,
+                    "trade_types": ["매매"],
+                },
+                prefill_processed_target_pairs={("10001", "매매")},
+                reason="playwright_failure",
+            )
 
         expected = {
             thread._pair_key("단지A", "10001", "전세"),
@@ -197,7 +219,160 @@ class TestCrawlerRegressions(unittest.TestCase):
             thread._pair_key("단지B", "20002", "전세"),
         }
         self.assertEqual(captured.get("allowed_pairs"), expected)
+        self.assertIn(("10001", "매매"), captured.get("prefill_pairs", set()))
+        self.assertIn(("단지A", "10001"), captured.get("prefill_complexes", {}))
         self.assertIsNone(thread._fallback_allowed_pairs)
+        self.assertEqual(int(thread.stats.get("fallback_trigger_count", 0)), 1)
+        self.assertEqual(thread.stats.get("fallback_last_reason"), "playwright_failure")
+
+    def test_fallback_prefill_merges_history_and_disappeared_scope(self):
+        class _DriverStub:
+            def quit(self):
+                return None
+
+        thread = CrawlerThread(
+            targets=[("단지A", "10001")],
+            trade_types=["매매", "전세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        thread._fallback_allowed_pairs = {thread._pair_key("단지A", "10001", "전세")}
+        thread._fallback_prefill_processed_target_pairs = {("10001", "매매")}
+        thread._fallback_prefill_complexes = {
+            ("단지A", "10001"): {
+                "name": "단지A",
+                "cid": "10001",
+                "count": 2,
+                "trade_types": {"매매"},
+            }
+        }
+        thread._init_driver = lambda: _DriverStub()
+        thread._crawl = lambda _driver, _name, _cid, _ttype: {"count": 1, "raw_count": 1, "raw_items": [{}]}
+        thread._get_speed_delay = lambda: 0
+        thread._sleep_interruptible = lambda *_args, **_kwargs: True
+        history_calls = []
+        finalized = {}
+        thread.record_crawl_history = lambda name, cid, types, count, **kwargs: history_calls.append(
+            (name, cid, types, count)
+        )
+        thread._finalize_disappeared_articles = lambda pairs: finalized.setdefault("pairs", set(pairs))
+
+        with (
+            patch("src.core.crawler.UC_AVAILABLE", True),
+            patch("src.core.crawler.BS4_AVAILABLE", True),
+            patch("src.core.crawler.PSUTIL_AVAILABLE", False),
+        ):
+            thread._run_selenium_loop()
+
+        self.assertEqual(len(history_calls), 1)
+        self.assertEqual(history_calls[0][0], "단지A")
+        self.assertEqual(history_calls[0][1], "10001")
+        self.assertIn("매매", history_calls[0][2])
+        self.assertIn("전세", history_calls[0][2])
+        self.assertEqual(int(history_calls[0][3]), 3)
+        self.assertEqual(
+            finalized.get("pairs"),
+            {("10001", "매매"), ("10001", "전세")},
+        )
+
+    def test_negative_cache_not_written_when_empty_unconfirmed(self):
+        cache = _CacheStub(cache_hit=False)
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=cache,
+            max_retry_count=0,
+        )
+        thread._crawl_once = lambda *_args, **_kwargs: {
+            "count": 0,
+            "raw_items": [],
+            "raw_count": 0,
+            "confirmed_empty": False,
+        }
+
+        result = thread._crawl(None, "테스트단지", "12345", "매매")
+        self.assertEqual(result["count"], 0)
+        self.assertFalse(result["cache_hit"])
+        self.assertFalse(cache.set_calls)
+
+    def test_negative_cache_written_when_confirmed_empty(self):
+        cache = _CacheStub(cache_hit=False)
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=cache,
+            max_retry_count=0,
+        )
+        thread._crawl_once = lambda *_args, **_kwargs: {
+            "count": 0,
+            "raw_items": [],
+            "raw_count": 0,
+            "confirmed_empty": True,
+        }
+
+        result = thread._crawl(None, "테스트단지", "12345", "매매")
+        self.assertEqual(result["count"], 0)
+        self.assertFalse(result["cache_hit"])
+        self.assertEqual(len(cache.set_calls), 1)
+        self.assertEqual(cache.set_calls[0][2], [])
+        self.assertEqual(cache.set_calls[0][3].get("reason"), "confirmed_empty")
+
+    def test_block_cooldown_triggered_after_three_consecutive_block_errors(self):
+        class _DriverStub:
+            def quit(self):
+                return None
+
+        thread = CrawlerThread(
+            targets=[("단지A", "10001")],
+            trade_types=["매매", "전세", "월세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        thread._init_driver = lambda: _DriverStub()
+        thread._crawl = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("temporary blocked page detected")
+        )
+        thread._get_speed_delay = lambda: 0
+        sleep_calls = []
+        thread._sleep_interruptible = lambda seconds, *_args, **_kwargs: sleep_calls.append(float(seconds)) or True
+        thread._finalize_disappeared_articles = lambda *_args, **_kwargs: None
+
+        with (
+            patch("src.core.crawler.UC_AVAILABLE", True),
+            patch("src.core.crawler.BS4_AVAILABLE", True),
+            patch("src.core.crawler.PSUTIL_AVAILABLE", False),
+        ):
+            thread._run_selenium_loop()
+
+        self.assertIn(60.0, sleep_calls)
+        self.assertGreaterEqual(int(thread.stats.get("block_detect_count", 0)), 3)
+        self.assertEqual(int(thread.stats.get("block_cooldown_count", 0)), 1)
+
+    def test_stats_payload_includes_observability_keys(self):
+        thread = self._build_thread(price_filter={"enabled": False})
+        payload = thread._build_stats_payload()
+        for key in (
+            "response_seen_count",
+            "detail_fetch_total",
+            "detail_fetch_success",
+            "fallback_trigger_count",
+            "fallback_last_reason",
+            "block_detect_count",
+            "block_cooldown_count",
+        ):
+            self.assertIn(key, payload)
 
     def test_push_item_dedupes_only_when_article_id_exists(self):
         thread = self._build_thread(price_filter={"enabled": False})

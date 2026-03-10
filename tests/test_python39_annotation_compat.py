@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +21,7 @@ def _has_future_annotations(tree: ast.Module) -> bool:
     return False
 
 
-def _annotation_contains_bitwise_union(node: ast.AST | None) -> bool:
+def _annotation_contains_bitwise_union(node: Optional[ast.AST]) -> bool:
     if node is None:
         return False
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):

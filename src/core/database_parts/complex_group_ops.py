@@ -77,54 +77,63 @@ class ComplexDatabaseComplexGroupOpsMixin:
         """통계용 단지 목록을 조회한다 (DB + 크롤링 이력 + 스냅샷)."""
         conn = self._pool.get_connection()
         try:
-            complex_map = {}
+            complex_map: dict[tuple[str, str], str] = {}
 
             # 1) 단지 기본 목록
             rows = self._fetchall_safe(
                 conn,
-                "SELECT name, complex_id FROM complexes ORDER BY name",
+                "SELECT name, asset_type, complex_id FROM complexes ORDER BY name, asset_type",
                 context="통계 단지 조회(complexes)",
             )
             for row in rows:
-                cid = row["complex_id"]
-                name = row["name"]
+                cid = str(row["complex_id"] or "")
+                asset_type = self._normalize_asset_type(row["asset_type"])
+                name = str(row["name"] or "")
                 if cid and name:
-                    complex_map[cid] = name
+                    complex_map[(asset_type, cid)] = name
 
             # 2) 크롤링 이력(최신 이름 우선)
             history_rows = self._fetchall_safe(
                 conn,
                 '''
-                SELECT ch.complex_id, ch.complex_name
+                SELECT
+                    complex_id,
+                    complex_name,
+                    COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type,
+                    crawled_at
                 FROM crawl_history ch
-                JOIN (
-                    SELECT complex_id, MAX(crawled_at) AS last_crawl
-                    FROM crawl_history
-                    GROUP BY complex_id
-                ) latest
-                ON ch.complex_id = latest.complex_id AND ch.crawled_at = latest.last_crawl
+                ORDER BY crawled_at DESC
                 ''',
                 context="통계 단지 조회(crawl_history)",
             )
             for row in history_rows:
-                cid = row["complex_id"]
-                name = row["complex_name"] or f"단지_{cid}"
-                if cid and cid not in complex_map:
-                    complex_map[cid] = name
+                cid = str(row["complex_id"] or "")
+                asset_type = self._normalize_asset_type(row["asset_type"])
+                if not cid:
+                    continue
+                key = (asset_type, cid)
+                if key in complex_map:
+                    continue
+                name = str(row["complex_name"] or f"단지_{cid}")
+                complex_map[key] = name
 
             # 3) 스냅샷에만 남아 있는 단지 보강
             snapshot_rows = self._fetchall_safe(
                 conn,
-                "SELECT DISTINCT complex_id FROM price_snapshots",
+                "SELECT DISTINCT COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, complex_id FROM price_snapshots",
                 context="통계 단지 조회(price_snapshots)",
             )
             for row in snapshot_rows:
-                cid = row["complex_id"]
-                if cid and cid not in complex_map:
-                    complex_map[cid] = f"단지_{cid}"
+                cid = str(row["complex_id"] or "")
+                asset_type = self._normalize_asset_type(row["asset_type"])
+                if not cid:
+                    continue
+                key = (asset_type, cid)
+                if key not in complex_map:
+                    complex_map[key] = f"단지_{cid}"
 
-            result = [(name, cid) for cid, name in complex_map.items()]
-            result.sort(key=lambda x: x[0])
+            result = [(name, asset_type, cid) for (asset_type, cid), name in complex_map.items()]
+            result.sort(key=lambda x: (x[0], x[1], x[2]))
             logger.debug(f"complex stats source rows: {len(result)}")
             return result
         except Exception as e:
@@ -160,12 +169,12 @@ class ComplexDatabaseComplexGroupOpsMixin:
             where_asset = " OR ".join(clauses)
             cursor.execute(f"DELETE FROM article_history WHERE {where_asset}", params)
             cursor.execute(f"DELETE FROM crawl_history WHERE {where_asset}", params)
+            cursor.execute(f"DELETE FROM price_snapshots WHERE {where_asset}", params)
 
         unique_complex_ids = sorted({str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()})
         if not unique_complex_ids:
             return
         placeholders = ",".join("?" * len(unique_complex_ids))
-        cursor.execute(f"DELETE FROM price_snapshots WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM alert_settings WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM article_favorites WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM article_alert_log WHERE complex_id IN ({placeholders})", unique_complex_ids)
