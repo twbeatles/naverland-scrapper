@@ -45,8 +45,25 @@ class AppStatsScheduleMixin:
                 
                 # CrawlerTab 초기화 및 데이터 로드
                 self.crawler_tab.clear_tasks()
-                for _, name, _asset_type, cid, _ in self.db.get_complexes_in_group(gid):
+                crawl_mode = str(settings.get("crawl_mode", "complex") or "complex").strip().lower()
+                apt_only_mode = crawl_mode != "geo_sweep"
+                excluded_vl = 0
+                loaded_count = 0
+                for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
+                    asset_token = str(asset_type or "APT").strip().upper() or "APT"
+                    if apt_only_mode and asset_token != "APT":
+                        excluded_vl += 1
+                        continue
                     self.crawler_tab.add_task(name, cid)
+                    loaded_count += 1
+                if excluded_vl > 0:
+                    msg = f"complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다."
+                    self.crawler_tab.append_log(f"ℹ️ {msg}", 20)
+                    self.status_bar.showMessage(msg)
+                    ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
+                if loaded_count <= 0:
+                    self.status_bar.showMessage("⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.")
+                    return
                 
                 # 크롤링 시작
                 self.crawler_tab.start_crawling()
@@ -135,28 +152,49 @@ class AppStatsScheduleMixin:
         except (TypeError, ValueError):
             return str(value)
 
-    @staticmethod
-    def _parse_stats_complex_key(value):
-        raw = str(value or "").strip()
-        if not raw:
-            return ""
-        if ":" in raw:
-            head, tail = raw.split(":", 1)
-            if head in {"APT", "VL"} and tail:
-                return tail
-        return raw
-
     # Stats Tab handlers
     def _load_stats_complexes(self: Any):
-        current_cid = self.stats_complex_combo.currentData()
+        current_key = self.stats_complex_combo.currentData()
         self.stats_complex_combo.blockSignals(True)
         try:
             self.stats_complex_combo.clear()
             complexes = self.db.get_complexes_for_stats()
-            for name, cid in complexes:
-                self.stats_complex_combo.addItem(f"{name}", cid)
-            if current_cid:
-                idx = self.stats_complex_combo.findData(current_cid)
+            for row in complexes:
+                if isinstance(row, (tuple, list)) and len(row) >= 3:
+                    name, asset_type, cid = row[0], row[1], row[2]
+                elif isinstance(row, (tuple, list)) and len(row) >= 2:
+                    name, key = row[0], row[1]
+                    key_text = str(key or "")
+                    if ":" in key_text:
+                        head, tail = key_text.split(":", 1)
+                        if head in {"APT", "VL"} and tail:
+                            asset_type, cid = head, tail
+                        else:
+                            asset_type, cid = "APT", key_text
+                    else:
+                        asset_type, cid = "APT", key_text
+                else:
+                    continue
+                cid_text = str(cid or "")
+                if not cid_text:
+                    continue
+                asset_token = str(asset_type or "APT").strip().upper() or "APT"
+                display_name = str(name or f"단지_{cid_text}")
+                combo_data = (asset_token, cid_text)
+                self.stats_complex_combo.addItem(f"{display_name} ({asset_token}:{cid_text})", combo_data)
+            if current_key:
+                idx = self.stats_complex_combo.findData(current_key)
+                if idx < 0:
+                    for i in range(self.stats_complex_combo.count()):
+                        data = self.stats_complex_combo.itemData(i)
+                        if isinstance(data, tuple) and len(data) >= 2:
+                            if isinstance(current_key, tuple) and len(current_key) >= 2:
+                                if str(data[0]) == str(current_key[0]) and str(data[1]) == str(current_key[1]):
+                                    idx = i
+                                    break
+                            elif str(data[1]) == str(current_key):
+                                idx = i
+                                break
                 if idx >= 0:
                     self.stats_complex_combo.setCurrentIndex(idx)
             if self.stats_complex_combo.count() > 0 and self.stats_complex_combo.currentIndex() < 0:
@@ -167,7 +205,20 @@ class AppStatsScheduleMixin:
             self.stats_complex_combo.blockSignals(False)
     
     def _load_stats(self: Any):
-        cid = self._parse_stats_complex_key(self.stats_complex_combo.currentData())
+        selected = self.stats_complex_combo.currentData()
+        asset_type = None
+        cid = ""
+        if isinstance(selected, (tuple, list)) and len(selected) >= 2:
+            asset_type = str(selected[0] or "APT").strip().upper() or "APT"
+            cid = str(selected[1] or "")
+        else:
+            cid = str(selected or "")
+            asset_type = "APT" if cid else None
+        if isinstance(cid, str) and ":" in cid:
+            head, tail = cid.split(":", 1)
+            if head in {"APT", "VL"} and tail:
+                asset_type = head
+                cid = tail
         if not cid:
             return
         ttype = self.stats_type_combo.currentText()
@@ -181,7 +232,7 @@ class AppStatsScheduleMixin:
                 if pyeong is None:
                     ui_logger.warning(f"평형 파싱 실패: {pyeong_text}")
 
-        snapshots = self.db.get_price_snapshots(cid, ttype)
+        snapshots = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type)
         if pyeong is not None:
             filtered = []
             for s in snapshots:
@@ -243,12 +294,25 @@ class AppStatsScheduleMixin:
     
     def _on_stats_complex_changed(self: Any, index):
         """통계 탭 단지 변경 시 평형 콤보박스 업데이트"""
-        cid = self._parse_stats_complex_key(self.stats_complex_combo.currentData())
+        selected = self.stats_complex_combo.currentData()
+        asset_type = None
+        cid = ""
+        if isinstance(selected, (tuple, list)) and len(selected) >= 2:
+            asset_type = str(selected[0] or "APT").strip().upper() or "APT"
+            cid = str(selected[1] or "")
+        else:
+            cid = str(selected or "")
+            asset_type = "APT" if cid else None
+        if isinstance(cid, str) and ":" in cid:
+            head, tail = cid.split(":", 1)
+            if head in {"APT", "VL"} and tail:
+                asset_type = head
+                cid = tail
         if not cid:
             return
 
         try:
-            snapshots = self.db.get_price_snapshots(cid)
+            snapshots = self.db.get_price_snapshots(cid, asset_type=asset_type)
         except Exception as e:
             ui_logger.warning(f"평형 목록 로드 실패: {e}")
             snapshots = []

@@ -122,8 +122,8 @@ class TestComplexDatabase(unittest.TestCase):
             rows = self.db.get_complexes_for_stats()
 
         self.assertEqual(len(rows), 2)
-        self.assertIn(("ComplexA", "APT", "11111"), rows)
-        self.assertTrue(any(asset == "VL" and cid == "22222" for _name, asset, cid in rows))
+        self.assertIn(("ComplexA", "11111"), rows)
+        self.assertIn(("단지_22222", "22222"), rows)
 
     def test_price_snapshots_are_separated_by_asset_type(self):
         saved = self.db.add_price_snapshots_bulk(

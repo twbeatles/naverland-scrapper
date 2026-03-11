@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.response_capture import TRADE_CODE_MAP
 
+_LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
+
 
 class _SignalStub:
     def __init__(self):
@@ -230,7 +232,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                 patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
-                    return_value={"매물ID": "A1", "留ㅻЪID": "A1"},
+                    return_value={"매물ID": "A1", _LEGACY_ARTICLE_ID_KEY: "A1"},
                 ),
             ):
                 collect_result = await engine._collect_target_raw_items(
@@ -247,7 +249,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(collect_result.get("response_seen"))
         self.assertFalse(collect_result.get("drain_timed_out"))
         self.assertEqual(len(raw_items), 1)
-        article_id = raw_items[0].get("매물ID") or raw_items[0].get("留ㅻЪID")
+        article_id = raw_items[0].get("매물ID") or raw_items[0].get(_LEGACY_ARTICLE_ID_KEY)
         self.assertEqual(article_id, "A1")
         self.assertTrue(any("article_capture:complexes/12345" in msg for msg, _ in thread.logged))
 
@@ -346,7 +348,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         start = time.monotonic()
         with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
             result = await engine._enrich_items_with_mobile_details(
-                [{"매물ID": "1", "留ㅻЪID": "1"}, {"매물ID": "2", "留ㅻЪID": "2"}]
+                [
+                    {"매물ID": "1", _LEGACY_ARTICLE_ID_KEY: "1"},
+                    {"매물ID": "2", _LEGACY_ARTICLE_ID_KEY: "2"},
+                ]
             )
         elapsed = time.monotonic() - start
 

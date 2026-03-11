@@ -24,7 +24,7 @@ class PlaywrightGeoModeMixin:
         zoom = int(geo.zoom or 15)
         discovered: dict[str, dict] = {}
         self.thread.log(
-            f"📍 지리 탐색 시작: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, 자산={','.join(geo.asset_types)}"
+            f"지도 탐색 시작: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, 자산={','.join(geo.asset_types)}"
         )
 
         marker_handler, marker_pending_tasks, marker_stats = self._build_marker_handler(discovered)
@@ -52,13 +52,13 @@ class PlaywrightGeoModeMixin:
         if marker_drain_timed_out:
             self.thread.log("   ⚠️ geo marker drain timeout occurred", 30)
         self.thread.log(
-            f"ℹ️ 지리 탐색 요약: 발견 단지 {len(discovered)}, 중복 제거 {dedup_removed}, 응답 처리 대기 {marker_wait_count}",
+            f"지도 탐색 요약: 발견 단지 {len(discovered)}, 중복 제거 {dedup_removed}, 응답 처리 대기 {marker_wait_count}",
             10,
         )
 
         ordered = sorted(discovered.values(), key=lambda row: (-int(row.get("count", 0)), row.get("complex_name", "")))
         if not ordered:
-            self.thread.log("⚠️ 지리 탐색 결과 단지를 찾지 못했습니다.", 30)
+            self.thread.log("지도 탐색 결과 단지를 찾지 못했습니다.", 30)
             return
 
         processed_pairs = set()
@@ -101,23 +101,42 @@ class PlaywrightGeoModeMixin:
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
+                    reset_streak = getattr(self.thread, "_reset_block_detection_streak", None)
+                    if callable(reset_streak):
+                        reset_streak()
                 except Exception as exc:
-                    self.thread.log(f"   ❌ {name}({trade_type}) 수집 실패: {exc}", 40)
-            if complex_trade_types:
-                self.thread.record_crawl_history(
-                    name,
-                    cid,
-                    ",".join(complex_trade_types),
-                    int(complex_count),
-                    engine=self.engine_name,
-                    mode="geo_sweep",
-                    source_lat=lat,
-                    source_lon=lon,
-                    source_zoom=zoom,
-                    asset_type=asset_type,
-                )
-            else:
-                self.thread.log(f"   ℹ️ {name}({asset_type})는 수집 거래유형이 없어 이력 저장을 건너뜁니다.", 10)
+                    self.thread.log(f"   {name}({trade_type}) 수집 실패: {exc}", 40)
+                    is_block_like = getattr(self.thread, "_is_block_like_error", None)
+                    block_like = bool(is_block_like(exc)) if callable(is_block_like) else False
+                    if block_like:
+                        register_block = getattr(self.thread, "_register_block_detection", None)
+                        should_cooldown = bool(register_block(str(exc))) if callable(register_block) else False
+                        if should_cooldown:
+                            self.thread.log(
+                                f"   ⏸️ 차단 신호 3회 연속 감지, {int(self.thread._block_cooldown_seconds)}초 쿨다운",
+                                30,
+                            )
+                            if not await self._sleep_async_interruptible(self.thread._block_cooldown_seconds):
+                                break
+                    else:
+                        reset_streak = getattr(self.thread, "_reset_block_detection_streak", None)
+                        if callable(reset_streak):
+                            reset_streak()
+            if not complex_trade_types:
+                self.thread.log(f"   {name}({asset_type}) 거래 성공 없음: 이력 기록을 생략합니다.", 30)
+                continue
+            self.thread.record_crawl_history(
+                name,
+                cid,
+                ",".join(complex_trade_types),
+                int(complex_count),
+                engine=self.engine_name,
+                mode="geo_sweep",
+                source_lat=lat,
+                source_lon=lon,
+                source_zoom=zoom,
+                asset_type=asset_type,
+            )
             self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
         self.thread.stats["geo_discovered_count"] = len(discovered)
         self.thread.stats["geo_dedup_count"] = dedup_removed
@@ -200,7 +219,7 @@ class PlaywrightGeoModeMixin:
         for idx, (target_lat, target_lon) in enumerate(coords, 1):
             if self.thread._should_stop():
                 break
-            self.thread.log(f"   🔎 {asset_type}/{trade_type} sweep {idx}/{total}", 10)
+            self.thread.log(f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10)
             await self._drag_to_latlon(target_lat, target_lon)
             try:
                 await self._desktop_page.mouse.wheel(0, -40)

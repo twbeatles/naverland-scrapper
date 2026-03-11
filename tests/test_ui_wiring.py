@@ -765,6 +765,13 @@ class TestUIWiring(unittest.TestCase):
                 if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "90001":
                     idx = i
                     break
+                if isinstance(data, str):
+                    if data == "90001" or data.endswith(":90001"):
+                        idx = i
+                        break
+                if isinstance(data, (tuple, list)) and len(data) >= 1 and str(data[0]).endswith(":90001"):
+                    idx = i
+                    break
             self.assertGreaterEqual(idx, 0)
 
             app.stats_complex_combo.setCurrentIndex(idx)
