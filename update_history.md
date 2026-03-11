@@ -1,3 +1,34 @@
+﻿## **v15.0.7 (2026-03-11)**
+
+**F-01~F-09 구현 리스크 플랜 일괄 반영 + 문서/패키징 정합성 재점검**
+
+### ✅ 핵심 반영
+
+* Selenium 신뢰성/차단/캐시 강화
+  - parse metadata(`response_seen`, `parse_success`, `empty_confirmed`, `blocked_detected`) 표준화
+  - `confirmed_empty` 조건에서만 negative cache 저장
+  - 하이브리드 breaker 고정: pair 2회/90초 cooldown, global 5회 중단
+* Playwright 관측성 강화
+  - response/parse/detail success-fail 메트릭 추가 및 stats payload 노출
+  - Geo 루프에서 빈 `complex_trade_types` 이력 저장 스킵
+  - `complex_mode.py`, `geo_mode.py` 깨진 로그/예외 문자열 정리
+* UI/DB 안정성 반영
+  - Geo 탭 `retry_on_error=False` 시 `max_retry_count=0` 강제
+  - `mark_disappeared_articles_for_targets` chunk update 처리
+  - `add_complex` lock retry + rollback 경로 추가
+  - stats complex key 충돌 시 `asset:cid` 목록키 분리(비충돌은 plain CID 유지)
+
+### 🧪 검증
+
+* `pytest -q` 전체 실행: `112 passed`
+
+### 📦 .spec / 문서 / 무시규칙 정합성
+
+* `.spec` 재점검 결과: `naverland-scrapper.spec`는 추가 hidden import/runtime hook 변경 불필요.
+* `README.md`, `claude.md`, `gemini.md`에 동일 정책(F-01~F-09 반영 상태) 동기화.
+* `.gitignore`에 PowerShell 캐시 폴더(`Microsoft/`) 무시 규칙 추가.
+
+---
 # 업데이트 히스토리
 
 ## **v15.0.8 (2026-03-10)**
@@ -382,4 +413,5 @@
 * **최근 검색 기록**: 자주 찾는 단지 조합 저장 및 불러오기 기능
 * **정렬 옵션**: 가격순, 면적순, 단지명순 등 다양한 정렬 기능
 * **완료 알림음**: 작업 완료 시 소리 알림 옵션
+
 

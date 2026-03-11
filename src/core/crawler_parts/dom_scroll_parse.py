@@ -6,6 +6,10 @@ if TYPE_CHECKING:
     from src.core.crawler import *  # noqa: F403
 
 
+class BlockedPageError(RuntimeError):
+    """Raised when the crawler detects a temporary blocked/defense page."""
+
+
 class CrawlerDomScrollParseMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
@@ -34,7 +38,7 @@ class CrawlerDomScrollParseMixin:
         if signal:
             ctx = f" ({context})" if context else ""
             self.log(f"   ⚠️ 차단/방어 페이지 감지{ctx}: {signal}", 30)
-            raise RuntimeError(f"temporary blocked page detected{ctx}: {signal}")
+            raise BlockedPageError(f"temporary blocked page detected{ctx}: {signal}")
 
     def _get_item_state(self, driver, selectors):
         script = """
@@ -173,13 +177,22 @@ class CrawlerDomScrollParseMixin:
     def _parse(self, soup, name, cid, ttype):
         raw_items = []
         found_items = ItemParser.find_items(soup)
+        parse_error_count = 0
         
         if found_items:
             # 선택자 로깅 (ItemParser 내부 디버그 로그와 별개로 사용자에게 진행상황 표시)
             self.log(f"   🔍 파싱 대상: {len(found_items)}개")
         else:
             self.log("   ⚠️ 파싱 대상 항목을 찾지 못했습니다.", 10)
-            return {"count": 0, "raw_items": [], "raw_count": 0}
+            return {
+                "count": 0,
+                "raw_items": [],
+                "raw_count": 0,
+                "response_seen": True,
+                "parse_success": False,
+                "empty_confirmed": False,
+                "blocked_detected": False,
+            }
         
         matched_count, skipped_type = 0, 0
         
@@ -202,14 +215,26 @@ class CrawlerDomScrollParseMixin:
                         skipped_type += 1
             except Exception as e:
                 self.log(f"   ⚠️ 항목 파싱 중 오류: {e}", 30)
+                parse_error_count += 1
         
         if skipped_type > 0:
             self.log(f"   ℹ️ 다른 거래유형 {skipped_type}건 제외 (요청: {ttype})")
         
+        parse_success = parse_error_count == 0
+        empty_confirmed = (
+            len(raw_items) == 0
+            and skipped_type == 0
+            and parse_error_count == 0
+            and len(found_items) > 0
+        )
         return {
             "count": matched_count,
             "raw_items": raw_items,
             "raw_count": len(found_items),
+            "response_seen": True,
+            "parse_success": bool(parse_success),
+            "empty_confirmed": bool(empty_confirmed),
+            "blocked_detected": False,
         }
 
         

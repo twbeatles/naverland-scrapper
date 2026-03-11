@@ -852,6 +852,55 @@ class TestUIWiring(unittest.TestCase):
             app.deleteLater()
             self._qt_app.processEvents()
 
+    def test_stats_tab_accepts_compound_asset_complex_key(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_compound_key.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+
+            conn = app.db._pool.get_connection()
+            try:
+                conn.cursor().execute(
+                    "INSERT OR IGNORE INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
+                    ("복합키단지", "APT", "90123", ""),
+                )
+                conn.cursor().execute(
+                    """
+                    INSERT INTO price_snapshots (
+                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, snapshot_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("90123", "매매", 34.0, 10000, 12000, 11000, 2, "2026-02-24"),
+                )
+                conn.commit()
+            finally:
+                app.db._pool.return_connection(conn)
+
+            app.stats_complex_combo.clear()
+            app.stats_complex_combo.addItem("복합키단지 (APT)", "APT:90123")
+            app.stats_complex_combo.setCurrentIndex(0)
+
+            app._on_stats_complex_changed(0)
+            app._load_stats()
+            self.assertGreaterEqual(app.stats_table.rowCount(), 1)
+
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_app_shutdown_waits_crawler_before_db_close(self):
         from src.ui.app import RealEstateApp
 

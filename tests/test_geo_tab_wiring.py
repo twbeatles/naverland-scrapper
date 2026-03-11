@@ -101,6 +101,43 @@ class TestGeoTabWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_geo_tab_disables_retry_when_retry_setting_off(self):
+        from src.core.database import ComplexDatabase
+
+        try:
+            from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+        except ImportError as exc:
+            if "_imaging" in str(exc):
+                self.skipTest("Pillow DLL blocked in this environment")
+            raise
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "geo_retry_off.db"))
+            tab = GeoCrawlerTab(db)
+            tab.check_trade.setChecked(True)
+
+            def _settings_get(key, default=None):
+                overrides = {
+                    "retry_on_error": False,
+                    "max_retry_count": 7,
+                    "cache_enabled": False,
+                }
+                return overrides.get(key, default)
+
+            with (
+                patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get),
+                patch("src.ui.widgets.geo_crawler_tab.CrawlerThread") as mock_thread_cls,
+            ):
+                tab.start_crawling()
+
+            kwargs = mock_thread_cls.call_args.kwargs
+            self.assertEqual(kwargs["max_retry_count"], 0)
+            mock_thread_cls.return_value.start.assert_called_once()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_discovered_complex_db_registration_runs_once_per_asset_and_complex(self):
         from src.core.crawler import CrawlerThread
 

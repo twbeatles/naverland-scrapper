@@ -221,6 +221,12 @@ class GeoCrawlerTab(CrawlerTab):
             dwell_ms=self.spin_dwell.value(),
             asset_types=asset_types,
         )
+        try:
+            configured_retry_count = max(0, int(settings.get("max_retry_count", 3)))
+        except (TypeError, ValueError):
+            configured_retry_count = 3
+        retry_on_error = bool(settings.get("retry_on_error", True))
+        max_retry_count = configured_retry_count if retry_on_error else 0
         self.crawler_thread = CrawlerThread(
             [],
             trade_types,
@@ -293,12 +299,18 @@ class GeoCrawlerTab(CrawlerTab):
         dedup = int(stats.get("geo_dedup_count", 0) or 0)
         drain_wait = int(stats.get("response_drain_wait_count", 0) or 0)
         drain_timeout = int(stats.get("response_drain_timeout_count", 0) or 0)
-        snapshot = (discovered, dedup, drain_wait, drain_timeout)
+        response_seen = int(stats.get("response_seen_count", 0) or 0)
+        parse_fail = int(stats.get("parse_fail_count", 0) or 0)
+        detail_fail = int(stats.get("detail_fail_count", 0) or 0)
+        blocked_count = int(stats.get("blocked_page_count", 0) or 0)
+        snapshot = (discovered, dedup, drain_wait, drain_timeout, response_seen, parse_fail, detail_fail, blocked_count)
         if getattr(self, "_last_geo_status_stats", None) == snapshot:
             return
         self._last_geo_status_stats = snapshot
         self.status_message.emit(
-            f"Geo 발견 {discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
+            "Geo 발견 "
+            f"{discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
+            f" / 응답 {response_seen} / 파싱실패 {parse_fail} / 상세실패 {detail_fail} / 차단 {blocked_count}"
         )
 
     def _on_crawl_finished(self, data):
@@ -314,10 +326,18 @@ class GeoCrawlerTab(CrawlerTab):
         dedup = int(final_stats.get("geo_dedup_count", 0) or 0)
         drain_wait = int(final_stats.get("response_drain_wait_count", 0) or 0)
         drain_timeout = int(final_stats.get("response_drain_timeout_count", 0) or 0)
+        response_seen = int(final_stats.get("response_seen_count", 0) or 0)
+        parse_fail = int(final_stats.get("parse_fail_count", 0) or 0)
+        detail_fail = int(final_stats.get("detail_fail_count", 0) or 0)
+        blocked_count = int(final_stats.get("blocked_page_count", 0) or 0)
         self.append_log(
-            f"📌 Geo 요약: 발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}",
+            "📌 Geo 요약: "
+            f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}, "
+            f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}",
             10,
         )
         self.status_message.emit(
-            f"Geo 완료: 발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}"
+            "Geo 완료: "
+            f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}, "
+            f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}"
         )

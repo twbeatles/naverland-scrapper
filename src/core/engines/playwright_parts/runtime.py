@@ -52,6 +52,12 @@ class PlaywrightRuntimeMixin:
         stats = getattr(self.thread, "stats", None)
         if not isinstance(stats, dict):
             return
+        stats.setdefault("response_seen_count", 0)
+        stats.setdefault("parse_success_count", 0)
+        stats.setdefault("parse_fail_count", 0)
+        stats.setdefault("detail_success_count", 0)
+        stats.setdefault("detail_fail_count", 0)
+        stats.setdefault("blocked_page_count", 0)
         stats.setdefault("playwright_recycle_count", 0)
         stats.setdefault("playwright_last_recycle_reason", "")
 

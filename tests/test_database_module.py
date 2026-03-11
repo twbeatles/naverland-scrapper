@@ -40,6 +40,56 @@ class TestComplexDatabase(unittest.TestCase):
         targets = [row for row in rows if row["complex_id"] == "30003"]
         self.assertEqual(sorted(row["asset_type"] for row in targets), ["APT", "VL"])
 
+    def test_add_complex_retries_on_locked_error(self):
+        class _CursorStub:
+            def __init__(self):
+                self.select_calls = 0
+                self.inserted = False
+
+            def execute(self, sql, params=()):
+                lowered = str(sql or "").lower()
+                if "select id from complexes" in lowered:
+                    self.select_calls += 1
+                    if self.select_calls == 1:
+                        raise sqlite3.OperationalError("database is locked")
+                elif "insert into complexes" in lowered:
+                    self.inserted = True
+                return self
+
+            def fetchone(self):
+                return None
+
+        class _ConnStub:
+            def __init__(self):
+                self.cursor_stub = _CursorStub()
+                self.commits = 0
+                self.rollbacks = 0
+
+            def cursor(self):
+                return self.cursor_stub
+
+            def commit(self):
+                self.commits += 1
+
+            def rollback(self):
+                self.rollbacks += 1
+
+            def execute(self, _sql):
+                return None
+
+        conn_stub = _ConnStub()
+        with (
+            patch.object(self.db._pool, "get_connection", return_value=conn_stub),
+            patch.object(self.db._pool, "return_connection", return_value=None),
+            patch("src.core.database.time.sleep", return_value=None),
+        ):
+            status = self.db.add_complex("RetryComplex", "R-100", asset_type="APT", return_status=True)
+
+        self.assertEqual(status, "inserted")
+        self.assertTrue(conn_stub.cursor_stub.inserted)
+        self.assertEqual(conn_stub.commits, 1)
+        self.assertGreaterEqual(conn_stub.rollbacks, 1)
+
     def test_group_lifecycle(self):
         self.db.add_complex("ComplexA", "11111", asset_type="APT")
         all_complexes = self.db.get_all_complexes()
@@ -129,6 +179,17 @@ class TestComplexDatabase(unittest.TestCase):
         vl_rows = self.db.get_price_snapshots("88008", "매매", asset_type="VL")
         self.assertEqual(len(apt_rows), 0)
         self.assertEqual(len(vl_rows), 1)
+
+    def test_get_complexes_for_stats_separates_collided_asset_keys(self):
+        self.db.add_complex("ComplexA", "30003", asset_type="APT")
+        self.db.add_complex("ComplexB", "30003", asset_type="VL")
+
+        rows = self.db.get_complexes_for_stats()
+        keys = {str(cid) for _name, cid in rows if "30003" in str(cid)}
+        self.assertIn("APT:30003", keys)
+        self.assertIn("VL:30003", keys)
+        self.assertTrue(any("(APT)" in str(name) for name, cid in rows if str(cid) == "APT:30003"))
+        self.assertTrue(any("(VL)" in str(name) for name, cid in rows if str(cid) == "VL:30003"))
 
     def test_write_circuit_breaker_blocks_core_writes(self):
         self.db._disable_writes("database_corruption")
@@ -321,6 +382,48 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(rows[1]["article_id"], "E2")
         self.assertEqual(rows[1]["asset_type"], "VL")
         self.assertEqual(rows[1]["status"], "active")
+
+    def test_mark_disappeared_for_targets_handles_large_target_chunks(self):
+        for idx in range(3):
+            cid = f"C{idx:04d}"
+            self.assertTrue(
+                self.db.update_article_history(
+                    article_id=f"L{idx}",
+                    complex_id=cid,
+                    complex_name=f"Complex-{idx}",
+                    trade_type="SALE",
+                    price=18000 + idx,
+                    price_text=str(18000 + idx),
+                    area=30.0 + idx,
+                    floor="10",
+                    feature="f",
+                    extra={"asset_type": "APT"},
+                )
+            )
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                "UPDATE article_history SET last_seen = date('now', '-2 day'), status='active' WHERE article_id IN (?, ?, ?)",
+                ("L0", "L1", "L2"),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        targets = [("APT", f"C{i:04d}", "SALE") for i in range(520)]
+        updated = self.db.mark_disappeared_articles_for_targets(targets)
+        self.assertEqual(updated, 3)
+
+        conn = self.db._pool.get_connection()
+        try:
+            disappeared_count = conn.cursor().execute(
+                "SELECT COUNT(*) FROM article_history WHERE article_id IN (?, ?, ?) AND status='disappeared'",
+                ("L0", "L1", "L2"),
+            ).fetchone()[0]
+        finally:
+            self.db._pool.return_connection(conn)
+        self.assertEqual(disappeared_count, 3)
 
     def test_record_alert_notification_dedup_by_day(self):
         first = self.db.record_alert_notification(

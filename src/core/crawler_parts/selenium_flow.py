@@ -5,6 +5,8 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from src.core.crawler import *  # noqa: F403
 
+from src.core.crawler_parts.dom_scroll_parse import BlockedPageError
+
 
 class CrawlerSeleniumFlowMixin:
     if TYPE_CHECKING:
@@ -97,11 +99,6 @@ class CrawlerSeleniumFlowMixin:
             current = 0
             processed_complexes = 0  # 처리한 단지 수
             processed_target_pairs = set()
-            for pair in set(self._fallback_prefill_processed_target_pairs or set()):
-                if not isinstance(pair, tuple) or len(pair) < 2:
-                    continue
-                processed_target_pairs.add((str(pair[0]), str(pair[1])))
-            prefill_complexes = dict(self._fallback_prefill_complexes or {})
             
             for name, cid in self.targets:
                 if self._should_stop():
@@ -134,31 +131,14 @@ class CrawlerSeleniumFlowMixin:
                     if not driver:
                         raise Exception("드라이버 재시작 실패")
                 
-                prefill_payload = prefill_complexes.get((str(name), str(cid)))
-                if isinstance(prefill_payload, dict):
-                    try:
-                        complex_count = int(prefill_payload.get("count", 0) or 0)
-                    except (TypeError, ValueError):
-                        complex_count = 0
-                    prefill_types = {
-                        str(x)
-                        for x in (prefill_payload.get("trade_types", []) or [])
-                        if str(x)
-                    }
-                    complex_trade_types = [trade for trade in self.trade_types if trade in prefill_types]
-                    for trade in sorted(prefill_types):
-                        if trade not in complex_trade_types:
-                            complex_trade_types.append(trade)
-                else:
-                    complex_count = 0
-                    complex_trade_types = []
+                complex_count = 0
+                complex_trade_types = []
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
                     pair_key = self._pair_key(name, cid, ttype)
                     if allowed_pairs is not None and pair_key not in allowed_pairs:
                         continue
-                    self._current_pair = pair_key
                     current += 1
                     
                     # 예상 남은 시간 계산
@@ -166,38 +146,40 @@ class CrawlerSeleniumFlowMixin:
 
                     self.progress_signal.emit(int(current / total * 100), f"{name} ({ttype})", remaining)
                     self.log(f"\\n📍 [{current}/{total}] {name} - {ttype}")
+
+                    cooldown_remaining = self._get_pair_blocked_cooldown_remaining(name, cid, ttype)
+                    if cooldown_remaining > 0:
+                        self.log(
+                            f"   ⏭ 차단 쿨다운으로 스킵: {name}({ttype}) {int(cooldown_remaining)}초 남음",
+                            30,
+                        )
+                        continue
+                    self._current_pair = pair_key
                     
                     try:
                         batch_result = self._crawl(driver, name, cid, ttype)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
-                        if ttype not in complex_trade_types:
-                            complex_trade_types.append(ttype)
+                        complex_trade_types.append(ttype)
                         if cid and ttype:
                             processed_target_pairs.add((str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
                         self._mark_pair_processed(name, cid, ttype)
-                        self._reset_block_detection_streak()
                         self.log(f"   ✅ {count}건 수집")
                     except RetryCancelledError:
                         self.log("   ⏹ 중단 요청으로 현재 작업을 종료합니다.", 20)
                         self.stop()
+                        self._current_pair = None
                         break
+                    except BlockedPageError as e:
+                        self.log(f"   ⚠️ 차단 감지: {e}", 30)
+                        self._current_pair = None
+                        if self._should_stop():
+                            break
                     except Exception as e:
                         self.log(f"   ❌ 오류: {e}", 40)
                         self.log(f"   상세: {traceback.format_exc()}", 40)
-                        block_like = self._is_block_like_error(e)
-                        if block_like:
-                            should_cooldown = self._register_block_detection(str(e))
-                            if should_cooldown:
-                                self.log(
-                                    f"   ⏸️ 차단 신호 3회 연속 감지, {int(self._block_cooldown_seconds)}초 쿨다운",
-                                    30,
-                                )
-                                if not self._sleep_interruptible(self._block_cooldown_seconds):
-                                    break
-                        else:
-                            self._reset_block_detection_streak()
+                        self._current_pair = None
                         
                         # 치명적 오류(세션 종료 등) 발생 시 드라이버 재시작 시도
                         if "SessionNotCreatedException" in str(e) or "NoSuchWindowException" in str(e) or "WebDriverException" in str(e):
@@ -233,8 +215,6 @@ class CrawlerSeleniumFlowMixin:
             raise
         finally:
             self._current_pair = None
-            self._fallback_prefill_complexes = {}
-            self._fallback_prefill_processed_target_pairs = set()
             if driver:
                 try:
                     driver.quit()
@@ -287,10 +267,39 @@ class CrawlerSeleniumFlowMixin:
             self.log(f"   ❌ {name}({ttype}) 크롤링 실패: {e}", 40)
             raise
         count = int(parse_result.get("count", 0))
+        response_seen = bool(parse_result.get("response_seen", False))
+        parse_success = bool(parse_result.get("parse_success", False))
+        empty_confirmed = bool(parse_result.get("empty_confirmed", False))
+        blocked_detected = bool(parse_result.get("blocked_detected", False))
+
+        if response_seen:
+            self.stats["response_seen_count"] = int(self.stats.get("response_seen_count", 0)) + 1
+        if parse_success:
+            self.stats["parse_success_count"] = int(self.stats.get("parse_success_count", 0)) + 1
+        elif response_seen:
+            self.stats["parse_fail_count"] = int(self.stats.get("parse_fail_count", 0)) + 1
+
+        if blocked_detected:
+            blocked_state = self._record_blocked_event(name, cid, ttype)
+            if blocked_state.get("pair_cooldown_started"):
+                self.log(
+                    f"   ⚠️ 동일 pair 차단 누적 -> {blocked_state.get('pair_cooldown_seconds', 90)}초 쿨다운 진입",
+                    30,
+                )
+            if blocked_state.get("global_abort"):
+                self.log(
+                    f"   🚫 전역 차단 누적 {blocked_state.get('blocked_total_count', 0)}회로 세션을 중단합니다.",
+                    40,
+                )
+                self.stop()
+            self.emit_stats()
+            raise BlockedPageError("blocked page detected")
+
+        self._record_pair_success(name, cid, ttype)
         
-        # v14.2: 필터 통과 여부와 무관하게 raw_items 캐시 저장
+        # v15.x: raw items는 항상 저장하되 negative cache는 확정 빈 결과일 때만 저장
         if self.cache:
-            raw_items = list(parse_result.get("raw_items", []) or [])
+            raw_items = parse_result.get("raw_items", [])
             if raw_items:
                 self.cache.set(
                     cid,
@@ -301,23 +310,16 @@ class CrawlerSeleniumFlowMixin:
                 )
             else:
                 negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
-                if negative_ttl_seconds > 0:
-                    confirmed_empty = bool(parse_result.get("confirmed_empty", False))
-                    if confirmed_empty:
-                        self.cache.set(
-                            cid,
-                            ttype,
-                            [],
-                            ttl_seconds=negative_ttl_seconds,
-                            reason="confirmed_empty",
-                            mode=self.crawl_mode,
-                            asset_type="APT",
-                        )
-                    else:
-                        self.log(
-                            "   ⚠️ 빈 결과가 확정되지 않아 negative cache 저장을 건너뜁니다.",
-                            30,
-                        )
+                if response_seen and parse_success and empty_confirmed and negative_ttl_seconds > 0:
+                    self.cache.set(
+                        cid,
+                        ttype,
+                        [],
+                        ttl_seconds=negative_ttl_seconds,
+                        reason="confirmed_empty",
+                        mode=self.crawl_mode,
+                        asset_type="APT",
+                    )
         
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
@@ -325,102 +327,55 @@ class CrawlerSeleniumFlowMixin:
             "count": count,
             "cache_hit": False,
             "raw_count": int(parse_result.get("raw_count", 0)),
-            "confirmed_empty": bool(parse_result.get("confirmed_empty", False)),
+            "response_seen": response_seen,
+            "parse_success": parse_success,
+            "empty_confirmed": empty_confirmed,
+            "blocked_detected": blocked_detected,
         }
 
     def _crawl_once(self, driver, name, cid, ttype, url):
-        self.log("   🔗 URL 접속 중...")
-        driver.get(url)
-        self._assert_not_blocked_page(driver, context="초기 페이지")
-
-        # v14.0: 동적 대기 - 페이지 로드 완료까지 대기
         try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located(("css selector", ".article_list, .item_list, .complex_list, [class*='article']"))
-            )
-        except TimeoutException:
-            self.log("   ⚠️ 매물 리스트 로드 대기 시간 초과, 계속 진행...", 30)
-        self._assert_not_blocked_page(driver, context="목록 대기")
+            self.log("   🔗 URL 접속 중...")
+            driver.get(url)
+            self._assert_not_blocked_page(driver, context="초기 페이지")
 
-        try:
-            article_tab = driver.find_element("css selector", "a[href*='articleList'], .tab_item[data-tab='article']")
-            article_tab.click()
-            # v14.0: 탭 클릭 후 동적 대기
+            # v14.0: 동적 대기 - 페이지 로드 완료까지 대기
             try:
-                WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located(("css selector", ".item_article, .item_inner"))
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located(("css selector", ".article_list, .item_list, .complex_list, [class*='article']"))
                 )
             except TimeoutException:
-                self.log("   ℹ️ 매물 탭 로드 대기 시간 초과 (무시)", 10)
-        except (NoSuchElementException, Exception) as e:
-            # 탭 클릭 실패는 정상적인 상황일 수 있음 (탭이 없는 경우)
-            self.log(f"   ℹ️ 매물 탭 찾기 실패 (정상): {type(e).__name__}", 10)
+                self.log("   ⚠️ 매물 리스트 로드 대기 시간 초과, 계속 진행...", 30)
+            self._assert_not_blocked_page(driver, context="목록 대기")
 
-        self._assert_not_blocked_page(driver, context="탭 진입")
-        self._scroll(driver)
-        self._assert_not_blocked_page(driver, context="스크롤 완료")
+            try:
+                article_tab = driver.find_element("css selector", "a[href*='articleList'], .tab_item[data-tab='article']")
+                article_tab.click()
+                # v14.0: 탭 클릭 후 동적 대기
+                try:
+                    WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located(("css selector", ".item_article, .item_inner"))
+                    )
+                except TimeoutException:
+                    self.log("   ℹ️ 매물 탭 로드 대기 시간 초과 (무시)", 10)
+            except (NoSuchElementException, Exception) as e:
+                # 탭 클릭 실패는 정상적인 상황일 수 있음 (탭이 없는 경우)
+                self.log(f"   ℹ️ 매물 탭 찾기 실패 (정상): {type(e).__name__}", 10)
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        parse_result = self._parse(soup, name, cid, ttype)
-        raw_items = list(parse_result.get("raw_items", []) or [])
-        if raw_items:
-            parse_result["confirmed_empty"] = False
-        else:
-            parse_result["confirmed_empty"] = self._is_confirmed_empty_state(driver)
-        return parse_result
+            self._assert_not_blocked_page(driver, context="탭 진입")
+            self._scroll(driver)
+            self._assert_not_blocked_page(driver, context="스크롤 완료")
 
-    def _is_confirmed_empty_state(self, driver) -> bool:
-        try:
-            title = str(driver.title or "")
-        except Exception:
-            title = ""
-        try:
-            page_source = str(driver.page_source or "")
-        except Exception:
-            page_source = ""
-
-        if self._detect_block_signal(title, page_source):
-            return False
-
-        lower_source = page_source.lower()
-        empty_keywords = (
-            "매물이 없습니다",
-            "등록된 매물이 없습니다",
-            "검색 결과가 없습니다",
-            "조건에 맞는 매물이 없습니다",
-            "조건에 맞는 매물",
-            "no listings",
-            "no listing",
-            "no articles",
-        )
-        if any(token in lower_source for token in empty_keywords):
-            return True
-
-        selectors = [
-            ".list_empty",
-            ".article_none",
-            ".no_result",
-            ".result_none",
-            "[class*='empty']",
-            "[class*='no_data']",
-            "[class*='noResult']",
-        ]
-        script = """
-            const selectors = arguments[0] || [];
-            for (const sel of selectors) {
-                const node = document.querySelector(sel);
-                if (!node) {
-                    continue;
-                }
-                const text = String(node.textContent || '').trim();
-                if (text.length > 0 || node.children.length === 0) {
-                    return true;
-                }
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            return self._parse(soup, name, cid, ttype)
+        except BlockedPageError:
+            return {
+                "count": 0,
+                "raw_items": [],
+                "raw_count": 0,
+                "response_seen": True,
+                "parse_success": False,
+                "empty_confirmed": False,
+                "blocked_detected": True,
             }
-            return false;
-        """
-        try:
-            return bool(driver.execute_script(script, selectors))
-        except Exception:
-            return False
 

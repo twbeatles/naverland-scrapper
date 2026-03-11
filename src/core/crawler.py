@@ -41,7 +41,7 @@ import types
 from src.core.crawler_parts.state_runtime import CrawlerStateRuntimeMixin
 from src.core.crawler_parts.history_alerts import CrawlerHistoryAlertsMixin
 from src.core.crawler_parts.selenium_flow import CrawlerSeleniumFlowMixin
-from src.core.crawler_parts.dom_scroll_parse import CrawlerDomScrollParseMixin
+from src.core.crawler_parts.dom_scroll_parse import CrawlerDomScrollParseMixin, BlockedPageError
 
 
 class CrawlerThread(
@@ -140,6 +140,10 @@ _rebind_inherited_methods(
     "emit_stats",
     "_row_get",
     "_cache_key",
+    "_blocked_pair_key",
+    "_get_pair_blocked_cooldown_remaining",
+    "_record_blocked_event",
+    "_record_pair_success",
     "_get_history_state_map",
     "_get_alert_rules",
     "_flush_history_updates_fallback",

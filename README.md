@@ -143,7 +143,6 @@ python src/main.py
    * 월세는 `보증금 범위`와 `월세 금액 범위`를 각각 설정하며, 두 조건을 모두 만족해야 결과에 포함됩니다.
    * 기본 엔진은 설정 또는 수집 탭에서 `playwright` / `selenium`을 선택할 수 있습니다.
    * 지도 탐색 탭에서는 `APT`, `VL`, 줌, 링 수, 그리드 간격, 지점 대기시간을 조정할 수 있습니다.
-   * 일반 단지 수집(`complex`) 모드는 `APT`만 지원하며, `VL`은 `geo sweep` 경로에서만 수집합니다.
    * 지도 탐색(`geo sweep`) 모드는 Playwright 전용이며 Selenium fallback은 지원하지 않습니다.
    * 고급 필터가 필요하면 상단 메뉴 **`🔍 필터 > ⚙️ 고급 결과 필터`** 또는 수집 결과 영역의 **`⚙️ 고급필터`** 버튼으로 진입합니다.
    * 고급 필터 해제는 메뉴 **`🔍 필터 > 🧹 고급 필터 해제`** 또는 결과 영역 **`🧹 필터해제`** 버튼으로 수행합니다.
@@ -254,36 +253,15 @@ python src/main.py
   - `NAVERLAND_CONSOLE=1` 빌드 스위치를 추가해 GUI 실행 실패 시 콘솔 로그 확인 경로를 열었습니다.
   - Chromium 번들 탐지 실패(`NAVERLAND_BUNDLE_CHROMIUM=1`)가 조용히 묻히지 않도록 spec 단계 경고 메시지를 출력합니다.
 
-## v15.0.7 Encoding/Compatibility Cleanup (2026-03-09)
+## v15.0.7 Reliability/Risk Plan Applied (2026-03-11)
 
-- 인코딩 정리:
-  - `src/core/database_parts/*`와 `src/core/engines/playwright_parts/*`의 mojibake 문자열을 의미 기준으로 복구했습니다.
-  - canonical payload 키는 `매물ID`로 유지하고, 과거 깨진 key는 legacy-read fallback으로만 허용합니다.
-- Python 3.9 호환:
-  - `python -m src.utils.preflight` 경로에서 발생하던 3.9 타입 annotation import 오류를 수정했습니다.
-  - 회귀 방지용 테스트 `tests/test_python39_annotation_compat.py`를 추가했습니다.
-- 텍스트 회귀 방지:
-  - `tests/test_mojibake_scan.py`를 추가해 `src/`, `tests/` Python 파일에 replacement char/Hangul Jamo/CJK compatibility ideograph가 남아 있으면 실패하도록 했습니다.
-- `.spec`/`.gitignore` 재점검:
-  - `naverland-scrapper.spec`는 이번 범위에서 추가 수정이 필요하지 않았습니다.
-  - `.gitignore`는 현행 빌드/로그/백업/Playwright 산출물 규칙으로 충분해 변경하지 않았습니다.
-
-## v15.0.8 Functional Audit Execution (2026-03-10)
-
-- 감사 계획 항목 일괄 반영:
-  - fallback 경계 정합성(부분 성공 prefill 전달 + processed pair 누적) 복구
-  - Selenium negative cache를 `confirmed_empty` 조건으로 제한
-  - `max_retry_count=0`, `geo_grid_rings=0` 설정값 보존 경로 정리
-  - `price_snapshots.asset_type` 마이그레이션/조회 분리/API 확장
-  - `complex` 모드 APT-only 정책(DB/그룹/예약 로딩에서 VL 제외 + 안내 로그)
-  - Geo trade 전부 실패 시 이력/완료 신호 생략
-  - 연속 차단 3회 감지 시 60초 쿨다운 + observability 지표 확장
-- 운영 지표(`stats_signal`) 확장:
-  - `fallback_trigger_count`, `fallback_last_reason`
-  - `block_detect_count`, `block_cooldown_count`
-  - `response_seen_count`, `detail_fetch_total`, `detail_fetch_success`
-- 검증:
-  - `python -m unittest discover -s tests -p "test_*.py"` 기준 `Ran 120 tests` pass
-- `.spec`/`.gitignore` 재점검:
-  - `naverland-scrapper.spec`는 이번 반영 범위에서 추가 수정이 필요하지 않았습니다.
-  - `.gitignore`는 현재 규칙으로 충분하여 변경하지 않았습니다.
+- F-01: Selenium parse metadata(`response_seen`, `parse_success`, `empty_confirmed`, `blocked_detected`)를 표준화하고, `confirmed_empty` 조건에서만 negative cache를 기록합니다.
+- F-02: Geo 탭도 일반 탭과 동일하게 `retry_on_error=False`면 `max_retry_count=0`을 강제합니다.
+- F-03: `mark_disappeared_articles_for_targets`를 대량 타깃에서도 안전한 chunk update 방식으로 변경했습니다.
+- F-04: `add_complex`에 write lock + lock retry(`database is locked`) + rollback 경로를 추가했습니다.
+- F-05: 차단 대응은 하이브리드 회로차단기(페어 2회/90초 cooldown, 전역 5회 중단)로 고정 적용했습니다.
+- F-06: stats용 complex 목록은 충돌 CID에만 `asset:cid` 복합키를 사용하고, UI는 plain/compound 키를 모두 해석합니다.
+- F-07: Geo 모드에서 `complex_trade_types`가 비어 있으면 crawl history 저장을 스킵합니다.
+- F-08: `playwright_parts/complex_mode.py`, `playwright_parts/geo_mode.py`의 깨진 로그/예외 문자열을 정리했습니다.
+- F-09: stats payload에 `response_seen_count`, `parse_success_count`, `parse_fail_count`, `detail_success_count`, `detail_fail_count`, `blocked_page_count`를 추가했습니다.
+- Verification: `pytest -q` 전체 실행 기준 `112 passed`.

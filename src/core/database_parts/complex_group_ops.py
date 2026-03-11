@@ -24,121 +24,168 @@ class ComplexDatabaseComplexGroupOpsMixin:
         asset_type: str = "APT",
         return_status: bool = False,
     ):
-        """단지 추가 - 중복 처리를 강화한다."""
+        """?⑥? 異붽? - ?붾쾭源?媛뺥솕"""
+        if self.is_write_disabled():
+            return "error" if return_status else False
         conn = self._pool.get_connection()
         try:
-            c = conn.cursor()
-            # 이미 존재하는 단지인지 먼저 확인한다.
-            normalized_asset_type = self._normalize_asset_type(asset_type)
-            c.execute(
-                "SELECT id FROM complexes WHERE asset_type = ? AND complex_id = ?",
-                (normalized_asset_type, complex_id),
-            )
-            existing = c.fetchone()
-            if existing:
-                logger.debug(f"단지 이미 존재: {name} ({complex_id})")
-                return "existing" if return_status else True  # 이미 존재하면 성공으로 처리
+            with self._write_lock:
+                try:
+                    conn.execute("PRAGMA busy_timeout=1200")
+                except Exception:
+                    pass
+                for attempt in range(3):
+                    try:
+                        c = conn.cursor()
+                        # ?대? 議댁옱?섎뒗吏 ?뺤씤
+                        normalized_asset_type = self._normalize_asset_type(asset_type)
+                        c.execute(
+                            "SELECT id FROM complexes WHERE asset_type = ? AND complex_id = ?",
+                            (normalized_asset_type, complex_id),
+                        )
+                        existing = c.fetchone()
+                        if existing:
+                            logger.debug(f"?⑥? ?대? 議댁옱: {name} ({complex_id})")
+                            return "existing" if return_status else True  # ?대? 議댁옱?섎㈃ ?깃났?쇰줈 泥섎━
 
-            c.execute(
-                "INSERT INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
-                (name, normalized_asset_type, complex_id, memo),
-            )
-            conn.commit()
-            logger.info(f"단지 추가 성공: {name} ({complex_id})")
-            return "inserted" if return_status else True
-        except sqlite3.IntegrityError as e:
-            logger.debug(f"단지 중복 (정상): {name} ({complex_id})")
-            return "existing" if return_status else True
+                        c.execute(
+                            "INSERT INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
+                            (name, normalized_asset_type, complex_id, memo),
+                        )
+                        conn.commit()
+                        logger.info(f"?⑥? 異붽? ?깃났: {name} ({complex_id})")
+                        return "inserted" if return_status else True
+                    except sqlite3.IntegrityError:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        logger.debug(f"?⑥? 以묐났 (?뺤긽): {name} ({complex_id})")
+                        return "existing" if return_status else True
+                    except sqlite3.OperationalError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_locked_sqlite_error(e) and attempt < 2:
+                            time.sleep(0.1 * (attempt + 1))
+                            continue
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"?⑥? 異붽? ?ㅽ뙣(operational): {name} ({complex_id}) - {e}")
+                        return "error" if return_status else False
+                    except sqlite3.DatabaseError as e:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        if self._is_corruption_sqlite_error(e):
+                            self._disable_writes("database_corruption", e)
+                        logger.error(f"?⑥? 異붽? ?ㅽ뙣(database): {name} ({complex_id}) - {e}")
+                        return "error" if return_status else False
         except Exception as e:
-            logger.exception(f"단지 추가 실패: {name} ({complex_id}) - {e}")
+            logger.exception(f"?⑥? 異붽? ?ㅽ뙣: {name} ({complex_id}) - {e}")
             return "error" if return_status else False
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
     
     def get_all_complexes(self):
-        """모든 단지를 조회한다."""
+        """紐⑤뱺 ?⑥? 議고쉶 - ?붾쾭源?媛뺥솕"""
         conn = self._pool.get_connection()
         try:
             result = self._fetchall_safe(
                 conn,
                 "SELECT id, name, asset_type, complex_id, memo FROM complexes ORDER BY name, asset_type",
-                context="단지 조회(complexes)",
+                context="?⑥? 議고쉶(complexes)",
             )
             logger.debug(f"complex list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("단지 조회", e)
-            logger.exception(f"단지 조회 실패: {e}")
+            self._log_corruption_detected("?⑥? 議고쉶", e)
+            logger.exception(f"?⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def get_complexes_for_stats(self):
-        """통계용 단지 목록을 조회한다 (DB + 크롤링 이력 + 스냅샷)."""
+        """?듦퀎 ??슜 ?⑥? 紐⑸줉 議고쉶 (DB + ?щ·留?湲곕줉 + ?ㅻ깄??"""
         conn = self._pool.get_connection()
         try:
             complex_map: dict[tuple[str, str], str] = {}
 
-            # 1) 단지 기본 목록
+            def _upsert(asset_type, complex_id, name):
+                cid = str(complex_id or "").strip()
+                if not cid:
+                    return
+                asset = self._normalize_asset_type(asset_type)
+                key = (asset, cid)
+                if key in complex_map:
+                    return
+                label = str(name or "").strip() or f"?⑥?_{cid}"
+                complex_map[key] = label
+
+            # 1) ??λ맂 ?⑥? 紐⑸줉
             rows = self._fetchall_safe(
                 conn,
                 "SELECT name, asset_type, complex_id FROM complexes ORDER BY name, asset_type",
-                context="통계 단지 조회(complexes)",
+                context="?듦퀎 ?⑥? 議고쉶(complexes)",
             )
             for row in rows:
-                cid = str(row["complex_id"] or "")
-                asset_type = self._normalize_asset_type(row["asset_type"])
-                name = str(row["name"] or "")
-                if cid and name:
-                    complex_map[(asset_type, cid)] = name
+                _upsert(row["asset_type"], row["complex_id"], row["name"])
 
-            # 2) 크롤링 이력(최신 이름 우선)
+            # 2) ?щ·留?湲곕줉(理쒖떊 ?대쫫 ?곗꽑)
             history_rows = self._fetchall_safe(
                 conn,
                 '''
                 SELECT
-                    complex_id,
-                    complex_name,
-                    COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type,
-                    crawled_at
+                    ch.complex_id,
+                    ch.complex_name,
+                    COALESCE(NULLIF(ch.asset_type, ''), 'APT') AS asset_type
                 FROM crawl_history ch
-                ORDER BY crawled_at DESC
+                JOIN (
+                    SELECT complex_id, MAX(crawled_at) AS last_crawl
+                    FROM crawl_history
+                    GROUP BY complex_id
+                ) latest
+                ON ch.complex_id = latest.complex_id AND ch.crawled_at = latest.last_crawl
                 ''',
-                context="통계 단지 조회(crawl_history)",
+                context="?듦퀎 ?⑥? 議고쉶(crawl_history)",
             )
             for row in history_rows:
-                cid = str(row["complex_id"] or "")
-                asset_type = self._normalize_asset_type(row["asset_type"])
-                if not cid:
-                    continue
-                key = (asset_type, cid)
-                if key in complex_map:
-                    continue
-                name = str(row["complex_name"] or f"단지_{cid}")
-                complex_map[key] = name
+                _upsert(row["asset_type"], row["complex_id"], row["complex_name"])
 
-            # 3) 스냅샷에만 남아 있는 단지 보강
+            # 3) ?ㅻ깄?룹뿉留?議댁옱?섎뒗 ?⑥? 蹂닿컯
             snapshot_rows = self._fetchall_safe(
                 conn,
-                "SELECT DISTINCT COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, complex_id FROM price_snapshots",
-                context="통계 단지 조회(price_snapshots)",
+                "SELECT DISTINCT complex_id FROM price_snapshots",
+                context="?듦퀎 ?⑥? 議고쉶(price_snapshots)",
             )
             for row in snapshot_rows:
-                cid = str(row["complex_id"] or "")
-                asset_type = self._normalize_asset_type(row["asset_type"])
-                if not cid:
-                    continue
-                key = (asset_type, cid)
-                if key not in complex_map:
-                    complex_map[key] = f"단지_{cid}"
+                _upsert("APT", row["complex_id"], "")
 
-            result = [(name, asset_type, cid) for (asset_type, cid), name in complex_map.items()]
-            result.sort(key=lambda x: (x[0], x[1], x[2]))
+            cid_assets: dict[str, set[str]] = {}
+            for asset_type, cid in complex_map.keys():
+                cid_assets.setdefault(cid, set()).add(asset_type)
+            collided_cids = {cid for cid, assets in cid_assets.items() if len(assets) > 1}
+
+            result = []
+            for (asset_type, cid), name in complex_map.items():
+                data_key = cid
+                display_name = name
+                if cid in collided_cids:
+                    data_key = f"{asset_type}:{cid}"
+                    display_name = f"{name} ({asset_type})"
+                result.append((display_name, data_key))
+            result.sort(key=lambda x: x[0])
             logger.debug(f"complex stats source rows: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("통계 단지 조회", e)
-            logger.exception(f"통계 단지 조회 실패: {e}")
+            self._log_corruption_detected("?듦퀎 ?⑥? 議고쉶", e)
+            logger.exception(f"?듦퀎 ?⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -169,12 +216,12 @@ class ComplexDatabaseComplexGroupOpsMixin:
             where_asset = " OR ".join(clauses)
             cursor.execute(f"DELETE FROM article_history WHERE {where_asset}", params)
             cursor.execute(f"DELETE FROM crawl_history WHERE {where_asset}", params)
-            cursor.execute(f"DELETE FROM price_snapshots WHERE {where_asset}", params)
 
         unique_complex_ids = sorted({str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()})
         if not unique_complex_ids:
             return
         placeholders = ",".join("?" * len(unique_complex_ids))
+        cursor.execute(f"DELETE FROM price_snapshots WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM alert_settings WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM article_favorites WHERE complex_id IN ({placeholders})", unique_complex_ids)
         cursor.execute(f"DELETE FROM article_alert_log WHERE complex_id IN ({placeholders})", unique_complex_ids)
@@ -208,10 +255,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
             if purge_related:
                 self._purge_related_for_complex_refs(c, refs)
             conn.commit()
-            logger.info(f"단지 삭제: ID={db_id}")
+            logger.info(f"?⑥? ??젣: ID={db_id}")
             return True
         except Exception as e:
-            logger.error(f"단지 삭제 실패: {e}")
+            logger.error(f"?⑥? ??젣 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -234,7 +281,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}")
             return deleted_count
         except Exception as e:
-            logger.error(f"단지 일괄 삭제 실패: {e}")
+            logger.error(f"?⑥? ?쇨큵 ??젣 ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -246,7 +293,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"메모 업데이트 실패: {e}")
+            logger.error(f"硫붾え ?낅뜲?댄듃 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -256,10 +303,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
         try:
             conn.cursor().execute("INSERT INTO groups (name, description) VALUES (?, ?)", (name, desc))
             conn.commit()
-            logger.info(f"그룹 생성: {name}")
+            logger.info(f"洹몃９ ?앹꽦: {name}")
             return True
         except Exception as e:
-            logger.error(f"그룹 생성 실패: {e}")
+            logger.error(f"洹몃９ ?앹꽦 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -270,13 +317,13 @@ class ComplexDatabaseComplexGroupOpsMixin:
             result = self._fetchall_safe(
                 conn,
                 "SELECT id, name, description FROM groups ORDER BY name",
-                context="그룹 조회(groups)",
+                context="洹몃９ 議고쉶(groups)",
             )
             logger.debug(f"group list loaded: {len(result)}")
             return result
         except Exception as e:
-            self._log_corruption_detected("그룹 조회", e)
-            logger.error(f"그룹 조회 실패: {e}")
+            self._log_corruption_detected("洹몃９ 議고쉶", e)
+            logger.error(f"洹몃９ 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
@@ -288,10 +335,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
             c.execute("DELETE FROM group_complexes WHERE group_id = ?", (group_id,))
             c.execute("DELETE FROM groups WHERE id = ?", (group_id,))
             conn.commit()
-            logger.info(f"그룹 삭제: ID={group_id}")
+            logger.info(f"洹몃９ ??젣: ID={group_id}")
             return True
         except Exception as e:
-            logger.error(f"그룹 삭제 실패: {e}")
+            logger.error(f"洹몃９ ??젣 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -306,12 +353,12 @@ class ComplexDatabaseComplexGroupOpsMixin:
                     c.execute("INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)", (group_id, cid))
                     count += c.rowcount
                 except Exception as e:
-                    logger.warning(f"그룹 단지 추가 실패: {cid} - {e}")
+                    logger.warning(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {cid} - {e}")
             conn.commit()
             logger.info(f"group complexes added: {count}")
             return count
         except Exception as e:
-            logger.error(f"그룹 단지 추가 실패: {e}")
+            logger.error(f"洹몃９???⑥? 異붽? ?ㅽ뙣: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
@@ -323,7 +370,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"그룹에서 단지 제거 실패: {e}")
+            logger.error(f"洹몃９?먯꽌 ?⑥? ?쒓굅 ?ㅽ뙣: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
@@ -338,7 +385,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             ).fetchall()
             return result
         except Exception as e:
-            logger.error(f"그룹 내 단지 조회 실패: {e}")
+            logger.error(f"洹몃９ ???⑥? 議고쉶 ?ㅽ뙣: {e}")
             return []
         finally:
             self._pool.return_connection(conn)

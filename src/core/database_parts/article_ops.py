@@ -556,6 +556,11 @@ class ComplexDatabaseArticleOpsMixin:
         if not normalized_pairs and not normalized_triples:
             return 0
 
+        def _iter_chunks(rows, chunk_size):
+            size = max(1, int(chunk_size or 1))
+            for idx in range(0, len(rows), size):
+                yield rows[idx : idx + size]
+
         conn = self._pool.get_connection()
         try:
             with self._write_lock:
@@ -563,35 +568,48 @@ class ComplexDatabaseArticleOpsMixin:
                     conn.execute("PRAGMA busy_timeout=3000")
                 except Exception:
                     pass
-                scoped_clauses: list[str] = []
-                params = []
-
-                if normalized_pairs:
-                    where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(normalized_pairs))
-                    scoped_clauses.append(f"({where_pairs})")
-                    for complex_id, trade_type in normalized_pairs:
-                        params.extend([complex_id, trade_type])
-
-                if normalized_triples:
-                    where_triples = " OR ".join(
-                        ["(asset_type = ? AND complex_id = ? AND trade_type = ?)"] * len(normalized_triples)
-                    )
-                    scoped_clauses.append(f"({where_triples})")
-                    for asset_type, complex_id, trade_type in normalized_triples:
-                        params.extend([asset_type, complex_id, trade_type])
-
                 c = conn.cursor()
-                c.execute(
-                    f"""
-                    UPDATE article_history
-                    SET status='disappeared'
-                    WHERE last_seen < CURRENT_DATE
-                      AND status='active'
-                      AND ({' OR '.join(scoped_clauses)})
-                    """,
-                    params,
-                )
-                updated = c.rowcount if c.rowcount != -1 else 0
+                updated = 0
+                max_sql_variables = 900
+                pair_chunk_size = min(200, max(1, max_sql_variables // 2))
+                triple_chunk_size = min(200, max(1, max_sql_variables // 3))
+
+                for pair_chunk in _iter_chunks(normalized_pairs, pair_chunk_size):
+                    where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(pair_chunk))
+                    params = []
+                    for complex_id, trade_type in pair_chunk:
+                        params.extend([complex_id, trade_type])
+                    c.execute(
+                        f"""
+                        UPDATE article_history
+                        SET status='disappeared'
+                        WHERE last_seen < CURRENT_DATE
+                          AND status='active'
+                          AND ({where_pairs})
+                        """,
+                        params,
+                    )
+                    updated += c.rowcount if c.rowcount != -1 else 0
+
+                for triple_chunk in _iter_chunks(normalized_triples, triple_chunk_size):
+                    where_triples = " OR ".join(
+                        ["(asset_type = ? AND complex_id = ? AND trade_type = ?)"] * len(triple_chunk)
+                    )
+                    params = []
+                    for asset_type, complex_id, trade_type in triple_chunk:
+                        params.extend([asset_type, complex_id, trade_type])
+                    c.execute(
+                        f"""
+                        UPDATE article_history
+                        SET status='disappeared'
+                        WHERE last_seen < CURRENT_DATE
+                          AND status='active'
+                          AND ({where_triples})
+                        """,
+                        params,
+                    )
+                    updated += c.rowcount if c.rowcount != -1 else 0
+
                 conn.commit()
                 if updated > 0:
                     logger.info(f"대상 범위 사라진 매물 처리: {updated}건")
