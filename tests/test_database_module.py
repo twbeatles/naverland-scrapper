@@ -425,29 +425,92 @@ class TestComplexDatabase(unittest.TestCase):
             self.db._pool.return_connection(conn)
         self.assertEqual(disappeared_count, 3)
 
-    def test_record_alert_notification_dedup_by_day(self):
+    def test_record_alert_notification_dedup_by_day_and_asset_type(self):
         first = self.db.record_alert_notification(
             alert_id=10,
             article_id="A100",
             complex_id="C100",
+            asset_type="APT",
             notified_on="2026-02-21",
         )
         second = self.db.record_alert_notification(
             alert_id=10,
             article_id="A100",
             complex_id="C100",
+            asset_type="APT",
             notified_on="2026-02-21",
         )
         third = self.db.record_alert_notification(
             alert_id=10,
             article_id="A100",
             complex_id="C100",
+            asset_type="VL",
             notified_on="2026-02-22",
+        )
+        fourth = self.db.record_alert_notification(
+            alert_id=10,
+            article_id="A100",
+            complex_id="C100",
+            asset_type="VL",
+            notified_on="2026-02-21",
         )
 
         self.assertTrue(first)
         self.assertFalse(second)
         self.assertTrue(third)
+        self.assertTrue(fourth)
+
+    def test_get_enabled_alert_rules_respects_asset_scope_and_all(self):
+        self.assertTrue(
+            self.db.add_alert_setting("88008", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT")
+        )
+        self.assertTrue(
+            self.db.add_alert_setting("88008", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL")
+        )
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                """
+                INSERT INTO alert_settings (
+                    complex_id, complex_name, asset_type, trade_type, area_min, area_max, price_min, price_max, enabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                ("88008", "LegacyBlank", "", "매매", 0.0, 100.0, 0, 999999),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        apt_rules = self.db.get_enabled_alert_rules("88008", "매매", asset_type="APT")
+        vl_rules = self.db.get_enabled_alert_rules("88008", "매매", asset_type="VL")
+
+        self.assertEqual(len(apt_rules), 3)
+        self.assertEqual(len(vl_rules), 2)
+        self.assertTrue(any(rule["complex_name"] == "ScopeApt" for rule in apt_rules))
+        self.assertFalse(any(rule["complex_name"] == "ScopeApt" for rule in vl_rules))
+        self.assertTrue(all(rule["asset_type"] in {"APT", "ALL"} for rule in apt_rules))
+        self.assertTrue(all(rule["asset_type"] in {"ALL", "VL"} for rule in vl_rules))
+
+    def test_get_crawl_history_returns_metadata_fields(self):
+        self.assertTrue(
+            self.db.add_crawl_history(
+                "MetaComplex",
+                "93001",
+                "매매",
+                2,
+                engine="playwright",
+                mode="complex",
+                asset_type="APT",
+            )
+        )
+
+        rows = self.db.get_crawl_history(limit=1)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["complex_name"], "MetaComplex")
+        self.assertEqual(rows[0]["asset_type"], "APT")
+        self.assertEqual(rows[0]["engine"], "playwright")
+        self.assertEqual(rows[0]["mode"], "complex")
 
     def test_backup_and_restore_preserves_rows(self):
         self.assertTrue(self.db.add_complex("BaseComplex", "A-100"))
@@ -534,6 +597,86 @@ class TestComplexDatabase(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["complex_id"], "LEG-100")
             self.assertEqual(rows[0]["asset_type"], "APT")
+        finally:
+            migrated_db.close()
+
+    def test_migrate_legacy_alert_asset_scope_schema(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy_alert_scope.db")
+        conn = sqlite3.connect(legacy_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """
+                CREATE TABLE alert_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    complex_id TEXT,
+                    complex_name TEXT,
+                    trade_type TEXT,
+                    area_min REAL DEFAULT 0,
+                    area_max REAL DEFAULT 999,
+                    price_min INTEGER DEFAULT 0,
+                    price_max INTEGER DEFAULT 999999999,
+                    enabled INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            c.execute(
+                """
+                CREATE TABLE article_alert_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alert_id INTEGER NOT NULL,
+                    article_id TEXT NOT NULL,
+                    complex_id TEXT NOT NULL,
+                    notified_on DATE DEFAULT CURRENT_DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(alert_id, article_id, complex_id, notified_on)
+                )
+                """
+            )
+            c.execute(
+                """
+                INSERT INTO alert_settings (
+                    complex_id, complex_name, trade_type, area_min, area_max, price_min, price_max, enabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                ("99001", "LegacyAlert", "매매", 0.0, 100.0, 0, 999999),
+            )
+            c.execute(
+                """
+                INSERT INTO article_alert_log (alert_id, article_id, complex_id, notified_on)
+                VALUES (?, ?, ?, ?)
+                """,
+                (7, "A-1", "99001", "2026-03-14"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        migrated_db = ComplexDatabase(legacy_path)
+        try:
+            rules = migrated_db.get_all_alert_settings()
+            self.assertEqual(len(rules), 1)
+            self.assertEqual(rules[0]["asset_type"], "ALL")
+
+            self.assertTrue(
+                migrated_db.record_alert_notification(
+                    alert_id=7,
+                    article_id="A-1",
+                    complex_id="99001",
+                    asset_type="APT",
+                    notified_on="2026-03-14",
+                )
+            )
+            self.assertFalse(
+                migrated_db.record_alert_notification(
+                    alert_id=7,
+                    article_id="A-1",
+                    complex_id="99001",
+                    asset_type="APT",
+                    notified_on="2026-03-14",
+                )
+            )
         finally:
             migrated_db.close()
 

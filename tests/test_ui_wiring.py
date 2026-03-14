@@ -809,6 +809,160 @@ class TestUIWiring(unittest.TestCase):
         dialog.deleteLater()
         self._qt_app.processEvents()
 
+    def test_alert_setting_dialog_supports_asset_scope_and_common_rules(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.dialogs.settings import AlertSettingDialog
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_alert_scope.db"))
+            db.add_complex("APT단지", "31001", asset_type="APT")
+            db.add_complex("VL단지", "31001", asset_type="VL")
+
+            dialog = AlertSettingDialog(db=db)
+
+            combo_texts = [dialog.combo_complex.itemText(i) for i in range(dialog.combo_complex.count())]
+            self.assertIn("APT단지 (APT:31001)", combo_texts)
+            self.assertIn("VL단지 (VL:31001)", combo_texts)
+
+            dialog.combo_complex.setCurrentIndex(combo_texts.index("APT단지 (APT:31001)"))
+            dialog.check_common_scope.setChecked(True)
+            dialog._add()
+
+            rows = db.get_all_alert_settings()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["asset_type"], "ALL")
+            self.assertEqual(dialog.table.item(0, 1).text(), "공통")
+
+            dialog.deleteLater()
+            db.close()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_dedupes_same_cid_on_add_and_start(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_task_dedupe.db"))
+            tab = CrawlerTab(db)
+
+            self.assertTrue(tab.add_task("첫단지", "12345"))
+            self.assertFalse(tab.add_task("둘단지", "12345"))
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(tab.table_list.item(0, 0).text(), "첫단지")
+            self.assertIn("중복 스킵", tab.log_browser.toPlainText())
+
+            tab._append_task_row("레거시중복", "12345")
+            self.assertEqual(tab.table_list.rowCount(), 2)
+
+            with patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls:
+                tab.start_crawling()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(mock_thread_cls.call_args.args[0], [("첫단지", "12345")])
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_history_tab_shows_asset_engine_and_mode_columns(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_history_metadata.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+
+            app.db.add_crawl_history(
+                "메타단지",
+                "41001",
+                "매매",
+                3,
+                engine="playwright",
+                mode="complex",
+                asset_type="APT",
+            )
+
+            app._load_history()
+
+            self.assertEqual(app.history_table.columnCount(), 8)
+            self.assertEqual(app.history_table.item(0, 0).text(), "메타단지")
+            self.assertEqual(app.history_table.item(0, 2).text(), "APT")
+            self.assertEqual(app.history_table.item(0, 3).text(), "playwright")
+            self.assertEqual(app.history_table.item(0, 4).text(), "complex")
+
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_stats_tab_clears_chart_for_multi_series(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_multi_series.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+
+            conn = app.db._pool.get_connection()
+            try:
+                conn.cursor().execute(
+                    "INSERT OR IGNORE INTO complexes (name, asset_type, complex_id, memo) VALUES (?, ?, ?, ?)",
+                    ("복합차트단지", "APT", "92001", ""),
+                )
+                conn.cursor().executemany(
+                    """
+                    INSERT INTO price_snapshots (
+                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_type, snapshot_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        ("92001", "매매", 34.0, 10000, 12000, 11000, 2, "APT", "2026-03-10"),
+                        ("92001", "전세", 34.0, 5000, 7000, 6000, 2, "APT", "2026-03-11"),
+                    ],
+                )
+                conn.commit()
+            finally:
+                app.db._pool.return_connection(conn)
+
+            app._load_stats_complexes()
+            for i in range(app.stats_complex_combo.count()):
+                data = app.stats_complex_combo.itemData(i)
+                if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "92001":
+                    app.stats_complex_combo.setCurrentIndex(i)
+                    break
+            app._load_stats()
+
+            self.assertIsNotNone(app.chart_widget)
+            self.assertEqual(
+                app.chart_widget.message_label.text(),
+                "차트를 보려면 거래유형과 평형을 하나로 좁혀주세요.",
+            )
+
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_stats_tab_repeated_entry_after_data_collection(self):
         from src.core.database import ComplexDatabase
         from src.ui.app import RealEstateApp

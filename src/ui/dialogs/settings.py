@@ -302,6 +302,13 @@ class AlertSettingDialog(QDialog):
         self.db = db
         self._setup_ui()
 
+    @staticmethod
+    def _format_alert_scope(asset_type):
+        scope = str(asset_type or "ALL").strip().upper() or "ALL"
+        if scope == "ALL":
+            return "공통"
+        return scope
+
     def _setup_ui(self):
         self.setWindowTitle("🔔 알림 설정")
         self.setMinimumSize(650, 550)
@@ -311,14 +318,20 @@ class AlertSettingDialog(QDialog):
         add_layout = QGridLayout()
         add_layout.addWidget(QLabel("단지:"), 0, 0)
         self.combo_complex = QComboBox()
-        for _, name, _asset_type, cid, _ in (self.db.get_all_complexes() if self.db else []):
-            self.combo_complex.addItem(f"{name} ({cid})", (cid, name))
+        for _, name, asset_type, cid, _ in (self.db.get_all_complexes() if self.db else []):
+            asset_token = str(asset_type or "APT").strip().upper() or "APT"
+            self.combo_complex.addItem(
+                f"{name} ({asset_token}:{cid})",
+                {"cid": str(cid or ""), "name": str(name or ""), "asset_type": asset_token},
+            )
         add_layout.addWidget(self.combo_complex, 0, 1, 1, 3)
 
         add_layout.addWidget(QLabel("유형:"), 1, 0)
         self.combo_type = QComboBox()
         self.combo_type.addItems(["매매", "전세", "월세"])
         add_layout.addWidget(self.combo_type, 1, 1)
+        self.check_common_scope = QCheckBox("공통 적용(APT/VL)")
+        add_layout.addWidget(self.check_common_scope, 1, 2, 1, 2)
 
         add_layout.addWidget(QLabel("면적(평):"), 2, 0)
         self.spin_area_min = QDoubleSpinBox()
@@ -350,8 +363,8 @@ class AlertSettingDialog(QDialog):
 
         layout.addWidget(QLabel("설정된 알림:"))
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["단지", "유형", "면적", "가격", "활성", "삭제"])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(["단지", "자산 범위", "유형", "면적", "가격", "활성", "삭제"])
         alert_header = self.table.horizontalHeader()
         if alert_header is not None:
             alert_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -371,7 +384,9 @@ class AlertSettingDialog(QDialog):
         data = self.combo_complex.currentData()
         if not data:
             return
-        cid, name = data
+        cid = str(data.get("cid", "") or "")
+        name = str(data.get("name", "") or "")
+        asset_type = "ALL" if self.check_common_scope.isChecked() else str(data.get("asset_type", "APT") or "APT")
         if self.db.add_alert_setting(
             cid,
             name,
@@ -380,6 +395,7 @@ class AlertSettingDialog(QDialog):
             self.spin_area_max.value(),
             self.spin_price_min.value(),
             self.spin_price_max.value(),
+            asset_type=asset_type,
         ):
             self._load()
 
@@ -387,13 +403,14 @@ class AlertSettingDialog(QDialog):
         self.table.setRowCount(0)
         if not self.db:
             return
-        for aid, cid, name, tt, amin, amax, pmin, pmax, enabled in self.db.get_all_alert_settings():
+        for aid, cid, name, asset_type, tt, amin, amax, pmin, pmax, enabled in self.db.get_all_alert_settings():
             row = self.table.rowCount()
             self.table.insertRow(row)
-            self.table.setItem(row, 0, QTableWidgetItem(name or cid))
-            self.table.setItem(row, 1, QTableWidgetItem(tt))
-            self.table.setItem(row, 2, QTableWidgetItem(f"{amin}~{amax}평"))
-            self.table.setItem(row, 3, QTableWidgetItem(f"{pmin:,}~{pmax:,}만"))
+            self.table.setItem(row, 0, QTableWidgetItem(f"{name or cid} ({cid})"))
+            self.table.setItem(row, 1, QTableWidgetItem(self._format_alert_scope(asset_type)))
+            self.table.setItem(row, 2, QTableWidgetItem(tt))
+            self.table.setItem(row, 3, QTableWidgetItem(f"{amin}~{amax}평"))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{pmin:,}~{pmax:,}만"))
             check = QCheckBox()
             check.setChecked(enabled == 1)
             if self.db:
@@ -402,10 +419,10 @@ class AlertSettingDialog(QDialog):
                         a, s == Qt.CheckState.Checked.value
                     )
                 )
-            self.table.setCellWidget(row, 4, check)
+            self.table.setCellWidget(row, 5, check)
             btn = QPushButton("🗑️ 삭제")
             btn.clicked.connect(lambda _, a=aid: self._delete(a))
-            self.table.setCellWidget(row, 5, btn)
+            self.table.setCellWidget(row, 6, btn)
 
     def _delete(self, aid):
         if self.db:

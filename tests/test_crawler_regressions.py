@@ -14,7 +14,7 @@ class _DBStub:
     def get_article_history_state_bulk(self, _complex_id):
         return {}
 
-    def get_enabled_alert_rules(self, _complex_id, _trade_type):
+    def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):
         return []
 
     def upsert_article_history_bulk(self, rows):
@@ -350,6 +350,43 @@ class TestCrawlerRegressions(unittest.TestCase):
         thread._push_item(dict(no_article_id))
         thread._push_item(dict(no_article_id))
         self.assertEqual(len(thread.collected_data), 3)
+
+    def test_process_raw_items_counts_only_new_pushes(self):
+        thread = self._build_thread(price_filter={"enabled": False})
+        raw_items = [
+            {
+                "단지명": "테스트단지",
+                "단지ID": "12345",
+                "매물ID": "A-1",
+                "거래유형": "매매",
+                "매매가": "10000",
+                "보증금": "",
+                "월세": "",
+                "면적(평)": 34.0,
+                "층/방향": "10층",
+                "특징태그": "",
+                "자산유형": "APT",
+            },
+            {
+                "단지명": "테스트단지",
+                "단지ID": "12345",
+                "매물ID": "A-1",
+                "거래유형": "매매",
+                "매매가": "10000",
+                "보증금": "",
+                "월세": "",
+                "면적(평)": 34.0,
+                "층/방향": "10층",
+                "특징태그": "",
+                "자산유형": "APT",
+            },
+        ]
+
+        matched = thread._process_raw_items(raw_items, "매매")
+
+        self.assertEqual(matched, 1)
+        self.assertEqual(int(thread.stats.get("total_found", 0)), 1)
+        self.assertEqual(len(thread.collected_data), 1)
 
 
 if __name__ == "__main__":

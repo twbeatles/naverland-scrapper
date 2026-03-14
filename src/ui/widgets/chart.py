@@ -1,41 +1,59 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from datetime import datetime
+from typing import Any, Iterable, Optional, cast
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.figure import Figure
     import matplotlib.dates as mdates
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     FigureCanvas = None
     Figure = None
     mdates = None
     MATPLOTLIB_AVAILABLE = False
-from datetime import datetime
-from typing import Optional, Iterable, Any, cast
 
-from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
+from src.utils.plot import sanitize_text_for_matplotlib, setup_korean_font
+
 
 class ChartWidget(QWidget):
     """v10.0: Analytics Chart using Matplotlib"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._korean_font_ok = False
+        self.figure = None
+        self.canvas = None
+        self.ax = None
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.message_label = QLabel()
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.message_label.setWordWrap(True)
+        layout.addWidget(self.message_label)
+
         if MATPLOTLIB_AVAILABLE and Figure is not None and FigureCanvas is not None:
             self._korean_font_ok = bool(setup_korean_font())
-            self.figure = Figure(figsize=(5, 3), dpi=100, facecolor='#2b2b2b')
+            self.figure = Figure(figsize=(5, 3), dpi=100, facecolor="#2b2b2b")
             self.canvas = FigureCanvas(self.figure)
             self.ax = self.figure.add_subplot(111)
-            self.ax.set_facecolor('#2b2b2b')
-            self.ax.tick_params(colors='white')
-            self.ax.xaxis.label.set_color('white')
-            self.ax.yaxis.label.set_color('white')
+            self.ax.set_facecolor("#2b2b2b")
+            self.ax.tick_params(colors="white")
+            self.ax.xaxis.label.set_color("white")
+            self.ax.yaxis.label.set_color("white")
             for spine in self.ax.spines.values():
-                spine.set_color('#555555')
+                spine.set_color("#555555")
             layout.addWidget(self.canvas)
+            self.clear("차트가 없습니다.")
         else:
-            layout.addWidget(QLabel("Matplotlib 라이브러리가 설치되지 않았습니다.\n(pip install matplotlib)"))
+            self.clear("Matplotlib 라이브러리가 설치되지 않았습니다.\n(pip install matplotlib)")
 
     def _parse_date(self, value: str) -> Optional[datetime]:
         try:
@@ -46,6 +64,15 @@ class ChartWidget(QWidget):
             except ValueError:
                 return None
 
+    def clear(self, message: str = "차트가 없습니다."):
+        self.message_label.setText(str(message or "차트가 없습니다."))
+        self.message_label.show()
+        if self.ax is not None:
+            self.ax.clear()
+        if self.canvas is not None:
+            self.canvas.hide()
+            self.canvas.draw_idle()
+
     def update_chart(
         self,
         dates: Iterable[str],
@@ -54,7 +81,7 @@ class ChartWidget(QWidget):
         max_vals: Optional[Iterable[float]] = None,
         title: str = "Price Trend",
     ):
-        if not MATPLOTLIB_AVAILABLE or mdates is None:
+        if not MATPLOTLIB_AVAILABLE or mdates is None or self.ax is None or self.canvas is None:
             return
         title_text = str(title or "Price Trend")
         if not self._korean_font_ok:
@@ -62,12 +89,14 @@ class ChartWidget(QWidget):
 
         dates_list = list(dates)
         if not dates_list:
+            self.clear("차트가 없습니다.")
             return
 
         # Backward compatibility: list of (date, price) tuples.
         if avg is None and isinstance(dates_list[0], (list, tuple)):
             data = dates_list
             if not data:
+                self.clear("차트가 없습니다.")
                 return
             data.sort(key=lambda x: x[0])
             parsed_points: list[tuple[datetime, float]] = []
@@ -81,14 +110,17 @@ class ChartWidget(QWidget):
                     parsed_price = 0.0
                 parsed_points.append((parsed_date, parsed_price))
             if not parsed_points:
+                self.clear("차트가 없습니다.")
                 return
             x = [p[0] for p in parsed_points]
             y = [p[1] for p in parsed_points]
             self.ax.clear()
-            self.ax.plot(cast(Any, x), cast(Any, y), marker='o', linestyle='-', color='#3498db', linewidth=2)
-            self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-            self.ax.grid(True, linestyle='--', alpha=0.3)
-            self.ax.set_title(title_text, color='white')
+            self.ax.plot(cast(Any, x), cast(Any, y), marker="o", linestyle="-", color="#3498db", linewidth=2)
+            self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+            self.ax.grid(True, linestyle="--", alpha=0.3)
+            self.ax.set_title(title_text, color="white")
+            self.message_label.hide()
+            self.canvas.show()
             self.canvas.draw()
             return
 
@@ -131,6 +163,7 @@ class ChartWidget(QWidget):
                 parsed_series.append((parsed_date, avg_value, min_value, max_value))
 
         if not parsed_series:
+            self.clear("차트가 없습니다.")
             return
 
         x = [p[0] for p in parsed_series]
@@ -140,9 +173,11 @@ class ChartWidget(QWidget):
 
         self.ax.clear()
         if y_min and y_max and len(y_min) == len(x) and len(y_max) == len(x):
-            self.ax.fill_between(cast(Any, x), cast(Any, y_min), cast(Any, y_max), color='#3498db', alpha=0.15)
-        self.ax.plot(cast(Any, x), cast(Any, y_avg), marker='o', linestyle='-', color='#3498db', linewidth=2)
-        self.ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-        self.ax.grid(True, linestyle='--', alpha=0.3)
-        self.ax.set_title(title_text, color='white')
+            self.ax.fill_between(cast(Any, x), cast(Any, y_min), cast(Any, y_max), color="#3498db", alpha=0.15)
+        self.ax.plot(cast(Any, x), cast(Any, y_avg), marker="o", linestyle="-", color="#3498db", linewidth=2)
+        self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+        self.ax.grid(True, linestyle="--", alpha=0.3)
+        self.ax.set_title(title_text, color="white")
+        self.message_label.hide()
+        self.canvas.show()
         self.canvas.draw()

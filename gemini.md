@@ -333,6 +333,28 @@ COLORS["light"] = {
   - disappeared-mark chunk update
   - `add_complex` lock retry + rollback
   - stats complex key collision 분리(`asset:cid` on collision only)
+
+## 0-12. v15.0.9 Functional Consistency Rollup (2026-03-14)
+- Alert scope separation:
+  - `alert_settings` / `article_alert_log` now store `asset_type` scope explicitly.
+  - Legacy/blank scope rows are normalized to `ALL`.
+  - Alert lookup matches the requested asset scope plus shared `ALL` rules only.
+  - Alert dedupe key now includes `asset_type`.
+  - `AlertSettingDialog` exposes `단지명 (APT:cid)` / `단지명 (VL:cid)` and a shared `공통 적용(APT/VL)` option.
+- Complex task dedupe policy:
+  - `CrawlerTab` dedupes complex-mode tasks by `cid` across manual add, DB/group/recent/URL/scheduled load.
+  - The first `(name, cid)` is retained and later duplicates are skipped with operator-facing feedback.
+  - A final `cid`-based normalization also runs immediately before `CrawlerThread` creation.
+- Count consistency:
+  - `_push_item()` returns `bool`, and only successful pushes increment matched/finished counts.
+  - Raw item, Selenium cache-hit, and DOM parse paths are aligned with actual emitted results.
+- History and stats UX:
+  - `complex` mode history explicitly stores `asset_type='APT'`.
+  - History UI now shows `asset_type`, `engine`, and `mode`.
+  - Stats chart renders only when the current filter resolves to one `(trade_type, pyeong)` series; otherwise it clears with guidance text.
+- Packaging/docs hygiene:
+  - `naverland-scrapper.spec` was rechecked on 2026-03-14 and still requires no extra hidden import/runtime hook changes.
+  - `.gitignore` was rechecked and remains sufficient for build/log/data/Playwright outputs without new ignore patterns.
 - UI consistency:
   - Geo start path에서 `retry_on_error=False` => `max_retry_count=0`
 - Validation: `pytest -q` => `112 passed`.

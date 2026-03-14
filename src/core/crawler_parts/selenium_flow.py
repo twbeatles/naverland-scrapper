@@ -203,6 +203,7 @@ class CrawlerSeleniumFlowMixin:
                     int(complex_count),
                     engine="selenium",
                     mode=self.crawl_mode,
+                    asset_type="APT",
                 )
                 
                 self.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), complex_count)
@@ -240,8 +241,8 @@ class CrawlerSeleniumFlowMixin:
                         continue
                     processed_item = self._enrich_item_with_history_and_alerts(dict(raw_item))
                     if self._check_filters(processed_item, ttype):
-                        self._push_item(processed_item)
-                        matched_count += 1
+                        if self._push_item(processed_item):
+                            matched_count += 1
                     else:
                         self.stats["filtered_out"] += 1
                 self._flush_history_updates(force=True)

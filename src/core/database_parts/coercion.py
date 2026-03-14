@@ -97,6 +97,16 @@ class ComplexDatabaseCoercionMixin:
         token = str(asset_type or "APT").strip().upper()
         return token or "APT"
 
+    @staticmethod
+    def _normalize_alert_asset_scope(asset_type, default: str = "ALL") -> str:
+        token = str(asset_type or "").strip().upper()
+        if token in {"APT", "VL", "ALL"}:
+            return token
+        fallback = str(default or "").strip().upper()
+        if fallback in {"APT", "VL", "ALL"}:
+            return fallback
+        return ""
+
     @classmethod
     def _complexes_table_requires_migration(cls, cursor) -> bool:
         columns = cls._column_names(cursor, "complexes")

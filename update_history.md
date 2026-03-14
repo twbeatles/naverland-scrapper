@@ -1,4 +1,45 @@
-﻿## **v15.0.7 (2026-03-11)**
+﻿## **v15.0.9 (2026-03-14)**
+
+**기능 구현 점검 리포트 전 항목 반영 + 문서/.spec/.gitignore 정합성 재점검**
+
+### ✅ 핵심 반영
+
+* 알림 스코프 정합:
+  - `alert_settings.asset_type`, `article_alert_log.asset_type` 추가
+  - legacy/blank alert scope는 `ALL`로 backfill
+  - 알림 조회는 `requested asset_type + ALL` 규칙만 반환
+  - 알림 dedupe 키를 `alert_id + article_id + complex_id + asset_type + notified_on`으로 확장
+  - 알림 설정 UI에 `단지명 (APT:cid)` / `단지명 (VL:cid)` 표시와 `공통 적용(APT/VL)` 옵션 추가
+* complex 모드 작업 dedupe:
+  - `CrawlerTab` 작업 추가 경로(수동/DB/그룹/최근검색/URL/예약)를 `cid` 기준 dedupe helper로 통합
+  - 중복 `cid`는 첫 이름을 유지하고 후속 항목은 로그/상태바에 "중복 스킵" 안내
+  - `start_crawling()` 직전에도 `target_list`를 최종 재정규화
+* item dedupe와 집계 일치:
+  - `_push_item()`을 `bool` 반환으로 전환
+  - raw item / Selenium cache hit / DOM parse 경로 모두 실제 push 성공 건만 `matched_count`와 완료 count에 반영
+* 이력/통계 UX 정합:
+  - `complex` 모드 `record_crawl_history()`도 `asset_type='APT'` 명시 저장
+  - 히스토리 탭 컬럼을 `단지명 / 단지ID / 자산 / 엔진 / 모드 / 거래유형 / 수집건수 / 수집시각`으로 확장
+  - 통계 차트는 단일 `(trade_type, pyeong)` 시리즈일 때만 렌더, 다중 시리즈는 안내 메시지로 clear
+
+### 🧪 검증
+
+* `PYTHONPATH=. pytest -q`
+* 결과: `131 passed`
+
+### 📦 .spec / 문서 / 무시규칙 정합성
+
+* `.spec` 재점검 결과:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook 수정이 필요하지 않음
+  - 재점검 기준 주석 날짜를 2026-03-14로 갱신
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_functional_review_2026-03-14.md`, `update_history.md`에 동일 정책 반영
+* `.gitignore` 재점검 결과:
+  - 현재 build/log/data/Playwright 산출물 무시 규칙으로 충분하며 추가 패턴 수정 없음
+
+---
+
+## **v15.0.7 (2026-03-11)**
 
 **F-01~F-09 구현 리스크 플랜 일괄 반영 + 문서/패키징 정합성 재점검**
 

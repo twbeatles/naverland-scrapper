@@ -102,8 +102,8 @@ class CrawlerHistoryAlertsMixin:
             processed_item = self._enrich_item_with_history_and_alerts(dict(raw_item))
             trade_type = str(processed_item.get("거래유형", requested_trade_type) or requested_trade_type)
             if self._check_filters(processed_item, trade_type):
-                self._push_item(processed_item)
-                matched_count += 1
+                if self._push_item(processed_item):
+                    matched_count += 1
             else:
                 self.stats["filtered_out"] += 1
         self._flush_history_updates(force=True)
@@ -206,14 +206,14 @@ class CrawlerHistoryAlertsMixin:
         self._history_state_cache[key] = history_map or {}
         return self._history_state_cache[key]
 
-    def _get_alert_rules(self, complex_id, trade_type):
-        key = self._cache_key(complex_id, trade_type)
+    def _get_alert_rules(self, complex_id, trade_type, asset_type=""):
+        key = self._cache_key(complex_id, trade_type, asset_type)
         if key in self._alert_rules_cache:
             return self._alert_rules_cache[key]
         rules = []
         if self.db and complex_id and trade_type:
             try:
-                rules = self.db.get_enabled_alert_rules(complex_id, trade_type)
+                rules = self.db.get_enabled_alert_rules(complex_id, trade_type, asset_type=asset_type)
             except Exception as e:
                 self.log(f"   ⚠️ 알림 룰 로드 실패: {e}", 30)
         self._alert_rules_cache[key] = rules or []
@@ -309,6 +309,9 @@ class CrawlerHistoryAlertsMixin:
             monthly = str(data.get("월세", "") or "")
             price_text = f"{deposit}/{monthly}" if monthly else deposit
         price_int = PriceConverter.to_int(price_text.split("/")[0] if "/" in price_text else price_text)
+        asset_type = str(data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        if asset_type not in {"APT", "VL"}:
+            asset_type = "APT"
 
         area_pyeong = 0.0
         try:
@@ -344,7 +347,7 @@ class CrawlerHistoryAlertsMixin:
                     "floor": str(data.get("층/방향", "") or ""),
                     "feature": str(data.get("타입/특징", "") or ""),
                     "last_price": prev_price if prev_price > 0 else price_int,
-                    "asset_type": str(data.get("자산유형", "") or ""),
+                    "asset_type": asset_type,
                     "source_mode": str(data.get("수집모드", self.crawl_mode) or self.crawl_mode),
                     "source_lat": float(data.get("위도", 0.0) or 0.0),
                     "source_lon": float(data.get("경도", 0.0) or 0.0),
@@ -383,7 +386,7 @@ class CrawlerHistoryAlertsMixin:
         data["가격변동"] = visible_price_change
 
         if complex_id and trade_type and area_pyeong > 0 and price_int > 0:
-            rules = self._get_alert_rules(complex_id, trade_type)
+            rules = self._get_alert_rules(complex_id, trade_type, asset_type)
             for rule in rules:
                 area_min = float(self._row_get(rule, "area_min", 0) or 0)
                 area_max = float(self._row_get(rule, "area_max", 999999) or 999999)
@@ -406,6 +409,7 @@ class CrawlerHistoryAlertsMixin:
                                     alert_id=alert_id,
                                     article_id=article_id,
                                     complex_id=complex_id,
+                                    asset_type=asset_type,
                                 )
                             )
                         except Exception as e:

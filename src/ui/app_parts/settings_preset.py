@@ -257,10 +257,12 @@ class AppSettingsPresetMixin:
 
     def _add_complexes_from_dialog(self: Any, complexes):
         if hasattr(self, "crawler_tab"):
+            added = 0
             for name, cid in complexes:
-                self.crawler_tab.add_task(name, cid)
+                if self.crawler_tab.add_task(name, cid):
+                    added += 1
             if complexes:
-                self.show_toast(f"{len(complexes)}개 단지 추가 완료")
+                self.show_toast(f"{added}개 단지 추가 완료")
             return
         ui_logger.warning("CrawlerTab unavailable for _add_complexes_from_dialog.")
 

@@ -207,8 +207,8 @@ class CrawlerDomScrollParseMixin:
                         raw_items.append(dict(data))
                         enriched = self._enrich_item_with_history_and_alerts(data)
                         if self._check_filters(enriched, ttype):
-                            self._push_item(enriched)
-                            matched_count += 1
+                            if self._push_item(enriched):
+                                matched_count += 1
                         else:
                             self.stats["filtered_out"] += 1
                     else:

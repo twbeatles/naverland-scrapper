@@ -10,6 +10,108 @@ class ComplexDatabaseSchemaMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
 
+    @classmethod
+    def _article_alert_log_requires_migration(cls, cursor) -> bool:
+        columns = cls._column_names(cursor, "article_alert_log")
+        if not columns:
+            return False
+        if "asset_type" not in columns:
+            return True
+
+        expected = ("alert_id", "article_id", "complex_id", "asset_type", "notified_on")
+        try:
+            indexes = cursor.execute("PRAGMA index_list(article_alert_log)").fetchall()
+        except Exception:
+            return True
+
+        for idx in indexes:
+            try:
+                is_unique = int(idx[2]) == 1
+                idx_name = str(idx[1])
+            except Exception:
+                try:
+                    is_unique = int(idx["unique"]) == 1
+                    idx_name = str(idx["name"])
+                except Exception:
+                    continue
+            if not is_unique:
+                continue
+            try:
+                info_rows = cursor.execute(f"PRAGMA index_info({idx_name})").fetchall()
+            except Exception:
+                continue
+            idx_cols = []
+            for info in info_rows:
+                try:
+                    idx_cols.append(str(info[2]))
+                except Exception:
+                    try:
+                        idx_cols.append(str(info["name"]))
+                    except Exception:
+                        pass
+            if tuple(idx_cols) == expected:
+                return False
+        return True
+
+    @classmethod
+    def _migrate_article_alert_log_asset_type_schema(cls, cursor):
+        if not cls._article_alert_log_requires_migration(cursor):
+            return
+
+        logger.info("article_alert_log schema migration start: add asset_type + scoped unique")
+        cursor.execute("ALTER TABLE article_alert_log RENAME TO article_alert_log_legacy")
+        cursor.execute(
+            """
+            CREATE TABLE article_alert_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER NOT NULL,
+                article_id TEXT NOT NULL,
+                complex_id TEXT NOT NULL,
+                asset_type TEXT DEFAULT 'ALL',
+                notified_on DATE DEFAULT CURRENT_DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(alert_id, article_id, complex_id, asset_type, notified_on)
+            )
+            """
+        )
+        legacy_columns = cls._column_names(cursor, "article_alert_log_legacy")
+        asset_expr = (
+            "CASE "
+            "WHEN TRIM(COALESCE(asset_type, '')) = '' THEN 'ALL' "
+            "ELSE UPPER(TRIM(asset_type)) "
+            "END"
+            if "asset_type" in legacy_columns
+            else "'ALL'"
+        )
+        notified_on_expr = (
+            "COALESCE(notified_on, CURRENT_DATE)"
+            if "notified_on" in legacy_columns
+            else "CURRENT_DATE"
+        )
+        created_at_expr = (
+            "COALESCE(created_at, CURRENT_TIMESTAMP)"
+            if "created_at" in legacy_columns
+            else "CURRENT_TIMESTAMP"
+        )
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO article_alert_log (
+                id, alert_id, article_id, complex_id, asset_type, notified_on, created_at
+            )
+            SELECT
+                id,
+                alert_id,
+                article_id,
+                complex_id,
+                {asset_expr} AS asset_type,
+                {notified_on_expr} AS notified_on,
+                {created_at_expr} AS created_at
+            FROM article_alert_log_legacy
+            """
+        )
+        cursor.execute("DROP TABLE article_alert_log_legacy")
+        logger.info("article_alert_log schema migration complete")
+
     def _init_tables(self):
         conn = self._pool.get_connection()
         try:
@@ -68,6 +170,7 @@ class ComplexDatabaseSchemaMixin:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complex_id TEXT,
                 complex_name TEXT,
+                asset_type TEXT DEFAULT 'ALL',
                 trade_type TEXT,
                 area_min REAL DEFAULT 0,
                 area_max REAL DEFAULT 999,
@@ -127,10 +230,12 @@ class ComplexDatabaseSchemaMixin:
                 alert_id INTEGER NOT NULL,
                 article_id TEXT NOT NULL,
                 complex_id TEXT NOT NULL,
+                asset_type TEXT DEFAULT 'ALL',
                 notified_on DATE DEFAULT CURRENT_DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(alert_id, article_id, complex_id, notified_on)
+                UNIQUE(alert_id, article_id, complex_id, asset_type, notified_on)
             )''')
+            self._migrate_article_alert_log_asset_type_schema(c)
             # Alert log table
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(article_id)')
@@ -169,6 +274,9 @@ class ComplexDatabaseSchemaMixin:
                 "price_snapshots": {
                     "asset_type": "TEXT DEFAULT 'APT'",
                 },
+                "alert_settings": {
+                    "asset_type": "TEXT DEFAULT 'ALL'",
+                },
             }
             for table_name, columns in migration_columns.items():
                 for column_name, ddl in columns.items():
@@ -193,8 +301,16 @@ class ComplexDatabaseSchemaMixin:
             
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(article_id, complex_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_alert_lookup ON alert_settings(complex_id, trade_type, enabled)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_alert_log_lookup ON article_alert_log(alert_id, article_id, complex_id, notified_on)')
+            c.execute('DROP INDEX IF EXISTS idx_alert_lookup')
+            c.execute(
+                'CREATE INDEX IF NOT EXISTS idx_alert_lookup '
+                'ON alert_settings(complex_id, trade_type, asset_type, enabled)'
+            )
+            c.execute('DROP INDEX IF EXISTS idx_alert_log_lookup')
+            c.execute(
+                'CREATE INDEX IF NOT EXISTS idx_alert_log_lookup '
+                'ON article_alert_log(alert_id, article_id, complex_id, asset_type, notified_on)'
+            )
 
             # v14.x: normalize legacy price_snapshots string values (for example, "34?", "1?2,000?")
             try:
@@ -243,6 +359,24 @@ class ComplexDatabaseSchemaMixin:
                     logger.info(f"migration complete: normalized price_snapshots rows={len(updates)}")
             except Exception as me:
                 logger.warning(f"price_snapshots cleanup failed (ignored): {me}")
+
+            try:
+                c.execute(
+                    """
+                    UPDATE alert_settings
+                    SET asset_type = 'ALL'
+                    WHERE TRIM(COALESCE(asset_type, '')) = ''
+                    """
+                )
+                c.execute(
+                    """
+                    UPDATE article_alert_log
+                    SET asset_type = 'ALL'
+                    WHERE TRIM(COALESCE(asset_type, '')) = ''
+                    """
+                )
+            except Exception as me:
+                logger.warning(f"alert asset scope cleanup failed (ignored): {me}")
 
             # Remove orphan rows from group_complexes when FK constraints were missing in old schemas
             c.execute(

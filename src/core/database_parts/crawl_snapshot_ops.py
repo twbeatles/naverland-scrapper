@@ -93,8 +93,12 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         try:
             result = self._fetchall_safe(
                 conn,
-                'SELECT complex_name, complex_id, trade_types, item_count, crawled_at '
-                'FROM crawl_history ORDER BY crawled_at DESC LIMIT ?',
+                "SELECT complex_name, complex_id, "
+                "COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, "
+                "COALESCE(engine, '') AS engine, "
+                "COALESCE(mode, 'complex') AS mode, "
+                "trade_types, item_count, crawled_at "
+                "FROM crawl_history ORDER BY crawled_at DESC LIMIT ?",
                 params=(limit,),
                 context="크롤링 이력 조회(crawl_history)",
             )

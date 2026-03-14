@@ -54,8 +54,8 @@ class AppStatsScheduleMixin:
                     if apt_only_mode and asset_token != "APT":
                         excluded_vl += 1
                         continue
-                    self.crawler_tab.add_task(name, cid)
-                    loaded_count += 1
+                    if self.crawler_tab.add_task(name, cid):
+                        loaded_count += 1
                 if excluded_vl > 0:
                     msg = f"complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다."
                     self.crawler_tab.append_log(f"ℹ️ {msg}", 20)
@@ -118,12 +118,34 @@ class AppStatsScheduleMixin:
             self.history_table.setRowCount(0)
             history = self.db.get_crawl_history()
             self.history_table.setRowCount(len(history))
-            for row, (name, cid, ttype, cnt, date) in enumerate(history):
-                self.history_table.setItem(row, 0, QTableWidgetItem(name))
-                self.history_table.setItem(row, 1, QTableWidgetItem(cid))
-                self.history_table.setItem(row, 2, QTableWidgetItem(ttype))
-                self.history_table.setItem(row, 3, QTableWidgetItem(str(cnt)))
-                self.history_table.setItem(row, 4, QTableWidgetItem(date))
+            for row_idx, history_row in enumerate(history):
+                if isinstance(history_row, dict):
+                    name = str(history_row.get("complex_name", "") or "")
+                    cid = str(history_row.get("complex_id", "") or "")
+                    asset_type = str(history_row.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                    engine = str(history_row.get("engine", "") or "")
+                    mode = str(history_row.get("mode", "complex") or "complex")
+                    trade_types = str(history_row.get("trade_types", "") or "")
+                    item_count = int(history_row.get("item_count", 0) or 0)
+                    crawled_at = str(history_row.get("crawled_at", "") or "")
+                else:
+                    name = str(history_row[0] if len(history_row) > 0 else "")
+                    cid = str(history_row[1] if len(history_row) > 1 else "")
+                    asset_type = str(history_row[2] if len(history_row) > 2 else "APT").strip().upper() or "APT"
+                    engine = str(history_row[3] if len(history_row) > 3 else "")
+                    mode = str(history_row[4] if len(history_row) > 4 else "complex")
+                    trade_types = str(history_row[5] if len(history_row) > 5 else "")
+                    item_count = int(history_row[6] if len(history_row) > 6 else 0)
+                    crawled_at = str(history_row[7] if len(history_row) > 7 else "")
+
+                self.history_table.setItem(row_idx, 0, QTableWidgetItem(name))
+                self.history_table.setItem(row_idx, 1, QTableWidgetItem(cid))
+                self.history_table.setItem(row_idx, 2, QTableWidgetItem(asset_type))
+                self.history_table.setItem(row_idx, 3, QTableWidgetItem(engine))
+                self.history_table.setItem(row_idx, 4, QTableWidgetItem(mode))
+                self.history_table.setItem(row_idx, 5, QTableWidgetItem(trade_types))
+                self.history_table.setItem(row_idx, 6, QTableWidgetItem(str(item_count)))
+                self.history_table.setItem(row_idx, 7, QTableWidgetItem(crawled_at))
         finally:
             self.history_table.setUpdatesEnabled(True)
 
@@ -242,11 +264,11 @@ class AppStatsScheduleMixin:
             snapshots = filtered
 
         self.stats_table.setUpdatesEnabled(False)
+        series_keys = set()
         chart_data = {"date": [], "avg": [], "min": [], "max": [], "type": None, "py": None}
         try:
             self.stats_table.setRowCount(0)
             self.stats_table.setRowCount(len(snapshots))
-            # 차트용 데이터 수집
             for row, (date, typ, py, min_p, max_p, avg_p, cnt) in enumerate(snapshots):
                 parsed_py = self._parse_pyeong_value(py)
                 py_text = (
@@ -260,13 +282,8 @@ class AppStatsScheduleMixin:
                 self.stats_table.setItem(row, 3, SortableTableWidgetItem(str(min_p)))
                 self.stats_table.setItem(row, 4, SortableTableWidgetItem(str(max_p)))
                 self.stats_table.setItem(row, 5, SortableTableWidgetItem(str(avg_p)))
-                
-                # 같은 유형/평형만 차트에 표시 (첫 번째 데이터 기준)
-                same_series = (
-                    chart_data["type"] == typ
-                    and chart_data["py"] == parsed_py
-                )
-                if parsed_py is not None and (not chart_data["date"] or same_series):
+                series_keys.add((str(typ or ""), parsed_py))
+                if parsed_py is not None:
                     chart_data["type"] = typ
                     chart_data["py"] = parsed_py
                     chart_data["date"].append(date)
@@ -275,22 +292,28 @@ class AppStatsScheduleMixin:
                     chart_data["max"].append(max_p)
         finally:
             self.stats_table.setUpdatesEnabled(True)
-        
-        # 차트 업데이트
-        if chart_data["date"]:
-            self._ensure_chart_widget()
-            title = (
-                f"{self.stats_complex_combo.currentText()} - "
-                f"{chart_data.get('type','')} "
-                f"{self._format_pyeong_value(chart_data.get('py', 0))}평 가격 추이"
-            )
-            self.chart_widget.update_chart(
-                chart_data["date"], 
-                chart_data["avg"], 
-                chart_data["min"], 
-                chart_data["max"],
-                title
-            )
+
+        self._ensure_chart_widget()
+        if not chart_data["date"]:
+            self.chart_widget.clear("차트 데이터가 없습니다.")
+            return
+
+        if len(series_keys) != 1:
+            self.chart_widget.clear("차트를 보려면 거래유형과 평형을 하나로 좁혀주세요.")
+            return
+
+        title = (
+            f"{self.stats_complex_combo.currentText()} - "
+            f"{chart_data.get('type', '')} "
+            f"{self._format_pyeong_value(chart_data.get('py', 0))}평 가격 추이"
+        )
+        self.chart_widget.update_chart(
+            chart_data["date"],
+            chart_data["avg"],
+            chart_data["min"],
+            chart_data["max"],
+            title,
+        )
     
     def _on_stats_complex_changed(self: Any, index):
         """통계 탭 단지 변경 시 평형 콤보박스 업데이트"""

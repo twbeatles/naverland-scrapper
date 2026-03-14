@@ -223,7 +223,7 @@ class CrawlerStateRuntimeMixin:
         dedupe_key = self._item_dedupe_key(item)
         if dedupe_key is not None:
             if dedupe_key in self._seen_item_keys:
-                return
+                return False
             self._seen_item_keys.add(dedupe_key)
         self.collected_data.append(item)
         self.pending_items.append(item)
@@ -231,6 +231,7 @@ class CrawlerStateRuntimeMixin:
         if self.emit_legacy_item_signal:
             self.item_signal.emit(item)
         self._flush_pending_items_if_needed()
+        return True
 
     def _flush_pending_items_if_needed(self, force=False):
         if not self.pending_items:
@@ -286,8 +287,8 @@ class CrawlerStateRuntimeMixin:
         except Exception:
             return default
 
-    def _cache_key(self, complex_id, trade_type):
-        return (str(complex_id or ""), str(trade_type or ""))
+    def _cache_key(self, *parts):
+        return tuple(str(part or "") for part in parts)
 
     def _blocked_pair_key(self, name, cid, trade_type):
         return self._pair_key(name, cid, trade_type)

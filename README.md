@@ -265,3 +265,25 @@ python src/main.py
 - F-08: `playwright_parts/complex_mode.py`, `playwright_parts/geo_mode.py`의 깨진 로그/예외 문자열을 정리했습니다.
 - F-09: stats payload에 `response_seen_count`, `parse_success_count`, `parse_fail_count`, `detail_success_count`, `detail_fail_count`, `blocked_page_count`를 추가했습니다.
 - Verification: `pytest -q` 전체 실행 기준 `112 passed`.
+
+## v15.0.9 Functional Consistency Notes (2026-03-14)
+
+- 알림 스코프를 `asset_type` 기준으로 분리했습니다.
+  - `alert_settings.asset_type`, `article_alert_log.asset_type`를 추가하고 legacy/blank 값은 `ALL`로 backfill 합니다.
+  - 알림 조회는 `requested asset_type + ALL` 규칙만 반환하며, 동일 `alert_id/article_id/complex_id/notified_on`이라도 자산유형이 다르면 별도 dedupe 합니다.
+  - 알림 설정 UI는 `단지명 (APT:cid)` / `단지명 (VL:cid)`를 표시하고, `공통 적용(APT/VL)` 체크 시 `ALL` 범위 규칙을 저장합니다.
+- complex 모드 작업 목록은 `cid` 기준 dedupe로 고정했습니다.
+  - 수동 추가, DB/그룹/최근 검색/URL/예약 실행이 모두 같은 dedupe 경로를 사용합니다.
+  - 동일 `cid`가 다시 들어오면 첫 이름을 유지하고 중복은 스킵 로그/상태 메시지로 안내합니다.
+  - `start_crawling()` 직전에도 최종 `target_list`를 다시 정규화합니다.
+- item dedupe와 집계 수치를 일치시켰습니다.
+  - `_push_item()`은 실제 push 성공 여부를 `bool`로 반환합니다.
+  - raw item, Selenium cache hit, DOM parse 경로 모두 실제 push 성공 건만 `matched_count`와 완료 count에 반영합니다.
+- crawl history 메타데이터와 stats UX를 보강했습니다.
+  - `complex` 모드 이력도 `asset_type='APT'`를 명시 저장합니다.
+  - 히스토리 탭은 `단지명 / 단지ID / 자산 / 엔진 / 모드 / 거래유형 / 수집건수 / 수집시각`을 표시합니다.
+  - 통계 차트는 단일 `(trade_type, pyeong)` 시리즈일 때만 렌더하고, 다중 시리즈면 `차트를 보려면 거래유형과 평형을 하나로 좁혀주세요.` 메시지를 보여줍니다.
+- `.spec` 재점검 결과:
+  - `naverland-scrapper.spec`는 이번 변경 범위에서도 추가 hidden import/runtime hook 수정이 필요하지 않았습니다.
+- `.gitignore` 재점검 결과:
+  - 현재 build/log/data/Playwright 산출물 무시 규칙으로 충분하며 이번 범위에서 추가 수정은 필요하지 않았습니다.

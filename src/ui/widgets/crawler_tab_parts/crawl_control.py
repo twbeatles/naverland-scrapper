@@ -24,14 +24,89 @@ class CrawlerTabCrawlControlMixin:
         self.input_name.clear()
         self.input_id.clear()
 
-    def add_task(self: Any, name, cid):
+    def _normalize_task_name(self: Any, name, cid):
+        cid_text = str(cid or "").strip()
+        name_text = str(name or "").strip()
+        return name_text or f"단지_{cid_text}"
+
+    def _find_task_row_by_cid(self: Any, cid):
+        cid_text = str(cid or "").strip()
+        if not cid_text:
+            return -1
+        for row in range(self.table_list.rowCount()):
+            item = self.table_list.item(row, 1)
+            if item and item.text().strip() == cid_text:
+                return row
+        return -1
+
+    def _append_task_row(self: Any, name, cid):
         row = self.table_list.rowCount()
         self.table_list.insertRow(row)
         self.table_list.setItem(row, 0, QTableWidgetItem(str(name)))
         self.table_list.setItem(row, 1, QTableWidgetItem(str(cid)))
-        
+
+    def _emit_task_duplicate_skip(self: Any, name, cid):
+        existing_row = self._find_task_row_by_cid(cid)
+        kept_name = ""
+        if existing_row >= 0:
+            kept_item = self.table_list.item(existing_row, 0)
+            kept_name = kept_item.text().strip() if kept_item else ""
+        display_name = kept_name or self._normalize_task_name(name, cid)
+        message = f"중복 스킵: {display_name} ({cid})"
+        self.append_log(message, 10)
+        self.status_message.emit(message)
+
+    def add_task(self: Any, name, cid, *, log_duplicate=True):
+        cid_text = str(cid or "").strip()
+        if not cid_text:
+            return False
+        name_text = self._normalize_task_name(name, cid_text)
+        if self._find_task_row_by_cid(cid_text) >= 0:
+            if log_duplicate:
+                self._emit_task_duplicate_skip(name_text, cid_text)
+            return False
+        self._append_task_row(name_text, cid_text)
+        return True
+
     def _add_row(self: Any, name, cid):
-        self.add_task(name, cid)
+        return self.add_task(name, cid)
+
+    def _dedupe_target_entries(self: Any, rows):
+        deduped = []
+        seen = set()
+        removed = 0
+        for name, cid in rows:
+            cid_text = str(cid or "").strip()
+            if not cid_text:
+                continue
+            if cid_text in seen:
+                removed += 1
+                continue
+            seen.add(cid_text)
+            deduped.append((self._normalize_task_name(name, cid_text), cid_text))
+        return deduped, removed
+
+    def _normalize_task_table(self: Any):
+        rows = []
+        for row in range(self.table_list.rowCount()):
+            name_item = self.table_list.item(row, 0)
+            cid_item = self.table_list.item(row, 1)
+            rows.append(
+                (
+                    name_item.text().strip() if name_item else "",
+                    cid_item.text().strip() if cid_item else "",
+                )
+            )
+        deduped, removed = self._dedupe_target_entries(rows)
+        if removed > 0 or len(deduped) != self.table_list.rowCount():
+            self.table_list.setRowCount(0)
+            for name, cid in deduped:
+                self._append_task_row(name, cid)
+        if removed > 0:
+            message = f"중복 스킵: {removed}개 작업을 정리했습니다."
+            self.append_log(message, 20)
+            self.status_message.emit(message)
+        return deduped
     
     def clear_tasks(self: Any):
         self.table_list.setRowCount(0)
@@ -173,9 +248,11 @@ class CrawlerTabCrawlControlMixin:
         if dlg.exec() == QDialog.DialogCode.Accepted:
             selected = dlg.get_selected_complexes()
             if selected:
+                added = 0
                 for name, cid in selected:
-                    self._add_row(name, cid)
-                self.status_message.emit(f"{len(selected)}개 URL 등록 완료")
+                    if self._add_row(name, cid):
+                        added += 1
+                self.status_message.emit(f"{added}개 URL 등록 완료")
                 return
             urls = dlg.get_urls()
             self._add_complexes_from_url(urls)
@@ -186,8 +263,8 @@ class CrawlerTabCrawlControlMixin:
             m = re.search(r'/complexes/(\d+)', url)
             if m:
                 cid = m.group(1)
-                self._add_row(f"단지_{cid}", cid)
-                count += 1
+                if self._add_row(f"단지_{cid}", cid):
+                    count += 1
         self.status_message.emit(f"{count}개 URL 등록 완료")
 
     def _open_complex_url(self: Any):
@@ -227,11 +304,12 @@ class CrawlerTabCrawlControlMixin:
         self.card_view.set_data([])
         self.grouped_rows = {}
         
-        target_list = []
-        for r in range(self.table_list.rowCount()):
-            name = self.table_list.item(r, 0).text()
-            cid = self.table_list.item(r, 1).text()
-            target_list.append((name, cid))
+        target_list = self._normalize_task_table()
+        if not target_list:
+            QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
+            self.btn_start.setEnabled(True)
+            self.btn_stop.setEnabled(False)
+            return
             
         trade_types = []
         if self.check_trade.isChecked(): trade_types.append("매매")

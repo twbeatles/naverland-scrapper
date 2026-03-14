@@ -102,6 +102,7 @@ class PlaywrightComplexModeMixin:
                 int(complex_count),
                 engine=self.engine_name,
                 mode=self.thread.crawl_mode,
+                asset_type="APT",
             )
             self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
         self.thread._current_pair = None
