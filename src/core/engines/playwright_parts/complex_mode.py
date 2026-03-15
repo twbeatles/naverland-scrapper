@@ -21,7 +21,10 @@ class PlaywrightComplexModeMixin:
         for pair in set(getattr(self.thread, "_fallback_prefill_processed_target_pairs", set()) or set()):
             if not isinstance(pair, tuple) or len(pair) < 2:
                 continue
-            processed_pairs.add((str(pair[0]), str(pair[1])))
+            if len(pair) >= 3:
+                processed_pairs.add((str(pair[0]), str(pair[1]), str(pair[2])))
+            else:
+                processed_pairs.add(("APT", str(pair[0]), str(pair[1])))
         for name, cid in self.thread.targets:
             if self.thread._should_stop():
                 break
@@ -45,7 +48,7 @@ class PlaywrightComplexModeMixin:
                     complex_count += count
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
-                    processed_pair = (str(cid), str(trade_type))
+                    processed_pair = ("APT", str(cid), str(trade_type))
                     processed_pairs.add(processed_pair)
                     self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
                     self.thread.stats["by_trade_type"][trade_type] = (

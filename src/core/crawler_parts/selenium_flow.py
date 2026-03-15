@@ -162,7 +162,7 @@ class CrawlerSeleniumFlowMixin:
                         complex_count += count
                         complex_trade_types.append(ttype)
                         if cid and ttype:
-                            processed_target_pairs.add((str(cid), str(ttype)))
+                            processed_target_pairs.add(("APT", str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
                         self._mark_pair_processed(name, cid, ttype)
                         self.log(f"   ✅ {count}건 수집")

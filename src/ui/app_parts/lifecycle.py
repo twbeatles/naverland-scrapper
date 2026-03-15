@@ -196,6 +196,7 @@ class AppLifecycleMixin:
             self._refresh_favorite_keys()
             self._noncritical_loaded["favorites"] = True
         self._load_schedule_groups()
+        self._load_schedule_config()
         
         # Connect signals after loading
         try:
@@ -449,7 +450,7 @@ class AppLifecycleMixin:
             layout.addWidget(empty_lbl)
         else:
             card_view = CardViewWidget(is_dark=(self.current_theme=="dark"))
-            card_view.set_data(recent_items)
+            card_view.set_data(self._decorate_items_with_favorite_state(recent_items))
             card_view.article_clicked.connect(
                 lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
             )

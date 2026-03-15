@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
+import time
 from typing import Any, TYPE_CHECKING
+
+from src.utils.helpers import DateTimeHelper
+from src.utils.logger import get_logger
+
+logger = get_logger("DB")
 
 if TYPE_CHECKING:
     from src.core.database import *  # noqa: F403
@@ -10,8 +17,25 @@ class ComplexDatabaseArticleOpsMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
 
-    def get_article_history_state_bulk(self, complex_id, trade_type=None):
-        """단지(및 거래유형) 기준 매물 이력 상태를 일괄 조회."""
+    @staticmethod
+    def _normalize_listing_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
+
+    @classmethod
+    def _asset_scope_where(
+        cls,
+        asset_type,
+        *,
+        column_name: str = "asset_type",
+        include_legacy_empty_for_apt: bool = True,
+    ) -> tuple[str, list[str]]:
+        token = cls._normalize_listing_asset_type(asset_type)
+        if include_legacy_empty_for_apt and token == "APT":
+            return f"({column_name} = ? OR COALESCE({column_name}, '') = '')", [token]
+        return f"{column_name} = ?", [token]
+
+    def get_article_history_state_bulk(self, complex_id, trade_type=None, asset_type=None):
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -19,7 +43,11 @@ class ComplexDatabaseArticleOpsMixin:
                 FROM article_history
                 WHERE complex_id = ?
             """
-            params = [complex_id]
+            params: list[Any] = [complex_id]
+            if asset_type:
+                asset_where, asset_params = self._asset_scope_where(asset_type)
+                sql += f" AND {asset_where}"
+                params.extend(asset_params)
             if trade_type:
                 sql += " AND trade_type = ?"
                 params.append(trade_type)
@@ -38,13 +66,12 @@ class ComplexDatabaseArticleOpsMixin:
                 }
             return result
         except Exception as e:
-            logger.error(f"매물 이력 일괄 조회 실패: {e}")
+            logger.error(f"article history bulk read failed: {e}")
             return {}
         finally:
             self._pool.return_connection(conn)
 
     def upsert_article_history_bulk(self, rows):
-        """매물 이력을 일괄 upsert."""
         if not rows:
             return 0
         if self.is_write_disabled():
@@ -60,11 +87,11 @@ class ComplexDatabaseArticleOpsMixin:
                     "trade_type": str(row.get("trade_type", "") or ""),
                     "price": int(row.get("price", 0) or 0),
                     "price_text": str(row.get("price_text", "") or ""),
-                    "area_pyeong": float(row.get("area", 0) or 0),
-                    "floor_info": str(row.get("floor", "") or ""),
+                    "area_pyeong": float(row.get("area", row.get("area_pyeong", 0)) or 0),
+                    "floor_info": str(row.get("floor", row.get("floor_info", "")) or ""),
                     "feature": str(row.get("feature", "") or ""),
                     "last_price": int(row.get("last_price", row.get("price", 0)) or row.get("price", 0) or 0),
-                    "asset_type": str(row.get("asset_type", "") or ""),
+                    "asset_type": self._normalize_listing_asset_type(row.get("asset_type", "APT")),
                     "source_mode": str(row.get("source_mode", "complex") or "complex"),
                     "source_lat": float(row.get("source_lat", 0) or 0),
                     "source_lon": float(row.get("source_lon", 0) or 0),
@@ -108,7 +135,7 @@ class ComplexDatabaseArticleOpsMixin:
                     "floor_info": str(floor or ""),
                     "feature": str(feature or ""),
                     "last_price": int(last_price or price or 0),
-                    "asset_type": "",
+                    "asset_type": "APT",
                     "source_mode": "complex",
                     "source_lat": 0.0,
                     "source_lon": 0.0,
@@ -161,7 +188,7 @@ class ComplexDatabaseArticleOpsMixin:
                                 :prev_jeonse_won, :jeonse_period_years, :jeonse_max_won, :jeonse_min_won,
                                 :gap_amount_won, :gap_ratio
                             )
-                            ON CONFLICT(article_id, complex_id) DO UPDATE SET
+                            ON CONFLICT(asset_type, article_id, complex_id) DO UPDATE SET
                                 complex_name = excluded.complex_name,
                                 trade_type = excluded.trade_type,
                                 price = excluded.price,
@@ -204,7 +231,7 @@ class ComplexDatabaseArticleOpsMixin:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"매물 이력 일괄 upsert 실패: {e}")
+                        logger.error(f"article history bulk upsert failed: {e}")
                         return 0
                     except sqlite3.DatabaseError as e:
                         try:
@@ -213,10 +240,10 @@ class ComplexDatabaseArticleOpsMixin:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"매물 이력 일괄 upsert 실패: {e}")
+                        logger.error(f"article history bulk upsert failed: {e}")
                         return 0
         except Exception as e:
-            logger.error(f"매물 이력 일괄 upsert 실패: {e}")
+            logger.error(f"article history bulk upsert failed: {e}")
             return 0
         finally:
             try:
@@ -226,87 +253,103 @@ class ComplexDatabaseArticleOpsMixin:
             self._pool.return_connection(conn)
 
     def check_article_history(self, article_id, complex_id, current_price):
-        """매물 이력 확인 (신규/변동)."""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
             c.execute(
                 "SELECT price, status FROM article_history WHERE article_id = ? AND complex_id = ?",
-                (article_id, complex_id)
+                (article_id, complex_id),
             )
             row = c.fetchone()
-            
             if not row:
-                return True, 0, 0  # 신규 매물 (is_new=True, change=0, prev=0)
-            
-            last_price = row['price']
+                return True, 0, 0
+            last_price = row["price"]
             price_change = current_price - last_price
-            
-            # 가격 변동 여부와 관계없이 최근 가격 정보를 반환한다.
             return False, price_change, last_price
-            
         except Exception as e:
-            logger.error(f"매물 이력 확인 실패: {e}")
+            logger.error(f"article history read failed: {e}")
             return False, 0, 0
         finally:
             self._pool.return_connection(conn)
 
-    def update_article_history(self, article_id, complex_id, complex_name, trade_type,
-                             price, price_text, area, floor, feature, extra=None):
-        """매물 이력을 업데이트한다."""
+    def update_article_history(
+        self,
+        article_id,
+        complex_id,
+        complex_name,
+        trade_type,
+        price,
+        price_text,
+        area,
+        floor,
+        feature,
+        extra=None,
+    ):
         if self.is_write_disabled():
             return False
         conn = self._pool.get_connection()
         try:
             with self._write_lock:
                 c = conn.cursor()
-                
-                # 기존 이력을 조회해 가격 변동을 계산한다.
+                extra = dict(extra or {})
+                asset_type = self._normalize_listing_asset_type(extra.get("asset_type", "APT"))
+                asset_where, asset_params = self._asset_scope_where(asset_type)
+
                 c.execute(
-                    "SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ?",
-                    (article_id, complex_id)
+                    f"SELECT price, first_seen FROM article_history WHERE article_id = ? AND complex_id = ? AND {asset_where}",
+                    [article_id, complex_id, *asset_params],
                 )
                 row = c.fetchone()
-                
                 if row:
-                    last_price = row['price']
+                    last_price = row["price"]
                     price_change = price - last_price
-                    extra = dict(extra or {})
-                    
-                    c.execute("""
-                        UPDATE article_history 
+                    c.execute(
+                        """
+                        UPDATE article_history
                         SET complex_name=?, trade_type=?, price=?, price_text=?, area_pyeong=?, floor_info=?, feature=?,
                             asset_type=?, source_mode=?, source_lat=?, source_lon=?, source_zoom=?, marker_id=?,
                             broker_office=?, broker_name=?, broker_phone1=?, broker_phone2=?,
                             prev_jeonse_won=?, jeonse_period_years=?, jeonse_max_won=?, jeonse_min_won=?,
                             gap_amount_won=?, gap_ratio=?, last_seen=CURRENT_DATE,
                             last_price=?, price_change=?, status='active'
-                        WHERE article_id=? AND complex_id=?
-                    """, (
-                        complex_name, trade_type, price, price_text, area, floor, feature,
-                        str(extra.get("asset_type", "") or ""),
-                        str(extra.get("source_mode", "complex") or "complex"),
-                        float(extra.get("source_lat", 0) or 0),
-                        float(extra.get("source_lon", 0) or 0),
-                        int(extra.get("source_zoom", 0) or 0),
-                        str(extra.get("marker_id", "") or ""),
-                        str(extra.get("broker_office", "") or ""),
-                        str(extra.get("broker_name", "") or ""),
-                        str(extra.get("broker_phone1", "") or ""),
-                        str(extra.get("broker_phone2", "") or ""),
-                        int(extra.get("prev_jeonse_won", 0) or 0),
-                        int(extra.get("jeonse_period_years", 0) or 0),
-                        int(extra.get("jeonse_max_won", 0) or 0),
-                        int(extra.get("jeonse_min_won", 0) or 0),
-                        int(extra.get("gap_amount_won", 0) or 0),
-                        float(extra.get("gap_ratio", 0.0) or 0.0),
-                        last_price, price_change, article_id, complex_id,
-                    ))
+                        WHERE article_id=? AND complex_id=? AND asset_type=?
+                        """,
+                        (
+                            complex_name,
+                            trade_type,
+                            price,
+                            price_text,
+                            area,
+                            floor,
+                            feature,
+                            asset_type,
+                            str(extra.get("source_mode", "complex") or "complex"),
+                            float(extra.get("source_lat", 0) or 0),
+                            float(extra.get("source_lon", 0) or 0),
+                            int(extra.get("source_zoom", 0) or 0),
+                            str(extra.get("marker_id", "") or ""),
+                            str(extra.get("broker_office", "") or ""),
+                            str(extra.get("broker_name", "") or ""),
+                            str(extra.get("broker_phone1", "") or ""),
+                            str(extra.get("broker_phone2", "") or ""),
+                            int(extra.get("prev_jeonse_won", 0) or 0),
+                            int(extra.get("jeonse_period_years", 0) or 0),
+                            int(extra.get("jeonse_max_won", 0) or 0),
+                            int(extra.get("jeonse_min_won", 0) or 0),
+                            int(extra.get("gap_amount_won", 0) or 0),
+                            float(extra.get("gap_ratio", 0.0) or 0.0),
+                            last_price,
+                            price_change,
+                            article_id,
+                            complex_id,
+                            asset_type,
+                        ),
+                    )
                 else:
-                    extra = dict(extra or {})
-                    c.execute("""
+                    c.execute(
+                        """
                         INSERT INTO article_history (
-                            article_id, complex_id, complex_name, trade_type, 
+                            article_id, complex_id, complex_name, trade_type,
                             price, price_text, area_pyeong, floor_info, feature,
                             first_seen, last_seen, last_price, price_change, status,
                             asset_type, source_mode, source_lat, source_lon, source_zoom, marker_id,
@@ -317,27 +360,37 @@ class ComplexDatabaseArticleOpsMixin:
                             ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE, CURRENT_DATE, ?, 0, 'active',
                             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                         )
-                    """, (
-                        article_id, complex_id, complex_name, trade_type,
-                        price, price_text, area, floor, feature, price,
-                        str(extra.get("asset_type", "") or ""),
-                        str(extra.get("source_mode", "complex") or "complex"),
-                        float(extra.get("source_lat", 0) or 0),
-                        float(extra.get("source_lon", 0) or 0),
-                        int(extra.get("source_zoom", 0) or 0),
-                        str(extra.get("marker_id", "") or ""),
-                        str(extra.get("broker_office", "") or ""),
-                        str(extra.get("broker_name", "") or ""),
-                        str(extra.get("broker_phone1", "") or ""),
-                        str(extra.get("broker_phone2", "") or ""),
-                        int(extra.get("prev_jeonse_won", 0) or 0),
-                        int(extra.get("jeonse_period_years", 0) or 0),
-                        int(extra.get("jeonse_max_won", 0) or 0),
-                        int(extra.get("jeonse_min_won", 0) or 0),
-                        int(extra.get("gap_amount_won", 0) or 0),
-                        float(extra.get("gap_ratio", 0.0) or 0.0),
-                    ))
-                
+                        """,
+                        (
+                            article_id,
+                            complex_id,
+                            complex_name,
+                            trade_type,
+                            price,
+                            price_text,
+                            area,
+                            floor,
+                            feature,
+                            price,
+                            asset_type,
+                            str(extra.get("source_mode", "complex") or "complex"),
+                            float(extra.get("source_lat", 0) or 0),
+                            float(extra.get("source_lon", 0) or 0),
+                            int(extra.get("source_zoom", 0) or 0),
+                            str(extra.get("marker_id", "") or ""),
+                            str(extra.get("broker_office", "") or ""),
+                            str(extra.get("broker_name", "") or ""),
+                            str(extra.get("broker_phone1", "") or ""),
+                            str(extra.get("broker_phone2", "") or ""),
+                            int(extra.get("prev_jeonse_won", 0) or 0),
+                            int(extra.get("jeonse_period_years", 0) or 0),
+                            int(extra.get("jeonse_max_won", 0) or 0),
+                            int(extra.get("jeonse_min_won", 0) or 0),
+                            int(extra.get("gap_amount_won", 0) or 0),
+                            float(extra.get("gap_ratio", 0.0) or 0.0),
+                        ),
+                    )
+
                 conn.commit()
                 return True
         except Exception as e:
@@ -347,153 +400,175 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"매물 이력 업데이트 실패: {e}")
+            logger.error(f"article history update failed: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_article_history_stats(self, complex_id=None):
-        """매물 이력 통계를 조회한다."""
         conn = self._pool.get_connection()
         try:
             today = DateTimeHelper.now_string("%Y-%m-%d")
-            
             if complex_id:
-                # 특정 단지 통계
-                result = conn.cursor().execute('''
-                    SELECT 
+                result = conn.cursor().execute(
+                    """
+                    SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN first_seen = ? THEN 1 ELSE 0 END) as new_today,
                         SUM(CASE WHEN price_change > 0 THEN 1 ELSE 0 END) as price_up,
                         SUM(CASE WHEN price_change < 0 THEN 1 ELSE 0 END) as price_down
                     FROM article_history WHERE complex_id = ?
-                ''', (today, complex_id)).fetchone()
+                    """,
+                    (today, complex_id),
+                ).fetchone()
             else:
-                # 전체 통계
-                result = conn.cursor().execute('''
-                    SELECT 
+                result = conn.cursor().execute(
+                    """
+                    SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN first_seen = ? THEN 1 ELSE 0 END) as new_today,
                         SUM(CASE WHEN price_change > 0 THEN 1 ELSE 0 END) as price_up,
                         SUM(CASE WHEN price_change < 0 THEN 1 ELSE 0 END) as price_down
                     FROM article_history
-                ''', (today,)).fetchone()
-            
+                    """,
+                    (today,),
+                ).fetchone()
+
             return {
-                'total': result[0] or 0,
-                'new_today': result[1] or 0,
-                'price_up': result[2] or 0,
-                'price_down': result[3] or 0
+                "total": result[0] or 0,
+                "new_today": result[1] or 0,
+                "price_up": result[2] or 0,
+                "price_down": result[3] or 0,
             }
         except Exception as e:
-            logger.error(f"매물 통계 조회 실패: {e}")
-            return {'total': 0, 'new_today': 0, 'price_up': 0, 'price_down': 0}
+            logger.error(f"article history stats failed: {e}")
+            return {"total": 0, "new_today": 0, "price_up": 0, "price_down": 0}
         finally:
             self._pool.return_connection(conn)
-    
+
     def cleanup_old_articles(self, days=30):
-        """오래된 매물 이력을 정리한다."""
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            c.execute('''
-                DELETE FROM article_history 
+            c.execute(
+                """
+                DELETE FROM article_history
                 WHERE julianday('now') - julianday(last_seen) > ?
-            ''', (days,))
+                """,
+                (days,),
+            )
             deleted = c.rowcount
             conn.commit()
-            logger.info(f"오래된 매물 {deleted}건 정리 (>{days}일)")
+            logger.info(f"cleanup old article history: {deleted} rows, days>{days}")
             return deleted
         except Exception as e:
-            logger.error(f"매물 정리 실패: {e}")
+            logger.error(f"cleanup old article history failed: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
 
-    def toggle_favorite(self, article_id, complex_id, is_active=True):
-        """매물 즐겨찾기 상태를 변경한다."""
+    def toggle_favorite(self, article_id, complex_id, asset_type="APT", is_active=True):
+        if isinstance(asset_type, bool):
+            is_active = bool(asset_type)
+            asset_type = "APT"
+        asset_token = self._normalize_listing_asset_type(asset_type)
         conn = self._pool.get_connection()
         try:
             if is_active:
-                conn.cursor().execute("""
-                    INSERT INTO article_favorites 
-                    (article_id, complex_id, is_favorite, created_at, updated_at)
-                    VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT(article_id, complex_id) DO UPDATE SET
+                conn.cursor().execute(
+                    """
+                    INSERT INTO article_favorites
+                    (asset_type, article_id, complex_id, is_favorite, created_at, updated_at)
+                    VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT(asset_type, article_id, complex_id) DO UPDATE SET
                         is_favorite=1,
                         updated_at=CURRENT_TIMESTAMP
-                """, (article_id, complex_id))
+                    """,
+                    (asset_token, article_id, complex_id),
+                )
             else:
-                conn.cursor().execute("""
-                    UPDATE article_favorites 
+                conn.cursor().execute(
+                    """
+                    UPDATE article_favorites
                     SET is_favorite=0, updated_at=CURRENT_TIMESTAMP
-                    WHERE article_id=? AND complex_id=?
-                """, (article_id, complex_id))
+                    WHERE article_id=? AND complex_id=? AND asset_type=?
+                    """,
+                    (article_id, complex_id, asset_token),
+                )
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"즐겨찾기 변경 실패: {e}")
+            logger.error(f"favorite toggle failed: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
-    def update_article_note(self, article_id, complex_id, note):
-        """매물 메모를 업데이트한다."""
+    def update_article_note(self, article_id, complex_id, note, asset_type="APT"):
+        asset_token = self._normalize_listing_asset_type(asset_type)
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("""
-                UPDATE article_favorites 
+            conn.cursor().execute(
+                """
+                UPDATE article_favorites
                 SET note=?, updated_at=CURRENT_TIMESTAMP
-                WHERE article_id=? AND complex_id=?
-            """, (note, article_id, complex_id))
+                WHERE article_id=? AND complex_id=? AND asset_type=?
+                """,
+                (note, article_id, complex_id, asset_token),
+            )
             conn.commit()
             return True
         except Exception as e:
-            logger.error(f"메모 업데이트 실패: {e}")
+            logger.error(f"article note update failed: {e}")
             return False
         finally:
             self._pool.return_connection(conn)
 
     def get_favorites(self):
-        """즐겨찾기 매물 목록을 조회한다."""
         conn = self._pool.get_connection()
         try:
-            query = """
+            rows = conn.cursor().execute(
+                """
                 SELECT h.*, f.is_favorite, f.note,
                        f.created_at AS favorite_created_at,
                        f.updated_at AS favorite_updated_at
                 FROM article_history h
-                JOIN article_favorites f ON h.article_id = f.article_id AND h.complex_id = f.complex_id
+                JOIN article_favorites f
+                  ON h.article_id = f.article_id
+                 AND h.complex_id = f.complex_id
+                 AND COALESCE(NULLIF(h.asset_type, ''), 'APT') = COALESCE(NULLIF(f.asset_type, ''), 'APT')
                 WHERE f.is_favorite = 1
                 ORDER BY f.updated_at DESC
-            """
-            rows = conn.cursor().execute(query).fetchall()
+                """
+            ).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"즐겨찾기 목록 조회 실패: {e}")
+            logger.error(f"favorite list read failed: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
-    def get_article_favorite_info(self, article_id, complex_id):
-        """특정 매물의 즐겨찾기/메모 정보를 조회한다."""
+    def get_article_favorite_info(self, article_id, complex_id, asset_type="APT"):
+        asset_token = self._normalize_listing_asset_type(asset_type)
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
-                "SELECT is_favorite, note FROM article_favorites WHERE article_id=? AND complex_id=?",
-                (article_id, complex_id)
+                """
+                SELECT is_favorite, note
+                FROM article_favorites
+                WHERE article_id=? AND complex_id=? AND asset_type=?
+                """,
+                (article_id, complex_id, asset_token),
             ).fetchone()
             if row:
                 return dict(row)
-            return {'is_favorite': 0, 'note': ''}
+            return {"is_favorite": 0, "note": ""}
         except Exception as e:
-            logger.error(f"매물 즐겨찾기 정보 조회 실패: {e}")
-            return {'is_favorite': 0, 'note': ''}
+            logger.error(f"favorite info read failed: {e}")
+            return {"is_favorite": 0, "note": ""}
         finally:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles(self):
-        """오늘 확인되지 않은 매물을 사라짐 상태로 변경한다."""
         if self.is_write_disabled():
             return 0
         conn = self._pool.get_connection()
@@ -503,17 +578,18 @@ class ComplexDatabaseArticleOpsMixin:
                     conn.execute("PRAGMA busy_timeout=3000")
                 except Exception:
                     pass
-                # 마지막 확인일이 오늘 이전인 active 매물을 disappeared로 변경한다.
                 c = conn.cursor()
-                c.execute("""
-                    UPDATE article_history 
-                    SET status='disappeared' 
+                c.execute(
+                    """
+                    UPDATE article_history
+                    SET status='disappeared'
                     WHERE last_seen < CURRENT_DATE AND status='active'
-                """)
+                    """
+                )
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"사라진 매물 처리: {updated}건")
+                    logger.info(f"mark disappeared articles: {updated}")
                 return updated
         except Exception as e:
             try:
@@ -522,7 +598,7 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"사라진 매물 처리 실패: {e}")
+            logger.error(f"mark disappeared articles failed: {e}")
             return 0
         finally:
             try:
@@ -532,28 +608,27 @@ class ComplexDatabaseArticleOpsMixin:
             self._pool.return_connection(conn)
 
     def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
-        """이번 실행 대상 범위에서만 사라진 매물을 처리한다."""
         if self.is_write_disabled():
             return 0
-        normalized_pairs: list[tuple[str, str]] = []
+
         normalized_triples: list[tuple[str, str, str]] = []
         for pair in targets or []:
             if not isinstance(pair, (list, tuple)):
                 continue
             if len(pair) >= 3:
-                asset_type = str(pair[0] or "").strip().upper()
+                asset_type = self._normalize_listing_asset_type(pair[0])
                 complex_id = str(pair[1] or "").strip()
                 trade_type = str(pair[2] or "").strip()
-                if asset_type and complex_id and trade_type:
-                    normalized_triples.append((asset_type, complex_id, trade_type))
-                continue
-            if len(pair) >= 2:
+            elif len(pair) >= 2:
+                asset_type = "APT"
                 complex_id = str(pair[0] or "").strip()
                 trade_type = str(pair[1] or "").strip()
-                if complex_id and trade_type:
-                    normalized_pairs.append((complex_id, trade_type))
+            else:
+                continue
+            if asset_type and complex_id and trade_type:
+                normalized_triples.append((asset_type, complex_id, trade_type))
 
-        if not normalized_pairs and not normalized_triples:
+        if not normalized_triples:
             return 0
 
         def _iter_chunks(rows, chunk_size):
@@ -570,26 +645,7 @@ class ComplexDatabaseArticleOpsMixin:
                     pass
                 c = conn.cursor()
                 updated = 0
-                max_sql_variables = 900
-                pair_chunk_size = min(200, max(1, max_sql_variables // 2))
-                triple_chunk_size = min(200, max(1, max_sql_variables // 3))
-
-                for pair_chunk in _iter_chunks(normalized_pairs, pair_chunk_size):
-                    where_pairs = " OR ".join(["(complex_id = ? AND trade_type = ?)"] * len(pair_chunk))
-                    params = []
-                    for complex_id, trade_type in pair_chunk:
-                        params.extend([complex_id, trade_type])
-                    c.execute(
-                        f"""
-                        UPDATE article_history
-                        SET status='disappeared'
-                        WHERE last_seen < CURRENT_DATE
-                          AND status='active'
-                          AND ({where_pairs})
-                        """,
-                        params,
-                    )
-                    updated += c.rowcount if c.rowcount != -1 else 0
+                triple_chunk_size = min(200, max(1, 900 // 3))
 
                 for triple_chunk in _iter_chunks(normalized_triples, triple_chunk_size):
                     where_triples = " OR ".join(
@@ -612,7 +668,7 @@ class ComplexDatabaseArticleOpsMixin:
 
                 conn.commit()
                 if updated > 0:
-                    logger.info(f"대상 범위 사라진 매물 처리: {updated}건")
+                    logger.info(f"mark disappeared articles for targets: {updated}")
                 return updated
         except Exception as e:
             try:
@@ -621,7 +677,7 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             if self._is_corruption_sqlite_error(e):
                 self._disable_writes("database_corruption", e)
-            logger.error(f"대상 범위 사라진 매물 처리 실패: {e}")
+            logger.error(f"mark disappeared articles for targets failed: {e}")
             return 0
         finally:
             try:
@@ -629,26 +685,26 @@ class ComplexDatabaseArticleOpsMixin:
             except Exception:
                 pass
             self._pool.return_connection(conn)
-            
+
     def get_disappeared_articles(self, limit=50):
-        """최근 사라진 매물을 조회한다."""
         conn = self._pool.get_connection()
         try:
-            sql = """
-                SELECT * FROM article_history 
-                WHERE status='disappeared' 
+            rows = conn.cursor().execute(
+                """
+                SELECT * FROM article_history
+                WHERE status='disappeared'
                 ORDER BY last_seen DESC LIMIT ?
-            """
-            rows = conn.cursor().execute(sql, (limit,)).fetchall()
+                """,
+                (limit,),
+            ).fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            logger.error(f"사라진 매물 조회 실패: {e}")
+            logger.error(f"get disappeared articles failed: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
 
     def count_disappeared_articles(self):
-        """사라진 매물 개수를 조회한다."""
         conn = self._pool.get_connection()
         try:
             row = conn.cursor().execute(
@@ -656,8 +712,7 @@ class ComplexDatabaseArticleOpsMixin:
             ).fetchone()
             return row[0] if row else 0
         except Exception as e:
-            logger.error(f"사라진 매물 개수 조회 실패: {e}")
+            logger.error(f"count disappeared articles failed: {e}")
             return 0
         finally:
             self._pool.return_connection(conn)
-

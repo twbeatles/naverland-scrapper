@@ -287,3 +287,27 @@ python src/main.py
   - `naverland-scrapper.spec`는 이번 변경 범위에서도 추가 hidden import/runtime hook 수정이 필요하지 않았습니다.
 - `.gitignore` 재점검 결과:
   - 현재 build/log/data/Playwright 산출물 무시 규칙으로 충분하며 이번 범위에서 추가 수정은 필요하지 않았습니다.
+
+## v15.0.10 Functional Follow-up (2026-03-15)
+
+- `article_history`, `article_favorites`는 이제 `(asset_type, article_id, complex_id)` 기준으로 분리 관리됩니다.
+  - 앱 시작 시 자산 스코프 마이그레이션이 필요하면 사전 DB 백업을 만든 뒤 스키마를 재구성합니다.
+  - legacy blank `asset_type` 값은 `APT`로 정규화합니다.
+- disappeared / purge 정합성을 자산 스코프 기준으로 맞췄습니다.
+  - disappeared 대상 계산은 내부적으로 `(asset_type, complex_id, trade_type)` triple만 사용합니다.
+  - purge/delete는 `article_history`, `crawl_history`, `price_snapshots`, `alert_settings`, `article_favorites`, `article_alert_log`를 자산 스코프 predicate로 정리합니다.
+- 저장 메뉴를 `화면 기준 저장`과 `원본 저장`으로 분리했습니다.
+  - 화면 기준 저장은 현재 검색어, 고급 필터, compact duplicate 상태, 현재 정렬 순서를 반영한 가시 결과만 저장합니다.
+  - 원본 저장은 기존처럼 `collected_data` 전체를 그대로 저장합니다.
+- 예약 실행은 `complex`와 `geo_sweep`를 모두 지원합니다.
+  - `complex`는 기존 그룹 기반 예약을 유지합니다.
+  - `geo_sweep`는 위도/경도 예약 실행을 지원하고, zoom/rings/step/dwell/asset_types는 저장된 geo 기본값을 사용합니다.
+- Geo 운영 통계는 실행 중에도 실시간으로 반영됩니다.
+  - `geo_discovered_count`, `geo_dedup_count`가 marker 처리 시점마다 상태바/로그에 즉시 반영됩니다.
+- 즐겨찾기 동기화는 자산 스코프 기준으로 통일되었습니다.
+  - 카드뷰, 즐겨찾기 탭, 최근 본 매물, 결과 재렌더가 모두 `(asset_type, article_id, complex_id)` 키를 공유합니다.
+- `.spec` / `.gitignore` 재점검:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook 수정이 필요하지 않았습니다.
+  - `.gitignore`는 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분해 추가 수정이 없었습니다.
+- 검증:
+  - `python -m pytest -q` => `137 passed`

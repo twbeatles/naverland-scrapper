@@ -10,64 +10,213 @@ class AppStatsScheduleMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
+    def _schedule_geo_defaults(self: Any):
+        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        normalized_assets = []
+        for asset in asset_types:
+            token = str(asset or "").strip().upper()
+            if token in {"APT", "VL"} and token not in normalized_assets:
+                normalized_assets.append(token)
+        return {
+            "lat": float(settings.get("schedule_geo_lat", 37.5608) or 37.5608),
+            "lon": float(settings.get("schedule_geo_lon", 126.9888) or 126.9888),
+            "zoom": int(settings.get("geo_default_zoom", 15) or 15),
+            "rings": int(settings.get("geo_grid_rings", 1) or 1),
+            "step_px": int(settings.get("geo_grid_step_px", 480) or 480),
+            "dwell_ms": int(settings.get("geo_sweep_dwell_ms", 600) or 600),
+            "asset_types": normalized_assets or ["APT", "VL"],
+        }
+
+    def _collect_schedule_config(self: Any):
+        geo_defaults = self._schedule_geo_defaults()
+        mode = str(self.schedule_mode_combo.currentData() or "complex")
+        return {
+            "enabled": bool(self.check_schedule.isChecked()),
+            "mode": mode,
+            "time": self.time_edit.time().toString("HH:mm"),
+            "group_id": self.schedule_group_combo.currentData(),
+            "geo": {
+                "lat": float(self.schedule_geo_lat.value()),
+                "lon": float(self.schedule_geo_lon.value()),
+                "zoom": int(geo_defaults["zoom"]),
+                "rings": int(geo_defaults["rings"]),
+                "step_px": int(geo_defaults["step_px"]),
+                "dwell_ms": int(geo_defaults["dwell_ms"]),
+                "asset_types": list(geo_defaults["asset_types"]),
+            },
+        }
+
+    def _save_schedule_config(self: Any, *_args):
+        config = self._collect_schedule_config()
+        settings.update(
+            {
+                "schedule_config": config,
+                "schedule_geo_lat": config["geo"]["lat"],
+                "schedule_geo_lon": config["geo"]["lon"],
+            }
+        )
+        return config
+
+    def _load_schedule_config(self: Any):
+        config = settings.get("schedule_config", {}) or {}
+        mode = str(config.get("mode", "complex") or "complex")
+        time_text = str(config.get("time", "09:00") or "09:00")
+        geo_config = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
+
+        self.check_schedule.blockSignals(True)
+        self.time_edit.blockSignals(True)
+        self.schedule_mode_combo.blockSignals(True)
+        self.schedule_group_combo.blockSignals(True)
+        self.schedule_geo_lat.blockSignals(True)
+        self.schedule_geo_lon.blockSignals(True)
+        try:
+            self.check_schedule.setChecked(bool(config.get("enabled", False)))
+            parsed_time = QTime.fromString(time_text, "HH:mm")
+            self.time_edit.setTime(parsed_time if parsed_time.isValid() else QTime(9, 0))
+
+            mode_index = self.schedule_mode_combo.findData(mode)
+            self.schedule_mode_combo.setCurrentIndex(mode_index if mode_index >= 0 else 0)
+
+            gid = config.get("group_id")
+            if gid is not None:
+                group_index = self.schedule_group_combo.findData(gid)
+                if group_index >= 0:
+                    self.schedule_group_combo.setCurrentIndex(group_index)
+
+            lat = geo_config.get("lat", settings.get("schedule_geo_lat", 37.5608))
+            lon = geo_config.get("lon", settings.get("schedule_geo_lon", 126.9888))
+            try:
+                self.schedule_geo_lat.setValue(float(lat))
+            except (TypeError, ValueError):
+                self.schedule_geo_lat.setValue(37.5608)
+            try:
+                self.schedule_geo_lon.setValue(float(lon))
+            except (TypeError, ValueError):
+                self.schedule_geo_lon.setValue(126.9888)
+        finally:
+            self.check_schedule.blockSignals(False)
+            self.time_edit.blockSignals(False)
+            self.schedule_mode_combo.blockSignals(False)
+            self.schedule_group_combo.blockSignals(False)
+            self.schedule_geo_lat.blockSignals(False)
+            self.schedule_geo_lon.blockSignals(False)
+
+        self._on_schedule_mode_changed()
+        self._save_schedule_config()
+
     def _load_schedule_groups(self: Any):
-        self.schedule_group_combo.clear()
-        for gid, name, _ in self.db.get_all_groups():
-            self.schedule_group_combo.addItem(name, gid)
+        current_gid = self.schedule_group_combo.currentData()
+        selected = False
+        self.schedule_group_combo.blockSignals(True)
+        try:
+            self.schedule_group_combo.clear()
+            for gid, name, _ in self.db.get_all_groups():
+                self.schedule_group_combo.addItem(name, gid)
+            if current_gid is not None:
+                idx = self.schedule_group_combo.findData(current_gid)
+                if idx >= 0:
+                    self.schedule_group_combo.setCurrentIndex(idx)
+                    selected = True
+            if not selected:
+                saved_gid = (settings.get("schedule_config", {}) or {}).get("group_id")
+                if saved_gid is not None:
+                    idx = self.schedule_group_combo.findData(saved_gid)
+                    if idx >= 0:
+                        self.schedule_group_combo.setCurrentIndex(idx)
+        finally:
+            self.schedule_group_combo.blockSignals(False)
         self._update_schedule_state()
-    
+        self._save_schedule_config()
+
+    def _on_schedule_mode_changed(self: Any, *_args):
+        mode = str(self.schedule_mode_combo.currentData() or "complex")
+        self.schedule_group_widget.setVisible(mode == "complex")
+        self.schedule_geo_widget.setVisible(mode == "geo_sweep")
+        self._update_schedule_state()
+        self._save_schedule_config()
+
     def _check_schedule(self: Any):
-        if not self.check_schedule.isChecked(): return
-        if self.schedule_group_combo.count() == 0: return
+        if not self.check_schedule.isChecked():
+            return
+        mode = str(self.schedule_mode_combo.currentData() or "complex")
+        if mode == "complex" and self.schedule_group_combo.count() == 0:
+            return
         now = QTime.currentTime()
         target = self.time_edit.time()
-        
-        # 분 단위 비교
         if now.hour() == target.hour() and now.minute() == target.minute():
             if not self.is_scheduled_run:
                 self.is_scheduled_run = True
                 self._run_scheduled()
         else:
             self.is_scheduled_run = False
-    
-    def _run_scheduled(self: Any):
-        gid = self.schedule_group_combo.currentData()
-        if gid:
-            if hasattr(self, 'crawler_tab'):
-                running_thread = getattr(self.crawler_tab, "crawler_thread", None)
-                if running_thread and running_thread.isRunning():
-                    self.status_bar.showMessage("⏸ 예약 작업 건너뜀: 현재 크롤링이 실행 중입니다.")
-                    ui_logger.info("예약 작업 스킵: 현재 크롤러 실행 중")
-                    return
 
-                # 탭 전환
-                self.tabs.setCurrentWidget(self.crawler_tab)
-                
-                # CrawlerTab 초기화 및 데이터 로드
-                self.crawler_tab.clear_tasks()
-                crawl_mode = str(settings.get("crawl_mode", "complex") or "complex").strip().lower()
-                apt_only_mode = crawl_mode != "geo_sweep"
-                excluded_vl = 0
-                loaded_count = 0
-                for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
-                    asset_token = str(asset_type or "APT").strip().upper() or "APT"
-                    if apt_only_mode and asset_token != "APT":
-                        excluded_vl += 1
-                        continue
-                    if self.crawler_tab.add_task(name, cid):
-                        loaded_count += 1
-                if excluded_vl > 0:
-                    msg = f"complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다."
-                    self.crawler_tab.append_log(f"ℹ️ {msg}", 20)
-                    self.status_bar.showMessage(msg)
-                    ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
-                if loaded_count <= 0:
-                    self.status_bar.showMessage("⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.")
-                    return
-                
-                # 크롤링 시작
-                self.crawler_tab.start_crawling()
-                self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
+    def _run_scheduled(self: Any):
+        mode = str(self.schedule_mode_combo.currentData() or "complex")
+        crawler_running = bool(
+            hasattr(self, "crawler_tab")
+            and getattr(self.crawler_tab, "crawler_thread", None)
+            and self.crawler_tab.crawler_thread.isRunning()
+        )
+        geo_running = bool(
+            hasattr(self, "geo_tab")
+            and getattr(self.geo_tab, "crawler_thread", None)
+            and self.geo_tab.crawler_thread.isRunning()
+        )
+        if crawler_running or geo_running:
+            self.status_bar.showMessage("⏸ 예약 작업 건너뜀: 다른 크롤링이 이미 실행 중입니다.")
+            ui_logger.info(
+                f"예약 작업 스킵: crawler_running={crawler_running}, geo_running={geo_running}"
+            )
+            return
+
+        config = self._save_schedule_config()
+        if mode == "geo_sweep":
+            geo = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
+            self.tabs.setCurrentWidget(self.geo_tab)
+            self.geo_tab.spin_lat.setValue(float(geo.get("lat", self.schedule_geo_lat.value())))
+            self.geo_tab.spin_lon.setValue(float(geo.get("lon", self.schedule_geo_lon.value())))
+            self.geo_tab.spin_zoom.setValue(int(geo.get("zoom", settings.get("geo_default_zoom", 15) or 15)))
+            self.geo_tab.spin_rings.setValue(int(geo.get("rings", settings.get("geo_grid_rings", 1) or 1)))
+            self.geo_tab.spin_step.setValue(int(geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)))
+            self.geo_tab.spin_dwell.setValue(
+                int(geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600))
+            )
+            asset_types = geo.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"])
+            asset_tokens = {str(asset or "").strip().upper() for asset in asset_types}
+            self.geo_tab.check_asset_apt.setChecked("APT" in asset_tokens or not asset_tokens)
+            self.geo_tab.check_asset_vl.setChecked("VL" in asset_tokens or not asset_tokens)
+            self.geo_tab.start_crawling()
+            self.status_bar.showMessage(
+                f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
+            )
+            return
+
+        gid = self.schedule_group_combo.currentData()
+        if gid is None:
+            self.status_bar.showMessage("⏸ 예약 작업 중단: 선택된 그룹이 없습니다.")
+            return
+
+        self.tabs.setCurrentWidget(self.crawler_tab)
+        self.crawler_tab.clear_tasks()
+        excluded_vl = 0
+        loaded_count = 0
+        for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
+            asset_token = str(asset_type or "APT").strip().upper() or "APT"
+            if asset_token != "APT":
+                excluded_vl += 1
+                continue
+            if self.crawler_tab.add_task(name, cid):
+                loaded_count += 1
+        if excluded_vl > 0:
+            msg = f"complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다."
+            self.crawler_tab.append_log(f"ℹ️ {msg}", 20)
+            self.status_bar.showMessage(msg)
+            ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
+        if loaded_count <= 0:
+            self.status_bar.showMessage("⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.")
+            return
+        self.crawler_tab.start_crawling()
+        self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
 
 
     def _update_group_empty_state(self: Any):
@@ -104,12 +253,17 @@ class AppStatsScheduleMixin:
             self.group_btn_remove.setEnabled(has_selection)
 
     def _update_schedule_state(self: Any):
+        mode = str(self.schedule_mode_combo.currentData() or "complex")
         has_groups = self.schedule_group_combo.count() > 0
-        self.check_schedule.setEnabled(has_groups)
-        self.time_edit.setEnabled(has_groups)
-        self.schedule_group_combo.setEnabled(has_groups)
+        can_run = mode == "geo_sweep" or has_groups
+        self.check_schedule.setEnabled(can_run)
+        self.time_edit.setEnabled(can_run)
+        self.schedule_mode_combo.setEnabled(True)
+        self.schedule_group_combo.setEnabled(mode == "complex" and has_groups)
+        self.schedule_geo_lat.setEnabled(mode == "geo_sweep")
+        self.schedule_geo_lon.setEnabled(mode == "geo_sweep")
         if hasattr(self, "schedule_empty_label"):
-            self.schedule_empty_label.setVisible(not has_groups)
+            self.schedule_empty_label.setVisible(mode == "complex" and not has_groups)
     
     # History Tab handlers
     def _load_history(self: Any):

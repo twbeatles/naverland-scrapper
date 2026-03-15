@@ -26,6 +26,8 @@ class AppTabSetupMixin:
             theme=self.current_theme,
             maintenance_guard=lambda: self._maintenance_mode,
         )
+        self.crawler_tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
+        self.crawler_tab.favorite_keys_provider = lambda: set(self.favorite_keys)
         self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
 
         self.geo_tab = GeoCrawlerTab(
@@ -34,6 +36,8 @@ class AppTabSetupMixin:
             theme=self.current_theme,
             maintenance_guard=lambda: self._maintenance_mode,
         )
+        self.geo_tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
+        self.geo_tab.favorite_keys_provider = lambda: set(self.favorite_keys)
         self.tabs.addTab(self.geo_tab, "🧭 지도 탐색")
         
         # 2. 단지 DB 탭
@@ -79,7 +83,7 @@ class AppTabSetupMixin:
         sl.setSpacing(10)
 
         self.check_schedule = QCheckBox("예약 실행 활성화")
-        self.check_schedule.setToolTip("설정한 시간에 자동으로 대상 그룹을 크롤링합니다.")
+        self.check_schedule.setToolTip("설정한 시간에 현재 예약 설정으로 자동 실행합니다.")
         sl.addWidget(self.check_schedule)
 
         tl = QHBoxLayout()
@@ -93,7 +97,21 @@ class AppTabSetupMixin:
         tl.addStretch()
         sl.addLayout(tl)
 
-        gl = QHBoxLayout()
+        ml = QHBoxLayout()
+        lbl_mode = QLabel("실행 모드")
+        lbl_mode.setStyleSheet("font-size: 12px; color: #888;")
+        ml.addWidget(lbl_mode)
+        self.schedule_mode_combo = QComboBox()
+        self.schedule_mode_combo.addItem("complex", "complex")
+        self.schedule_mode_combo.addItem("geo_sweep", "geo_sweep")
+        self.schedule_mode_combo.setToolTip("예약 실행 시 사용할 수집 모드를 선택합니다.")
+        ml.addWidget(self.schedule_mode_combo)
+        ml.addStretch()
+        sl.addLayout(ml)
+
+        self.schedule_group_widget = QWidget()
+        gl = QHBoxLayout(self.schedule_group_widget)
+        gl.setContentsMargins(0, 0, 0, 0)
         lbl_grp = QLabel("대상 그룹")
         lbl_grp.setStyleSheet("font-size: 12px; color: #888;")
         gl.addWidget(lbl_grp)
@@ -101,9 +119,31 @@ class AppTabSetupMixin:
         self.schedule_group_combo.setToolTip("예약 크롤링을 실행할 단지 그룹을 선택합니다.")
         gl.addWidget(self.schedule_group_combo, 1)
         gl.addStretch()
-        sl.addLayout(gl)
+        sl.addWidget(self.schedule_group_widget)
 
-        hint = QLabel("💡 그룹 관리 탭에서 그룹을 먼저 생성하세요.")
+        self.schedule_geo_widget = QWidget()
+        geo_layout = QGridLayout(self.schedule_geo_widget)
+        geo_layout.setContentsMargins(0, 0, 0, 0)
+        geo_layout.setHorizontalSpacing(8)
+        geo_layout.setVerticalSpacing(6)
+        geo_layout.addWidget(QLabel("위도"), 0, 0)
+        self.schedule_geo_lat = QDoubleSpinBox()
+        self.schedule_geo_lat.setRange(33.0, 39.5)
+        self.schedule_geo_lat.setDecimals(6)
+        self.schedule_geo_lat.setValue(37.5608)
+        geo_layout.addWidget(self.schedule_geo_lat, 0, 1)
+        geo_layout.addWidget(QLabel("경도"), 1, 0)
+        self.schedule_geo_lon = QDoubleSpinBox()
+        self.schedule_geo_lon.setRange(124.0, 132.1)
+        self.schedule_geo_lon.setDecimals(6)
+        self.schedule_geo_lon.setValue(126.9888)
+        geo_layout.addWidget(self.schedule_geo_lon, 1, 1)
+        geo_hint = QLabel("geo_sweep 예약은 위도/경도만 입력하고 나머지 geo 옵션은 설정값 기본값을 사용합니다.")
+        geo_hint.setObjectName("hintLabel")
+        geo_layout.addWidget(geo_hint, 2, 0, 1, 2)
+        sl.addWidget(self.schedule_geo_widget)
+
+        hint = QLabel("💡 complex는 그룹을, geo_sweep는 지도 중심 좌표를 사용합니다.")
         hint.setObjectName("hintLabel")
         sl.addWidget(hint)
 
@@ -117,6 +157,13 @@ class AppTabSetupMixin:
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
         self.tabs.addTab(self.schedule_tab, "⏰ 예약")
+
+        self.check_schedule.toggled.connect(self._save_schedule_config)
+        self.time_edit.timeChanged.connect(self._save_schedule_config)
+        self.schedule_mode_combo.currentIndexChanged.connect(self._on_schedule_mode_changed)
+        self.schedule_group_combo.currentIndexChanged.connect(self._save_schedule_config)
+        self.schedule_geo_lat.valueChanged.connect(self._save_schedule_config)
+        self.schedule_geo_lon.valueChanged.connect(self._save_schedule_config)
     
     def _setup_history_tab(self: Any):
         self.history_tab = QWidget()

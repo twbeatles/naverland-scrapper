@@ -55,6 +55,23 @@ DEFAULT_SETTINGS = {
     "geo_grid_step_px": 480,
     "geo_sweep_dwell_ms": 600,
     "geo_asset_types": ["APT", "VL"],
+    "schedule_geo_lat": 37.5608,
+    "schedule_geo_lon": 126.9888,
+    "schedule_config": {
+        "enabled": False,
+        "mode": "complex",
+        "time": "09:00",
+        "group_id": None,
+        "geo": {
+            "lat": 37.5608,
+            "lon": 126.9888,
+            "zoom": 15,
+            "rings": 1,
+            "step_px": 480,
+            "dwell_ms": 600,
+            "asset_types": ["APT", "VL"],
+        },
+    },
 }
 
 class SettingsManager:

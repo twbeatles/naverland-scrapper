@@ -139,7 +139,7 @@ class CrawlerTabFiltersSearchMixin:
         if self._compact_duplicates:
             base = list(self._compact_rows_data)
         else:
-            base = list(self.collected_data)
+            base = self._decorate_favorite_state(self.collected_data)
         if not self._advanced_filters:
             return base
         filtered = []
@@ -166,7 +166,7 @@ class CrawlerTabFiltersSearchMixin:
         elif self._compact_duplicates:
             self.card_view.set_data(list(self._compact_rows_data))
         else:
-            self.card_view.set_data(list(self.collected_data))
+            self.card_view.set_data(self._decorate_favorite_state(self.collected_data))
         self.card_view.filter_cards(text)
 
     def open_advanced_filter_dialog(self: Any):

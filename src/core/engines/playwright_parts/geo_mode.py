@@ -171,9 +171,13 @@ class PlaywrightGeoModeMixin:
                 current_count = int(current.get("count", 0) or 0) if current else -1
                 if current is None or marker_count > current_count:
                     discovered[dedupe_key] = marker
+                    self.thread.stats["geo_discovered_count"] = len(discovered)
                     self.thread.register_discovered_complex(marker)
+                    self.thread.emit_stats()
                 else:
                     stats["dedup_skipped"] = int(stats.get("dedup_skipped", 0)) + 1
+                    self.thread.stats["geo_dedup_count"] = int(stats.get("dedup_skipped", 0) or 0)
+                    self.thread.emit_stats()
 
         def _handle(response):
             try:

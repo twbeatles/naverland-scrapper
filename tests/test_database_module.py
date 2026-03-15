@@ -680,6 +680,298 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             migrated_db.close()
 
+    def test_migrate_legacy_article_history_and_favorites_asset_scope_schema_creates_backup(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy_article_scope.db")
+        conn = sqlite3.connect(legacy_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """
+                CREATE TABLE article_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    article_id TEXT NOT NULL,
+                    complex_id TEXT NOT NULL,
+                    complex_name TEXT,
+                    trade_type TEXT,
+                    price INTEGER,
+                    price_text TEXT,
+                    area_pyeong REAL,
+                    floor_info TEXT,
+                    feature TEXT,
+                    first_seen DATE DEFAULT CURRENT_DATE,
+                    last_seen DATE DEFAULT CURRENT_DATE,
+                    last_price INTEGER,
+                    price_change INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'active',
+                    UNIQUE(article_id, complex_id)
+                )
+                """
+            )
+            c.execute(
+                """
+                CREATE TABLE article_favorites (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    article_id TEXT NOT NULL,
+                    complex_id TEXT NOT NULL,
+                    is_favorite INTEGER DEFAULT 1,
+                    note TEXT DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(article_id, complex_id)
+                )
+                """
+            )
+            c.execute(
+                """
+                INSERT INTO article_history (
+                    article_id, complex_id, complex_name, trade_type, price, price_text, area_pyeong, floor_info, feature
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("A-LEG", "90001", "LegacyComplex", "매매", 12000, "12000", 33.0, "10층", "legacy"),
+            )
+            c.execute(
+                """
+                INSERT INTO article_favorites (article_id, complex_id, is_favorite, note)
+                VALUES (?, ?, 1, ?)
+                """,
+                ("A-LEG", "90001", "legacy"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        migrated_db = ComplexDatabase(legacy_path)
+        try:
+            backup_path = getattr(migrated_db, "_schema_migration_backup_path", None)
+            self.assertIsNotNone(backup_path)
+            self.assertTrue(os.path.exists(str(backup_path)))
+
+            check_conn = migrated_db._pool.get_connection()
+            try:
+                rows = check_conn.cursor().execute(
+                    """
+                    SELECT asset_type, article_id, complex_id
+                    FROM article_history
+                    WHERE article_id = ?
+                    """,
+                    ("A-LEG",),
+                ).fetchall()
+                fav_rows = check_conn.cursor().execute(
+                    """
+                    SELECT asset_type, article_id, complex_id
+                    FROM article_favorites
+                    WHERE article_id = ?
+                    """,
+                    ("A-LEG",),
+                ).fetchall()
+            finally:
+                migrated_db._pool.return_connection(check_conn)
+
+            self.assertEqual([(row["asset_type"], row["article_id"], row["complex_id"]) for row in rows], [("APT", "A-LEG", "90001")])
+            self.assertEqual(
+                [(row["asset_type"], row["article_id"], row["complex_id"]) for row in fav_rows],
+                [("APT", "A-LEG", "90001")],
+            )
+        finally:
+            migrated_db.close()
+
+    def test_article_history_and_favorites_store_same_article_per_asset_type(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="A-100",
+                complex_id="C-100",
+                complex_name="ScopeComplex",
+                trade_type="매매",
+                price=10000,
+                price_text="10000",
+                area=30.0,
+                floor="10층",
+                feature="apt",
+                extra={"asset_type": "APT"},
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="A-100",
+                complex_id="C-100",
+                complex_name="ScopeComplex",
+                trade_type="매매",
+                price=20000,
+                price_text="20000",
+                area=30.0,
+                floor="10층",
+                feature="vl",
+                extra={"asset_type": "VL"},
+            )
+        )
+        self.assertTrue(self.db.toggle_favorite("A-100", "C-100", "APT", True))
+        self.assertTrue(self.db.toggle_favorite("A-100", "C-100", "VL", True))
+
+        conn = self.db._pool.get_connection()
+        try:
+            history_rows = conn.cursor().execute(
+                """
+                SELECT asset_type, price
+                FROM article_history
+                WHERE article_id = ? AND complex_id = ?
+                ORDER BY asset_type
+                """,
+                ("A-100", "C-100"),
+            ).fetchall()
+            favorite_rows = conn.cursor().execute(
+                """
+                SELECT asset_type, is_favorite
+                FROM article_favorites
+                WHERE article_id = ? AND complex_id = ?
+                ORDER BY asset_type
+                """,
+                ("A-100", "C-100"),
+            ).fetchall()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(
+            [(row["asset_type"], int(row["price"])) for row in history_rows],
+            [("APT", 10000), ("VL", 20000)],
+        )
+        self.assertEqual(
+            [(row["asset_type"], int(row["is_favorite"])) for row in favorite_rows],
+            [("APT", 1), ("VL", 1)],
+        )
+
+    def test_delete_complex_purge_related_respects_favorites_alerts_and_logs_by_asset_type(self):
+        self.db.add_complex("ScopeApt", "99001", asset_type="APT")
+        self.db.add_complex("ScopeVl", "99001", asset_type="VL")
+        rows = self.db.get_all_complexes()
+        apt_db_id = next(
+            int(row["id"])
+            for row in rows
+            if row["complex_id"] == "99001" and row["asset_type"] == "APT"
+        )
+
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="APT-1",
+                complex_id="99001",
+                complex_name="ScopeApt",
+                trade_type="매매",
+                price=10000,
+                price_text="10000",
+                area=32.0,
+                floor="10층",
+                feature="apt",
+                extra={"asset_type": "APT"},
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="VL-1",
+                complex_id="99001",
+                complex_name="ScopeVl",
+                trade_type="매매",
+                price=20000,
+                price_text="20000",
+                area=32.0,
+                floor="10층",
+                feature="vl",
+                extra={"asset_type": "VL"},
+            )
+        )
+        self.assertTrue(self.db.toggle_favorite("APT-1", "99001", "APT", True))
+        self.assertTrue(self.db.toggle_favorite("VL-1", "99001", "VL", True))
+        self.assertTrue(self.db.add_alert_setting("99001", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT"))
+        self.assertTrue(self.db.add_alert_setting("99001", "ScopeVl", "매매", 0, 100, 0, 999999, asset_type="VL"))
+        self.assertTrue(self.db.add_alert_setting("99001", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL"))
+        self.assertTrue(
+            self.db.record_alert_notification(
+                alert_id=1,
+                article_id="APT-1",
+                complex_id="99001",
+                asset_type="APT",
+                notified_on="2026-03-15",
+            )
+        )
+        self.assertTrue(
+            self.db.record_alert_notification(
+                alert_id=2,
+                article_id="VL-1",
+                complex_id="99001",
+                asset_type="VL",
+                notified_on="2026-03-15",
+            )
+        )
+
+        self.assertTrue(self.db.delete_complex(apt_db_id, purge_related=True))
+
+        conn = self.db._pool.get_connection()
+        try:
+            c = conn.cursor()
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_history WHERE complex_id = ? AND asset_type = 'APT'",
+                    ("99001",),
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_history WHERE complex_id = ? AND asset_type = 'VL'",
+                    ("99001",),
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_favorites WHERE complex_id = ? AND asset_type = 'APT'",
+                    ("99001",),
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_favorites WHERE complex_id = ? AND asset_type = 'VL'",
+                    ("99001",),
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM alert_settings WHERE complex_id = ? AND asset_type = 'APT'",
+                    ("99001",),
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM alert_settings WHERE complex_id = ? AND asset_type = 'VL'",
+                    ("99001",),
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM alert_settings WHERE complex_id = ? AND asset_type = 'ALL'",
+                    ("99001",),
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_alert_log WHERE complex_id = ? AND asset_type = 'APT'",
+                    ("99001",),
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_alert_log WHERE complex_id = ? AND asset_type = 'VL'",
+                    ("99001",),
+                ).fetchone()[0],
+                1,
+            )
+        finally:
+            self.db._pool.return_connection(conn)
+
 
 if __name__ == "__main__":
     unittest.main()

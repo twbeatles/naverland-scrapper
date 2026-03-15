@@ -209,14 +209,46 @@ class ComplexDatabaseComplexGroupOpsMixin:
             cursor.execute(f"DELETE FROM article_history WHERE {where_asset}", params)
             cursor.execute(f"DELETE FROM crawl_history WHERE {where_asset}", params)
             cursor.execute(f"DELETE FROM price_snapshots WHERE {where_asset}", params)
+            cursor.execute(f"DELETE FROM alert_settings WHERE {where_asset}", params)
+            cursor.execute(f"DELETE FROM article_favorites WHERE {where_asset}", params)
+            cursor.execute(f"DELETE FROM article_alert_log WHERE {where_asset}", params)
 
-        unique_complex_ids = sorted({str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()})
+        unique_complex_ids = sorted(
+            {str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()}
+        )
         if not unique_complex_ids:
             return
+
         placeholders = ",".join("?" * len(unique_complex_ids))
-        cursor.execute(f"DELETE FROM alert_settings WHERE complex_id IN ({placeholders})", unique_complex_ids)
-        cursor.execute(f"DELETE FROM article_favorites WHERE complex_id IN ({placeholders})", unique_complex_ids)
-        cursor.execute(f"DELETE FROM article_alert_log WHERE complex_id IN ({placeholders})", unique_complex_ids)
+        remaining_rows = cursor.execute(
+            f"SELECT DISTINCT complex_id FROM complexes WHERE complex_id IN ({placeholders})",
+            unique_complex_ids,
+        ).fetchall()
+        remaining_ids = {
+            str(row["complex_id"]) if hasattr(row, "keys") else str(row[0])
+            for row in remaining_rows
+        }
+        fully_removed_ids = [cid for cid in unique_complex_ids if cid not in remaining_ids]
+        if not fully_removed_ids:
+            return
+
+        removed_placeholders = ",".join("?" * len(fully_removed_ids))
+        cursor.execute(
+            f"""
+            DELETE FROM alert_settings
+            WHERE complex_id IN ({removed_placeholders})
+              AND (asset_type = 'ALL' OR COALESCE(asset_type, '') = '')
+            """,
+            fully_removed_ids,
+        )
+        cursor.execute(
+            f"""
+            DELETE FROM article_alert_log
+            WHERE complex_id IN ({removed_placeholders})
+              AND (asset_type = 'ALL' OR COALESCE(asset_type, '') = '')
+            """,
+            fully_removed_ids,
+        )
 
     def _fetch_complex_refs_by_db_ids(self, cursor, db_ids: list[int]) -> list[tuple[str, str]]:
         if not db_ids:

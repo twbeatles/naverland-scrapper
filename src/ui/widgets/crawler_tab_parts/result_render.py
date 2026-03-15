@@ -32,6 +32,41 @@ class CrawlerTabResultRenderMixin:
             return list(items)
         return [item for item in items if self._check_advanced_filter(item)]
 
+    @staticmethod
+    def _favorite_key_for_item(item):
+        if not isinstance(item, dict):
+            return None
+        article_id = str(item.get("매물ID", "") or "")
+        complex_id = str(item.get("단지ID", "") or "")
+        asset_type = str(item.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        if not article_id or not complex_id:
+            return None
+        return (asset_type, article_id, complex_id)
+
+    def _favorite_keys_snapshot(self: Any):
+        provider = getattr(self, "favorite_keys_provider", None)
+        if callable(provider):
+            try:
+                value = provider()
+            except Exception:
+                value = None
+            if value is not None:
+                return set(value)
+        current = getattr(self, "favorite_keys", None)
+        return set(current) if current else set()
+
+    def _decorate_favorite_state(self: Any, items):
+        if not items:
+            return []
+        favorite_keys = self._favorite_keys_snapshot()
+        decorated = []
+        for item in items:
+            row = dict(item or {})
+            key = self._favorite_key_for_item(row)
+            row["is_favorite"] = bool(key and key in favorite_keys)
+            decorated.append(row)
+        return decorated
+
     def set_advanced_filters(self: Any, filters):
         next_filters = filters or None
         if next_filters and self._is_default_advanced_filter(next_filters):
@@ -68,6 +103,7 @@ class CrawlerTabResultRenderMixin:
     def _get_compact_key(self: Any, data):
         trade_type, price_text, _ = self._extract_price_values(data)
         return (
+            str(data.get("자산유형", "APT") or "APT"),
             str(data.get("단지명", "") or ""),
             str(data.get("단지ID", "") or ""),
             trade_type,
@@ -88,6 +124,8 @@ class CrawlerTabResultRenderMixin:
     def _merge_compact_item(self: Any, existing, incoming):
         existing["duplicate_count"] = int(existing.get("duplicate_count", 1) or 1) + 1
         existing["수집시각"] = incoming.get("수집시각", existing.get("수집시각", ""))
+        if bool(incoming.get("is_favorite")):
+            existing["is_favorite"] = True
         if bool(incoming.get("is_new") or incoming.get("신규여부")):
             existing["is_new"] = True
             existing["신규여부"] = True
@@ -107,7 +145,9 @@ class CrawlerTabResultRenderMixin:
 
     def _rebuild_result_views_from_collected_data(self: Any):
         self._reset_result_state()
-        display_data = self._apply_advanced_filter_items(self.collected_data)
+        display_data = self._decorate_favorite_state(
+            self._apply_advanced_filter_items(self.collected_data)
+        )
         if not display_data:
             self.card_view.set_data([])
             return
@@ -131,7 +171,11 @@ class CrawlerTabResultRenderMixin:
                 if self._compact_duplicates:
                     self.card_view.set_data(list(self._compact_rows_data))
                 else:
-                    self.card_view.set_data(self._apply_advanced_filter_items(self.collected_data))
+                    self.card_view.set_data(
+                        self._decorate_favorite_state(
+                            self._apply_advanced_filter_items(self.collected_data)
+                        )
+                    )
                 if self._advanced_filters or self._pending_search_text:
                     self._apply_card_filters(self._pending_search_text)
         else:
@@ -169,7 +213,7 @@ class CrawlerTabResultRenderMixin:
         if not items:
             return
         self.collected_data.extend(items)
-        visible_items = self._apply_advanced_filter_items(items)
+        visible_items = self._decorate_favorite_state(self._apply_advanced_filter_items(items))
         if not visible_items:
             return
         if self._compact_duplicates:
@@ -227,6 +271,7 @@ class CrawlerTabResultRenderMixin:
         payload["층/방향"] = str(data.get("층/방향", "") if isinstance(data, dict) else "")
         payload["타입/특징"] = str(data.get("타입/특징", "") if isinstance(data, dict) else "")
         payload["is_new"] = bool(is_new)
+        payload["is_favorite"] = bool(data.get("is_favorite")) if isinstance(data, dict) else False
         payload["price_change"] = int(price_change or 0)
         return payload
 
@@ -260,7 +305,7 @@ class CrawlerTabResultRenderMixin:
         if self._compact_duplicates:
             source = list(self._compact_rows_data)
         else:
-            source = list(self.collected_data)
+            source = self._decorate_favorite_state(self.collected_data)
         lookup = {}
         for item in source:
             trade_type, _, price_int = self._extract_price_values(item)

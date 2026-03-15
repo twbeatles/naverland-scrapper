@@ -215,24 +215,46 @@ class AppSettingsPresetMixin:
             for fav in favorites:
                 aid = fav.get("article_id")
                 cid = fav.get("complex_id")
+                asset_type = str(fav.get("asset_type", "APT") or "APT").strip().upper() or "APT"
                 if aid and cid:
-                    keys.add((aid, cid))
+                    keys.add((asset_type, aid, cid))
             self.favorite_keys = keys
         except Exception as e:
             ui_logger.debug(f"즐겨찾기 키 로드 실패 (무시): {e}")
             self.favorite_keys = set()
 
-    def _on_favorite_toggled(self: Any, article_id, complex_id, is_fav):
+    def _decorate_items_with_favorite_state(self: Any, items):
+        if not items:
+            return []
+        favorite_keys = set(getattr(self, "favorite_keys", set()) or set())
+        decorated = []
+        for item in items:
+            row = dict(item or {})
+            article_id = str(row.get("매물ID", "") or "")
+            complex_id = str(row.get("단지ID", "") or "")
+            asset_type = str(row.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+            row["is_favorite"] = bool(
+                article_id and complex_id and (asset_type, article_id, complex_id) in favorite_keys
+            )
+            decorated.append(row)
+        return decorated
+
+    def _on_favorite_toggled(self: Any, article_id, complex_id, asset_type, is_fav):
         if not article_id or not complex_id:
             return
+        asset_token = str(asset_type or "APT").strip().upper() or "APT"
         try:
-            self.db.toggle_favorite(article_id, complex_id, is_fav)
+            self.db.toggle_favorite(article_id, complex_id, asset_token, is_fav)
         finally:
-            key = (article_id, complex_id)
+            key = (asset_token, article_id, complex_id)
             if is_fav:
                 self.favorite_keys.add(key)
             else:
                 self.favorite_keys.discard(key)
+            if hasattr(self, "crawler_tab"):
+                self.crawler_tab._rebuild_result_views_from_collected_data()
+            if hasattr(self, "geo_tab"):
+                self.geo_tab._rebuild_result_views_from_collected_data()
             if hasattr(self, 'favorites_tab'):
                 self.favorites_tab.refresh()
     

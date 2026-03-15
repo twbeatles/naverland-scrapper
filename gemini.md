@@ -359,3 +359,30 @@ COLORS["light"] = {
   - Geo start path에서 `retry_on_error=False` => `max_retry_count=0`
 - Validation: `pytest -q` => `112 passed`.
 - Packaging recheck: `naverland-scrapper.spec`는 추가 hidden import/runtime hook 수정 없이 유지 가능.
+
+## 0-13. v15.0.10 Functional Follow-up (2026-03-15)
+- Asset-scoped article state:
+  - `article_history`, `article_favorites` now use `(asset_type, article_id, complex_id)` as the effective key.
+  - Startup migration creates a one-time DB backup before rebuilding legacy schemas.
+  - Legacy blank `asset_type` values are normalized to `APT`.
+- Disappeared / purge safety:
+  - processed target scope is unified to `(asset_type, complex_id, trade_type)`.
+  - purge/delete now applies asset-scoped predicates to `article_history`, `crawl_history`, `price_snapshots`, `alert_settings`, `article_favorites`, and `article_alert_log`.
+- Favorite sync:
+  - card view, favorites tab, recently viewed dialog, and result rebuilds all share `(asset_type, article_id, complex_id)` favorite keys.
+  - direct card-view DB writes were removed in favor of the app-level favorite handler.
+- Export semantics:
+  - save menu is split into visible export vs raw export.
+  - visible export reflects current search/filter/compact/sort state from the rendered result table.
+  - raw export preserves the full `collected_data` payload.
+- Scheduled execution:
+  - schedule tab now supports `complex` and `geo_sweep`.
+  - geo schedule stores lat/lon and reuses saved geo defaults for zoom/rings/step/dwell/asset_types.
+  - scheduled geo runs no longer exclude `VL`.
+- Geo runtime stats:
+  - marker handling increments `geo_discovered_count` / `geo_dedup_count` in real time and emits stats immediately.
+- `.spec` / `.gitignore` review:
+  - `naverland-scrapper.spec` still requires no extra hidden import/runtime hook/data bundle changes for this pass.
+  - `.gitignore` remains sufficient for build/log/data/backup/Playwright outputs without new patterns.
+- Validation:
+  - `python -m pytest -q` => `137 passed`

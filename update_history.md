@@ -1,4 +1,46 @@
-﻿## **v15.0.9 (2026-03-14)**
+﻿## **v15.0.10 (2026-03-15)**
+
+**기능 구현 후속 개선 반영 + .spec/.md/.gitignore 정합성 재점검**
+
+### ✅ 핵심 반영
+
+* 자산 스코프 정합성:
+  - `article_history`, `article_favorites`를 `(asset_type, article_id, complex_id)` 기준으로 재구성
+  - startup schema migration 전 DB backup 생성
+  - legacy blank `asset_type`를 `APT`로 정규화
+* disappeared / purge 안전화:
+  - disappeared 대상 계산을 `(asset_type, complex_id, trade_type)` 기준으로 통일
+  - purge/delete가 `article_history`, `crawl_history`, `price_snapshots`, `alert_settings`, `article_favorites`, `article_alert_log`에 동일 asset-scoped predicate를 적용
+* 즐겨찾기 동기화:
+  - 카드뷰 direct DB write 제거, app-level favorite handler로 일원화
+  - 카드뷰/즐겨찾기탭/최근 본 매물/결과 재렌더가 `(asset_type, article_id, complex_id)` favorite key를 공유
+* 저장 semantics 정리:
+  - 저장 메뉴를 `화면 기준 저장` / `원본 저장`으로 분리
+  - 화면 기준 저장은 현재 검색/고급필터/compact duplicate/정렬 결과를 반영
+  - 원본 저장은 전체 `collected_data` 유지
+* 예약 실행 확장:
+  - 예약 탭에 `complex` / `geo_sweep` 모드 추가
+  - geo 예약은 lat/lon을 저장하고 geo 기본값(zoom/rings/step/dwell/asset_types)을 재사용
+  - scheduled geo run에서 `VL` 제외 로직 제거
+* Geo 운영 통계:
+  - marker 처리 시점마다 `geo_discovered_count`, `geo_dedup_count`를 즉시 emit
+
+### 📦 .spec / 문서 / 무시규칙 정합성
+
+* `.spec` 재점검 결과:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - 재점검 기준 주석 날짜를 `2026-03-15`로 갱신
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_functional_review_2026-03-15.md`, `update_history.md`에 동일 기준 반영
+* `.gitignore` 재점검 결과:
+  - 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분하며 추가 수정 없음
+
+### 🧪 검증
+
+* `python -m pytest -q`
+* 결과: `137 passed`
+
+## **v15.0.9 (2026-03-14)**
 
 **기능 구현 점검 리포트 전 항목 반영 + 문서/.spec/.gitignore 정합성 재점검**
 

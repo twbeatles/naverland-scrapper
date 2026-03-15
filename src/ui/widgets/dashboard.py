@@ -371,7 +371,7 @@ class DashboardWidget(QWidget):
 class ArticleCard(QFrame):
     """매물 카드 위젯 (v13.0)"""
     clicked = pyqtSignal(dict)
-    favorite_toggled = pyqtSignal(str, str, bool)
+    favorite_toggled = pyqtSignal(str, str, str, bool)
     
     def __init__(self, data: dict, is_dark: bool = True, parent=None):
         super().__init__(parent)
@@ -506,9 +506,10 @@ class ArticleCard(QFrame):
     def _toggle_favorite(self):
         article_id = self.data.get("매물ID", "")
         complex_id = self.data.get("단지ID", "")
+        asset_type = str(self.data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
         is_fav = self.fav_btn.text() == "☆"
         self.fav_btn.setText("★" if is_fav else "☆")
-        self.favorite_toggled.emit(article_id, complex_id, is_fav)
+        self.favorite_toggled.emit(article_id, complex_id, asset_type, is_fav)
     
     def mousePressEvent(self, a0):
         if a0 is not None and a0.button() == Qt.MouseButton.LeftButton:
@@ -519,7 +520,7 @@ class ArticleCard(QFrame):
 class CardViewWidget(QScrollArea):
     """카드 뷰 위젯 (v13.0)"""
     article_clicked = pyqtSignal(dict)
-    favorite_toggled = pyqtSignal(str, str, bool)
+    favorite_toggled = pyqtSignal(str, str, str, bool)
     
     def __init__(self, is_dark: bool = True, parent=None):
         super().__init__(parent)

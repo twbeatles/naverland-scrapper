@@ -153,7 +153,8 @@ class FavoritesTab(QWidget):
             self.db.update_article_note(
                 item_data.get("article_id", ""),
                 item_data.get("complex_id", ""),
-                note
+                note,
+                asset_type=item_data.get("asset_type", "APT"),
             )
             self.refresh()
     
@@ -175,12 +176,14 @@ class FavoritesTab(QWidget):
             self._favorite_toggled(
                 item_data.get("article_id", ""),
                 item_data.get("complex_id", ""),
+                item_data.get("asset_type", "APT"),
                 False
             )
         else:
             self.db.toggle_favorite(
                 item_data.get("article_id", ""),
                 item_data.get("complex_id", ""),
+                item_data.get("asset_type", "APT"),
                 False
             )
         self.refresh()

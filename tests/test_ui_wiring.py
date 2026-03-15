@@ -1370,6 +1370,160 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_crawler_tab_export_scope_preserves_visible_order_and_raw_data(self):
+        from PyQt6.QtCore import Qt
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_export_scope.db"))
+            tab = CrawlerTab(db)
+
+            items = [
+                {
+                    "단지명": "Alpha단지",
+                    "단지ID": "70001",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 30.0,
+                    "평당가_표시": "333만",
+                    "층/방향": "10층",
+                    "타입/특징": "alpha",
+                    "매물ID": "A1",
+                    "수집시각": "2026-03-15 10:00:00",
+                    "자산유형": "APT",
+                },
+                {
+                    "단지명": "Beta단지",
+                    "단지ID": "70002",
+                    "거래유형": "매매",
+                    "매매가": "30000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 30.0,
+                    "평당가_표시": "1000만",
+                    "층/방향": "11층",
+                    "타입/특징": "beta",
+                    "매물ID": "A2",
+                    "수집시각": "2026-03-15 10:00:01",
+                    "자산유형": "APT",
+                },
+            ]
+
+            tab._on_items_batch(items)
+            tab.result_table.sortItems(tab.COL_PRICE_SORT, Qt.SortOrder.DescendingOrder)
+
+            visible = tab._export_items_for_scope("visible")
+            raw = tab._export_items_for_scope("raw")
+
+            self.assertEqual([item["매물ID"] for item in visible], ["A2", "A1"])
+            self.assertEqual([item["매물ID"] for item in raw], ["A1", "A2"])
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_renders_favorites_with_asset_scoped_keys(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_favorite_scope.db"))
+            tab = CrawlerTab(db)
+            tab.view_mode = "card"
+            tab.favorite_keys_provider = lambda: {("VL", "A1", "71001")}
+            tab.collected_data = [
+                {
+                    "단지명": "Scope단지",
+                    "단지ID": "71001",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 30.0,
+                    "평당가_표시": "333만",
+                    "층/방향": "10층",
+                    "타입/특징": "apt",
+                    "매물ID": "A1",
+                    "수집시각": "2026-03-15 10:00:00",
+                    "자산유형": "APT",
+                },
+                {
+                    "단지명": "Scope단지",
+                    "단지ID": "71001",
+                    "거래유형": "매매",
+                    "매매가": "10000",
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 30.0,
+                    "평당가_표시": "333만",
+                    "층/방향": "10층",
+                    "타입/특징": "vl",
+                    "매물ID": "A1",
+                    "수집시각": "2026-03-15 10:00:01",
+                    "자산유형": "VL",
+                },
+            ]
+
+            tab._rebuild_result_views_from_collected_data()
+
+            rendered = {
+                (row["자산유형"], bool(row.get("is_favorite")))
+                for row in tab.card_view._all_data
+            }
+            self.assertIn(("APT", False), rendered)
+            self.assertIn(("VL", True), rendered)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_scheduled_geo_run_uses_geo_defaults_and_vl_support(self):
+        from src.ui.app import RealEstateApp
+
+        def _settings_get(key, default=None):
+            overrides = {
+                "geo_default_zoom": 14,
+                "geo_grid_rings": 2,
+                "geo_grid_step_px": 360,
+                "geo_sweep_dwell_ms": 900,
+                "geo_asset_types": ["APT", "VL"],
+                "schedule_config": {},
+            }
+            return overrides.get(key, default)
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        with (
+            patch("src.ui.app.settings.get", side_effect=_settings_get),
+            patch("src.ui.app.settings.update", return_value=None),
+            patch.object(app.geo_tab, "start_crawling") as mock_geo_start,
+            patch.object(app.crawler_tab, "start_crawling") as mock_complex_start,
+        ):
+            app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+            app.schedule_geo_lat.setValue(37.4321)
+            app.schedule_geo_lon.setValue(127.1234)
+            app._run_scheduled()
+
+        self.assertAlmostEqual(app.geo_tab.spin_lat.value(), 37.4321, places=4)
+        self.assertAlmostEqual(app.geo_tab.spin_lon.value(), 127.1234, places=4)
+        self.assertEqual(app.geo_tab.spin_zoom.value(), 14)
+        self.assertEqual(app.geo_tab.spin_rings.value(), 2)
+        self.assertTrue(app.geo_tab.check_asset_apt.isChecked())
+        self.assertTrue(app.geo_tab.check_asset_vl.isChecked())
+        mock_geo_start.assert_called_once()
+        mock_complex_start.assert_not_called()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

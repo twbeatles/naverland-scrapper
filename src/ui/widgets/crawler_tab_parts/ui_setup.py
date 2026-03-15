@@ -30,6 +30,7 @@ class CrawlerTabUISetupMixin:
         self._compact_duplicates = bool(settings.get("compact_duplicate_listings", True))
         self._compact_items_by_key = {}
         self._compact_rows_data = []
+        self.favorite_keys_provider = None
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         try:
@@ -564,7 +565,6 @@ class CrawlerTabUISetupMixin:
         self.card_view.article_clicked.connect(
             lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
         )
-        self.card_view.favorite_toggled.connect(self.db.toggle_favorite)
         self.view_stack.addWidget(self.card_view)
         
         if self.view_mode == "card":

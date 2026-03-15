@@ -173,11 +173,17 @@ class CrawlerHistoryAlertsMixin:
             for pair in set(original_prefill_pairs or set()):
                 if not isinstance(pair, tuple) or len(pair) < 2:
                     continue
-                prefill_pairs.add((str(pair[0]), str(pair[1])))
+                if len(pair) >= 3:
+                    prefill_pairs.add((str(pair[0]), str(pair[1]), str(pair[2])))
+                else:
+                    prefill_pairs.add(("APT", str(pair[0]), str(pair[1])))
             for pair in set(prefill_processed_target_pairs or set()):
                 if not isinstance(pair, tuple) or len(pair) < 2:
                     continue
-                prefill_pairs.add((str(pair[0]), str(pair[1])))
+                if len(pair) >= 3:
+                    prefill_pairs.add((str(pair[0]), str(pair[1]), str(pair[2])))
+                else:
+                    prefill_pairs.add(("APT", str(pair[0]), str(pair[1])))
 
             self._fallback_allowed_pairs = allowed_pairs
             self._fallback_prefill_complexes = prefill_complexes
@@ -193,14 +199,18 @@ class CrawlerHistoryAlertsMixin:
             self._fallback_prefill_processed_target_pairs = original_prefill_pairs
             self.engine_name = original_engine
 
-    def _get_history_state_map(self, complex_id, trade_type):
-        key = (str(complex_id or ""), "*")
+    def _get_history_state_map(self, complex_id, trade_type, asset_type="APT"):
+        key = (str(asset_type or "APT"), str(complex_id or ""), "*")
         if key in self._history_state_cache:
             return self._history_state_cache[key]
         history_map = {}
         if self.db and complex_id:
             try:
-                history_map = self.db.get_article_history_state_bulk(complex_id)
+                history_map = self.db.get_article_history_state_bulk(
+                    complex_id,
+                    trade_type=None,
+                    asset_type=asset_type,
+                )
             except Exception as e:
                 self.log(f"   ⚠️ 이력 상태 로드 실패: {e}", 30)
         self._history_state_cache[key] = history_map or {}
@@ -235,7 +245,7 @@ class CrawlerHistoryAlertsMixin:
                     trade_type=row.get("trade_type", ""),
                     price=int(row.get("price", 0) or 0),
                     price_text=row.get("price_text", ""),
-                    area=float(row.get("area", 0) or 0),
+                    area=float(row.get("area", row.get("area_pyeong", 0)) or 0),
                     floor=row.get("floor", ""),
                     feature=row.get("feature", ""),
                     extra=row,
@@ -322,7 +332,7 @@ class CrawlerHistoryAlertsMixin:
         is_new = False
         raw_price_change = 0
         if article_id and complex_id and price_int > 0:
-            history_map = self._get_history_state_map(complex_id, trade_type)
+            history_map = self._get_history_state_map(complex_id, trade_type, asset_type)
             prev = history_map.get(article_id)
             prev_price = int(self._row_get(prev, "price", 0) or 0)
             is_new = prev is None
