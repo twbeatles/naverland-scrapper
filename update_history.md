@@ -1,3 +1,49 @@
+## **v15.0.12 (2026-03-16)**
+
+**Geo incomplete 안전모드 / run_status / preflight 정책 반영 + .spec/.md/gitignore 재점검**
+
+### 주요 기능 반영
+
+* preflight 정책 정밀화
+  - `data/settings.json`을 직접 읽어 `effective crawl_engine`를 계산
+  - Playwright Chromium 미설치는 `effective crawl_engine=playwright`일 때만 시작 차단
+  - `effective crawl_engine=selenium`일 때는 warning-only
+  - `NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK`, `NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER` 우선순위 유지
+* geo incomplete 안전모드
+  - `geo_incomplete_safety_mode` 기본값 `true`
+  - incomplete 사유를 `marker switch fail`, `marker drain timeout`, `geo scan failure`로 추적
+  - safety mode ON이면 geo incomplete 런에서 auto-register / crawl history / disappeared marking skip
+  - safety mode OFF이면 persistence는 허용하되 `run_status=incomplete`로 저장
+* crawl history / UI 계약 보강
+  - `crawl_history.run_status` additive migration 추가
+  - History 탭 컬럼을 `mode -> status -> trade_types` 순서로 확장
+  - complex 모드는 `success|partial|failed`, geo incomplete persisted run은 `incomplete`
+* marker / disappeared 처리 보강
+  - geo marker 정규화에서 `complex_id`와 `marker_id`를 분리
+  - 성공적으로 검증된 pair가 0개인 런에서는 disappeared marking skip
+  - discovered complex DB 등록은 geo discovery 이후 flush되며 incomplete safety mode에 따라 차단 가능
+
+### .spec / 문서 / gitignore 점검
+
+* `.spec` 점검 결과
+  - `naverland-scrapper.spec`는 hidden import/runtime hook/data bundle 규칙 변경 없이 유지 가능
+  - 다만 slim build + `effective crawl_engine=playwright` 조합에서는 local Chromium 또는 bundle Chromium이 필요하다는 주석을 최신 정책 기준으로 보강
+* 문서 정합성 반영
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_risk_review_2026-03-16.md`, `update_history.md`에 동일 기준 반영
+  - 최신 기준:
+    - Selenium fallback은 `complex` 모드만 지원
+    - `geo_sweep`는 Playwright 전용
+    - geo incomplete safety mode 기본값은 `true`
+    - history `run_status`는 `success|partial|failed|incomplete`
+* `.gitignore` 점검 결과
+  - 현재 build/log/data/backup/Playwright 산출물 ignore 규칙으로 충분
+  - 이번 범위에서는 추가 수정 없음
+
+### 검증
+
+* `pytest -q`
+  - 결과: `149 passed`
+
 ## **v15.0.11 (2026-03-16)**
 
 **타이핑/인코딩 정합성 보강 + .spec/.md/.gitignore 재점검**

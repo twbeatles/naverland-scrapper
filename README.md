@@ -100,6 +100,9 @@ pip install -r requirements.txt
 Playwright Chromium 브라우저도 함께 설치해야 합니다.  
 playwright install chromium
 
+기본 설정(`crawl_engine=playwright`)을 유지할 경우 slim 빌드와 소스 실행 모두에서 로컬 Playwright Chromium 또는 번들 Chromium이 필요합니다.
+`crawl_engine=selenium`으로 전환한 환경에서는 Playwright browser 미설치가 warning으로만 처리됩니다.
+
 ### **3\. 프로그램 실행**
 
 python -m src.main
@@ -108,7 +111,8 @@ python -m src.main
 
 python src/main.py
 
-프로그램 시작 시 필수 라이브러리/디렉토리/충돌 마커(preflight)를 자동 점검하며, Playwright Chromium 존재 여부도 함께 확인합니다.
+프로그램 시작 시 필수 라이브러리/디렉토리/충돌 마커(preflight)를 자동 점검합니다.
+추가로 `data/settings.json` 기준의 `effective crawl_engine`를 계산해, `playwright`를 실제로 사용할 런타임에서만 Playwright Chromium 존재 여부를 시작 차단 조건으로 확인합니다.
 
 ### **4\. 배포 빌드 (PyInstaller)**
 
@@ -327,3 +331,20 @@ python src/main.py
 - Validation:
   - `npx pyright` => `0 errors`
   - `python -m pytest -q` => `137 passed`
+
+## v15.0.12 Runtime Safety / Packaging Recheck (2026-03-16)
+
+- Preflight / runtime safety:
+  - `preflight`는 `data/settings.json`을 직접 읽어 `effective crawl_engine`를 계산합니다.
+  - Playwright Chromium 미설치는 `effective crawl_engine=playwright`일 때만 시작 차단으로 처리하고, `selenium`일 때는 warning-only로 처리합니다.
+  - `geo_incomplete_safety_mode` 기본값은 `true`이며, geo incomplete 런에서는 자동 단지 등록 / crawl history 저장 / disappeared marking을 보수적으로 skip합니다.
+- Geo / history contract:
+  - `crawl_history`에 `run_status`(`success|partial|failed|incomplete`) 컬럼이 추가되었고, History 탭은 `mode` 다음에 `status` 컬럼을 표시합니다.
+  - geo marker 정규화는 `complex_id`와 `marker_id`를 분리해 저장합니다.
+  - 성공적으로 검증된 pair가 0개인 런에서는 disappeared marking을 수행하지 않습니다.
+- `.spec` / `.gitignore` review:
+  - `naverland-scrapper.spec`는 hidden import/runtime hook/data bundle 규칙 변경 없이 유지 가능합니다.
+  - 다만 기본 slim 배포에서는 `playwright` 사용 시 로컬 Chromium 또는 `NAVERLAND_BUNDLE_CHROMIUM=1` 번들이 필요합니다.
+  - `.gitignore`는 현재 build/log/data/backup/Playwright 산출물 기준으로 추가 수정이 필요하지 않았습니다.
+- Validation:
+  - `pytest -q` => `149 passed`

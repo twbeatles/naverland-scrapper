@@ -58,6 +58,9 @@ class PlaywrightRuntimeMixin:
         stats.setdefault("detail_success_count", 0)
         stats.setdefault("detail_fail_count", 0)
         stats.setdefault("blocked_page_count", 0)
+        stats.setdefault("geo_incomplete", False)
+        stats.setdefault("geo_incomplete_count", 0)
+        stats.setdefault("geo_incomplete_reasons", [])
         stats.setdefault("playwright_recycle_count", 0)
         stats.setdefault("playwright_last_recycle_reason", "")
 

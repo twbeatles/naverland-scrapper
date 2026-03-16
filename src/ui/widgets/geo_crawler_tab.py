@@ -252,6 +252,7 @@ class GeoCrawlerTab(CrawlerTab):
             playwright_detail_workers=settings.get("playwright_detail_workers", 12),
             block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
             playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
+            geo_incomplete_safety_mode=settings.get("geo_incomplete_safety_mode", True),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
@@ -283,6 +284,10 @@ class GeoCrawlerTab(CrawlerTab):
             status = "신규"
         elif status == "existing":
             status = "기존"
+        elif status == "pending":
+            status = "대기"
+        elif status == "blocked_incomplete":
+            status = "incomplete"
         elif status == "skipped":
             status = "유지"
         elif status == "error":
@@ -303,15 +308,33 @@ class GeoCrawlerTab(CrawlerTab):
         parse_fail = int(stats.get("parse_fail_count", 0) or 0)
         detail_fail = int(stats.get("detail_fail_count", 0) or 0)
         blocked_count = int(stats.get("blocked_page_count", 0) or 0)
-        snapshot = (discovered, dedup, drain_wait, drain_timeout, response_seen, parse_fail, detail_fail, blocked_count)
+        geo_incomplete = bool(stats.get("geo_incomplete", False))
+        incomplete_reasons = ", ".join(
+            str(x) for x in (stats.get("geo_incomplete_reasons", []) or []) if str(x)
+        )
+        snapshot = (
+            discovered,
+            dedup,
+            drain_wait,
+            drain_timeout,
+            response_seen,
+            parse_fail,
+            detail_fail,
+            blocked_count,
+            geo_incomplete,
+            incomplete_reasons,
+        )
         if getattr(self, "_last_geo_status_stats", None) == snapshot:
             return
         self._last_geo_status_stats = snapshot
-        self.status_message.emit(
+        message = (
             "Geo 발견 "
             f"{discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
             f" / 응답 {response_seen} / 파싱실패 {parse_fail} / 상세실패 {detail_fail} / 차단 {blocked_count}"
         )
+        if geo_incomplete:
+            message += f" / incomplete {incomplete_reasons or 'unknown'}"
+        self.status_message.emit(message)
 
     def _on_crawl_finished(self, data):
         final_stats = {}
@@ -330,14 +353,30 @@ class GeoCrawlerTab(CrawlerTab):
         parse_fail = int(final_stats.get("parse_fail_count", 0) or 0)
         detail_fail = int(final_stats.get("detail_fail_count", 0) or 0)
         blocked_count = int(final_stats.get("blocked_page_count", 0) or 0)
+        geo_incomplete = bool(final_stats.get("geo_incomplete", False))
+        incomplete_reasons = ", ".join(
+            str(x) for x in (final_stats.get("geo_incomplete_reasons", []) or []) if str(x)
+        )
+        safety_mode = bool(getattr(thread, "geo_incomplete_safety_mode", False)) if thread else False
         self.append_log(
             "📌 Geo 요약: "
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}, "
             f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}",
             10,
         )
-        self.status_message.emit(
+        summary_message = (
             "Geo 완료: "
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}, "
             f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}"
         )
+        self.status_message.emit(summary_message)
+        if geo_incomplete:
+            incomplete_message = f"Geo incomplete: {incomplete_reasons or 'unknown'}"
+            if safety_mode:
+                incomplete_message += " (safety mode: auto-register/history/disappeared skipped)"
+            self.append_log(incomplete_message, 30)
+            self.status_message.emit(incomplete_message)
+            window = self.window()
+            show_toast = getattr(window, "show_toast", None)
+            if callable(show_toast):
+                show_toast(incomplete_message, toast_type="warning")

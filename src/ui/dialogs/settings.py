@@ -167,6 +167,8 @@ class SettingsDialog(QDialog):
         asset_layout.addStretch()
         geo_layout.addWidget(QLabel("자산 유형:"), 4, 0)
         geo_layout.addLayout(asset_layout, 4, 1)
+        self.check_geo_incomplete_safety_mode = QCheckBox("Geo incomplete safety mode")
+        geo_layout.addWidget(self.check_geo_incomplete_safety_mode, 5, 0, 1, 2)
         geo_group.setLayout(geo_layout)
         layout.addWidget(geo_group)
 
@@ -251,6 +253,9 @@ class SettingsDialog(QDialog):
         asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
         self.check_geo_asset_apt.setChecked("APT" in asset_types)
         self.check_geo_asset_vl.setChecked("VL" in asset_types)
+        self.check_geo_incomplete_safety_mode.setChecked(
+            bool(settings.get("geo_incomplete_safety_mode", True))
+        )
 
     def _save(self):
         asset_types = []
@@ -290,6 +295,7 @@ class SettingsDialog(QDialog):
             "geo_grid_step_px": self.spin_geo_step.value(),
             "geo_sweep_dwell_ms": self.spin_geo_dwell.value(),
             "geo_asset_types": asset_types,
+            "geo_incomplete_safety_mode": self.check_geo_incomplete_safety_mode.isChecked(),
         }
         settings.update(new)
         self.settings_changed.emit(new)

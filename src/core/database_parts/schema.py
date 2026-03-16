@@ -488,6 +488,7 @@ class ComplexDatabaseSchemaMixin:
                 source_lon REAL DEFAULT 0,
                 source_zoom INTEGER DEFAULT 0,
                 asset_type TEXT DEFAULT '',
+                run_status TEXT DEFAULT 'success',
                 crawled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
             c.execute('''CREATE TABLE IF NOT EXISTS price_snapshots (
@@ -617,6 +618,7 @@ class ComplexDatabaseSchemaMixin:
                     "source_lon": "REAL DEFAULT 0",
                     "source_zoom": "INTEGER DEFAULT 0",
                     "asset_type": "TEXT DEFAULT ''",
+                    "run_status": "TEXT DEFAULT 'success'",
                 },
                 "price_snapshots": {
                     "asset_type": "TEXT DEFAULT 'APT'",

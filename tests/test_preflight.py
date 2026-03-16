@@ -3,12 +3,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.utils.preflight import (
     find_conflict_markers,
     find_missing_dependencies,
+    get_effective_crawl_engine,
     run_preflight_checks,
 )
 
@@ -53,6 +55,84 @@ class TestPreflight(unittest.TestCase):
             )
             self.assertFalse(ok)
             self.assertTrue(any("머지 충돌" in err for err in errors))
+
+    def test_get_effective_crawl_engine_defaults_to_playwright_on_missing_or_invalid_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings_path = Path(tmp) / "settings.json"
+            self.assertEqual(get_effective_crawl_engine(settings_path), "playwright")
+            settings_path.write_text("{invalid", encoding="utf-8")
+            self.assertEqual(get_effective_crawl_engine(settings_path), "playwright")
+
+    def test_run_preflight_checks_fails_when_playwright_engine_requires_browser(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
+                patch.dict(os.environ, {}, clear=False),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                )
+            self.assertFalse(ok)
+            self.assertTrue(any("Playwright Chromium" in err for err in errors))
+
+    def test_run_preflight_checks_warns_only_when_effective_engine_is_selenium(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "settings.json").write_text('{"crawl_engine": "selenium"}', encoding="utf-8")
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
+                patch.dict(os.environ, {}, clear=False),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                )
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
+
+    def test_run_preflight_checks_skip_env_overrides_require_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.find_missing_playwright_browser") as browser_check,
+                patch.dict(
+                    os.environ,
+                    {
+                        "NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK": "1",
+                        "NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER": "1",
+                    },
+                    clear=False,
+                ),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                )
+            browser_check.assert_not_called()
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":

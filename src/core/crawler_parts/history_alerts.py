@@ -19,27 +19,54 @@ class CrawlerHistoryAlertsMixin:
         if not cid or not name:
             return
         dedupe_key = f"{asset_type}:{cid}"
-        status = self._discovered_complex_status.get(dedupe_key, "skipped")
-        if dedupe_key not in self._registered_discovered_complex_keys:
-            self._registered_discovered_complex_keys.add(dedupe_key)
+        self._registered_discovered_complex_keys.add(dedupe_key)
+        self._pending_discovered_complexes[dedupe_key] = dict(payload)
+        status = self._discovered_complex_status.get(dedupe_key, "pending")
+        emitted = dict(payload)
+        emitted["db_status"] = status
+        self.discovered_complex_signal.emit(emitted)
+
+    def _flush_discovered_complex_registrations(self):
+        pending = dict(getattr(self, "_pending_discovered_complexes", {}) or {})
+        self._pending_discovered_complexes.clear()
+        if not pending:
+            return 0
+
+        if not self._should_persist_geo_results():
+            for dedupe_key, payload in pending.items():
+                self._discovered_complex_status[dedupe_key] = "blocked_incomplete"
+                emitted = dict(payload)
+                emitted["db_status"] = "blocked_incomplete"
+                self.discovered_complex_signal.emit(emitted)
+            return 0
+
+        saved = 0
+        for dedupe_key, payload in pending.items():
+            status = "skipped"
             if self.db:
                 try:
                     status = str(
                         self.db.add_complex(
-                            name,
-                            cid,
-                            asset_type=asset_type,
+                            str(payload.get("complex_name", "") or ""),
+                            str(payload.get("complex_id", "") or ""),
+                            asset_type=str(payload.get("asset_type", "APT") or "APT").upper(),
                             return_status=True,
                         )
                         or "skipped"
                     )
                 except Exception as e:
-                    self.log(f"⚠️ 발견 단지 자동 등록 실패: {name} ({cid}) - {e}", 30)
+                    self.log(
+                        f"⚠️ 발견 단지 자동 등록 실패: {payload.get('complex_name', '')} ({payload.get('complex_id', '')}) - {e}",
+                        30,
+                    )
                     status = "error"
             self._discovered_complex_status[dedupe_key] = status
-        emitted = dict(payload)
-        emitted["db_status"] = status
-        self.discovered_complex_signal.emit(emitted)
+            emitted = dict(payload)
+            emitted["db_status"] = status
+            self.discovered_complex_signal.emit(emitted)
+            if status in {"inserted", "existing"}:
+                saved += 1
+        return saved
 
     def record_crawl_history(
         self,
@@ -54,6 +81,7 @@ class CrawlerHistoryAlertsMixin:
         source_lon=None,
         source_zoom=None,
         asset_type="",
+        run_status="success",
     ):
         if not self.db:
             return
@@ -69,6 +97,7 @@ class CrawlerHistoryAlertsMixin:
                 source_lon=source_lon,
                 source_zoom=source_zoom,
                 asset_type=asset_type,
+                run_status=run_status,
             )
             if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
                 self._notify_db_write_disabled()
@@ -76,9 +105,15 @@ class CrawlerHistoryAlertsMixin:
             self.log(f"⚠️ 크롤링 기록 저장 실패: {e}", 30)
 
     def _finalize_disappeared_articles(self, processed_target_pairs):
+        if self.crawl_mode == "geo_sweep" and not self._should_persist_geo_results():
+            self.log("   geo incomplete safety mode active: disappeared marking skipped", 30)
+            return
+        if not processed_target_pairs:
+            self.log("   disappeared marking skipped: no successful target pairs", 10)
+            return
         if self.track_disappeared and (not self._should_stop()) and self.db:
             try:
-                if processed_target_pairs and hasattr(self.db, "mark_disappeared_articles_for_targets"):
+                if hasattr(self.db, "mark_disappeared_articles_for_targets"):
                     disappeared = int(
                         self.db.mark_disappeared_articles_for_targets(
                             list(sorted(processed_target_pairs))

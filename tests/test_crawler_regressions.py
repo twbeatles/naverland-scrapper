@@ -279,6 +279,54 @@ class TestCrawlerRegressions(unittest.TestCase):
 
         self.assertEqual(finalized.get("pairs"), set())
 
+    def test_finalize_disappeared_articles_skips_when_no_successful_pairs(self):
+        class _DisappearDB:
+            def __init__(self):
+                self.scoped_calls = 0
+                self.global_calls = 0
+
+            def get_article_history_state_bulk(self, _complex_id):
+                return {}
+
+            def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):
+                return []
+
+            def upsert_article_history_bulk(self, rows):
+                return len(rows)
+
+            def update_article_history(self, **_kwargs):
+                return True
+
+            def record_alert_notification(self, **_kwargs):
+                return True
+
+            def mark_disappeared_articles_for_targets(self, rows):
+                self.scoped_calls += 1
+                return 0
+
+            def mark_disappeared_articles(self):
+                self.global_calls += 1
+                return 0
+
+        db = _DisappearDB()
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=db,
+            cache=None,
+            max_retry_count=0,
+        )
+
+        thread._finalize_disappeared_articles(set())
+        self.assertEqual(db.scoped_calls, 0)
+        self.assertEqual(db.global_calls, 0)
+
+        thread._finalize_disappeared_articles({("APT", "10001", "매매")})
+        self.assertEqual(db.scoped_calls, 1)
+        self.assertEqual(db.global_calls, 0)
+
     def test_blocked_page_detection_signal(self):
         thread = self._build_thread(price_filter={"enabled": False})
         signal = thread._detect_block_signal("Access Denied", "<html>captcha required</html>")

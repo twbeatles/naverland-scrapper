@@ -132,6 +132,7 @@ class CrawlerSeleniumFlowMixin:
                         raise Exception("드라이버 재시작 실패")
                 
                 complex_count = 0
+                attempted_trade_types = []
                 complex_trade_types = []
                 for ttype in self.trade_types:
                     if self._should_stop():
@@ -139,6 +140,8 @@ class CrawlerSeleniumFlowMixin:
                     pair_key = self._pair_key(name, cid, ttype)
                     if allowed_pairs is not None and pair_key not in allowed_pairs:
                         continue
+                    if ttype not in attempted_trade_types:
+                        attempted_trade_types.append(ttype)
                     current += 1
                     
                     # 예상 남은 시간 계산
@@ -194,19 +197,27 @@ class CrawlerSeleniumFlowMixin:
                         break
 
                 self._flush_history_updates(force=True)
-                if not complex_trade_types:
+                if not attempted_trade_types:
                     continue
+                run_status = self._determine_run_status(
+                    self.trade_types,
+                    complex_trade_types,
+                    attempted_trade_types,
+                )
+                history_trade_types = complex_trade_types or attempted_trade_types
                 self.record_crawl_history(
                     name,
                     cid,
-                    ",".join(complex_trade_types),
+                    ",".join(history_trade_types),
                     int(complex_count),
                     engine="selenium",
                     mode=self.crawl_mode,
                     asset_type="APT",
+                    run_status=run_status,
                 )
-                
-                self.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), complex_count)
+
+                if complex_trade_types:
+                    self.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), complex_count)
                 processed_complexes += 1
 
             self._finalize_disappeared_articles(processed_target_pairs)

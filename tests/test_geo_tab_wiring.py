@@ -55,6 +55,7 @@ class TestGeoTabWiring(unittest.TestCase):
             self.assertEqual(thread.crawl_mode, "geo_sweep")
             self.assertEqual(thread.engine_name, "playwright")
             self.assertFalse(thread.fallback_engine_enabled)
+            self.assertTrue(thread.geo_incomplete_safety_mode)
             geo_config = thread.geo_config
             assert geo_config is not None
             self.assertAlmostEqual(geo_config.lat, 37.55)
@@ -174,9 +175,12 @@ class TestGeoTabWiring(unittest.TestCase):
         thread.register_discovered_complex(
             {"asset_type": "APT", "complex_id": "12345", "complex_name": "테스트단지", "count": 8}
         )
+        self.assertEqual(db_stub.calls, 0)
+        self.assertEqual(emitted[-1]["db_status"], "pending")
+        thread._flush_discovered_complex_registrations()
 
         self.assertEqual(db_stub.calls, 1)
-        self.assertEqual(len(emitted), 2)
+        self.assertEqual(len(emitted), 3)
         self.assertEqual(emitted[-1]["db_status"], "inserted")
 
     def test_geo_status_message_updates_from_stats(self):

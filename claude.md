@@ -109,7 +109,7 @@
     - **JSON**: 설정, 프리셋, 캐시, 히스토리
 - **Visualization**: `matplotlib` (PyQt6 임베디드)
 - **Build Tool**: `PyInstaller`
-- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile`, `NAVERLAND_ONEFILE=0` 시 `onedir`, Playwright Chromium bundle 포함)
+- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile slim`, `NAVERLAND_ONEFILE=0` 시 `onedir`, `NAVERLAND_BUNDLE_CHROMIUM=1`일 때만 Chromium bundle 포함)
 - **Optional**: `psutil` (메모리 모니터링), `plyer` (알림)
 
 ## 3. Architecture (v15.0 Modular)
@@ -462,3 +462,24 @@ COLORS["light"] = {
 - Validation:
   - `npx pyright` => `0 errors`
   - `python -m pytest -q` => `137 passed`
+
+## 0-15. v15.0.12 Runtime Safety / Packaging Recheck (2026-03-16)
+- Preflight contract:
+  - `src/utils/preflight.py` now reads `data/settings.json` directly and computes the effective `crawl_engine`.
+  - Missing Playwright Chromium is now a startup error only when the effective engine is `playwright`.
+  - `NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK` still skips the browser check entirely.
+  - `NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER` still forces an error regardless of the effective engine.
+- Geo incomplete safety:
+  - `geo_incomplete_safety_mode` is a persisted setting and defaults to `true`.
+  - Incomplete geo discovery now records explicit reasons (`marker switch fail`, `marker drain timeout`, `geo scan failure`).
+  - When safety mode is on, geo incomplete runs skip auto-register, `crawl_history`, and disappeared marking.
+  - When safety mode is off, geo incomplete runs can persist but use `run_status="incomplete"`.
+- Data/UI contract:
+  - `crawl_history` now has `run_status` and the history tab shows `mode -> status -> trade_types`.
+  - Marker normalization now separates `complex_id` from `marker_id`; do not assume they are interchangeable.
+  - Disappeared marking is skipped when there are zero successfully validated pairs.
+- Packaging/docs:
+  - `naverland-scrapper.spec` was rechecked after the runtime-safety rollout; no hidden import/runtime hook changes were required.
+  - Slim packaging remains the default, but a Playwright runtime still needs either local Chromium or a bundled Chromium build.
+- Validation:
+  - `pytest -q` => `149 passed`

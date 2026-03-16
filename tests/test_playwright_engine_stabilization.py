@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
-from src.core.services.response_capture import TRADE_CODE_MAP
+from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
 
 _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
@@ -62,9 +62,17 @@ class _ThreadStub:
         self.playwright_detail_workers = 1
         self.playwright_response_drain_timeout_ms = 3000
         self.block_heavy_resources = False
+        self.engine_name = "playwright"
+        self.crawl_mode = "complex"
+        self.fallback_engine_enabled = False
+        self.geo_incomplete_safety_mode = True
+        self.geo_incomplete = False
+        self.geo_incomplete_reasons = []
+        self.geo_incomplete_count = 0
         self.cache: Any | None = None
         self.negative_cache_ttl_minutes = 5
         self.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
+        self.targets = [("테스트단지", "12345")]
         self.geo_config = SimpleNamespace(
             lat=37.55,
             lon=126.99,
@@ -86,6 +94,9 @@ class _ThreadStub:
             "blocked_page_count": 0,
             "geo_discovered_count": 0,
             "geo_dedup_count": 0,
+            "geo_incomplete": False,
+            "geo_incomplete_count": 0,
+            "geo_incomplete_reasons": [],
         }
         self.logged = []
         self.registered = []
@@ -95,15 +106,84 @@ class _ThreadStub:
         self.finalized_pairs = None
         self.stats_emitted = 0
         self.history_calls = []
+        self._pair_sequence = []
+        self._processed_pairs = set()
+        self._current_pair = None
+        self._fallback_prefill_processed_target_pairs = set()
+        self._pending_discovered_complexes = {}
+        self._discovered_complex_status = {}
+        self._registered_discovered_complex_keys = set()
+        self._block_cooldown_seconds = 60
 
     def _should_stop(self):
         return bool(self.stop_flag)
+
+    def _pair_key(self, name, cid, trade_type):
+        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+
+    def _mark_pair_processed(self, name, cid, trade_type):
+        self._processed_pairs.add(self._pair_key(name, cid, trade_type))
+
+    def _sleep_interruptible(self, seconds, chunk_seconds=0.2):
+        return True
+
+    def _get_speed_delay(self):
+        return 0.0
+
+    def _reset_block_detection_streak(self):
+        return None
+
+    def _is_block_like_error(self, exc):
+        return False
+
+    def _register_block_detection(self, reason=""):
+        return False
 
     def log(self, msg, level=20):
         self.logged.append((str(msg), int(level)))
 
     def register_discovered_complex(self, payload):
         self.registered.append(dict(payload))
+
+    def _flush_discovered_complex_registrations(self):
+        if self.geo_incomplete and self.geo_incomplete_safety_mode:
+            return 0
+        return len(self.registered)
+
+    def _determine_run_status(
+        self,
+        requested_trade_types,
+        successful_trade_types,
+        attempted_trade_types,
+        *,
+        force_incomplete=False,
+    ):
+        if force_incomplete:
+            return "incomplete"
+        attempted = [str(x) for x in attempted_trade_types if str(x)]
+        successful = [str(x) for x in successful_trade_types if str(x)]
+        requested = [str(x) for x in requested_trade_types if str(x)]
+        if attempted and not successful:
+            return "failed"
+        if requested and all(token in successful for token in requested):
+            return "success"
+        return "partial"
+
+    def _mark_geo_incomplete(self, reason, detail=""):
+        token = str(reason or "")
+        self.geo_incomplete = True
+        self.geo_incomplete_count += 1
+        if token and token not in self.geo_incomplete_reasons:
+            self.geo_incomplete_reasons.append(token)
+        self.stats["geo_incomplete"] = True
+        self.stats["geo_incomplete_count"] = self.geo_incomplete_count
+        self.stats["geo_incomplete_reasons"] = list(self.geo_incomplete_reasons)
+
+    def _geo_incomplete_reason_summary(self):
+        return ", ".join(self.geo_incomplete_reasons)
+
+    def _should_persist_geo_results(self):
+        return not (self.geo_incomplete and self.geo_incomplete_safety_mode)
 
     def _estimate_remaining_seconds(self, current, total):
         return 0
@@ -119,6 +199,8 @@ class _ThreadStub:
         return None
 
     def _finalize_disappeared_articles(self, processed_pairs):
+        if self.crawl_mode == "geo_sweep" and not self._should_persist_geo_results():
+            return
         self.finalized_pairs = set(processed_pairs)
 
     def emit_stats(self):
@@ -573,6 +655,252 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             engine._loop.close()
 
         self.assertEqual(len(thread.history_calls), 0)
+
+    def test_normalize_marker_payload_separates_marker_id_and_complex_id(self):
+        payload = normalize_marker_payload(
+            {
+                "markerId": "marker-101",
+                "complexNo": "complex-202",
+                "complexName": "테스트단지",
+                "articleCount": 4,
+            },
+            asset_type="APT",
+        )
+
+        self.assertEqual(payload["complex_id"], "complex-202")
+        self.assertEqual(payload["marker_id"], "marker-101")
+
+    async def test_complex_mode_records_partial_run_status_when_some_trade_types_fail(self):
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _noop_started():
+            return None
+
+        async def _noop_memory(_reason):
+            return None
+
+        async def _crawl(name, cid, trade_type, *args, **kwargs):
+            if trade_type == thread.trade_types[0]:
+                return {"count": 2}
+            raise RuntimeError("second trade failed")
+
+        engine._ensure_started = _noop_started
+        engine._check_memory_and_recycle_if_needed = _noop_memory
+        engine._crawl_target_with_cache = _crawl
+
+        try:
+            await engine._run_complex_mode()
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(len(thread.history_calls), 1)
+        args, kwargs = thread.history_calls[0]
+        self.assertEqual(kwargs["run_status"], "partial")
+        self.assertEqual(args[2], thread.trade_types[0])
+
+    async def test_complex_mode_records_failed_run_status_when_all_trade_types_fail(self):
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _noop_started():
+            return None
+
+        async def _noop_memory(_reason):
+            return None
+
+        async def _crawl(*args, **kwargs):
+            raise RuntimeError("all failed")
+
+        engine._ensure_started = _noop_started
+        engine._check_memory_and_recycle_if_needed = _noop_memory
+        engine._crawl_target_with_cache = _crawl
+
+        try:
+            await engine._run_complex_mode()
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(len(thread.history_calls), 1)
+        args, kwargs = thread.history_calls[0]
+        self.assertEqual(kwargs["run_status"], "failed")
+        self.assertEqual(int(args[3]), 0)
+        self.assertEqual(set(str(args[2]).split(",")), set(thread.trade_types))
+
+    async def test_geo_scan_failure_isolated_per_asset_and_trade_type(self):
+        thread = _ThreadStub()
+        thread.crawl_mode = "geo_sweep"
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+        called = []
+
+        async def _noop_started():
+            return None
+
+        def _fake_marker_handler(_discovered):
+            pending_tasks: set[asyncio.Task] = set()
+
+            def _handle_response(_response) -> None:
+                return None
+
+            return (_handle_response, pending_tasks, {"dedup_skipped": 0})
+
+        async def _scan(asset_type, trade_type, lat, lon, zoom, geo):
+            called.append((asset_type, trade_type))
+            if asset_type == "APT" and trade_type == thread.trade_types[0]:
+                raise RuntimeError("scan failed")
+
+        async def _fake_drain(*_args, **_kwargs):
+            return (0, False)
+
+        engine._ensure_started = _noop_started
+        engine._build_marker_handler = _fake_marker_handler
+        engine._scan_geo_asset_type = _scan
+        engine._drain_pending_response_tasks = _fake_drain
+
+        try:
+            await engine._run_geo()
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(
+            called,
+            [
+                ("APT", thread.trade_types[0]),
+                ("APT", thread.trade_types[1]),
+                ("VL", thread.trade_types[0]),
+                ("VL", thread.trade_types[1]),
+            ],
+        )
+        self.assertTrue(thread.geo_incomplete)
+        self.assertIn("geo_scan_failure", thread.geo_incomplete_reasons)
+
+    async def test_geo_scan_marks_incomplete_when_marker_switch_fails(self):
+        thread = _ThreadStub()
+        thread.crawl_mode = "geo_sweep"
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+
+        async def _call(label, func, *, attempts=3):
+            return await func()
+
+        async def _noop_recenter(lat, lon, zoom):
+            return None
+
+        async def _switch_fail():
+            return False
+
+        engine._async_retry = _call
+        engine._human_like_recenter = _noop_recenter
+        engine._switch_to_listing_markers = _switch_fail
+
+        try:
+            result = await engine._scan_geo_asset_type("APT", thread.trade_types[0], 37.55, 126.99, 15, thread.geo_config)
+        finally:
+            engine._loop.close()
+
+        self.assertFalse(result)
+        self.assertTrue(thread.geo_incomplete)
+        self.assertIn("marker_switch_fail", thread.geo_incomplete_reasons)
+
+    async def test_geo_incomplete_safety_mode_skips_history_and_disappeared_finalize(self):
+        thread = _ThreadStub()
+        thread.crawl_mode = "geo_sweep"
+        thread.geo_incomplete_safety_mode = True
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+
+        async def _noop_started():
+            return None
+
+        def _fake_marker_handler(discovered):
+            discovered["APT:1001"] = {
+                "asset_type": "APT",
+                "complex_id": "1001",
+                "complex_name": "단지A",
+                "count": 2,
+                "marker_id": "marker-1",
+            }
+            pending_tasks: set[asyncio.Task] = set()
+
+            def _handle_response(_response) -> None:
+                return None
+
+            return (_handle_response, pending_tasks, {"dedup_skipped": 0})
+
+        async def _noop_scan(*_args, **_kwargs):
+            return None
+
+        async def _crawl(*_args, **_kwargs):
+            return {"count": 1}
+
+        async def _fake_drain(*_args, **_kwargs):
+            return (1, True)
+
+        engine._ensure_started = _noop_started
+        engine._build_marker_handler = _fake_marker_handler
+        engine._scan_geo_asset_type = _noop_scan
+        engine._crawl_target_with_cache = _crawl
+        engine._drain_pending_response_tasks = _fake_drain
+
+        try:
+            await engine._run_geo()
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(thread.geo_incomplete)
+        self.assertEqual(len(thread.history_calls), 0)
+        self.assertIsNone(thread.finalized_pairs)
+
+    async def test_geo_incomplete_without_safety_mode_records_incomplete_history(self):
+        thread = _ThreadStub()
+        thread.crawl_mode = "geo_sweep"
+        thread.geo_incomplete_safety_mode = False
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+
+        async def _noop_started():
+            return None
+
+        def _fake_marker_handler(discovered):
+            discovered["APT:1001"] = {
+                "asset_type": "APT",
+                "complex_id": "1001",
+                "complex_name": "단지A",
+                "count": 2,
+                "marker_id": "marker-1",
+            }
+            pending_tasks: set[asyncio.Task] = set()
+
+            def _handle_response(_response) -> None:
+                return None
+
+            return (_handle_response, pending_tasks, {"dedup_skipped": 0})
+
+        async def _noop_scan(*_args, **_kwargs):
+            return None
+
+        async def _crawl(*_args, **_kwargs):
+            return {"count": 1}
+
+        async def _fake_drain(*_args, **_kwargs):
+            return (1, True)
+
+        engine._ensure_started = _noop_started
+        engine._build_marker_handler = _fake_marker_handler
+        engine._scan_geo_asset_type = _noop_scan
+        engine._crawl_target_with_cache = _crawl
+        engine._drain_pending_response_tasks = _fake_drain
+
+        try:
+            await engine._run_geo()
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(thread.geo_incomplete)
+        self.assertEqual(len(thread.history_calls), 1)
+        _args, kwargs = thread.history_calls[0]
+        self.assertEqual(kwargs["run_status"], "incomplete")
 
     async def test_memory_watchdog_recycles_context_and_emits_stats(self):
         thread = _ThreadStub()

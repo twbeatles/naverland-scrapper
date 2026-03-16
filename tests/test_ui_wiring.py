@@ -898,11 +898,12 @@ class TestUIWiring(unittest.TestCase):
 
             app._load_history()
 
-            self.assertEqual(app.history_table.columnCount(), 8)
+            self.assertEqual(app.history_table.columnCount(), 9)
             self.assertEqual(_table_text(app.history_table, 0, 0), "메타단지")
             self.assertEqual(_table_text(app.history_table, 0, 2), "APT")
             self.assertEqual(_table_text(app.history_table, 0, 3), "playwright")
             self.assertEqual(_table_text(app.history_table, 0, 4), "complex")
+            self.assertEqual(_table_text(app.history_table, 0, 5), "success")
 
             if hasattr(app, "schedule_timer") and app.schedule_timer:
                 app.schedule_timer.stop()

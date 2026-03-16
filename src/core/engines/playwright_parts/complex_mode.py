@@ -29,10 +29,13 @@ class PlaywrightComplexModeMixin:
             if self.thread._should_stop():
                 break
             complex_count = 0
+            attempted_trade_types = []
             complex_trade_types = []
             for trade_type in self.thread.trade_types:
                 if self.thread._should_stop():
                     break
+                if trade_type not in attempted_trade_types:
+                    attempted_trade_types.append(trade_type)
                 await self._check_memory_and_recycle_if_needed("complex_loop")
                 self.thread._current_pair = self.thread._pair_key(name, cid, trade_type)
                 current += 1
@@ -96,18 +99,26 @@ class PlaywrightComplexModeMixin:
                 if not self.thread._sleep_interruptible(self.thread._get_speed_delay()):
                     break
             self.thread._flush_history_updates(force=True)
-            if not complex_trade_types:
+            if not attempted_trade_types:
                 continue
+            run_status = self.thread._determine_run_status(
+                self.thread.trade_types,
+                complex_trade_types,
+                attempted_trade_types,
+            )
+            history_trade_types = complex_trade_types or attempted_trade_types
             self.thread.record_crawl_history(
                 name,
                 cid,
-                ",".join(complex_trade_types),
+                ",".join(history_trade_types),
                 int(complex_count),
                 engine=self.engine_name,
                 mode=self.thread.crawl_mode,
                 asset_type="APT",
+                run_status=run_status,
             )
-            self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
+            if complex_trade_types:
+                self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
         self.thread._current_pair = None
         self.thread._finalize_disappeared_articles(processed_pairs)
 

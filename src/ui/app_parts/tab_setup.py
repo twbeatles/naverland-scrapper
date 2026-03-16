@@ -180,9 +180,9 @@ class AppTabSetupMixin:
         layout.addLayout(bl)
 
         self.history_table = QTableWidget()
-        self.history_table.setColumnCount(8)
+        self.history_table.setColumnCount(9)
         self.history_table.setHorizontalHeaderLabels(
-            ["단지명", "단지ID", "자산", "엔진", "모드", "거래유형", "수집건수", "수집시각"]
+            ["단지명", "단지ID", "자산", "엔진", "모드", "상태", "거래유형", "수집건수", "수집시각"]
         )
         history_header = self.history_table.horizontalHeader()
         if history_header is not None:

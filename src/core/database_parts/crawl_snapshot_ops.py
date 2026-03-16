@@ -23,6 +23,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         source_lon=None,
         source_zoom=None,
         asset_type="",
+        run_status="success",
     ):
         if self.is_write_disabled():
             return False
@@ -39,8 +40,8 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                             """
                             INSERT INTO crawl_history (
                                 complex_name, complex_id, trade_types, item_count,
-                                engine, mode, source_lat, source_lon, source_zoom, asset_type
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                             (
                                 name,
@@ -53,6 +54,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                                 float(source_lon or 0),
                                 int(source_zoom or 0),
                                 asset_type,
+                                str(run_status or "success"),
                             ),
                         )
                         conn.commit()
@@ -97,6 +99,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 "COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, "
                 "COALESCE(engine, '') AS engine, "
                 "COALESCE(mode, 'complex') AS mode, "
+                "COALESCE(run_status, 'success') AS run_status, "
                 "trade_types, item_count, crawled_at "
                 "FROM crawl_history ORDER BY crawled_at DESC LIMIT ?",
                 params=(limit,),

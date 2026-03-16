@@ -29,6 +29,7 @@ class PlaywrightGeoModeMixin:
 
         marker_handler, marker_pending_tasks, marker_stats = self._build_marker_handler(discovered)
         marker_wait_count = 0
+        marker_drain_timed_out = False
         self._desktop_page.on("response", marker_handler)
         try:
             for asset_type in geo.asset_types:
@@ -37,7 +38,17 @@ class PlaywrightGeoModeMixin:
                 for trade_type in self.thread.trade_types:
                     if self.thread._should_stop():
                         break
-                    await self._scan_geo_asset_type(asset_type, trade_type, lat, lon, zoom, geo)
+                    try:
+                        await self._scan_geo_asset_type(asset_type, trade_type, lat, lon, zoom, geo)
+                    except Exception as exc:
+                        self.thread._mark_geo_incomplete(
+                            "geo_scan_failure",
+                            f"{asset_type}/{trade_type}",
+                        )
+                        self.thread.log(
+                            f"   geo scan failure: {asset_type}/{trade_type} - {exc}",
+                            30,
+                        )
         finally:
             try:
                 self._desktop_page.remove_listener("response", marker_handler)
@@ -50,11 +61,25 @@ class PlaywrightGeoModeMixin:
 
         dedup_removed = int(marker_stats.get("dedup_skipped", 0))
         if marker_drain_timed_out:
-            self.thread.log("   ⚠️ geo marker drain timeout occurred", 30)
+            self.thread._mark_geo_incomplete("marker_drain_timeout", "geo_marker")
         self.thread.log(
             f"지도 탐색 요약: 발견 단지 {len(discovered)}, 중복 제거 {dedup_removed}, 응답 처리 대기 {marker_wait_count}",
             10,
         )
+        self.thread.stats["geo_discovered_count"] = len(discovered)
+        self.thread.stats["geo_dedup_count"] = dedup_removed
+        self.thread.emit_stats()
+
+        persistence_allowed = self.thread._should_persist_geo_results()
+        flushed_count = self.thread._flush_discovered_complex_registrations()
+        if self.thread.geo_incomplete:
+            reason_summary = self.thread._geo_incomplete_reason_summary() or "unknown"
+            persistence_note = ""
+            if not persistence_allowed:
+                persistence_note = " (safety mode: auto-register/history/disappeared skipped)"
+            self.thread.log(f"Geo incomplete: {reason_summary}{persistence_note}", 30)
+        elif flushed_count:
+            self.thread.log(f"   geo discovered complexes registered: {flushed_count}", 10)
 
         ordered = sorted(discovered.values(), key=lambda row: (-int(row.get("count", 0)), row.get("complex_name", "")))
         if not ordered:
@@ -64,6 +89,7 @@ class PlaywrightGeoModeMixin:
         processed_pairs = set()
         total = len(ordered) * max(1, len(self.thread.trade_types))
         current = 0
+        force_incomplete_history = bool(self.thread.geo_incomplete and not self.thread.geo_incomplete_safety_mode)
         for row in ordered:
             if self.thread._should_stop():
                 break
@@ -71,10 +97,13 @@ class PlaywrightGeoModeMixin:
             cid = str(row.get("complex_id", ""))
             asset_type = str(row.get("asset_type", "APT"))
             complex_count = 0
+            attempted_trade_types = []
             complex_trade_types = []
             for trade_type in self.thread.trade_types:
                 if self.thread._should_stop():
                     break
+                if trade_type not in attempted_trade_types:
+                    attempted_trade_types.append(trade_type)
                 await self._check_memory_and_recycle_if_needed("geo_loop")
                 current += 1
                 self.thread.progress_signal.emit(
@@ -96,7 +125,8 @@ class PlaywrightGeoModeMixin:
                     )
                     count = int(result.get("count", 0))
                     complex_count += count
-                    complex_trade_types.append(trade_type)
+                    if trade_type not in complex_trade_types:
+                        complex_trade_types.append(trade_type)
                     processed_pairs.add((asset_type, cid, trade_type))
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
@@ -122,13 +152,24 @@ class PlaywrightGeoModeMixin:
                         reset_streak = getattr(self.thread, "_reset_block_detection_streak", None)
                         if callable(reset_streak):
                             reset_streak()
-            if not complex_trade_types:
+            if not attempted_trade_types:
+                continue
+            run_status = self.thread._determine_run_status(
+                self.thread.trade_types,
+                complex_trade_types,
+                attempted_trade_types,
+                force_incomplete=force_incomplete_history,
+            )
+            history_trade_types = complex_trade_types or attempted_trade_types
+            if not persistence_allowed:
+                continue
+            if not complex_trade_types and not force_incomplete_history:
                 self.thread.log(f"   {name}({asset_type}) 거래 성공 없음: 이력 기록을 생략합니다.", 30)
                 continue
             self.thread.record_crawl_history(
                 name,
                 cid,
-                ",".join(complex_trade_types),
+                ",".join(history_trade_types),
                 int(complex_count),
                 engine=self.engine_name,
                 mode="geo_sweep",
@@ -136,11 +177,10 @@ class PlaywrightGeoModeMixin:
                 source_lon=lon,
                 source_zoom=zoom,
                 asset_type=asset_type,
+                run_status=run_status,
             )
-            self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
-        self.thread.stats["geo_discovered_count"] = len(discovered)
-        self.thread.stats["geo_dedup_count"] = dedup_removed
-        self.thread.emit_stats()
+            if complex_trade_types:
+                self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
         self.thread._finalize_disappeared_articles(processed_pairs)
 
     def _build_marker_handler(self, discovered: dict[str, dict]):
@@ -197,7 +237,7 @@ class PlaywrightGeoModeMixin:
         geo,
     ):
         if not self._desktop_page:
-            return
+            return False
         base_kind = "houses" if asset_type == "VL" else "complexes"
         trade_code = _TRADE_TO_CODE.get(trade_type, "A1")
         url = (
@@ -216,7 +256,13 @@ class PlaywrightGeoModeMixin:
         except Exception:
             self.thread.log("geo canvas wait timeout", 10)
         await self._human_like_recenter(lat, lon, zoom)
-        await self._switch_to_listing_markers()
+        switched = await self._switch_to_listing_markers()
+        if not switched:
+            self.thread._mark_geo_incomplete(
+                "marker_switch_fail",
+                f"{asset_type}/{trade_type}",
+            )
+            return False
         coords = build_grid_sweep_coords(lat, lon, zoom, rings=geo.rings, step_px=geo.step_px)
         dwell_ms = max(100, int(geo.dwell_ms))
         total = len(coords)
@@ -230,6 +276,7 @@ class PlaywrightGeoModeMixin:
             except Exception:
                 pass
             await self._desktop_page.wait_for_timeout(dwell_ms)
+        return True
 
     async def _get_ms(self):
         if not self._desktop_page:

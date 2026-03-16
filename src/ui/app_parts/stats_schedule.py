@@ -279,6 +279,7 @@ class AppStatsScheduleMixin:
                     asset_type = str(history_row.get("asset_type", "APT") or "APT").strip().upper() or "APT"
                     engine = str(history_row.get("engine", "") or "")
                     mode = str(history_row.get("mode", "complex") or "complex")
+                    run_status = str(history_row.get("run_status", "success") or "success")
                     trade_types = str(history_row.get("trade_types", "") or "")
                     item_count = int(history_row.get("item_count", 0) or 0)
                     crawled_at = str(history_row.get("crawled_at", "") or "")
@@ -288,18 +289,20 @@ class AppStatsScheduleMixin:
                     asset_type = str(history_row[2] if len(history_row) > 2 else "APT").strip().upper() or "APT"
                     engine = str(history_row[3] if len(history_row) > 3 else "")
                     mode = str(history_row[4] if len(history_row) > 4 else "complex")
-                    trade_types = str(history_row[5] if len(history_row) > 5 else "")
-                    item_count = int(history_row[6] if len(history_row) > 6 else 0)
-                    crawled_at = str(history_row[7] if len(history_row) > 7 else "")
+                    run_status = str(history_row[5] if len(history_row) > 5 else "success")
+                    trade_types = str(history_row[6] if len(history_row) > 6 else "")
+                    item_count = int(history_row[7] if len(history_row) > 7 else 0)
+                    crawled_at = str(history_row[8] if len(history_row) > 8 else "")
 
                 self.history_table.setItem(row_idx, 0, QTableWidgetItem(name))
                 self.history_table.setItem(row_idx, 1, QTableWidgetItem(cid))
                 self.history_table.setItem(row_idx, 2, QTableWidgetItem(asset_type))
                 self.history_table.setItem(row_idx, 3, QTableWidgetItem(engine))
                 self.history_table.setItem(row_idx, 4, QTableWidgetItem(mode))
-                self.history_table.setItem(row_idx, 5, QTableWidgetItem(trade_types))
-                self.history_table.setItem(row_idx, 6, QTableWidgetItem(str(item_count)))
-                self.history_table.setItem(row_idx, 7, QTableWidgetItem(crawled_at))
+                self.history_table.setItem(row_idx, 5, QTableWidgetItem(run_status))
+                self.history_table.setItem(row_idx, 6, QTableWidgetItem(trade_types))
+                self.history_table.setItem(row_idx, 7, QTableWidgetItem(str(item_count)))
+                self.history_table.setItem(row_idx, 8, QTableWidgetItem(crawled_at))
         finally:
             self.history_table.setUpdatesEnabled(True)
 

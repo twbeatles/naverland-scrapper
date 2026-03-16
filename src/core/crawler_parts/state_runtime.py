@@ -37,6 +37,7 @@ class CrawlerStateRuntimeMixin:
         playwright_detail_workers=12,
         block_heavy_resources=True,
         playwright_response_drain_timeout_ms=3000,
+        geo_incomplete_safety_mode=True,
     ):
         super().__init__()
         self.targets = targets
@@ -58,6 +59,9 @@ class CrawlerStateRuntimeMixin:
             "price_down": 0,
             "geo_discovered_count": 0,
             "geo_dedup_count": 0,
+            "geo_incomplete": False,
+            "geo_incomplete_count": 0,
+            "geo_incomplete_reasons": [],
             "response_drain_wait_count": 0,
             "response_drain_timeout_count": 0,
             "response_seen_count": 0,
@@ -124,6 +128,10 @@ class CrawlerStateRuntimeMixin:
             self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
         except (TypeError, ValueError):
             self.playwright_response_drain_timeout_ms = 3000
+        self.geo_incomplete_safety_mode = bool(geo_incomplete_safety_mode)
+        self.geo_incomplete = False
+        self.geo_incomplete_reasons = []
+        self.geo_incomplete_count = 0
         self._engine = None
         self._last_batch_flush_at = time.monotonic()
         self._history_state_cache = {}
@@ -132,6 +140,7 @@ class CrawlerStateRuntimeMixin:
         self._db_write_disabled_notified = False
         self._registered_discovered_complex_keys = set()
         self._discovered_complex_status = {}
+        self._pending_discovered_complexes = {}
         self._pair_sequence = self._build_pair_sequence()
         self._processed_pairs = set()
         self._current_pair = None
@@ -205,6 +214,71 @@ class CrawlerStateRuntimeMixin:
     def _mark_pair_processed(self, name, cid, trade_type):
         self._processed_pairs.add(self._pair_key(name, cid, trade_type))
 
+    @staticmethod
+    def _unique_trade_types(trade_types):
+        ordered = []
+        seen = set()
+        for trade_type in trade_types or []:
+            token = str(trade_type or "").strip()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            ordered.append(token)
+        return ordered
+
+    def _determine_run_status(
+        self,
+        requested_trade_types,
+        successful_trade_types,
+        attempted_trade_types,
+        *,
+        force_incomplete=False,
+    ) -> str:
+        if force_incomplete:
+            return "incomplete"
+        requested = self._unique_trade_types(requested_trade_types)
+        attempted = self._unique_trade_types(attempted_trade_types)
+        successful = self._unique_trade_types(successful_trade_types)
+        if attempted and not successful:
+            return "failed"
+        if requested and all(token in successful for token in requested):
+            return "success"
+        return "partial"
+
+    def _mark_geo_incomplete(self, reason: str, detail: str = "") -> None:
+        token = str(reason or "").strip().lower()
+        if not token:
+            return
+        self.geo_incomplete = True
+        self.geo_incomplete_count = int(self.geo_incomplete_count) + 1
+        if token not in self.geo_incomplete_reasons:
+            self.geo_incomplete_reasons.append(token)
+        self.stats["geo_incomplete"] = True
+        self.stats["geo_incomplete_count"] = int(self.geo_incomplete_count)
+        self.stats["geo_incomplete_reasons"] = [
+            self._geo_incomplete_reason_label(reason) for reason in self.geo_incomplete_reasons
+        ]
+        detail_text = f" ({detail})" if detail else ""
+        self.log(f"   geo incomplete flagged: {token}{detail_text}", 30)
+        self.emit_stats()
+
+    @staticmethod
+    def _geo_incomplete_reason_label(reason: str) -> str:
+        mapping = {
+            "marker_switch_fail": "marker switch fail",
+            "marker_drain_timeout": "marker drain timeout",
+            "geo_scan_failure": "geo scan failure",
+        }
+        token = str(reason or "").strip().lower()
+        return mapping.get(token, token or "unknown")
+
+    def _geo_incomplete_reason_summary(self) -> str:
+        reasons = [self._geo_incomplete_reason_label(reason) for reason in self.geo_incomplete_reasons]
+        return ", ".join(reasons)
+
+    def _should_persist_geo_results(self) -> bool:
+        return not (self.crawl_mode == "geo_sweep" and self.geo_incomplete and self.geo_incomplete_safety_mode)
+
     def _item_dedupe_key(self, item):
         if not isinstance(item, dict):
             return None
@@ -254,6 +328,9 @@ class CrawlerStateRuntimeMixin:
             "price_down": self.stats.get("price_down", 0),
             "geo_discovered_count": self.stats.get("geo_discovered_count", 0),
             "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
+            "geo_incomplete": bool(self.stats.get("geo_incomplete", False)),
+            "geo_incomplete_count": self.stats.get("geo_incomplete_count", 0),
+            "geo_incomplete_reasons": list(self.stats.get("geo_incomplete_reasons", [])),
             "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
             "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
             "response_seen_count": self.stats.get("response_seen_count", 0),

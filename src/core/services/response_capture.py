@@ -88,7 +88,12 @@ def normalize_price_fields(article: dict[str, Any], trade_type: str) -> tuple[st
 
 
 def normalize_marker_payload(marker: dict[str, Any], asset_type: str = "") -> dict[str, Any]:
-    cid = str(_first(marker, "markerId", "complexNo", "houseNo", default="")).strip()
+    cid = str(_first(marker, "complexNo", "houseNo", default="")).strip()
+    marker_id = str(_first(marker, "markerId", default="")).strip()
+    if not cid:
+        cid = marker_id
+    if not marker_id:
+        marker_id = cid
     name = str(_first(marker, "complexName", "houseName", default="")).strip()
     lat = _to_float(_first(marker, "latitude", "lat", default=0.0))
     lon = _to_float(_first(marker, "longitude", "lon", "lng", default=0.0))
@@ -98,7 +103,7 @@ def normalize_marker_payload(marker: dict[str, Any], asset_type: str = "") -> di
         "complex_id": cid,
         "complex_name": name or f"단지_{cid}",
         "asset_type": kind,
-        "marker_id": cid,
+        "marker_id": marker_id,
         "count": count,
         "lat": lat,
         "lon": lon,

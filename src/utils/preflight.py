@@ -1,11 +1,12 @@
 import importlib.util
 import importlib
+import json
 import os
 from pathlib import Path
 from typing import Iterable, Optional
 
 from src.utils.logger import get_logger
-from src.utils.paths import DATA_DIR, LOG_DIR
+from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH
 
 
 REQUIRED_DEPENDENCIES = [
@@ -98,6 +99,20 @@ def find_missing_playwright_browser() -> str:
         return f"playwright browser unavailable: {e}"
 
 
+def get_effective_crawl_engine(settings_path: Optional[Path] = None) -> str:
+    path = settings_path or SETTINGS_PATH
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return "playwright"
+    if not isinstance(payload, dict):
+        return "playwright"
+    engine = str(payload.get("crawl_engine", "playwright") or "playwright").strip().lower()
+    if engine not in {"playwright", "selenium"}:
+        return "playwright"
+    return engine
+
+
 def run_preflight_checks(
     base_dir: Optional[Path] = None,
     data_dir: Optional[Path] = None,
@@ -108,6 +123,7 @@ def run_preflight_checks(
     data = data_dir or DATA_DIR
     logs = log_dir or LOG_DIR
     app_logger = logger or get_logger("Preflight")
+    settings_path = data / "settings.json"
 
     errors: list[str] = []
 
@@ -129,6 +145,12 @@ def run_preflight_checks(
             if should_require_playwright_browser():
                 errors.append(message)
                 app_logger.error("Playwright Chromium 누락: %s", missing_browser)
+            elif get_effective_crawl_engine(settings_path) == "playwright":
+                errors.append(message)
+                app_logger.error(
+                    "Playwright Chromium required for effective crawl_engine=playwright: %s",
+                    missing_browser,
+                )
             else:
                 app_logger.warning("%s", message)
 

@@ -10,13 +10,16 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-16 (.spec/doc/gitignore/typing consistency pass): no extra hidden imports/hooks required.
+# Rechecked on 2026-03-16 (.spec/doc/gitignore/runtime-status consistency pass):
+# no extra hidden imports/hooks required.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) do not require spec changes.
 project_dir = Path.cwd().resolve()
 # One-file build is now the default for distribution.
 # You can still force onedir by setting NAVERLAND_ONEFILE=0.
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "1") == "1"
 # Slim build is the default. Bundle Chromium only when explicitly requested.
+# Runtime preflight now blocks startup when the effective crawl_engine is `playwright`
+# and Playwright Chromium is neither installed locally nor bundled.
 bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "0") == "1"
 windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
 # Keep windowed mode by default. Enable console explicitly when debugging startup failures.

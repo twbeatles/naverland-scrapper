@@ -353,9 +353,9 @@ class AppLifecycleMixin:
             self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 창 닫기를 시도하세요.")
         event.ignore()
 
-    def show_toast(self: Any, message, duration=3000):
+    def show_toast(self: Any, message, duration=3000, toast_type="info"):
         # 화면 우측 하단에 표시
-        toast = ToastWidget(message, self)
+        toast = ToastWidget(message, toast_type=toast_type, parent=self)
         
         # 위치 계산 (쌓이도록)
         margin = 20

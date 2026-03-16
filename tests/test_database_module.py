@@ -511,6 +511,7 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(rows[0]["asset_type"], "APT")
         self.assertEqual(rows[0]["engine"], "playwright")
         self.assertEqual(rows[0]["mode"], "complex")
+        self.assertEqual(rows[0]["run_status"], "success")
 
     def test_backup_and_restore_preserves_rows(self):
         self.assertTrue(self.db.add_complex("BaseComplex", "A-100"))

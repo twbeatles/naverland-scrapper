@@ -21,18 +21,20 @@ class TestDatabaseEngineExtensions(unittest.TestCase):
                     source_lon=127.0,
                     source_zoom=15,
                     asset_type="APT",
+                    run_status="incomplete",
                 )
             )
             conn = db._pool.get_connection()
             try:
                 row = conn.cursor().execute(
-                    "SELECT engine, mode, source_lat, source_lon, source_zoom, asset_type FROM crawl_history LIMIT 1"
+                    "SELECT engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status FROM crawl_history LIMIT 1"
                 ).fetchone()
             finally:
                 db._pool.return_connection(conn)
             self.assertEqual(row["engine"], "playwright")
             self.assertEqual(row["mode"], "geo_sweep")
             self.assertEqual(row["asset_type"], "APT")
+            self.assertEqual(row["run_status"], "incomplete")
             db.close()
 
     def test_article_history_upsert_persists_extended_fields(self):
