@@ -13,14 +13,14 @@ class PlaywrightRuntimeMixin:
     def __init__(self, thread):
         self.thread = thread
         self._loop = asyncio.new_event_loop()
-        self._playwright = None
-        self._browser = None
-        self._desktop_context = None
-        self._desktop_page = None
-        self._mobile_context = None
-        self._page_pool: asyncio.Queue | None = None
-        self._started = False
-        self._fallback_used = False
+        self._playwright: Any | None = None
+        self._browser: Any | None = None
+        self._desktop_context: Any | None = None
+        self._desktop_page: Any | None = None
+        self._mobile_context: Any | None = None
+        self._page_pool: asyncio.Queue[Any] | None = None
+        self._started: bool = False
+        self._fallback_used: bool = False
 
     def run(self) -> None:
         if not PLAYWRIGHT_AVAILABLE:
@@ -115,23 +115,27 @@ class PlaywrightRuntimeMixin:
         if self._started:
             return
         self._started = True
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
+        playwright = await async_playwright().start()
+        self._playwright = playwright
+        browser = await playwright.chromium.launch(
             headless=bool(self.thread.playwright_headless)
         )
-        self._desktop_context = await self._browser.new_context(
+        self._browser = browser
+        desktop_context = await browser.new_context(
             viewport={"width": 1920, "height": 1080},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             locale="ko-KR",
         )
-        await self._setup_blocking(self._desktop_context)
-        self._desktop_page = await self._desktop_context.new_page()
-        await self._desktop_page.add_init_script(
+        self._desktop_context = desktop_context
+        await self._setup_blocking(desktop_context)
+        desktop_page = await desktop_context.new_page()
+        self._desktop_page = desktop_page
+        await desktop_page.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
 
-        device = self._playwright.devices["iPhone 14 Pro Max"]
-        self._mobile_context = await self._browser.new_context(
+        device = playwright.devices["iPhone 14 Pro Max"]
+        mobile_context = await browser.new_context(
             **device,
             locale="ko-KR",
             extra_http_headers={
@@ -139,17 +143,19 @@ class PlaywrightRuntimeMixin:
                 "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             },
         )
-        await self._setup_blocking(self._mobile_context)
-        self._page_pool = asyncio.Queue()
+        self._mobile_context = mobile_context
+        await self._setup_blocking(mobile_context)
+        page_pool: asyncio.Queue[Any] = asyncio.Queue()
+        self._page_pool = page_pool
         for _ in range(max(1, int(self.thread.playwright_detail_workers))):
-            page = await self._mobile_context.new_page()
+            page = await mobile_context.new_page()
             await page.add_init_script(
                 """
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
                 window.open = (u) => { location.href = u; };
                 """
             )
-            await self._page_pool.put(page)
+            await page_pool.put(page)
 
     async def _shutdown_async(self):
         if self._page_pool is not None:

@@ -49,6 +49,7 @@ class TestExportModule(unittest.TestCase):
             self.assertEqual(out, path)
             wb = load_workbook(path, data_only=True)
             ws = wb.active
+            assert ws is not None
             value = ws.cell(row=2, column=2).value
             wb.close()
 

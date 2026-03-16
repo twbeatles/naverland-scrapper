@@ -14,6 +14,8 @@ logger = get_logger("DB")
 class ComplexDatabaseSchemaMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
+        @staticmethod
+        def _column_names(cursor: Any, table_name: str) -> set[str]: ...
 
     @classmethod
     def _article_history_requires_migration(cls, cursor) -> bool:

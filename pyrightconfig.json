@@ -1,0 +1,22 @@
+{
+  "include": [
+    "app_entry.py",
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    "build",
+    "dist",
+    "data",
+    "logs"
+  ],
+  "pythonVersion": "3.9",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "standard",
+  "useLibraryCodeForTypes": true,
+  "reportMissingTypeStubs": "none"
+}

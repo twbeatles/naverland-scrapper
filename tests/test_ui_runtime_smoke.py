@@ -47,6 +47,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_url_batch_dialog_unverified_defaults_unchecked(self):
+        from PyQt6.QtWidgets import QCheckBox
         from src.ui.dialogs.batch import URLBatchDialog
 
         with (
@@ -64,6 +65,8 @@ class TestUIRuntimeSmoke(unittest.TestCase):
 
             chk_unknown = dlg.result_table.cellWidget(0, 0)
             chk_verified = dlg.result_table.cellWidget(1, 0)
+            assert isinstance(chk_unknown, QCheckBox)
+            assert isinstance(chk_verified, QCheckBox)
             self.assertFalse(chk_unknown.isChecked())
             self.assertTrue(chk_verified.isChecked())
 

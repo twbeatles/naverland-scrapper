@@ -447,3 +447,18 @@ COLORS["light"] = {
   - `.gitignore` remains sufficient for build/log/data/backup/Playwright outputs without new patterns.
 - Validation:
   - `python -m pytest -q` => `137 passed`
+
+## 0-14. v15.0.11 Typing/Encoding Consistency Pass (2026-03-16)
+- Workspace typing baseline:
+  - added `pyrightconfig.json` and fixed the baseline command to `npx pyright` over `app_entry.py + src + tests`
+  - current result: `0 errors`
+  - mixin/dynamic-attribute/test-double type issues that surfaced in Pylance/Pyright were normalized
+- Encoding baseline:
+  - added `.editorconfig` and `.vscode/settings.json` to keep UTF-8 workspace defaults stable
+  - removed remaining UTF-8 BOMs from Python/docs and repaired a corrupted comment string
+- `.spec` / `.gitignore` follow-up:
+  - `naverland-scrapper.spec` was rechecked on 2026-03-16 and still needs no extra hidden import/runtime hook/data bundle changes
+  - `.gitignore` keeps existing build/log/data/backup/Playwright ignores and now explicitly allows `pyrightconfig.json` and `.vscode/settings.json`
+- Validation:
+  - `npx pyright` => `0 errors`
+  - `python -m pytest -q` => `137 passed`

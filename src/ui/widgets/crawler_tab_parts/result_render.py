@@ -44,16 +44,16 @@ class CrawlerTabResultRenderMixin:
         return (asset_type, article_id, complex_id)
 
     def _favorite_keys_snapshot(self: Any):
-        provider = getattr(self, "favorite_keys_provider", None)
+        provider = self.favorite_keys_provider
         if callable(provider):
             try:
                 value = provider()
             except Exception:
                 value = None
-            if value is not None:
+            if isinstance(value, set):
                 return set(value)
-        current = getattr(self, "favorite_keys", None)
-        return set(current) if current else set()
+        current = getattr(self, "favorite_keys", set())
+        return set(current) if isinstance(current, set) else set()
 
     def _decorate_favorite_state(self: Any, items):
         if not items:

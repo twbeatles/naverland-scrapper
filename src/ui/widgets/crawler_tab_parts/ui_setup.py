@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from src.ui.widgets.crawler_tab import *  # noqa: F403
+
+
+FavoriteKey = tuple[str, str, str]
+FavoriteKeyProvider = Callable[[], set[FavoriteKey]]
+CompactRowKey = tuple[str, str, str, str, str, float, str]
+RowPayload = dict[str, Any]
+ResultRow = dict[str, Any]
 
 
 class CrawlerTabUISetupMixin:
@@ -17,20 +24,20 @@ class CrawlerTabUISetupMixin:
         self.history_manager = history_manager
         self.current_theme = theme
         self._maintenance_guard = maintenance_guard
-        self.crawler_thread = None
-        self.crawl_cache = None
-        self.collected_data = []
-        self.grouped_rows = {}
-        self._pending_search_text = ""
-        self._row_search_cache = []
-        self._row_payload_cache = []
-        self._row_hidden_state = {}
-        self._advanced_filters = None
-        self._append_chunk_size = 200
-        self._compact_duplicates = bool(settings.get("compact_duplicate_listings", True))
-        self._compact_items_by_key = {}
-        self._compact_rows_data = []
-        self.favorite_keys_provider = None
+        self.crawler_thread: Any | None = None
+        self.crawl_cache: Any | None = None
+        self.collected_data: list[ResultRow] = []
+        self.grouped_rows: dict[str, Any] = {}
+        self._pending_search_text: str = ""
+        self._row_search_cache: list[str] = []
+        self._row_payload_cache: list[RowPayload] = []
+        self._row_hidden_state: dict[int, bool] = {}
+        self._advanced_filters: dict[str, Any] | None = None
+        self._append_chunk_size: int = 200
+        self._compact_duplicates: bool = bool(settings.get("compact_duplicate_listings", True))
+        self._compact_items_by_key: dict[CompactRowKey, ResultRow] = {}
+        self._compact_rows_data: list[ResultRow] = []
+        self.favorite_keys_provider: FavoriteKeyProvider | None = None
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         try:

@@ -8,6 +8,12 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def _table_text(table, row: int, column: int) -> str:
+    item = table.item(row, column)
+    assert item is not None
+    return item.text()
+
+
 @unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
 class TestGeoTabWiring(unittest.TestCase):
     @classmethod
@@ -44,12 +50,14 @@ class TestGeoTabWiring(unittest.TestCase):
             ):
                 tab.start_crawling()
 
-            self.assertIsNotNone(tab.crawler_thread)
-            self.assertEqual(tab.crawler_thread.crawl_mode, "geo_sweep")
-            self.assertEqual(tab.crawler_thread.engine_name, "playwright")
-            self.assertFalse(tab.crawler_thread.fallback_engine_enabled)
-            self.assertIsNotNone(tab.crawler_thread.geo_config)
-            self.assertAlmostEqual(tab.crawler_thread.geo_config.lat, 37.55)
+            thread = tab.crawler_thread
+            assert thread is not None
+            self.assertEqual(thread.crawl_mode, "geo_sweep")
+            self.assertEqual(thread.engine_name, "playwright")
+            self.assertFalse(thread.fallback_engine_enabled)
+            geo_config = thread.geo_config
+            assert geo_config is not None
+            self.assertAlmostEqual(geo_config.lat, 37.55)
             self.assertIn(
                 "Geo 모드는 Playwright 전용이며 Selenium fallback은 지원하지 않습니다.",
                 tab.log_browser.toPlainText(),
@@ -94,8 +102,8 @@ class TestGeoTabWiring(unittest.TestCase):
             )
 
             self.assertEqual(tab.discovered_table.rowCount(), 1)
-            self.assertEqual(tab.discovered_table.item(0, 0).text(), "기존")
-            self.assertEqual(tab.discovered_table.item(0, 4).text(), "9")
+            self.assertEqual(_table_text(tab.discovered_table, 0, 0), "기존")
+            self.assertEqual(_table_text(tab.discovered_table, 0, 4), "9")
 
             db.close()
             tab.deleteLater()
@@ -239,8 +247,11 @@ class TestGeoTabWiring(unittest.TestCase):
                 with patch("src.core.crawler.CrawlerThread.start", return_value=None):
                     tab.start_crawling()
 
-                self.assertIsNotNone(tab.crawler_thread)
-                self.assertEqual(tab.crawler_thread.retry_handler.max_retries, 0)
+                thread = tab.crawler_thread
+                assert thread is not None
+                retry_handler = thread.retry_handler
+                assert retry_handler is not None
+                self.assertEqual(retry_handler.max_retries, 0)
 
             db.close()
             tab.deleteLater()

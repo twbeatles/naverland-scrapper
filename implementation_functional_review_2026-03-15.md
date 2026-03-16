@@ -132,3 +132,11 @@
 ## 최종 검증
 - `python -m pytest -q`
   - 결과: `137 passed in 10.47s`
+
+## 2026-03-16 Follow-up: Typing/Encoding/.spec/.gitignore
+- `pyrightconfig.json`을 추가해 workspace 타입 검사를 `app_entry.py + src + tests` 기준으로 고정했습니다.
+- `npx pyright` 재검증 결과는 `0 errors`입니다.
+- `.editorconfig`, `.vscode/settings.json`을 추가해 UTF-8 저장 및 IDE type checking 기준을 고정했습니다.
+- 남아 있던 UTF-8 BOM과 깨진 주석을 정리했습니다.
+- `naverland-scrapper.spec`는 재점검 결과 추가 hidden import/runtime hook/data bundle 수정이 여전히 필요하지 않았습니다.
+- `.gitignore`는 기존 산출물 무시 규칙을 유지하되, 저장소 기준 설정 파일인 `pyrightconfig.json`, `.vscode/settings.json`을 추적 가능하도록 예외를 추가했습니다.

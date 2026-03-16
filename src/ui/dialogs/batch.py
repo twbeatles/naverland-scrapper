@@ -1,4 +1,4 @@
-﻿from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,

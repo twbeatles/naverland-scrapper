@@ -311,3 +311,19 @@ python src/main.py
   - `.gitignore`는 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분해 추가 수정이 없었습니다.
 - 검증:
   - `python -m pytest -q` => `137 passed`
+
+## v15.0.11 Typing/Encoding Consistency Pass (2026-03-16)
+
+- Typing baseline:
+  - workspace 기준 `pyrightconfig.json`을 추가해 검사 범위를 `app_entry.py + src + tests`로 고정했습니다.
+  - 현재 기준 검증 명령은 `npx pyright`이며 결과는 `0 errors`입니다.
+  - Pylance/Pyright 오탐이 나던 믹스인/동적 속성/테스트 더블 타입을 정리했습니다.
+- Encoding baseline:
+  - `.editorconfig`와 `.vscode/settings.json`을 추가해 UTF-8 저장과 workspace type checking 기준을 고정했습니다.
+  - Python/문서 파일에 남아 있던 UTF-8 BOM을 제거했고, 깨진 주석/문자열을 정리했습니다.
+- `.spec` / `.gitignore` review:
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않았습니다.
+  - `.gitignore`는 기존 산출물 무시 규칙은 유지하고, 새로 추가한 `pyrightconfig.json`과 `.vscode/settings.json`만 추적 가능하도록 예외를 보강했습니다.
+- Validation:
+  - `npx pyright` => `0 errors`
+  - `python -m pytest -q` => `137 passed`

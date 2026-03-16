@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sqlite3
 import tempfile
 import unittest

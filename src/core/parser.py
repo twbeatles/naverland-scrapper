@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 import urllib.request
 from socket import timeout as SocketTimeout

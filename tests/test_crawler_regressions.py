@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 
@@ -257,11 +258,17 @@ class TestCrawlerRegressions(unittest.TestCase):
             def quit(self):
                 return None
 
-        thread._init_driver = lambda: _Driver()
+        def _fake_init_driver() -> Any:
+            return _Driver()
+
+        def _fake_finalize_disappeared_articles(processed_target_pairs) -> None:
+            finalized.setdefault("pairs", set(processed_target_pairs))
+
+        thread._init_driver = _fake_init_driver
         thread._crawl = lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("_crawl must not run while cooldown is active")
         )
-        thread._finalize_disappeared_articles = lambda pairs: finalized.setdefault("pairs", set(pairs))
+        thread._finalize_disappeared_articles = _fake_finalize_disappeared_articles
 
         with (
             patch("src.core.crawler.UC_AVAILABLE", True),
@@ -279,15 +286,21 @@ class TestCrawlerRegressions(unittest.TestCase):
 
     def test_scroll_container_fallback_smoke(self):
         thread = self._build_thread(price_filter={"enabled": False})
-        thread._detect_scroll_container = lambda _driver: True
         states = [(5, {"A1"}), (5, {"A1"}), (5, {"A1"})]
-        thread._get_item_state = lambda _driver, _selectors: states.pop(0)
         calls = []
 
-        def _fake_scroll_once(_driver, use_container):
+        def _fake_detect_scroll_container(driver) -> bool:
+            return True
+
+        def _fake_get_item_state(driver, selectors) -> tuple[int, set[str]]:
+            return states.pop(0)
+
+        def _fake_scroll_once(driver, use_container) -> bool:
             calls.append(use_container)
             return False if len(calls) == 1 else True
 
+        thread._detect_scroll_container = _fake_detect_scroll_container
+        thread._get_item_state = _fake_get_item_state
         thread._scroll_once = _fake_scroll_once
         with patch("src.core.crawler.time.sleep", return_value=None):
             thread._scroll(object())
@@ -298,11 +311,22 @@ class TestCrawlerRegressions(unittest.TestCase):
 
     def test_scroll_window_fallback_smoke(self):
         thread = self._build_thread(price_filter={"enabled": False})
-        thread._detect_scroll_container = lambda _driver: False
         states = [(3, {"X"}), (3, {"X"}), (3, {"X"})]
-        thread._get_item_state = lambda _driver, _selectors: states.pop(0)
         calls = []
-        thread._scroll_once = lambda _driver, use_container: calls.append(use_container) or False
+
+        def _fake_detect_scroll_container(driver) -> bool:
+            return False
+
+        def _fake_get_item_state(driver, selectors) -> tuple[int, set[str]]:
+            return states.pop(0)
+
+        def _fake_scroll_once(driver, use_container) -> bool:
+            calls.append(use_container)
+            return False
+
+        thread._detect_scroll_container = _fake_detect_scroll_container
+        thread._get_item_state = _fake_get_item_state
+        thread._scroll_once = _fake_scroll_once
 
         with patch("src.core.crawler.time.sleep", return_value=None):
             thread._scroll(object())

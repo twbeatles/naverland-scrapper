@@ -9,6 +9,12 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def _table_text(table, row: int, column: int) -> str:
+    item = table.item(row, column)
+    assert item is not None
+    return item.text()
+
+
 @unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
 class TestUIWiring(unittest.TestCase):
     @classmethod
@@ -138,9 +144,9 @@ class TestUIWiring(unittest.TestCase):
             with patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting):
                 tab._append_rows_batch([sample])
 
-            self.assertEqual(tab.result_table.item(0, 7).text(), "1건")
-            self.assertEqual(tab.result_table.item(0, 8).text(), "")
-            self.assertEqual(tab.result_table.item(0, 9).text(), "")
+            self.assertEqual(_table_text(tab.result_table, 0, 7), "1건")
+            self.assertEqual(_table_text(tab.result_table, 0, 8), "")
+            self.assertEqual(_table_text(tab.result_table, 0, 9), "")
 
             db.close()
             tab.deleteLater()
@@ -192,7 +198,7 @@ class TestUIWiring(unittest.TestCase):
             tab._on_items_batch(batch)
             self.assertEqual(len(tab.collected_data), 2)
             self.assertEqual(tab.result_table.rowCount(), 1)
-            self.assertEqual(tab.result_table.item(0, 7).text(), "2건")
+            self.assertEqual(_table_text(tab.result_table, 0, 7), "2건")
 
             db.close()
             tab.deleteLater()
@@ -296,7 +302,7 @@ class TestUIWiring(unittest.TestCase):
                 tab._show_db_load_dialog()
 
             self.assertEqual(tab.table_list.rowCount(), 1)
-            self.assertEqual(tab.table_list.item(0, 1).text(), "11001")
+            self.assertEqual(_table_text(tab.table_list, 0, 1), "11001")
             self.assertIn("APT만 지원", tab.log_browser.toPlainText())
 
             db.close()
@@ -334,7 +340,7 @@ class TestUIWiring(unittest.TestCase):
                 tab._show_group_load_dialog()
 
             self.assertEqual(tab.table_list.rowCount(), 1)
-            self.assertEqual(tab.table_list.item(0, 1).text(), "12001")
+            self.assertEqual(_table_text(tab.table_list, 0, 1), "12001")
             self.assertIn("APT만 지원", tab.log_browser.toPlainText())
 
             db.close()
@@ -527,7 +533,7 @@ class TestUIWiring(unittest.TestCase):
 
         self.assertEqual(mock_clear.call_count, 0)
         self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
-        self.assertEqual(app.crawler_tab.table_list.item(0, 1).text(), "99999")
+        self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
         mock_start.assert_not_called()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -560,7 +566,7 @@ class TestUIWiring(unittest.TestCase):
             app._run_scheduled()
 
         self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
-        self.assertEqual(app.crawler_tab.table_list.item(0, 1).text(), "11111")
+        self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "11111")
         self.assertIn("APT만 지원", app.crawler_tab.log_browser.toPlainText())
         mock_start.assert_called_once()
 
@@ -831,7 +837,7 @@ class TestUIWiring(unittest.TestCase):
             rows = db.get_all_alert_settings()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["asset_type"], "ALL")
-            self.assertEqual(dialog.table.item(0, 1).text(), "공통")
+            self.assertEqual(_table_text(dialog.table, 0, 1), "공통")
 
             dialog.deleteLater()
             db.close()
@@ -848,7 +854,7 @@ class TestUIWiring(unittest.TestCase):
             self.assertTrue(tab.add_task("첫단지", "12345"))
             self.assertFalse(tab.add_task("둘단지", "12345"))
             self.assertEqual(tab.table_list.rowCount(), 1)
-            self.assertEqual(tab.table_list.item(0, 0).text(), "첫단지")
+            self.assertEqual(_table_text(tab.table_list, 0, 0), "첫단지")
             self.assertIn("중복 스킵", tab.log_browser.toPlainText())
 
             tab._append_task_row("레거시중복", "12345")
@@ -893,10 +899,10 @@ class TestUIWiring(unittest.TestCase):
             app._load_history()
 
             self.assertEqual(app.history_table.columnCount(), 8)
-            self.assertEqual(app.history_table.item(0, 0).text(), "메타단지")
-            self.assertEqual(app.history_table.item(0, 2).text(), "APT")
-            self.assertEqual(app.history_table.item(0, 3).text(), "playwright")
-            self.assertEqual(app.history_table.item(0, 4).text(), "complex")
+            self.assertEqual(_table_text(app.history_table, 0, 0), "메타단지")
+            self.assertEqual(_table_text(app.history_table, 0, 2), "APT")
+            self.assertEqual(_table_text(app.history_table, 0, 3), "playwright")
+            self.assertEqual(_table_text(app.history_table, 0, 4), "complex")
 
             if hasattr(app, "schedule_timer") and app.schedule_timer:
                 app.schedule_timer.stop()
@@ -950,9 +956,10 @@ class TestUIWiring(unittest.TestCase):
                     break
             app._load_stats()
 
-            self.assertIsNotNone(app.chart_widget)
+            chart_widget = app.chart_widget
+            assert chart_widget is not None
             self.assertEqual(
-                app.chart_widget.message_label.text(),
+                chart_widget.message_label.text(),
                 "차트를 보려면 거래유형과 평형을 하나로 좁혀주세요.",
             )
 

@@ -10,7 +10,8 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-15 (.spec/doc/gitignore consistency pass): no extra hidden imports/hooks required.
+# Rechecked on 2026-03-16 (.spec/doc/gitignore/typing consistency pass): no extra hidden imports/hooks required.
+# Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) do not require spec changes.
 project_dir = Path.cwd().resolve()
 # One-file build is now the default for distribution.
 # You can still force onedir by setting NAVERLAND_ONEFILE=0.

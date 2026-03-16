@@ -1,4 +1,37 @@
-﻿## **v15.0.10 (2026-03-15)**
+## **v15.0.11 (2026-03-16)**
+
+**타이핑/인코딩 정합성 보강 + .spec/.md/.gitignore 재점검**
+
+### ✅ 핵심 반영
+
+* 정적 분석 기준 고정:
+  - `pyrightconfig.json` 추가로 검사 범위를 `app_entry.py`, `src/`, `tests/`로 통일
+  - 믹스인/동적 속성/테스트 더블 때문에 발생하던 Pylance/Pyright 오탐 정리
+* 인코딩 기준 고정:
+  - `.editorconfig`, `.vscode/settings.json` 추가로 UTF-8 저장 및 workspace type checking 기준 고정
+  - Python/문서 파일에 남아 있던 UTF-8 BOM 제거
+  - 깨진 주석/문자열을 의미 기준으로 복구
+
+### 📦 .spec / 문서 / 무시규칙 정합성
+
+* `.spec` 재점검 결과:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - 재점검 기준 주석 날짜를 `2026-03-16`으로 갱신
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_functional_review_2026-03-15.md`, `update_history.md`에 동일 기준 반영
+  - 공통 반영 기준은 `workspace pyright baseline`, `UTF-8 encoding guardrails`, `.spec 재점검 결과`, `.gitignore 예외 규칙`임
+* `.gitignore` 재점검 결과:
+  - 기존 build/log/data/backup/Playwright 산출물 무시 규칙은 그대로 유지
+  - `pyrightconfig.json`, `.vscode/settings.json`은 저장소 기준 설정으로 추적할 수 있게 예외 규칙 추가
+
+### 🧪 검증
+
+* `npx pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m pytest -q`
+  - 결과: `137 passed`
+
+## **v15.0.10 (2026-03-15)**
 
 **기능 구현 후속 개선 반영 + .spec/.md/.gitignore 정합성 재점검**
 

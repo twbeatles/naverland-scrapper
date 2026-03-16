@@ -24,6 +24,7 @@ data/
 *.db.restore_tmp
 *.db.pre_restore
 *.json
+!pyrightconfig.json
 *.csv
 *.xlsx
 
@@ -37,7 +38,8 @@ test-results/
 ms-playwright/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 .pytest_cache/
 Microsoft/

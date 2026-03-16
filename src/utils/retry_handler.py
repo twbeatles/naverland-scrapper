@@ -1,4 +1,4 @@
-﻿import time
+import time
 from typing import Callable, Optional
 
 from src.utils.error_handler import NetworkErrorHandler

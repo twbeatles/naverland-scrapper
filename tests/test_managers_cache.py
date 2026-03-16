@@ -66,7 +66,7 @@ class TestCacheAndManagers(unittest.TestCase):
         with patch("src.core.cache.CACHE_PATH", cache_path):
             cache = CrawlCache(ttl_minutes=30)
             data = cache.get("12345", "매매")
-            self.assertIsNotNone(data)
+            assert data is not None
             self.assertEqual(data[0]["id"], 7)
 
             cache.set("99999", "매매", [{"id": 9}])

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, List, Tuple
 
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
@@ -22,17 +22,18 @@ class AppLifecycleMixin:
         self.preset_manager = FilterPresetManager()
         self.history_manager = SearchHistoryManager(max_items=settings.get("max_search_history", 20))
         self.recently_viewed = RecentlyViewedManager()
-        self.advanced_filters = None
-        self.collected_data = []
+        self.advanced_filters: dict[str, Any] | None = None
+        self.collected_data: list[dict[str, Any]] = []
         self.is_scheduled_run = False
-        self.retry_handler = None
-        self.tray_icon = None
+        self.retry_handler: Any | None = None
+        self.tray_icon: Any | None = None
         self._is_shutting_down = False
         self._maintenance_mode = False
         self._maintenance_reason = ""
         self._maintenance_enabled_snapshot: List[Tuple[Any, bool]] = []
-        self.favorite_keys = set()
-        self._shortcuts = {}
+        self.favorite_keys: set[tuple[str, str, str]] = set()
+        self._shortcuts: dict[str, Any] = {}
+        self.schedule_timer: Any | None = None
         self.db = ComplexDatabase()
         self._lazy_noncritical_tabs = bool(settings.get("startup_lazy_noncritical_tabs", True))
         self._noncritical_loaded = {
@@ -372,7 +373,7 @@ class AppLifecycleMixin:
         QTimer.singleShot(duration + 500, self._reposition_toasts)
 
     def _reposition_toasts(self: Any):
-        # ?????? ??? ??? ???
+        # 이미 삭제된 toast 객체는 목록에서 정리한다.
         alive = []
         for toast in list(self.toast_widgets):
             try:

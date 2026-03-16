@@ -1,7 +1,8 @@
-﻿import asyncio
+import asyncio
 import time
 import unittest
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
@@ -61,7 +62,7 @@ class _ThreadStub:
         self.playwright_detail_workers = 1
         self.playwright_response_drain_timeout_ms = 3000
         self.block_heavy_resources = False
-        self.cache = None
+        self.cache: Any | None = None
         self.negative_cache_ttl_minutes = 5
         self.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
         self.geo_config = SimpleNamespace(
@@ -510,7 +511,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         await engine._page_pool.put(object())
         await engine._page_pool.put(object())
 
-        async def _no_retry(_label, func, *, attempts=3):
+        async def _no_retry(label: str, func, *, attempts=3):
             return await func()
 
         engine._async_retry = _no_retry
@@ -544,7 +545,12 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                 "count": 2,
                 "marker_id": "m1",
             }
-            return (lambda _response: None), set(), {"dedup_skipped": 0}
+            pending_tasks: set[asyncio.Task[object]] = set()
+
+            def _handle_response(response) -> None:
+                return None
+
+            return (_handle_response, pending_tasks, {"dedup_skipped": 0})
 
         async def _noop_scan(*_args, **_kwargs):
             return None
