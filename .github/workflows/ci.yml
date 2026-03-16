@@ -29,6 +29,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -36,6 +41,9 @@ jobs:
 
       - name: Syntax check
         run: python -m compileall src
+
+      - name: Run Pyright
+        run: npx --yes pyright
 
       - name: Preflight check
         run: python -m src.utils.preflight

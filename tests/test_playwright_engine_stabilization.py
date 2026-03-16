@@ -391,6 +391,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         async def _scan(asset_type, trade_type, lat, lon, zoom, geo):
             called.append((asset_type, trade_type))
+            return True
 
         engine._ensure_started = _noop_started
         engine._scan_geo_asset_type = _scan
@@ -635,7 +636,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             return (_handle_response, pending_tasks, {"dedup_skipped": 0})
 
         async def _noop_scan(*_args, **_kwargs):
-            return None
+            return True
 
         async def _always_fail(*_args, **_kwargs):
             raise RuntimeError("target crawl failed")
@@ -677,7 +678,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         async def _noop_started():
             return None
 
-        async def _noop_memory(_reason):
+        async def _noop_memory(reason):
             return None
 
         async def _crawl(name, cid, trade_type, *args, **kwargs):
@@ -706,7 +707,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         async def _noop_started():
             return None
 
-        async def _noop_memory(_reason):
+        async def _noop_memory(reason):
             return None
 
         async def _crawl(*args, **kwargs):
@@ -737,10 +738,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         async def _noop_started():
             return None
 
-        def _fake_marker_handler(_discovered):
+        def _fake_marker_handler(discovered):
             pending_tasks: set[asyncio.Task] = set()
 
-            def _handle_response(_response) -> None:
+            def _handle_response(response) -> None:
                 return None
 
             return (_handle_response, pending_tasks, {"dedup_skipped": 0})
@@ -749,6 +750,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             called.append((asset_type, trade_type))
             if asset_type == "APT" and trade_type == thread.trade_types[0]:
                 raise RuntimeError("scan failed")
+            return True
 
         async def _fake_drain(*_args, **_kwargs):
             return (0, False)
@@ -823,13 +825,13 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             }
             pending_tasks: set[asyncio.Task] = set()
 
-            def _handle_response(_response) -> None:
+            def _handle_response(response) -> None:
                 return None
 
             return (_handle_response, pending_tasks, {"dedup_skipped": 0})
 
         async def _noop_scan(*_args, **_kwargs):
-            return None
+            return True
 
         async def _crawl(*_args, **_kwargs):
             return {"count": 1}
@@ -872,13 +874,13 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             }
             pending_tasks: set[asyncio.Task] = set()
 
-            def _handle_response(_response) -> None:
+            def _handle_response(response) -> None:
                 return None
 
             return (_handle_response, pending_tasks, {"dedup_skipped": 0})
 
         async def _noop_scan(*_args, **_kwargs):
-            return None
+            return True
 
         async def _crawl(*_args, **_kwargs):
             return {"count": 1}

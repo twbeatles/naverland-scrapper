@@ -1,3 +1,25 @@
+## **v15.0.13 (2026-03-16)**
+
+**Repo-wide Pylance/Pyright cleanup + encoding regression guardrails**
+
+### 주요 반영
+
+* 테스트 더블 시그니처 정합성 보강
+  - `tests/test_playwright_engine_stabilization.py`에서 `PlaywrightCrawlerEngine` monkeypatch 대상 메서드들의 파라미터명/반환형을 실제 시그니처와 맞춤
+  - `_scan_geo_asset_type` 대역은 `bool` 반환으로 고정
+  - `_check_memory_and_recycle_if_needed(reason)`, `_build_marker_handler(discovered)`, `response` callback 이름까지 맞춰 Pylance/Pyright attribute access 오류 제거
+* 인코딩 회귀 방지 강화
+  - `tests/test_mojibake_scan.py` 검사 범위를 `src/tests` Python 파일만이 아니라 `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `.spec`, workflow, editor 설정까지 확장
+  - tracked text 파일이 모두 `UTF-8 without BOM`인지와 mojibake indicator가 없는지를 함께 검증
+  - 이번 패스에서 tracked 소스/문서/설정 파일 기준 실제 UTF-8 손상은 발견되지 않음
+* CI 타입 가드 추가
+  - `.github/workflows/ci.yml`에 `actions/setup-node` + `npx --yes pyright`를 추가해 repo-wide 타입 회귀를 CI에서 바로 차단
+
+### 검증
+
+* `npx pyright` => `0 errors`
+* `pytest -q` => `150 passed`
+
 ## **v15.0.12 (2026-03-16)**
 
 **Geo incomplete 안전모드 / run_status / preflight 정책 반영 + .spec/.md/gitignore 재점검**
