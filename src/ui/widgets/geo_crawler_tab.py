@@ -16,14 +16,17 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 
-from src.core.cache import CrawlCache
-from src.core.crawler import CrawlerThread
 from src.core.models.crawl_models import GeoSweepConfig
 from src.core.managers import SettingsManager
-from src.ui.widgets.crawler_tab import CrawlerTab
+from src.ui.widgets.crawler_tab import (
+    CrawlerTab,
+    _get_crawl_cache_cls,
+    _get_crawler_thread_cls,
+)
 
 
 settings = SettingsManager()
+CrawlerThread = None
 
 
 class GeoCrawlerTab(CrawlerTab):
@@ -139,6 +142,8 @@ class GeoCrawlerTab(CrawlerTab):
         self.check_asset_vl.setChecked("VL" in asset_types)
 
     def start_crawling(self):
+        global CrawlerThread
+
         if self._maintenance_guard and self._maintenance_guard():
             self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
             return
@@ -202,7 +207,8 @@ class GeoCrawlerTab(CrawlerTab):
         }
 
         if settings.get("cache_enabled", True):
-            self.crawl_cache = CrawlCache(
+            cache_cls = _get_crawl_cache_cls()
+            self.crawl_cache = cache_cls(
                 ttl_minutes=settings.get("cache_ttl_minutes", 30),
                 write_back_interval_sec=settings.get("cache_write_back_interval_sec", 2),
                 max_entries=settings.get("cache_max_entries", 2000),
@@ -227,7 +233,10 @@ class GeoCrawlerTab(CrawlerTab):
             configured_retry_count = 3
         retry_on_error = bool(settings.get("retry_on_error", True))
         max_retry_count = configured_retry_count if retry_on_error else 0
-        self.crawler_thread = CrawlerThread(
+        if CrawlerThread is None:
+            CrawlerThread = _get_crawler_thread_cls()
+        crawler_thread_cls = CrawlerThread
+        self.crawler_thread = crawler_thread_cls(
             [],
             trade_types,
             area_filter,

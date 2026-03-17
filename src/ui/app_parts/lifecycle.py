@@ -62,6 +62,14 @@ class AppLifecycleMixin:
         self._restore_window_geometry()
         
         self.show_toast(f"환영합니다! {APP_TITLE} {APP_VERSION}입니다.")
+        startup_notice = ""
+        try:
+            startup_notice = self.db.get_startup_recovery_notice()
+        except Exception:
+            startup_notice = ""
+        if startup_notice:
+            self.status_bar.showMessage(startup_notice, 15000)
+            self.show_toast(startup_notice)
 
     def _restore_window_geometry(self: Any):
         geo = settings.get("window_geometry")
@@ -184,11 +192,6 @@ class AppLifecycleMixin:
         self.schedule_timer.start(60000)
     
     def _load_initial_data(self: Any):
-        # self._load_db_complexes() - Handled by DatabaseTab
-        # self._load_all_groups() - Handled by GroupTab
-        if hasattr(self, 'db_tab'): self.db_tab.load_data()
-        if hasattr(self, 'group_tab'): self.group_tab.load_groups()
-
         if not self._lazy_noncritical_tabs:
             self._load_history()
             self._noncritical_loaded["history"] = True
@@ -196,6 +199,9 @@ class AppLifecycleMixin:
             self._noncritical_loaded["stats"] = True
             self._refresh_favorite_keys()
             self._noncritical_loaded["favorites"] = True
+        group_tab = getattr(self, "group_tab", None)
+        if group_tab is not None:
+            group_tab.load_groups()
         self._load_schedule_groups()
         self._load_schedule_config()
         
@@ -216,8 +222,9 @@ class AppLifecycleMixin:
             self._load_stats()
         if self.dashboard_widget is not None:
             self.dashboard_widget.set_data(self.collected_data)
-        if hasattr(self, "favorites_tab"):
-            self.favorites_tab.refresh()
+        favorites_tab = getattr(self, "favorites_tab", None)
+        if favorites_tab is not None:
+            favorites_tab.refresh()
             self._noncritical_loaded["favorites"] = True
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
 
@@ -450,6 +457,8 @@ class AppLifecycleMixin:
             empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(empty_lbl)
         else:
+            from src.ui.widgets.cards import CardViewWidget
+
             card_view = CardViewWidget(is_dark=(self.current_theme=="dark"))
             card_view.set_data(self._decorate_items_with_favorite_state(recent_items))
             card_view.article_clicked.connect(

@@ -10,7 +10,6 @@ if project_root not in sys.path:
 
 from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
 from src.utils.paths import ensure_directories
-from src.utils.plot import setup_korean_font
 from src.utils.preflight import run_preflight_checks
 
 
@@ -84,7 +83,6 @@ def main():
         sys.__excepthook__(exc_type, exc, tb)
 
     sys.excepthook = _excepthook
-    setup_korean_font()
 
     from PyQt6.QtWidgets import QApplication
     from src.ui.app import RealEstateApp

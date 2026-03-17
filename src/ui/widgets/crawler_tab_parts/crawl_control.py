@@ -274,6 +274,11 @@ class CrawlerTabCrawlControlMixin:
             webbrowser.open(url)
 
     def start_crawling(self: Any):
+        from src.ui.widgets.crawler_tab import (
+            _get_crawl_cache_cls,
+            _get_crawler_thread_cls,
+        )
+
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
             self.status_message.emit("이미 크롤링이 실행 중입니다.")
@@ -359,14 +364,16 @@ class CrawlerTabCrawlControlMixin:
         max_retry_count = configured_retry_count if retry_on_error else 0
 
         if settings.get("cache_enabled", True):
-            self.crawl_cache = CrawlCache(
+            cache_cls = _get_crawl_cache_cls()
+            self.crawl_cache = cache_cls(
                 ttl_minutes=settings.get("cache_ttl_minutes", 30),
                 write_back_interval_sec=settings.get("cache_write_back_interval_sec", 2),
                 max_entries=settings.get("cache_max_entries", 2000),
             )
         
         # Start Thread
-        self.crawler_thread = CrawlerThread(
+        crawler_thread_cls = _get_crawler_thread_cls()
+        self.crawler_thread = crawler_thread_cls(
             target_list, trade_types, area_filter, price_filter, self.db,
             speed=self.speed_slider.current_speed(),
             cache=self.crawl_cache,

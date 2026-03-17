@@ -2,6 +2,7 @@ import importlib.util
 import importlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -41,6 +42,16 @@ def should_skip_playwright_browser_check() -> bool:
 
 def should_require_playwright_browser() -> bool:
     return _is_truthy_env(os.environ.get("NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER"))
+
+
+def is_frozen_runtime() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def should_run_source_integrity_checks() -> bool:
+    if is_frozen_runtime():
+        return False
+    return not _is_truthy_env(os.environ.get("NAVERLAND_SKIP_SOURCE_INTEGRITY_CHECKS"))
 
 
 def find_conflict_markers(
@@ -84,9 +95,70 @@ def find_internal_import_failures(modules: Iterable[str]) -> list[str]:
     return failures
 
 
+def _iter_playwright_browser_path_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    configured = str(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "") or "").strip()
+    if configured:
+        candidates.append(Path(configured))
+
+    local_app_data = str(os.environ.get("LOCALAPPDATA", "") or "").strip()
+    if local_app_data:
+        candidates.append(Path(local_app_data) / "ms-playwright")
+
+    if is_frozen_runtime():
+        executable_dir = Path(sys.executable).resolve().parent
+        base_path = Path(getattr(sys, "_MEIPASS", executable_dir))
+        candidates.extend(
+            [
+                base_path / "ms-playwright",
+                base_path / "_internal" / "ms-playwright",
+                executable_dir / "ms-playwright",
+                executable_dir / "_internal" / "ms-playwright",
+            ]
+        )
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _find_browser_executable_under(root: Path) -> str:
+    if not root.exists():
+        return ""
+
+    direct_candidates = [
+        root / "chrome-win64" / "chrome.exe",
+        root / "chrome-linux" / "chrome",
+        root / "chrome-mac" / "Chromium.app" / "Contents" / "MacOS" / "Chromium",
+    ]
+    for candidate in direct_candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    try:
+        for pattern in ("*/chrome-win64/chrome.exe", "*/chrome-linux/chrome", "*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"):
+            match = next(root.glob(pattern), None)
+            if match is not None and match.exists():
+                return str(match)
+    except OSError:
+        return ""
+    return ""
+
+
 def find_missing_playwright_browser() -> str:
     if importlib.util.find_spec("playwright") is None:
         return "playwright"
+    for candidate in _iter_playwright_browser_path_candidates():
+        executable = _find_browser_executable_under(candidate)
+        if executable:
+            return ""
     try:
         from playwright.sync_api import sync_playwright
 
@@ -127,10 +199,11 @@ def run_preflight_checks(
 
     errors: list[str] = []
 
-    conflict_files = find_conflict_markers(base)
-    if conflict_files:
-        errors.append("소스 코드에 미해결 머지 충돌 마커가 존재합니다.")
-        app_logger.error("머지 충돌 마커 감지: %s", ", ".join(conflict_files))
+    if should_run_source_integrity_checks():
+        conflict_files = find_conflict_markers(base)
+        if conflict_files:
+            errors.append("소스 코드에 미해결 머지 충돌 마커가 존재합니다.")
+            app_logger.error("머지 충돌 마커 감지: %s", ", ".join(conflict_files))
 
     missing_required = find_missing_dependencies(REQUIRED_DEPENDENCIES)
     if missing_required:
@@ -154,7 +227,7 @@ def run_preflight_checks(
             else:
                 app_logger.warning("%s", message)
 
-    if not missing_required:
+    if not missing_required and should_run_source_integrity_checks():
         internal_failures = find_internal_import_failures(REQUIRED_INTERNAL_IMPORTS)
         if internal_failures:
             errors.append(

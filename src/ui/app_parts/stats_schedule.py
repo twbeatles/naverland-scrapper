@@ -411,14 +411,7 @@ class AppStatsScheduleMixin:
                 if pyeong is None:
                     ui_logger.warning(f"평형 파싱 실패: {pyeong_text}")
 
-        snapshots = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type)
-        if pyeong is not None:
-            filtered = []
-            for s in snapshots:
-                py = self._parse_pyeong_value(s[2] if len(s) > 2 else None)
-                if py is not None and abs(py - float(pyeong)) <= 1e-6:
-                    filtered.append(s)
-            snapshots = filtered
+        snapshots = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type, pyeong=pyeong)
 
         self.stats_table.setUpdatesEnabled(False)
         series_keys = set()
@@ -492,17 +485,10 @@ class AppStatsScheduleMixin:
             return
 
         try:
-            snapshots = self.db.get_price_snapshots(cid, asset_type=asset_type)
+            pyeongs = sorted(set(self.db.get_price_snapshot_pyeongs(cid, asset_type=asset_type)))
         except Exception as e:
             ui_logger.warning(f"평형 목록 로드 실패: {e}")
-            snapshots = []
-        # 평형 목록 추출
-        pyeong_values = []
-        for row in snapshots:
-            value = self._parse_pyeong_value(row[2] if len(row) > 2 else None)
-            if value is not None:
-                pyeong_values.append(value)
-        pyeongs = sorted(set(pyeong_values))
+            pyeongs = []
 
         prev_text = self.stats_pyeong_combo.currentText()
         prev_value = self._parse_pyeong_value(prev_text) if prev_text and prev_text != "전체" else None

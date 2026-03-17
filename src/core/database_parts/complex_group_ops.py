@@ -143,11 +143,22 @@ class ComplexDatabaseComplexGroupOpsMixin:
                 conn,
                 '''
                 SELECT
-                    complex_id,
-                    complex_name,
-                    COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type
-                FROM crawl_history ch
-                ORDER BY crawled_at DESC
+                    ch.complex_id,
+                    ch.complex_name,
+                    ch.asset_scope AS asset_type
+                FROM (
+                    SELECT
+                        complex_id,
+                        complex_name,
+                        COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_scope,
+                        crawled_at,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(NULLIF(asset_type, ''), 'APT'), complex_id
+                            ORDER BY crawled_at DESC
+                        ) AS row_num
+                    FROM crawl_history
+                ) ch
+                WHERE ch.row_num = 1
                 ''',
                 context="통계 단지 조회(crawl_history)",
             )

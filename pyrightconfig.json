@@ -18,5 +18,26 @@
   "pythonPlatform": "Windows",
   "typeCheckingMode": "standard",
   "useLibraryCodeForTypes": true,
-  "reportMissingTypeStubs": "none"
+  "reportMissingTypeStubs": "none",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "."
+      ]
+    },
+    {
+      "root": "src",
+      "extraPaths": [
+        "."
+      ]
+    },
+    {
+      "root": "tests",
+      "extraPaths": [
+        ".",
+        "src"
+      ]
+    }
+  ]
 }

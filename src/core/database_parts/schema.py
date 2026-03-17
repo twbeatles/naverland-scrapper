@@ -588,6 +588,10 @@ class ComplexDatabaseSchemaMixin:
             c.execute('DROP INDEX IF EXISTS idx_article_id')
             c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(asset_type, article_id)')
             c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_crawl_history_stats_lookup "
+                "ON crawl_history(asset_type, complex_id, crawled_at DESC)"
+            )
             c.execute('CREATE INDEX IF NOT EXISTS idx_price_snapshots_lookup ON price_snapshots(complex_id, trade_type, snapshot_date DESC)')
             
             # additive migrations
@@ -638,6 +642,10 @@ class ComplexDatabaseSchemaMixin:
                     "CREATE INDEX IF NOT EXISTS idx_price_snapshots_asset_lookup "
                     "ON price_snapshots(asset_type, complex_id, trade_type, snapshot_date DESC)"
                 )
+                c.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_price_snapshots_stats_pyeong "
+                    "ON price_snapshots(asset_type, complex_id, pyeong, snapshot_date DESC)"
+                )
             except Exception as me:
                 logger.warning(f"price_snapshots asset lookup index migration failed (ignored): {me}")
             
@@ -662,7 +670,7 @@ class ComplexDatabaseSchemaMixin:
                 'ON article_alert_log(alert_id, article_id, complex_id, asset_type, notified_on)'
             )
 
-            # v14.x: normalize legacy price_snapshots string values (for example, "34?", "1?2,000?")
+            # v14.x: normalize legacy price_snapshots string values (for example, "34평", "1억2,000만")
             try:
                 c.execute(
                     """

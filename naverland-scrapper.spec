@@ -15,8 +15,9 @@ from PyInstaller.utils.hooks import collect_submodules
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) do not require spec changes.
 project_dir = Path.cwd().resolve()
 # One-file build is now the default for distribution.
-# You can still force onedir by setting NAVERLAND_ONEFILE=0.
-build_onefile = os.environ.get("NAVERLAND_ONEFILE", "1") == "1"
+# Low-spec PCs benefit from onedir because it avoids onefile extraction overhead.
+# You can still force onefile by setting NAVERLAND_ONEFILE=1.
+build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
 # Chromium-bundled build is the default so frozen apps work on machines without
 # a preinstalled Playwright browser. Set NAVERLAND_BUNDLE_CHROMIUM=0 for slim builds.
 # Runtime preflight still blocks startup when the effective crawl_engine is `playwright`
@@ -50,7 +51,14 @@ if bundle_chromium:
             browser_path = Path(p.chromium.executable_path)
         browser_root = browser_path.parent.parent if browser_path.exists() else None
         if browser_root and browser_root.exists():
-            datas.append((str(browser_root), "ms-playwright"))
+            # Preserve the browser revision directory so Playwright can still
+            # resolve `<PLAYWRIGHT_BROWSERS_PATH>/<revision>/...` at runtime.
+            datas.append(
+                (
+                    str(browser_root),
+                    str(Path("ms-playwright") / browser_root.name),
+                )
+            )
         else:
             print("[spec] NAVERLAND_BUNDLE_CHROMIUM=1 but Chromium executable was not found.")
     except Exception as exc:

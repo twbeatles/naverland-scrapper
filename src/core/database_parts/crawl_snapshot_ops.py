@@ -273,7 +273,43 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         finally:
             self._pool.return_connection(conn)
     
-    def get_price_snapshots(self, complex_id, trade_type=None, asset_type=None):
+    def get_price_snapshot_pyeongs(self, complex_id, asset_type=None):
+        conn = self._pool.get_connection()
+        try:
+            sql = "SELECT DISTINCT pyeong FROM price_snapshots WHERE complex_id = ?"
+            params = [complex_id]
+            if not self._is_all_filter_value(asset_type):
+                asset_token = self._normalize_asset_type(asset_type)
+                if asset_token == "APT":
+                    sql += " AND (asset_type = ? OR COALESCE(asset_type, '') = '')"
+                    params.append("APT")
+                else:
+                    sql += " AND asset_type = ?"
+                    params.append(asset_token)
+            sql += " ORDER BY pyeong"
+            rows = self._fetchall_safe(
+                conn,
+                sql,
+                params=params,
+                context="가격 스냅샷 평형 조회(price_snapshots)",
+            )
+            result = []
+            for row in rows:
+                try:
+                    parsed = self._coerce_float(row["pyeong"], default=None)
+                except Exception:
+                    parsed = None
+                if parsed is not None:
+                    result.append(parsed)
+            return result
+        except Exception as e:
+            self._log_corruption_detected("가격 스냅샷 평형 조회", e)
+            logger.error(f"가격 스냅샷 평형 조회 실패: {e}")
+            return []
+        finally:
+            self._pool.return_connection(conn)
+
+    def get_price_snapshots(self, complex_id, trade_type=None, asset_type=None, pyeong=None):
         """Load stored price snapshot rows."""
         conn = self._pool.get_connection()
         try:
@@ -295,6 +331,11 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 else:
                     sql += " AND asset_type = ?"
                     params.append(asset_token)
+            if not self._is_all_filter_value(pyeong):
+                parsed_pyeong = self._coerce_float(pyeong, default=None)
+                if parsed_pyeong is not None:
+                    sql += " AND pyeong = ?"
+                    params.append(parsed_pyeong)
             
             sql += ' ORDER BY snapshot_date DESC, trade_type, pyeong'
             

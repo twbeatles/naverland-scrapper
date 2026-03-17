@@ -14,13 +14,10 @@ import re
 
 from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url
 from src.core.managers import SettingsManager
-from src.core.crawler import CrawlerThread
-from src.core.cache import CrawlCache
-from src.core.export import DataExporter
 from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard
 )
-from src.ui.widgets.dashboard import CardViewWidget
+from src.ui.widgets.cards import CardViewWidget
 from src.ui.dialogs import (
     MultiSelectDialog,
     URLBatchDialog,
@@ -33,6 +30,37 @@ from src.utils.logger import get_logger
 
 settings = SettingsManager()
 logger = get_logger("CrawlerTab")
+
+CrawlerThread = None
+CrawlCache = None
+DataExporter = None
+
+
+def _get_crawler_thread_cls():
+    global CrawlerThread
+    if CrawlerThread is None:
+        from src.core.crawler import CrawlerThread as _CrawlerThread
+
+        CrawlerThread = _CrawlerThread
+    return CrawlerThread
+
+
+def _get_crawl_cache_cls():
+    global CrawlCache
+    if CrawlCache is None:
+        from src.core.cache import CrawlCache as _CrawlCache
+
+        CrawlCache = _CrawlCache
+    return CrawlCache
+
+
+def _get_data_exporter_cls():
+    global DataExporter
+    if DataExporter is None:
+        from src.core.export import DataExporter as _DataExporter
+
+        DataExporter = _DataExporter
+    return DataExporter
 
 import inspect
 import types

@@ -7,6 +7,17 @@ if TYPE_CHECKING:
 
 
 class AppTabSetupMixin:
+    TAB_CRAWLER = 0
+    TAB_GEO = 1
+    TAB_DB = 2
+    TAB_GROUP = 3
+    TAB_SCHEDULE = 4
+    TAB_HISTORY = 5
+    TAB_STATS = 6
+    TAB_DASHBOARD = 7
+    TAB_FAVORITES = 8
+    TAB_GUIDE = 9
+
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
@@ -18,34 +29,18 @@ class AppTabSetupMixin:
         layout.setSpacing(6)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
-        
-        # 1. 수집기 탭
-        self.crawler_tab = CrawlerTab(
-            self.db,
-            history_manager=self.history_manager,
-            theme=self.current_theme,
-            maintenance_guard=lambda: self._maintenance_mode,
-        )
-        self.crawler_tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
-        self.crawler_tab.favorite_keys_provider = lambda: set(self.favorite_keys)
+        self.status_bar = self.statusBar()
+
+        self.crawler_tab = self._create_crawler_tab()
         self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
 
-        self.geo_tab = GeoCrawlerTab(
-            self.db,
-            history_manager=self.history_manager,
-            theme=self.current_theme,
-            maintenance_guard=lambda: self._maintenance_mode,
-        )
-        self.geo_tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
-        self.geo_tab.favorite_keys_provider = lambda: set(self.favorite_keys)
+        self.geo_tab = self._create_geo_tab()
         self.tabs.addTab(self.geo_tab, "🧭 지도 탐색")
-        
-        # 2. 단지 DB 탭
-        self.db_tab = DatabaseTab(self.db)
-        self.tabs.addTab(self.db_tab, "💾 단지 DB")
-        
-        # 3. 그룹 관리 탭
-        self.group_tab = GroupTab(self.db)
+
+        self._db_tab_placeholder = self._create_lazy_tab_placeholder("단지 DB는 첫 진입 시 로드됩니다.")
+        self.tabs.addTab(self._db_tab_placeholder, "💾 단지 DB")
+
+        self.group_tab = self._create_group_tab()
         self.tabs.addTab(self.group_tab, "📁 그룹 관리")
         
         self._setup_schedule_tab()
@@ -54,22 +49,105 @@ class AppTabSetupMixin:
         self._setup_dashboard_tab()
         self._setup_favorites_tab()
         self._setup_guide_tab()
-        
-        self.status_bar = self.statusBar()
-        self.crawler_tab.data_collected.connect(self._on_crawl_data_collected)
-        self.crawler_tab.status_message.connect(self.status_bar.showMessage)
-        self.crawler_tab.alert_triggered.connect(self._on_alert_triggered)
-        self.geo_tab.data_collected.connect(self._on_crawl_data_collected)
-        self.geo_tab.status_message.connect(self.status_bar.showMessage)
-        self.geo_tab.alert_triggered.connect(self._on_alert_triggered)
-        self.group_tab.groups_updated.connect(self._load_schedule_groups)
-        
         self.tabs.currentChanged.connect(self._refresh_tab)
 
-    
-    
     # Obsolete setup methods removed (replaced by modular widgets)
     # _setup_crawler_tab, _setup_db_tab, _setup_groups_tab removed
+
+    def _create_lazy_tab_placeholder(self: Any, message: str):
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(16, 16, 16, 16)
+        label = QLabel(message)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("color: #888; font-size: 13px;")
+        layout.addWidget(label)
+        return tab
+
+    def _create_crawler_tab(self: Any):
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        tab = CrawlerTab(
+            self.db,
+            history_manager=self.history_manager,
+            theme=self.current_theme,
+            maintenance_guard=lambda: self._maintenance_mode,
+        )
+        tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
+        tab.favorite_keys_provider = lambda: set(self.favorite_keys)
+        tab.data_collected.connect(self._on_crawl_data_collected)
+        tab.status_message.connect(self.status_bar.showMessage)
+        tab.alert_triggered.connect(self._on_alert_triggered)
+        return tab
+
+    def _create_geo_tab(self: Any):
+        from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+
+        tab = GeoCrawlerTab(
+            self.db,
+            history_manager=self.history_manager,
+            theme=self.current_theme,
+            maintenance_guard=lambda: self._maintenance_mode,
+        )
+        tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
+        tab.favorite_keys_provider = lambda: set(self.favorite_keys)
+        tab.data_collected.connect(self._on_crawl_data_collected)
+        tab.status_message.connect(self.status_bar.showMessage)
+        tab.alert_triggered.connect(self._on_alert_triggered)
+        return tab
+
+    def _create_group_tab(self: Any):
+        from src.ui.widgets.group_tab import GroupTab
+
+        tab = GroupTab(self.db)
+        tab.groups_updated.connect(self._load_schedule_groups)
+        return tab
+
+    def _replace_tab_widget(self: Any, index: int, widget, title: str):
+        old_widget = self.tabs.widget(index)
+        current_index = self.tabs.currentIndex()
+        was_blocked = self.tabs.blockSignals(True)
+        try:
+            self.tabs.removeTab(index)
+            self.tabs.insertTab(index, widget, title)
+        finally:
+            self.tabs.blockSignals(was_blocked)
+        if current_index == index:
+            self.tabs.setCurrentIndex(index)
+        if old_widget is not None:
+            old_widget.deleteLater()
+        return widget
+
+    def _ensure_db_tab(self: Any):
+        tab = getattr(self, "db_tab", None)
+        if tab is not None:
+            return tab
+        from src.ui.widgets.database_tab import DatabaseTab
+
+        tab = DatabaseTab(self.db)
+        self.db_tab = self._replace_tab_widget(self.TAB_DB, tab, "💾 단지 DB")
+        return self.db_tab
+
+    def _ensure_group_tab(self: Any):
+        tab = getattr(self, "group_tab", None)
+        if tab is not None:
+            return tab
+        tab = self._create_group_tab()
+        self.group_tab = self._replace_tab_widget(self.TAB_GROUP, tab, "📁 그룹 관리")
+        return self.group_tab
+
+    def _ensure_favorites_tab(self: Any):
+        tab = getattr(self, "favorites_tab", None)
+        if tab is not None:
+            return tab
+        from src.ui.widgets.tabs import FavoritesTab
+
+        tab = FavoritesTab(self.db, theme=self.current_theme, favorite_toggled=self._on_favorite_toggled)
+        self.favorites_tab = self._replace_tab_widget(self.TAB_FAVORITES, tab, "⭐ 즐겨찾기")
+        return self.favorites_tab
 
     
     def _setup_schedule_tab(self: Any):
@@ -261,11 +339,8 @@ class AppTabSetupMixin:
         self.tabs.addTab(self.dashboard_tab, "📊 대시보드")
     
     def _setup_favorites_tab(self: Any):
-        """v13.0: 즐겨찾기 탭"""
-        self.favorites_tab = FavoritesTab(
-            self.db, theme=self.current_theme, favorite_toggled=self._on_favorite_toggled
-        )
-        self.tabs.addTab(self.favorites_tab, "⭐ 즐겨찾기")
+        self._favorites_tab_placeholder = self._create_lazy_tab_placeholder("즐겨찾기는 첫 진입 시 로드됩니다.")
+        self.tabs.addTab(self._favorites_tab_placeholder, "⭐ 즐겨찾기")
     
     def _setup_guide_tab(self: Any):
         tab = QWidget()
@@ -460,6 +535,8 @@ class AppTabSetupMixin:
     def _ensure_chart_widget(self: Any):
         if self.chart_widget is not None:
             return
+        from src.ui.widgets.chart import ChartWidget
+
         self.chart_widget = ChartWidget()
         idx = self.stats_splitter.indexOf(self.chart_placeholder)
         if idx >= 0:
@@ -472,6 +549,8 @@ class AppTabSetupMixin:
     def _ensure_dashboard_widget(self: Any):
         if self.dashboard_widget is not None:
             return
+        from src.ui.widgets.dashboard import DashboardWidget
+
         self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
         if hasattr(self.dashboard_widget, "warning_signal"):
             self.dashboard_widget.warning_signal.connect(self._on_dashboard_warning)
@@ -482,17 +561,17 @@ class AppTabSetupMixin:
             self.dashboard_widget.set_data(self.collected_data)
 
     def _refresh_tab(self: Any):
-        current = self.tabs.currentWidget()
-        if current is self.db_tab:
-            self.db_tab.load_data()
-        elif current is self.geo_tab:
+        index = self.tabs.currentIndex()
+        if index == self.TAB_GEO:
             return
-        elif current is self.group_tab:
-            self.group_tab.load_groups()
-        elif current is self.history_tab:
+        if index == self.TAB_DB:
+            self._ensure_db_tab().load_data()
+        elif index == self.TAB_GROUP:
+            self._ensure_group_tab().load_groups()
+        elif index == self.TAB_HISTORY:
             self._noncritical_loaded["history"] = True
             self._load_history()
-        elif current is self.stats_tab:
+        elif index == self.TAB_STATS:
             try:
                 if not self._noncritical_loaded["stats"]:
                     self._load_stats_complexes()
@@ -501,13 +580,14 @@ class AppTabSetupMixin:
             except Exception as e:
                 ui_logger.exception(f"통계 탭 로드 실패: {e}")
                 self.status_bar.showMessage("⚠️ 통계 탭 로드 중 오류가 발생했습니다.")
-        elif current is self.dashboard_tab:
+        elif index == self.TAB_DASHBOARD:
             self._ensure_dashboard_widget()
             self.dashboard_widget.refresh()
-        elif current is self.favorites_tab:
+        elif index == self.TAB_FAVORITES:
+            favorites_tab = self._ensure_favorites_tab()
             if not self._noncritical_loaded["favorites"]:
                 self._refresh_favorite_keys()
                 self._noncritical_loaded["favorites"] = True
-            self.favorites_tab.refresh()
+            favorites_tab.refresh()
 
 

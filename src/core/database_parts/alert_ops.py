@@ -34,7 +34,7 @@ class ComplexDatabaseAlertOpsMixin:
             self._pool.return_connection(conn)
 
     def get_enabled_alert_rules(self, complex_id, trade_type=None, asset_type=None):
-        """?쒖꽦 ?뚮┝ 洹쒖튃???⑥?/嫄곕옒?좏삎/먯궛 ?좏삎 湲곗??쇰줈 議고쉶?쒕떎."""
+        """활성 알림 규칙을 단지/거래유형/자산유형 기준으로 조회한다."""
         conn = self._pool.get_connection()
         try:
             sql = (

@@ -118,6 +118,7 @@ class CrawlerTabIOActionsMixin:
 
     def _save_with_export_scope(self: Any, kind: str, scope: str = "visible"):
         from pathlib import Path
+        from src.ui.widgets.crawler_tab import _get_data_exporter_cls
 
         items = self._export_items_for_scope(scope)
         scope_key = str(scope or "visible").lower()
@@ -142,7 +143,8 @@ class CrawlerTabIOActionsMixin:
             return
 
         try:
-            exporter = DataExporter(items)
+            exporter_cls = _get_data_exporter_cls()
+            exporter = exporter_cls(items)
             template = settings.get("excel_template")
             if kind == "excel":
                 result = exporter.to_excel(Path(path), template)

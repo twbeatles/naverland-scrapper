@@ -2,6 +2,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from src.core.database import ComplexDatabase
@@ -215,6 +216,43 @@ class TestComplexDatabase(unittest.TestCase):
             ]
         )
         self.assertEqual(saved, 0)
+
+    def test_malformed_schema_startup_quarantines_db_and_recreates_clean_database(self):
+        self.db.close()
+
+        corrupt_path = Path(self.tmp.name) / "malformed_schema.db"
+        conn = sqlite3.connect(str(corrupt_path))
+        try:
+            conn.execute("CREATE TABLE sample (id INTEGER)")
+            conn.commit()
+            conn.execute("PRAGMA writable_schema=ON")
+            conn.execute(
+                "UPDATE sqlite_master SET sql=? WHERE name='sample'",
+                ('CREATE TABLE "노형중흥에스클래스 아파트" (',),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        recovered_db = ComplexDatabase(str(corrupt_path))
+        try:
+            notice = recovered_db.get_startup_recovery_notice()
+            self.assertIn("손상된 DB를 분리", notice)
+            self.assertEqual(len(recovered_db.get_all_complexes()), 0)
+            self.assertTrue(recovered_db.add_complex("Recovered", "99001", asset_type="APT"))
+
+            backup_dir = Path(self.tmp.name) / "backups"
+            backups = list(backup_dir.glob("malformed_schema.startup_corrupt_*.db"))
+            self.assertEqual(len(backups), 1)
+
+            check_conn = sqlite3.connect(str(corrupt_path))
+            try:
+                integrity = check_conn.cursor().execute("PRAGMA integrity_check").fetchone()
+            finally:
+                check_conn.close()
+            self.assertEqual(str(integrity[0]).lower(), "ok")
+        finally:
+            recovered_db.close()
 
     def test_delete_complex_removes_group_mapping(self):
         self.db.add_complex("ComplexA", "11111")

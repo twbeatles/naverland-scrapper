@@ -29,7 +29,6 @@ class GroupTab(QWidget):
         super().__init__(parent)
         self.db = db
         self._init_ui()
-        self.load_groups()
 
     def _init_ui(self):
         layout = QHBoxLayout(self)

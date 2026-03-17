@@ -40,14 +40,6 @@ from src.ui.styles import get_stylesheet
 from src.ui.input_wheel_guard import install_global_wheel_guard, apply_wheel_guard_recursively
 from src.utils.helpers import DateTimeHelper, get_article_url
 
-from src.ui.widgets.crawler_tab import CrawlerTab
-from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
-from src.ui.widgets.database_tab import DatabaseTab
-from src.ui.widgets.group_tab import GroupTab
-from src.ui.widgets.tabs import FavoritesTab
-
-from src.ui.widgets.dashboard import DashboardWidget, CardViewWidget
-from src.ui.widgets.chart import ChartWidget
 from src.ui.widgets.components import SortableTableWidgetItem
 from src.ui.dialogs import (
     SettingsDialog,

@@ -18,20 +18,22 @@ class AppDatabaseMaintenanceMixin:
         self._maintenance_enabled_snapshot = []
 
         targets = [self.tabs]
-        if hasattr(self, "crawler_tab"):
+        crawler_tab = getattr(self, "crawler_tab", None)
+        if crawler_tab is not None:
             targets.extend(
                 [
-                    self.crawler_tab.btn_start,
-                    self.crawler_tab.btn_save,
-                    self.crawler_tab.btn_advanced_filter,
-                    self.crawler_tab.btn_clear_advanced_filter,
+                    crawler_tab.btn_start,
+                    crawler_tab.btn_save,
+                    crawler_tab.btn_advanced_filter,
+                    crawler_tab.btn_clear_advanced_filter,
                 ]
             )
-        if hasattr(self, "geo_tab"):
+        geo_tab = getattr(self, "geo_tab", None)
+        if geo_tab is not None:
             targets.extend(
                 [
-                    self.geo_tab.btn_start,
-                    self.geo_tab.btn_save,
+                    geo_tab.btn_start,
+                    geo_tab.btn_save,
                 ]
             )
         for action_name in (
@@ -106,8 +108,9 @@ class AppDatabaseMaintenanceMixin:
             if hasattr(self, "schedule_timer") and self.schedule_timer:
                 self.schedule_timer.stop()
 
-            if hasattr(self, "crawler_tab"):
-                ok = self.crawler_tab.shutdown_crawl(timeout_ms=8000)
+            crawler_tab = getattr(self, "crawler_tab", None)
+            if crawler_tab is not None:
+                ok = crawler_tab.shutdown_crawl(timeout_ms=8000)
                 if not ok:
                     self.status_bar.showMessage("⚠️ 크롤링 스레드 종료 후 다시 복원을 시도하세요.")
                     QMessageBox.warning(
@@ -132,6 +135,15 @@ class AppDatabaseMaintenanceMixin:
             for key in self._noncritical_loaded:
                 self._noncritical_loaded[key] = False
             self._load_initial_data()
+            db_tab = getattr(self, "db_tab", None)
+            if db_tab is not None:
+                db_tab.load_data()
+            group_tab = getattr(self, "group_tab", None)
+            if group_tab is not None:
+                group_tab.load_groups()
+            favorites_tab = getattr(self, "favorites_tab", None)
+            if favorites_tab is not None:
+                favorites_tab.refresh()
             if self.dashboard_widget is not None:
                 self.dashboard_widget.refresh()
             self.status_bar.showMessage("✅ DB 복원 완료!")

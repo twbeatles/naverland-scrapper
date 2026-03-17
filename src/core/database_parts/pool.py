@@ -44,14 +44,23 @@ class ConnectionPool:
     def _create_connection(self):
         # Ensure parent directory exists before opening SQLite file.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.row_factory = sqlite3.Row
-        return conn
+
+        conn = None
+        try:
+            conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.row_factory = sqlite3.Row
+            return conn
+        except Exception:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            raise
     
     def get_connection(self):
         with self._lease_lock:

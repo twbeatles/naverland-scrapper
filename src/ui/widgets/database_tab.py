@@ -33,7 +33,6 @@ class DatabaseTab(QWidget):
         super().__init__(parent)
         self.db = db
         self._init_ui()
-        self.load_data()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
