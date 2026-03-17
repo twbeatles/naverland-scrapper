@@ -74,7 +74,14 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
-                patch.dict(os.environ, {}, clear=False),
+                patch.dict(
+                    os.environ,
+                    {
+                        "NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK": "",
+                        "NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER": "",
+                    },
+                    clear=False,
+                ),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
@@ -95,7 +102,14 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
-                patch.dict(os.environ, {}, clear=False),
+                patch.dict(
+                    os.environ,
+                    {
+                        "NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK": "",
+                        "NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER": "",
+                    },
+                    clear=False,
+                ),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
