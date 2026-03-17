@@ -44,8 +44,6 @@ class EmptyStateWidget(QWidget):
             action_btn.clicked.connect(self.action_clicked.emit)
             action_btn.setMaximumWidth(200)
             layout.addWidget(action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-
 class SearchBar(QWidget):
     search_changed = pyqtSignal(str)
     def __init__(self, placeholder="검색...", parent=None):

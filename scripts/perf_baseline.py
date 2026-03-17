@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import QApplication
 from src.core.cache import CrawlCache
 from src.core.item_parser import ItemParser
 from src.ui.app import RealEstateApp
-from src.ui.widgets.dashboard import CardViewWidget
+from src.ui.widgets.cards import CardViewWidget
 from src.utils.paths import LOG_DIR, ensure_directories
 
 

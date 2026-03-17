@@ -192,19 +192,15 @@ class CrawlerTabResultRenderMixin:
         elif level >= 30: color = theme_colors["warning"]
         elif level == 10: color = theme_colors["text_secondary"]
         
-        self.log_browser.append(f'<span style="color:{color}">{msg}</span>')
         try:
             max_lines = max(200, int(settings.get("max_log_lines", 1500)))
         except (TypeError, ValueError):
             max_lines = 1500
-        overflow = self.log_browser.document().blockCount() - max_lines
-        if overflow > 0:
-            cursor = self.log_browser.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.Start)
-            for _ in range(overflow):
-                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-                cursor.removeSelectedText()
-                cursor.deleteChar()
+        doc = self.log_browser.document()
+        if getattr(self, "_log_max_block_count", None) != max_lines:
+            doc.setMaximumBlockCount(max_lines)
+            self._log_max_block_count = max_lines
+        self.log_browser.append(f'<span style="color:{color}">{msg}</span>')
         # Scroll to bottom
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
@@ -238,6 +234,10 @@ class CrawlerTabResultRenderMixin:
             self._row_search_cache.append("")
         self._row_search_cache[row] = searchable
         return searchable
+
+    @staticmethod
+    def _build_row_searchable_text(values):
+        return " ".join(str(value or "") for value in values).lower()
 
     @staticmethod
     def _format_won_value(value, signed: bool = False) -> str:
@@ -352,26 +352,32 @@ class CrawlerTabResultRenderMixin:
         if price_change_threshold > 0 and abs(price_change) < price_change_threshold:
             price_change = 0
 
-        self.result_table.setItem(row, self.COL_COMPLEX, QTableWidgetItem(str(data.get("단지명", ""))))
+        complex_name = str(data.get("단지명", ""))
+        self.result_table.setItem(row, self.COL_COMPLEX, QTableWidgetItem(complex_name))
         self.result_table.setItem(row, self.COL_TRADE, QTableWidgetItem(trade_type))
         self.result_table.setItem(row, self.COL_PRICE, QTableWidgetItem(price_text))
 
+        area_text = f"{area_val}평"
         area_item = QTableWidgetItem(f"{area_val}평")
         area_item.setData(Qt.ItemDataRole.EditRole, float(area_val))
         self.result_table.setItem(row, self.COL_AREA, area_item)
 
+        pyeong_price_text = str(data.get("평당가_표시", "-"))
         self.result_table.setItem(
-            row, self.COL_PYEONG_PRICE, QTableWidgetItem(str(data.get("평당가_표시", "-")))
+            row, self.COL_PYEONG_PRICE, QTableWidgetItem(pyeong_price_text)
         )
+        floor_text = str(data.get("층/방향", ""))
         self.result_table.setItem(
-            row, self.COL_FLOOR, QTableWidgetItem(str(data.get("층/방향", "")))
+            row, self.COL_FLOOR, QTableWidgetItem(floor_text)
         )
+        feature_text = str(data.get("타입/특징", ""))
         self.result_table.setItem(
-            row, self.COL_FEATURE, QTableWidgetItem(str(data.get("타입/특징", "")))
+            row, self.COL_FEATURE, QTableWidgetItem(feature_text)
         )
 
         dup_count = int(data.get("duplicate_count", 1) or 1)
-        self.result_table.setItem(row, self.COL_DUP_COUNT, QTableWidgetItem(f"{dup_count}건"))
+        dup_count_text = f"{dup_count}건"
+        self.result_table.setItem(row, self.COL_DUP_COUNT, QTableWidgetItem(dup_count_text))
 
         is_new = bool(data.get("is_new") or data.get("신규여부"))
         new_badge_text = "N" if show_new_badge and is_new else ""
@@ -382,21 +388,25 @@ class CrawlerTabResultRenderMixin:
         else:
             change_text = ""
         self.result_table.setItem(row, self.COL_PRICE_CHANGE, QTableWidgetItem(change_text))
-        self.result_table.setItem(row, self.COL_ASSET_TYPE, QTableWidgetItem(str(data.get("자산유형", ""))))
+        asset_type_text = str(data.get("자산유형", ""))
+        self.result_table.setItem(row, self.COL_ASSET_TYPE, QTableWidgetItem(asset_type_text))
+        prev_jeonse_text = self._format_won_value(data.get("기전세금(원)", 0))
         self.result_table.setItem(
             row,
             self.COL_PREV_JEONSE,
-            QTableWidgetItem(self._format_won_value(data.get("기전세금(원)", 0))),
+            QTableWidgetItem(prev_jeonse_text),
         )
+        gap_amount_text = self._format_won_value(data.get("갭금액(원)", 0), signed=True)
         self.result_table.setItem(
             row,
             self.COL_GAP_AMOUNT,
-            QTableWidgetItem(self._format_won_value(data.get("갭금액(원)", 0), signed=True)),
+            QTableWidgetItem(gap_amount_text),
         )
+        gap_ratio_text = self._format_gap_ratio(data.get("갭비율", 0))
         self.result_table.setItem(
             row,
             self.COL_GAP_RATIO,
-            QTableWidgetItem(self._format_gap_ratio(data.get("갭비율", 0))),
+            QTableWidgetItem(gap_ratio_text),
         )
 
         collect_time = str(data.get("수집시각", ""))
@@ -409,7 +419,8 @@ class CrawlerTabResultRenderMixin:
             data.get("자산유형", "APT"),
         )
         self.result_table.setItem(row, self.COL_URL, QTableWidgetItem(article_url))
-        sort_item = QTableWidgetItem(str(price_int))
+        price_sort_text = str(price_int)
+        sort_item = QTableWidgetItem(price_sort_text)
         sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
         self.result_table.setItem(row, self.COL_PRICE_SORT, sort_item)
         payload = self._build_row_payload_from_data(
@@ -423,6 +434,32 @@ class CrawlerTabResultRenderMixin:
         while len(self._row_payload_cache) <= row:
             self._row_payload_cache.append({})
         self._row_payload_cache[row] = payload
+        searchable = self._build_row_searchable_text(
+            [
+                complex_name,
+                trade_type,
+                price_text,
+                area_text,
+                pyeong_price_text,
+                floor_text,
+                feature_text,
+                dup_count_text,
+                new_badge_text,
+                change_text,
+                asset_type_text,
+                prev_jeonse_text,
+                gap_amount_text,
+                gap_ratio_text,
+                collect_time,
+                "🔗",
+                article_url,
+                price_sort_text,
+            ]
+        )
+        while len(self._row_search_cache) <= row:
+            self._row_search_cache.append("")
+        self._row_search_cache[row] = searchable
+        return payload, searchable
 
     def _append_rows_compact_batch(self: Any, items):
         for item in items:
@@ -457,16 +494,18 @@ class CrawlerTabResultRenderMixin:
         self.result_table.setUpdatesEnabled(False)
         self.result_table.setSortingEnabled(False)
         self.result_table.setRowCount(len(rows))
-        self._row_search_cache = []
-        self._row_payload_cache = []
+        self.result_table.blockSignals(True)
+        self._row_search_cache = [""] * len(rows)
+        self._row_payload_cache = [{} for _ in rows]
         self._row_hidden_state = {}
 
-        for row, data in enumerate(rows):
-            self._set_result_row(row, data)
-            self._sync_row_search_cache(row)
-            self._apply_current_filter_to_row(row)
-
-        self.result_table.setUpdatesEnabled(True)
+        try:
+            for row, data in enumerate(rows):
+                self._set_result_row(row, data)
+                self._apply_current_filter_to_row(row)
+        finally:
+            self.result_table.blockSignals(False)
+            self.result_table.setUpdatesEnabled(True)
 
     def _append_rows_batch(self: Any, items):
         start_row = self.result_table.rowCount()
@@ -476,18 +515,26 @@ class CrawlerTabResultRenderMixin:
 
         self.result_table.setSortingEnabled(False)
         self.result_table.setUpdatesEnabled(False)
+        self.result_table.blockSignals(True)
         self.result_table.setRowCount(start_row + row_count)
 
-        chunk_size = max(50, int(self._append_chunk_size))
-        for start in range(0, row_count, chunk_size):
-            end = min(row_count, start + chunk_size)
-            for idx in range(start, end):
-                row = start_row + idx
-                data = dict(items[idx])
-                data["duplicate_count"] = 1
-                self._set_result_row(row, data)
-                self._sync_row_search_cache(row)
-                self._apply_current_filter_to_row(row)
+        needed = start_row + row_count
+        if len(self._row_search_cache) < needed:
+            self._row_search_cache.extend([""] * (needed - len(self._row_search_cache)))
+        if len(self._row_payload_cache) < needed:
+            self._row_payload_cache.extend({} for _ in range(needed - len(self._row_payload_cache)))
 
-        self.result_table.setUpdatesEnabled(True)
+        chunk_size = max(50, int(self._append_chunk_size))
+        try:
+            for start in range(0, row_count, chunk_size):
+                end = min(row_count, start + chunk_size)
+                for idx in range(start, end):
+                    row = start_row + idx
+                    data = dict(items[idx])
+                    data["duplicate_count"] = 1
+                    self._set_result_row(row, data)
+                    self._apply_current_filter_to_row(row)
+        finally:
+            self.result_table.blockSignals(False)
+            self.result_table.setUpdatesEnabled(True)
 

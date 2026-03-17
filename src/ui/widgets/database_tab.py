@@ -113,7 +113,10 @@ class DatabaseTab(QWidget):
         return db_id, name, asset_type, complex_id, memo
 
     def load_data(self):
+        self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
+        prev_sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
         try:
             complexes = self.db.get_all_complexes()
@@ -130,7 +133,9 @@ class DatabaseTab(QWidget):
             logger.error(f"load failed: {e}")
             self._update_empty_state(0)
         finally:
+            self.table.blockSignals(False)
             self.table.setUpdatesEnabled(True)
+            self.table.setSortingEnabled(prev_sorting)
         self._update_action_state()
 
     def _update_empty_state(self, count):

@@ -22,6 +22,10 @@ class ArticleCard(QFrame):
 
     clicked = pyqtSignal(dict)
     favorite_toggled = pyqtSignal(str, str, str, bool)
+    _CARD_STYLE_CACHE = {}
+    _TYPE_STYLE_CACHE = {}
+    _PRICE_STYLE_CACHE = {}
+    _FAVORITE_STYLE_CACHE = {}
 
     def __init__(self, data: dict, is_dark: bool = True, parent=None):
         super().__init__(parent)
@@ -40,30 +44,37 @@ class ArticleCard(QFrame):
         fg_color = colors["dark_fg"] if self.is_dark else colors["fg"]
         hover_bg = bg_color if self.is_dark else f"{fg_color}10"
 
-        self.setStyleSheet(
-            f"""
-            ArticleCard {{
-                background-color: {bg_color};
-                border: 1px solid {fg_color}40;
-                border-radius: 14px;
-                padding: 14px;
-            }}
-            ArticleCard:hover {{
-                border: 2px solid {fg_color};
-                background-color: {hover_bg};
-            }}
-            """
-        )
+        style_key = (bg_color, fg_color, hover_bg)
+        card_style = self._CARD_STYLE_CACHE.get(style_key)
+        if card_style is None:
+            card_style = (
+                "ArticleCard {"
+                f"background-color: {bg_color};"
+                f"border: 1px solid {fg_color}40;"
+                "border-radius: 14px;"
+                "padding: 14px;"
+                "}"
+                "ArticleCard:hover {"
+                f"border: 2px solid {fg_color};"
+                f"background-color: {hover_bg};"
+                "}"
+            )
+            self._CARD_STYLE_CACHE[style_key] = card_style
+        self.setStyleSheet(card_style)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
         top_layout = QHBoxLayout()
         type_label = QLabel(trade_type)
-        type_label.setStyleSheet(
-            f"color: {fg_color}; background-color: {fg_color}22; padding: 4px 10px; "
-            "border-radius: 999px; font-weight: 700; font-size: 11px;"
-        )
+        type_style = self._TYPE_STYLE_CACHE.get(fg_color)
+        if type_style is None:
+            type_style = (
+                f"color: {fg_color}; background-color: {fg_color}22; padding: 4px 10px; "
+                "border-radius: 999px; font-weight: 700; font-size: 11px;"
+            )
+            self._TYPE_STYLE_CACHE[fg_color] = type_style
+        type_label.setStyleSheet(type_style)
         top_layout.addWidget(type_label)
         top_layout.addStretch()
 
@@ -95,9 +106,11 @@ class ArticleCard(QFrame):
         accent = COLORS[theme_key]["accent"]
         self.fav_btn = QPushButton("★" if self.data.get("is_favorite") else "☆")
         self.fav_btn.setFixedSize(30, 30)
-        self.fav_btn.setStyleSheet(
-            f"border: none; font-size: 18px; background: transparent; color: {accent};"
-        )
+        fav_style = self._FAVORITE_STYLE_CACHE.get(accent)
+        if fav_style is None:
+            fav_style = f"border: none; font-size: 18px; background: transparent; color: {accent};"
+            self._FAVORITE_STYLE_CACHE[accent] = fav_style
+        self.fav_btn.setStyleSheet(fav_style)
         self.fav_btn.clicked.connect(self._toggle_favorite)
         top_layout.addWidget(self.fav_btn)
 
@@ -112,7 +125,11 @@ class ArticleCard(QFrame):
         if self.data.get("월세"):
             price_text += f" / {self.data.get('월세')}"
         price_label = QLabel(price_text)
-        price_label.setStyleSheet(f"color: {fg_color}; font-size: 18px; font-weight: 800;")
+        price_style = self._PRICE_STYLE_CACHE.get(fg_color)
+        if price_style is None:
+            price_style = f"color: {fg_color}; font-size: 18px; font-weight: 800;"
+            self._PRICE_STYLE_CACHE[fg_color] = price_style
+        price_label.setStyleSheet(price_style)
         layout.addWidget(price_label)
 
         if price_change != 0:
@@ -242,12 +259,16 @@ class CardViewWidget(QScrollArea):
         return max(1, available // (self._card_width + self._card_spacing))
 
     def _clear_cards(self):
-        for card in self._cards:
-            card.deleteLater()
-        self._cards.clear()
-        self.grid_layout.setSpacing(self._card_spacing)
-        self._render_cursor = 0
-        self._last_columns = self._calc_columns()
+        self.container.setUpdatesEnabled(False)
+        try:
+            for card in self._cards:
+                card.deleteLater()
+            self._cards.clear()
+            self.grid_layout.setSpacing(self._card_spacing)
+            self._render_cursor = 0
+            self._last_columns = self._calc_columns()
+        finally:
+            self.container.setUpdatesEnabled(True)
 
     def _apply_filter(self, reset_view=False):
         text = (self._filter_text or "").lower()
@@ -293,15 +314,19 @@ class CardViewWidget(QScrollArea):
             return
         cols = self._calc_columns()
         end = min(len(self._filtered_data), self._render_cursor + self._page_size)
-        for i in range(self._render_cursor, end):
-            article = self._filtered_data[i]
-            card = ArticleCard(article, self.is_dark)
-            card.clicked.connect(self.article_clicked.emit)
-            card.favorite_toggled.connect(self.favorite_toggled.emit)
+        self.container.setUpdatesEnabled(False)
+        try:
+            for i in range(self._render_cursor, end):
+                article = self._filtered_data[i]
+                card = ArticleCard(article, self.is_dark)
+                card.clicked.connect(self.article_clicked.emit)
+                card.favorite_toggled.connect(self.favorite_toggled.emit)
 
-            row, col = divmod(i, cols)
-            self.grid_layout.addWidget(card, row, col)
-            self._cards.append(card)
+                row, col = divmod(i, cols)
+                self.grid_layout.addWidget(card, row, col)
+                self._cards.append(card)
+        finally:
+            self.container.setUpdatesEnabled(True)
         self._render_cursor = end
         self._last_columns = cols
 

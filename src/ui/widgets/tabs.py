@@ -92,25 +92,29 @@ class FavoritesTab(QWidget):
             logger.error(f"즐겨찾기 로드 실패: {e}")
             favorites = []
         
+        self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
+        prev_sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(favorites))
         self._update_empty_state(len(favorites))
         
-        for row, fav in enumerate(favorites):
-            self.table.setItem(row, 0, QTableWidgetItem(str(fav.get("complex_name", ""))))
-            self.table.setItem(row, 1, QTableWidgetItem(str(fav.get("trade_type", ""))))
-            self.table.setItem(row, 2, QTableWidgetItem(str(fav.get("price_text", ""))))
-            self.table.setItem(row, 3, QTableWidgetItem(f"{fav.get('area_pyeong', 0)}평"))
-            self.table.setItem(row, 4, QTableWidgetItem(str(fav.get("floor_info", ""))))
-            self.table.setItem(row, 5, QTableWidgetItem(str(fav.get("note", ""))))
-            created = fav.get("favorite_created_at") or fav.get("created_at") or fav.get("first_seen", "")
-            self.table.setItem(row, 6, QTableWidgetItem(str(created)[:10]))
-            
-            # 데이터 저장
-            item = self.table.item(row, 0)
-            if item:
-                item.setData(Qt.ItemDataRole.UserRole, fav)
-        self.table.setUpdatesEnabled(True)
+        try:
+            for row, fav in enumerate(favorites):
+                complex_item = QTableWidgetItem(str(fav.get("complex_name", "")))
+                complex_item.setData(Qt.ItemDataRole.UserRole, fav)
+                self.table.setItem(row, 0, complex_item)
+                self.table.setItem(row, 1, QTableWidgetItem(str(fav.get("trade_type", ""))))
+                self.table.setItem(row, 2, QTableWidgetItem(str(fav.get("price_text", ""))))
+                self.table.setItem(row, 3, QTableWidgetItem(f"{fav.get('area_pyeong', 0)}평"))
+                self.table.setItem(row, 4, QTableWidgetItem(str(fav.get("floor_info", ""))))
+                self.table.setItem(row, 5, QTableWidgetItem(str(fav.get("note", ""))))
+                created = fav.get("favorite_created_at") or fav.get("created_at") or fav.get("first_seen", "")
+                self.table.setItem(row, 6, QTableWidgetItem(str(created)[:10]))
+        finally:
+            self.table.blockSignals(False)
+            self.table.setUpdatesEnabled(True)
+            self.table.setSortingEnabled(prev_sorting)
 
         # selection actions
         self._update_action_state()

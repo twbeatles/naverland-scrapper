@@ -42,7 +42,7 @@ DEFAULT_SETTINGS = {
     "history_batch_size": 200,  # 이력 DB 일괄 반영 크기
     "result_filter_debounce_ms": 220,  # 결과 검색 디바운스
     "max_log_lines": 1500,  # 로그 최대 라인 수
-    "startup_lazy_noncritical_tabs": True,  # 비핵심 탭 초기 로드 지연
+    "startup_lazy_noncritical_tabs": False,  # 레거시 설정키 유지(현재는 항상 즉시 로드)
     "compact_duplicate_listings": True,  # 동일 매물(가격/평수/층) 묶어서 표시
     "crawl_engine": "playwright",
     "fallback_engine_enabled": True,

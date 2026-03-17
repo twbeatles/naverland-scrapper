@@ -80,7 +80,7 @@
     - **JSON**: 설정, 프리셋, 캐시, 히스토리
 - **Visualization**: `matplotlib` (PyQt6 임베디드)
 - **Build Tool**: `PyInstaller`
-- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onefile slim`, `NAVERLAND_ONEFILE=0` 시 `onedir`, `NAVERLAND_BUNDLE_CHROMIUM=1`일 때만 Chromium bundle 포함)
+- **Distribution Profile**: `naverland-scrapper.spec` (기본 `onedir + Chromium bundle`, `NAVERLAND_ONEFILE=1` 시 `onefile`, `NAVERLAND_BUNDLE_CHROMIUM=0` 시 slim)
 - **Optional**: `psutil` (메모리 모니터링), `plyer` (알림)
 
 ## 3. Architecture (v15.0 Modular)
@@ -128,7 +128,8 @@ src/
 │   │
 │   └── widgets/                # UI 컴포넌트
 │       ├── components.py       # SearchBar, SpeedSlider, SummaryCard 등
-│       ├── dashboard.py        # DashboardWidget, CardViewWidget, ArticleCard
+│       ├── dashboard.py        # DashboardWidget
+│       ├── cards.py            # CardViewWidget, ArticleCard
 │       ├── toast.py            # ToastWidget (애니메이션 알림)
 │       ├── chart.py            # ChartWidget (matplotlib)
 │       ├── tabs.py             # 탭 관련 위젯
@@ -182,7 +183,7 @@ src/
 | `DatabaseTab` | `database_tab.py` | DB 데이터 조회 및 관리 |
 | `GroupTab` | `group_tab.py` | 단지 그룹핑 및 배치 관리 |
 | `DashboardWidget` | `dashboard.py` | 통계 대시보드 |
-| `CardViewWidget` | `dashboard.py` | 카드 형태 매물 표시 |
+| `CardViewWidget` | `cards.py` | 카드 형태 매물 표시 |
 | `ToastWidget` | `toast.py` | 애니메이션 알림 |
 | `ChartWidget` | `chart.py` | matplotlib 차트 |
 | `FavoritesTab` | `tabs.py` | 즐겨찾기 탭 |
@@ -422,3 +423,17 @@ COLORS["light"] = {
   - Slim packaging remains the default, but a Playwright runtime still needs either local Chromium or a bundled Chromium build.
 - Validation:
   - `pytest -q` => `149 passed`
+
+## 0-16. v15.0.14 Docs/Spec/Gitignore Consistency Pass (2026-03-17)
+- Packaging baseline:
+  - `naverland-scrapper.spec`의 실제 기본 프로필은 `onedir + Chromium bundle`.
+  - `NAVERLAND_ONEFILE=1`에서만 onefile 생성.
+- UI/module baseline:
+  - `CardViewWidget`, `ArticleCard`는 `src/ui/widgets/cards.py` 소속.
+  - `src/ui/widgets/dashboard.py`는 대시보드 집계/차트 위젯 전용.
+  - 비핵심 탭 lazy loading은 제거되었고 `startup_lazy_noncritical_tabs`는 레거시 호환용 `False` 고정 키만 유지.
+- Performance baseline:
+  - 대시보드는 통계 캐시 + 소멸 count TTL 캐시 + 지연 차트 캔버스 생성 사용.
+  - 결과 렌더링은 행 검색 캐시 사전 구성, 로그 maximum block count, 카드 스타일 캐시를 사용.
+- Ignore baseline:
+  - `.gitignore`에 `.mypy_cache/`, `.ruff_cache/`, `.nox/`, `node_modules/`, `coverage.xml`를 추가해 로컬 개발 산출물 유입을 예방.

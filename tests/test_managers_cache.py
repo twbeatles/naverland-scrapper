@@ -95,7 +95,7 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertEqual(settings.get("max_log_lines"), 1500)
             self.assertEqual(settings.get("playwright_response_drain_timeout_ms"), 3000)
             self.assertTrue(settings.get("geo_incomplete_safety_mode"))
-            self.assertTrue(settings.get("startup_lazy_noncritical_tabs"))
+            self.assertFalse(settings.get("startup_lazy_noncritical_tabs"))
             self.assertTrue(settings.get("compact_duplicate_listings"))
             settings.update(
                 {

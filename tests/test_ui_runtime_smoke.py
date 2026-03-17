@@ -37,6 +37,51 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         w.deleteLater()
         self._qt_app.processEvents()
 
+    def test_app_guide_tab_contains_moved_help_content(self):
+        from PyQt6.QtWidgets import QTextBrowser
+        from src.ui.app import RealEstateApp
+
+        w = RealEstateApp()
+
+        browsers = w.findChildren(QTextBrowser)
+        guide_html = "\n".join(browser.toHtml() for browser in browsers)
+        self.assertIn("빠른 시작 가이드", guide_html)
+        self.assertIn("탭별 안내", guide_html)
+        self.assertIn("메뉴 안내", guide_html)
+        self.assertIn("데이터 수집", guide_html)
+        self.assertIn("DB 백업", guide_html)
+
+        if hasattr(w, "schedule_timer") and w.schedule_timer:
+            w.schedule_timer.stop()
+        if hasattr(w, "tray_icon") and w.tray_icon:
+            w.tray_icon.hide()
+        if hasattr(w, "db") and w.db:
+            w.db.close()
+
+        w.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_app_initializes_noncritical_tabs_eagerly(self):
+        from src.ui.app import RealEstateApp
+
+        w = RealEstateApp()
+
+        self.assertIsNotNone(getattr(w, "db_tab", None))
+        self.assertIsNotNone(getattr(w, "favorites_tab", None))
+        self.assertIsNotNone(getattr(w, "dashboard_widget", None))
+        self.assertIs(w.tabs.widget(w.TAB_DB), w.db_tab)
+        self.assertIs(w.tabs.widget(w.TAB_FAVORITES), w.favorites_tab)
+
+        if hasattr(w, "schedule_timer") and w.schedule_timer:
+            w.schedule_timer.stop()
+        if hasattr(w, "tray_icon") and w.tray_icon:
+            w.tray_icon.hide()
+        if hasattr(w, "db") and w.db:
+            w.db.close()
+
+        w.deleteLater()
+        self._qt_app.processEvents()
+
     def test_dialogs_instantiation(self):
         from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog
 

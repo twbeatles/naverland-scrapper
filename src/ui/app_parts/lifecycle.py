@@ -35,11 +35,10 @@ class AppLifecycleMixin:
         self._shortcuts: dict[str, Any] = {}
         self.schedule_timer: Any | None = None
         self.db = ComplexDatabase()
-        self._lazy_noncritical_tabs = bool(settings.get("startup_lazy_noncritical_tabs", True))
         self._noncritical_loaded = {
-            "history": False,
-            "stats": False,
-            "favorites": False,
+            "history": True,
+            "stats": True,
+            "favorites": True,
         }
         
         # v11.0: Toast 알림 시스템
@@ -192,16 +191,21 @@ class AppLifecycleMixin:
         self.schedule_timer.start(60000)
     
     def _load_initial_data(self: Any):
-        if not self._lazy_noncritical_tabs:
-            self._load_history()
-            self._noncritical_loaded["history"] = True
-            self._load_stats_complexes()
-            self._noncritical_loaded["stats"] = True
-            self._refresh_favorite_keys()
-            self._noncritical_loaded["favorites"] = True
+        self._load_history()
+        self._noncritical_loaded["history"] = True
+        self._load_stats_complexes()
+        self._noncritical_loaded["stats"] = True
+        self._refresh_favorite_keys()
+        self._noncritical_loaded["favorites"] = True
         group_tab = getattr(self, "group_tab", None)
         if group_tab is not None:
             group_tab.load_groups()
+        db_tab = getattr(self, "db_tab", None)
+        if db_tab is not None:
+            db_tab.load_data()
+        favorites_tab = getattr(self, "favorites_tab", None)
+        if favorites_tab is not None:
+            favorites_tab.refresh()
         self._load_schedule_groups()
         self._load_schedule_config()
         
@@ -215,9 +219,7 @@ class AppLifecycleMixin:
     def _on_crawl_data_collected(self: Any, data):
         self.collected_data = list(data) if data else []
         self._load_history()
-        self._noncritical_loaded["history"] = True
         self._load_stats_complexes()
-        self._noncritical_loaded["stats"] = True
         if self.tabs.currentWidget() is self.stats_tab:
             self._load_stats()
         if self.dashboard_widget is not None:
@@ -225,7 +227,6 @@ class AppLifecycleMixin:
         favorites_tab = getattr(self, "favorites_tab", None)
         if favorites_tab is not None:
             favorites_tab.refresh()
-            self._noncritical_loaded["favorites"] = True
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
 
     def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):

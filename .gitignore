@@ -43,6 +43,11 @@ ms-playwright/
 .idea/
 .pytest_cache/
 Microsoft/
+.mypy_cache/
+.ruff_cache/
+.nox/
+node_modules/
+coverage.xml
 
 # Environment
 .env

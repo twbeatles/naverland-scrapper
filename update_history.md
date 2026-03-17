@@ -1,3 +1,27 @@
+## **v15.0.14 (2026-03-17)**
+
+**문서/.spec/.gitignore 정합성 재점검 + 성능 리팩토링 기준 동기화**
+
+### ✅ 핵심 반영
+
+* 문서/빌드 기준 정합화:
+  - `naverland-scrapper.spec`의 실제 기본 프로필을 `onedir + Chromium bundle` 기준으로 명시
+  - `NAVERLAND_ONEFILE=1`에서만 onefile이 생성된다는 점을 README/AI 컨텍스트 문서와 일치시킴
+  - 카드 뷰 위젯 경로를 `src/ui/widgets/cards.py`로 바로잡고, `dashboard.py`는 대시보드 전용 위젯 문서로 정리
+* 성능 기준 문서화:
+  - 비핵심 탭 lazy loading 제거 상태와 `startup_lazy_noncritical_tabs=False` 레거시 호환 정책을 명시
+  - 대시보드 통계 캐시/소멸 count TTL 캐시/지연 차트 초기화
+  - 결과 테이블 검색 캐시 사전 생성, 로그 `maximumBlockCount`, 카드 스타일 캐시를 최신 기준으로 추가
+* `.gitignore` 보강:
+  - 로컬 개발 산출물 유입 방지를 위해 `.mypy_cache/`, `.ruff_cache/`, `.nox/`, `node_modules/`, `coverage.xml` 추가
+
+### ✅ 검증
+
+* `python -m pytest tests/test_performance_smoke.py tests/test_ui_runtime_smoke.py tests/test_ui_wiring.py -q`
+  - 결과: `49 passed`
+* `python scripts/perf_baseline.py`
+  - 기준 측정: app init `0.9154s`, card set_data(1000) `0.1782s`
+
 ## **v15.0.13 (2026-03-16)**
 
 **Repo-wide Pylance/Pyright cleanup + encoding regression guardrails**

@@ -10,13 +10,15 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-16 (.spec/doc/gitignore/runtime-status consistency pass):
+# Rechecked on 2026-03-17 (.spec/doc/gitignore/runtime-status/performance consistency pass):
 # no extra hidden imports/hooks required.
-# Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) do not require spec changes.
+# Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
+# UI performance refactors (`src/ui/widgets/cards.py`, dashboard deferred chart init)
+# do not require spec changes.
 project_dir = Path.cwd().resolve()
-# One-file build is now the default for distribution.
-# Low-spec PCs benefit from onedir because it avoids onefile extraction overhead.
-# You can still force onefile by setting NAVERLAND_ONEFILE=1.
+# Default distribution profile is onedir with bundled Chromium.
+# This avoids onefile extraction overhead and matches the current README/doc baseline.
+# Force onefile explicitly with NAVERLAND_ONEFILE=1.
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
 # Chromium-bundled build is the default so frozen apps work on machines without
 # a preinstalled Playwright browser. Set NAVERLAND_BUNDLE_CHROMIUM=0 for slim builds.

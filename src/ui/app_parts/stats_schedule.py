@@ -267,7 +267,10 @@ class AppStatsScheduleMixin:
     
     # History Tab handlers
     def _load_history(self: Any):
+        self.history_table.blockSignals(True)
         self.history_table.setUpdatesEnabled(False)
+        prev_sorting = self.history_table.isSortingEnabled()
+        self.history_table.setSortingEnabled(False)
         try:
             self.history_table.setRowCount(0)
             history = self.db.get_crawl_history()
@@ -304,7 +307,9 @@ class AppStatsScheduleMixin:
                 self.history_table.setItem(row_idx, 7, QTableWidgetItem(str(item_count)))
                 self.history_table.setItem(row_idx, 8, QTableWidgetItem(crawled_at))
         finally:
+            self.history_table.blockSignals(False)
             self.history_table.setUpdatesEnabled(True)
+            self.history_table.setSortingEnabled(prev_sorting)
 
     @staticmethod
     def _parse_pyeong_value(value):
@@ -413,7 +418,10 @@ class AppStatsScheduleMixin:
 
         snapshots = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type, pyeong=pyeong)
 
+        self.stats_table.blockSignals(True)
         self.stats_table.setUpdatesEnabled(False)
+        prev_sorting = self.stats_table.isSortingEnabled()
+        self.stats_table.setSortingEnabled(False)
         series_keys = set()
         chart_data = {"date": [], "avg": [], "min": [], "max": [], "type": None, "py": None}
         try:
@@ -441,7 +449,9 @@ class AppStatsScheduleMixin:
                     chart_data["min"].append(min_p)
                     chart_data["max"].append(max_p)
         finally:
+            self.stats_table.blockSignals(False)
             self.stats_table.setUpdatesEnabled(True)
+            self.stats_table.setSortingEnabled(prev_sorting)
 
         self._ensure_chart_widget()
         if not chart_data["date"]:

@@ -110,28 +110,25 @@ class SettingsDialog(QDialog):
         self.spin_max_log_lines.setSingleStep(100)
         perf_layout.addWidget(self.spin_max_log_lines, 2, 1)
 
-        self.check_lazy_startup = QCheckBox("비핵심 탭 초기 로드 지연")
-        perf_layout.addWidget(self.check_lazy_startup, 3, 0, 1, 2)
-
         self.check_compact_duplicates = QCheckBox("동일 매물 묶어서 표시")
-        perf_layout.addWidget(self.check_compact_duplicates, 4, 0, 1, 2)
+        perf_layout.addWidget(self.check_compact_duplicates, 3, 0, 1, 2)
 
-        perf_layout.addWidget(QLabel("Playwright 워커 수"), 5, 0)
+        perf_layout.addWidget(QLabel("Playwright 워커 수"), 4, 0)
         self.spin_playwright_workers = QSpinBox()
         self.spin_playwright_workers.setRange(1, 32)
-        perf_layout.addWidget(self.spin_playwright_workers, 5, 1)
+        perf_layout.addWidget(self.spin_playwright_workers, 4, 1)
 
         self.check_playwright_headless = QCheckBox("Playwright headless 실행")
-        perf_layout.addWidget(self.check_playwright_headless, 6, 0, 1, 2)
+        perf_layout.addWidget(self.check_playwright_headless, 5, 0, 1, 2)
 
         self.check_block_heavy_resources = QCheckBox("이미지/폰트 등 무거운 리소스 차단")
-        perf_layout.addWidget(self.check_block_heavy_resources, 7, 0, 1, 2)
+        perf_layout.addWidget(self.check_block_heavy_resources, 6, 0, 1, 2)
 
-        perf_layout.addWidget(QLabel("응답 drain timeout(ms):"), 8, 0)
+        perf_layout.addWidget(QLabel("응답 drain timeout(ms):"), 7, 0)
         self.spin_playwright_drain_timeout = QSpinBox()
         self.spin_playwright_drain_timeout.setRange(100, 20000)
         self.spin_playwright_drain_timeout.setSingleStep(100)
-        perf_layout.addWidget(self.spin_playwright_drain_timeout, 8, 1)
+        perf_layout.addWidget(self.spin_playwright_drain_timeout, 7, 1)
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
 
@@ -228,9 +225,6 @@ class SettingsDialog(QDialog):
             int(settings.get("result_filter_debounce_ms", 220) or 220)
         )
         self.spin_max_log_lines.setValue(int(settings.get("max_log_lines", 1500) or 1500))
-        self.check_lazy_startup.setChecked(
-            bool(settings.get("startup_lazy_noncritical_tabs", True))
-        )
         self.check_compact_duplicates.setChecked(
             bool(settings.get("compact_duplicate_listings", True))
         )
@@ -284,7 +278,7 @@ class SettingsDialog(QDialog):
             "history_batch_size": self.spin_history_batch.value(),
             "result_filter_debounce_ms": self.spin_filter_debounce.value(),
             "max_log_lines": self.spin_max_log_lines.value(),
-            "startup_lazy_noncritical_tabs": self.check_lazy_startup.isChecked(),
+            "startup_lazy_noncritical_tabs": False,
             "compact_duplicate_listings": self.check_compact_duplicates.isChecked(),
             "playwright_detail_workers": self.spin_playwright_workers.value(),
             "playwright_headless": self.check_playwright_headless.isChecked(),
