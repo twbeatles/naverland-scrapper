@@ -56,6 +56,13 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertIn("12345", ids)
         self.assertIn("67890", ids)
 
+    def test_extract_from_text_accepts_short_standalone_id_lines(self):
+        text = "1\n22"
+        results = NaverURLParser.extract_from_text(text)
+        ids = [cid for _, cid in results]
+        self.assertIn("1", ids)
+        self.assertIn("22", ids)
+
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
         side_effect=Exception("network fail"),

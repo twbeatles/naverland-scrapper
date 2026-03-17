@@ -17,10 +17,11 @@ project_dir = Path.cwd().resolve()
 # One-file build is now the default for distribution.
 # You can still force onedir by setting NAVERLAND_ONEFILE=0.
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "1") == "1"
-# Slim build is the default. Bundle Chromium only when explicitly requested.
-# Runtime preflight now blocks startup when the effective crawl_engine is `playwright`
+# Chromium-bundled build is the default so frozen apps work on machines without
+# a preinstalled Playwright browser. Set NAVERLAND_BUNDLE_CHROMIUM=0 for slim builds.
+# Runtime preflight still blocks startup when the effective crawl_engine is `playwright`
 # and Playwright Chromium is neither installed locally nor bundled.
-bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "0") == "1"
+bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "1") == "1"
 windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
 # Keep windowed mode by default. Enable console explicitly when debugging startup failures.
 enable_console = os.environ.get("NAVERLAND_CONSOLE", "0") == "1"

@@ -20,12 +20,12 @@ class NaverURLParser:
         r"m\.land\.naver\.com.*complex[=/](\d+)",
     ]
     _URL_RE = re.compile(r"https?://[^\s<>\"']+")
-    _STANDALONE_ID_LINE_RE = re.compile(r"^\s*(\d{5,10})\s*$")
+    _STANDALONE_ID_LINE_RE = re.compile(r"^\s*(\d+)\s*$")
     _CONTEXT_ID_LINE_RE = re.compile(
-        r"(?:단지\s*(?:id|번호)?|complex\s*id|complexno)\s*[:=]?\s*(\d{5,10})",
+        r"(?:단지\s*(?:id|번호)?|complex\s*id|complexno)\s*[:=]?\s*(\d+)",
         re.IGNORECASE,
     )
-    _COMPLEX_QUERY_RE = re.compile(r"complexNo=(\d{5,10})", re.IGNORECASE)
+    _COMPLEX_QUERY_RE = re.compile(r"complexNo=(\d+)", re.IGNORECASE)
 
     _retry_handler = RetryHandler(max_retries=2, base_delay=1.0)
 

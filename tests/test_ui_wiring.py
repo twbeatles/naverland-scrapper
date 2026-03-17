@@ -1281,7 +1281,51 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_crawler_tab_rejects_invalid_manual_complex_id(self):
+    def test_crawler_tab_accepts_short_manual_complex_id(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "short_manual_id.db"))
+            tab = CrawlerTab(db)
+            tab.input_name.setText("테스트단지")
+            tab.input_id.setText("12")
+
+            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+                tab._add_complex()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(_table_text(tab.table_list, 0, 0), "테스트단지")
+            self.assertEqual(_table_text(tab.table_list, 0, 1), "12")
+            mock_warning.assert_not_called()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_manual_complex_name_is_optional(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "optional_manual_name.db"))
+            tab = CrawlerTab(db)
+            tab.input_name.setText("")
+            tab.input_id.setText("7")
+
+            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+                tab._add_complex()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(_table_text(tab.table_list, 0, 0), "단지_7")
+            self.assertEqual(_table_text(tab.table_list, 0, 1), "7")
+            mock_warning.assert_not_called()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_rejects_non_numeric_manual_complex_id(self):
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -1289,7 +1333,7 @@ class TestUIWiring(unittest.TestCase):
             db = ComplexDatabase(os.path.join(tmp, "invalid_manual_id.db"))
             tab = CrawlerTab(db)
             tab.input_name.setText("테스트단지")
-            tab.input_id.setText("1234")
+            tab.input_id.setText("12A")
 
             with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
                 tab._add_complex()

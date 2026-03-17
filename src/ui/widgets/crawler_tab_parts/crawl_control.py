@@ -13,10 +13,10 @@ class CrawlerTabCrawlControlMixin:
     def _add_complex(self: Any):
         name = self.input_name.text().strip()
         cid = self.input_id.text().strip()
-        if not name or not cid:
+        if not cid:
             return
         if not self._complex_id_regex.match(cid).hasMatch():
-            QMessageBox.warning(self, "입력 오류", "단지 ID는 숫자 5~10자리만 입력할 수 있습니다.")
+            QMessageBox.warning(self, "입력 오류", "단지 ID는 숫자만 입력할 수 있습니다.")
             self.input_id.setFocus()
             self.input_id.selectAll()
             return
