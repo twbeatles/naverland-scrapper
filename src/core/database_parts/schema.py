@@ -501,6 +501,8 @@ class ComplexDatabaseSchemaMixin:
                 avg_price INTEGER,
                 item_count INTEGER,
                 asset_type TEXT DEFAULT 'APT',
+                price_metric TEXT DEFAULT 'price',
+                legacy_monthly INTEGER DEFAULT 0,
                 snapshot_date DATE DEFAULT CURRENT_DATE
             )''')
             c.execute('''CREATE TABLE IF NOT EXISTS alert_settings (
@@ -592,8 +594,6 @@ class ComplexDatabaseSchemaMixin:
                 "CREATE INDEX IF NOT EXISTS idx_crawl_history_stats_lookup "
                 "ON crawl_history(asset_type, complex_id, crawled_at DESC)"
             )
-            c.execute('CREATE INDEX IF NOT EXISTS idx_price_snapshots_lookup ON price_snapshots(complex_id, trade_type, snapshot_date DESC)')
-            
             # additive migrations
             migration_columns = {
                 "article_history": {
@@ -626,6 +626,8 @@ class ComplexDatabaseSchemaMixin:
                 },
                 "price_snapshots": {
                     "asset_type": "TEXT DEFAULT 'APT'",
+                    "price_metric": "TEXT DEFAULT 'price'",
+                    "legacy_monthly": "INTEGER DEFAULT 0",
                 },
                 "alert_settings": {
                     "asset_type": "TEXT DEFAULT 'ALL'",
@@ -638,13 +640,20 @@ class ComplexDatabaseSchemaMixin:
                     except Exception as me:
                         logger.warning(f"{table_name}.{column_name} column migration failed (ignored): {me}")
             try:
+                c.execute("DROP INDEX IF EXISTS idx_price_snapshots_lookup")
+                c.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_price_snapshots_lookup "
+                    "ON price_snapshots(complex_id, trade_type, price_metric, snapshot_date DESC)"
+                )
+                c.execute("DROP INDEX IF EXISTS idx_price_snapshots_asset_lookup")
                 c.execute(
                     "CREATE INDEX IF NOT EXISTS idx_price_snapshots_asset_lookup "
-                    "ON price_snapshots(asset_type, complex_id, trade_type, snapshot_date DESC)"
+                    "ON price_snapshots(asset_type, complex_id, trade_type, price_metric, snapshot_date DESC)"
                 )
+                c.execute("DROP INDEX IF EXISTS idx_price_snapshots_stats_pyeong")
                 c.execute(
                     "CREATE INDEX IF NOT EXISTS idx_price_snapshots_stats_pyeong "
-                    "ON price_snapshots(asset_type, complex_id, pyeong, snapshot_date DESC)"
+                    "ON price_snapshots(asset_type, complex_id, trade_type, price_metric, pyeong, snapshot_date DESC)"
                 )
             except Exception as me:
                 logger.warning(f"price_snapshots asset lookup index migration failed (ignored): {me}")
@@ -715,6 +724,43 @@ class ComplexDatabaseSchemaMixin:
                         updates,
                     )
                     logger.info(f"migration complete: normalized price_snapshots rows={len(updates)}")
+                c.execute(
+                    """
+                    UPDATE price_snapshots
+                    SET price_metric = CASE
+                        WHEN trade_type = '월세' THEN 'deposit'
+                        WHEN TRIM(COALESCE(price_metric, '')) = '' THEN 'price'
+                        ELSE LOWER(TRIM(price_metric))
+                    END
+                    WHERE TRIM(COALESCE(price_metric, '')) = ''
+                       OR LOWER(TRIM(COALESCE(price_metric, ''))) NOT IN ('price', 'deposit', 'rent')
+                       OR (trade_type = '월세' AND LOWER(TRIM(COALESCE(price_metric, ''))) = 'price')
+                    """
+                )
+                c.execute(
+                    """
+                    UPDATE price_snapshots
+                    SET legacy_monthly = CASE
+                        WHEN trade_type = '월세'
+                         AND LOWER(TRIM(COALESCE(price_metric, 'price'))) = 'deposit'
+                         AND NOT EXISTS (
+                             SELECT 1
+                             FROM price_snapshots paired
+                             WHERE paired.complex_id = price_snapshots.complex_id
+                               AND paired.trade_type = price_snapshots.trade_type
+                               AND COALESCE(paired.asset_type, 'APT') = COALESCE(price_snapshots.asset_type, 'APT')
+                               AND COALESCE(paired.snapshot_date, '') = COALESCE(price_snapshots.snapshot_date, '')
+                               AND (
+                                   (paired.pyeong IS NULL AND price_snapshots.pyeong IS NULL)
+                                   OR paired.pyeong = price_snapshots.pyeong
+                               )
+                               AND LOWER(TRIM(COALESCE(paired.price_metric, 'price'))) = 'rent'
+                         ) THEN 1
+                        ELSE 0
+                    END
+                    WHERE trade_type = '월세'
+                    """
+                )
             except Exception as me:
                 logger.warning(f"price_snapshots cleanup failed (ignored): {me}")
 

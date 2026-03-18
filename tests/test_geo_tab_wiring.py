@@ -261,6 +261,113 @@ class TestGeoTabWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_geo_tab_restores_last_coordinates_and_saves_manual_location_on_start(self):
+        from src.core.database import ComplexDatabase
+
+        try:
+            from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+        except ImportError as exc:
+            if "_imaging" in str(exc):
+                self.skipTest("Pillow DLL blocked in this environment")
+            raise
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "geo_last_coords.db"))
+
+            def _settings_get(key, default=None):
+                overrides = {
+                    "geo_last_lat": 37.1111,
+                    "geo_last_lon": 127.2222,
+                    "cache_enabled": False,
+                    "fallback_engine_enabled": False,
+                }
+                return overrides.get(key, default)
+
+            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+                tab = GeoCrawlerTab(db)
+
+            self.assertAlmostEqual(tab.spin_lat.value(), 37.1111, places=4)
+            self.assertAlmostEqual(tab.spin_lon.value(), 127.2222, places=4)
+
+            tab.check_trade.setChecked(True)
+            tab.spin_lat.setValue(37.3333)
+            tab.spin_lon.setValue(127.4444)
+
+            with (
+                patch("src.ui.widgets.geo_crawler_tab.settings.update") as mock_update,
+                patch("src.core.crawler.CrawlerThread.start", return_value=None),
+            ):
+                tab.start_crawling()
+
+            self.assertTrue(
+                any(
+                    call.args
+                    and isinstance(call.args[0], dict)
+                    and call.args[0].get("geo_last_lat") == 37.3333
+                    and call.args[0].get("geo_last_lon") == 127.4444
+                    for call in mock_update.call_args_list
+                )
+            )
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_geo_tab_can_apply_scheduled_profile_without_overwriting_last_manual_coords(self):
+        from src.core.database import ComplexDatabase
+
+        try:
+            from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+        except ImportError as exc:
+            if "_imaging" in str(exc):
+                self.skipTest("Pillow DLL blocked in this environment")
+            raise
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "geo_scheduled_profile.db"))
+
+            def _settings_get(key, default=None):
+                overrides = {
+                    "cache_enabled": False,
+                    "fallback_engine_enabled": False,
+                }
+                return overrides.get(key, default)
+
+            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+                tab = GeoCrawlerTab(db)
+
+            tab.check_trade.setChecked(True)
+            tab.apply_geo_profile(
+                lat=37.7777,
+                lon=127.8888,
+                zoom=14,
+                rings=2,
+                step_px=360,
+                dwell_ms=900,
+                asset_types=["VL"],
+                persist_last=False,
+            )
+
+            with (
+                patch("src.ui.widgets.geo_crawler_tab.settings.update") as mock_update,
+                patch("src.core.crawler.CrawlerThread.start", return_value=None),
+            ):
+                tab.start_crawling()
+
+            self.assertFalse(mock_update.called)
+            thread = tab.crawler_thread
+            assert thread is not None
+            geo_config = thread.geo_config
+            assert geo_config is not None
+            self.assertAlmostEqual(geo_config.lat, 37.7777, places=4)
+            self.assertAlmostEqual(geo_config.lon, 127.8888, places=4)
+            self.assertEqual(geo_config.zoom, 14)
+            self.assertEqual(geo_config.rings, 2)
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_geo_final_summary_log_on_finish(self):
         from src.core.database import ComplexDatabase
 

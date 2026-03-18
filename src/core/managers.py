@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from threading import Lock
 from typing import Any, List
-from pathlib import Path
 from src.utils.paths import DATA_DIR, SETTINGS_PATH, PRESETS_PATH, HISTORY_PATH
 from src.utils.logger import get_logger
 from src.utils.helpers import DateTimeHelper
+from src.utils.json_store import atomic_write_json, load_json_with_recovery
 
 DEFAULT_SETTINGS = {
     "theme": "dark", "crawl_speed": "보통", "minimize_to_tray": True,
@@ -56,6 +57,8 @@ DEFAULT_SETTINGS = {
     "geo_grid_step_px": 480,
     "geo_sweep_dwell_ms": 600,
     "geo_asset_types": ["APT", "VL"],
+    "geo_last_lat": 37.5608,
+    "geo_last_lon": 126.9888,
     "schedule_geo_lat": 37.5608,
     "schedule_geo_lon": 126.9888,
     "schedule_config": {
@@ -88,36 +91,25 @@ class SettingsManager:
     def __init__(self):
         if self._initialized: return
         self._initialized = True
-        self._settings: dict[str, Any] = DEFAULT_SETTINGS.copy()
+        self._settings: dict[str, Any] = deepcopy(DEFAULT_SETTINGS)
         self._load()
 
-    @staticmethod
-    def _backup_broken_settings(path: Path) -> Path | None:
-        try:
-            suffix = DateTimeHelper.now_string().replace(":", "").replace(" ", "_")
-            backup_path = path.with_suffix(path.suffix + f".broken.{suffix}")
-            path.replace(backup_path)
-            return backup_path
-        except OSError:
-            return None
-
     def _load(self):
-        logger = get_logger("SettingsManager")
-        if SETTINGS_PATH.exists():
-            try:
-                with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
-                    self._settings.update(json.load(f))
-            except (OSError, json.JSONDecodeError) as e:
-                backup = self._backup_broken_settings(SETTINGS_PATH)
-                logger.warning(f"설정 로드 실패, 기본값으로 복구합니다: {e}")
-                if backup:
-                    logger.warning(f"손상된 설정 파일 백업: {backup}")
-                self._settings = DEFAULT_SETTINGS.copy()
-                self._save()
+        payload = load_json_with_recovery(
+            SETTINGS_PATH,
+            default_factory=lambda: deepcopy(DEFAULT_SETTINGS),
+            logger_name="SettingsManager",
+            label="settings",
+        )
+        if isinstance(payload, dict):
+            self._settings = deepcopy(DEFAULT_SETTINGS)
+            self._settings.update(payload)
+        else:
+            self._settings = deepcopy(DEFAULT_SETTINGS)
+            self._save()
     def _save(self):
         try:
-            with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self._settings, f, ensure_ascii=False, indent=2)
+            atomic_write_json(SETTINGS_PATH, self._settings)
         except OSError as e:
             get_logger('SettingsManager').warning(f"설정 저장 실패: {e}")
     def get(self, key: str, default: Any = None) -> Any:
@@ -136,16 +128,16 @@ class FilterPresetManager:
         self._presets = {}
         self._load()
     def _load(self):
-        if PRESETS_PATH.exists():
-            try:
-                with open(PRESETS_PATH, 'r', encoding='utf-8') as f:
-                    self._presets = json.load(f)
-            except (OSError, json.JSONDecodeError) as e:
-                get_logger('FilterPresetManager').warning(f"프리셋 로드 실패: {e}")
+        payload = load_json_with_recovery(
+            PRESETS_PATH,
+            default_factory=dict,
+            logger_name="FilterPresetManager",
+            label="presets",
+        )
+        self._presets = payload if isinstance(payload, dict) else {}
     def _save(self):
         try:
-            with open(PRESETS_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self._presets, f, ensure_ascii=False, indent=2)
+            atomic_write_json(PRESETS_PATH, self._presets)
         except OSError as e:
             get_logger('FilterPresetManager').warning(f"프리셋 저장 실패: {e}")
     def add(self, name, config): self._presets[name] = config; self._save(); return True
@@ -164,17 +156,17 @@ class SearchHistoryManager:
         self._load()
     
     def _load(self):
-        if HISTORY_PATH.exists():
-            try:
-                with open(HISTORY_PATH, 'r', encoding='utf-8') as f:
-                    self._history = json.load(f)
-            except (OSError, json.JSONDecodeError) as e:
-                get_logger('SearchHistoryManager').warning(f"검색 기록 로드 실패: {e}")
+        payload = load_json_with_recovery(
+            HISTORY_PATH,
+            default_factory=list,
+            logger_name="SearchHistoryManager",
+            label="search_history",
+        )
+        self._history = payload if isinstance(payload, list) else []
     
     def _save(self):
         try:
-            with open(HISTORY_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self._history[:self.max_items], f, ensure_ascii=False, indent=2)
+            atomic_write_json(HISTORY_PATH, self._history[:self.max_items])
         except OSError as e:
             get_logger('SearchHistoryManager').warning(f"검색 기록 저장 실패: {e}")
 
@@ -244,18 +236,18 @@ class RecentlyViewedManager:
     
     def _load(self):
         """파일에서 로드"""
-        if self.STORAGE_PATH.exists():
-            try:
-                with open(self.STORAGE_PATH, 'r', encoding='utf-8') as f:
-                    self._items = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                self._items = []
+        payload = load_json_with_recovery(
+            self.STORAGE_PATH,
+            default_factory=list,
+            logger_name="RecentlyViewedManager",
+            label="recently_viewed",
+        )
+        self._items = payload if isinstance(payload, list) else []
     
     def _save(self):
         """파일에 저장"""
         try:
-            with open(self.STORAGE_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self._items[:self.MAX_ITEMS], f, ensure_ascii=False, indent=2)
+            atomic_write_json(self.STORAGE_PATH, self._items[:self.MAX_ITEMS])
         except OSError as e:
             get_logger('RecentlyViewedManager').warning(f"최근 본 매물 저장 실패: {e}")
     

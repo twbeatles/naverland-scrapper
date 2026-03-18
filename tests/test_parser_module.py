@@ -16,6 +16,9 @@ class TestNaverURLParser(unittest.TestCase):
         url = "https://new.land.naver.com/complexes/123456"
         self.assertEqual(NaverURLParser.extract_complex_id(url), "123456")
 
+        url = "https://new.land.naver.com/houses/654321?articleId=999999999"
+        self.assertEqual(NaverURLParser.extract_complex_id(url), "654321")
+
     def test_extract_from_text(self):
         text = "https://land.naver.com/complex/11111\n단지ID: 22222"
         results = NaverURLParser.extract_from_text(text)
@@ -62,6 +65,18 @@ class TestNaverURLParser(unittest.TestCase):
         ids = [cid for _, cid in results]
         self.assertIn("1", ids)
         self.assertIn("22", ids)
+
+    def test_extract_from_text_accepts_house_urls_and_deduplicates_with_complex_urls(self):
+        text = "\n".join(
+            [
+                "https://new.land.naver.com/houses/54321?articleId=111",
+                "https://new.land.naver.com/complexes/54321",
+                "https://m.land.naver.com/houses/article/54321",
+            ]
+        )
+        results = NaverURLParser.extract_from_text(text)
+        ids = [cid for _, cid in results]
+        self.assertEqual(ids, ["54321"])
 
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",

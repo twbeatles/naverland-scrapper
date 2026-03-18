@@ -24,6 +24,8 @@ data/
 *.db.restore_tmp
 *.db.pre_restore
 *.json
+*.json.tmp
+*.json.broken.*
 !pyrightconfig.json
 *.csv
 *.xlsx

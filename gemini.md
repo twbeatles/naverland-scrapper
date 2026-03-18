@@ -438,3 +438,32 @@ COLORS["light"] = {
   - 결과 렌더링은 행 검색 캐시 사전 구성, 로그 maximum block count, 카드 스타일 캐시를 사용.
 - Ignore baseline:
   - `.gitignore`에 `.mypy_cache/`, `.ruff_cache/`, `.nox/`, `node_modules/`, `coverage.xml`를 추가해 로컬 개발 산출물 유입을 예방.
+
+## 0-17. v15.0.15 Functional Reliability Update (2026-03-18)
+- DB restore safety:
+  - restore must stop both `crawler_tab` and `geo_tab` before replacing the SQLite file
+  - if either shutdown fails, restore must abort and UI/timer state must recover cleanly
+- URL parsing:
+  - `NaverURLParser` is the canonical extractor for batch/manual URL registration
+  - supported URL families include `new.land.naver.com/complexes/{id}` and `new.land.naver.com/houses/{id}?articleId=...`
+- Monthly price snapshots:
+  - schema now includes `price_metric` and `legacy_monthly`
+  - `매매` / `전세` use `price_metric='price'`
+  - `월세` stores paired rows for `deposit` and `rent`
+  - default monthly stats/history queries read `rent` and exclude `legacy_monthly=1`
+- Stats UI:
+  - monthly stats expose a metric selector with default `rent`
+  - switching to `deposit` redraws both table and chart from the selected metric only
+- JSON runtime state:
+  - `settings`, `presets`, `search_history`, `recently_viewed`, `crawl_cache` use atomic temp-write + `os.replace()`
+  - malformed JSON is quarantined to `*.broken.<label>.*` and reloaded from defaults
+- Geo scheduling / memory:
+  - `schedule_config.geo` is the source of truth for scheduled geo runs
+  - scheduled geo profile contains `lat`, `lon`, `zoom`, `rings`, `step_px`, `dwell_ms`, `asset_types`
+  - manual Geo tab coordinates persist separately as `geo_last_lat` / `geo_last_lon`
+  - scheduled runs must not overwrite the remembered manual coordinates
+- Packaging / ignore review:
+  - `naverland-scrapper.spec` was rechecked and still needs no extra hidden import/runtime hook/data bundle changes
+  - `.gitignore` now ignores `*.json.tmp` and `*.json.broken.*` runtime artifacts
+- Validation:
+  - `pytest -q` => `176 passed`

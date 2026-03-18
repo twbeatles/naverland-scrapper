@@ -640,3 +640,28 @@
 * **완료 알림음**: 작업 완료 시 소리 알림 옵션
 
 
+---
+
+## **v15.0.15**
+
+**기능 안정화 / 문서·패키징 정합성 업데이트**
+
+### ✅ 핵심 반영
+
+* **DB 복원 안전성 강화**: DB 복원 전에 `crawler_tab`과 `geo_tab`을 모두 안전 종료하고, 하나라도 실패하면 복원을 중단하도록 정리
+* **VL houses URL 정식 지원**: `new.land.naver.com/houses/{complex_id}?articleId=...` 계열 URL을 URL 배치 등록과 수동 등록 모두에서 지원
+* **월세 추이 이중 지표 저장**: `price_snapshots`에 `price_metric`, `legacy_monthly`를 도입하고 `월세`를 `deposit` / `rent` 두 지표로 분리 저장
+* **월세 통계 UI 개선**: 통계 탭에서 `월세 금액` 기본값과 `보증금` 전환 콤보를 제공하고, 선택한 지표 기준으로 표/차트를 다시 그림
+* **예약 Geo full profile 저장**: 예약 `geo_sweep`가 `lat`, `lon`, `zoom`, `rings`, `step_px`, `dwell_ms`, `asset_types` 전체를 `schedule_config.geo`에 저장/복원
+* **마지막 수동 Geo 좌표 기억**: 일반 Geo 탭이 `geo_last_lat`, `geo_last_lon`을 저장하고 다음 실행 때 복원
+* **JSON 상태 저장 원자화**: `settings`, `presets`, `search_history`, `recently_viewed`, `crawl_cache`를 temp-write + `os.replace()`로 저장하고, 손상 파일은 `*.json.broken.*`로 quarantine
+
+### 📦 패키징 / 문서 / ignore
+
+* **`.spec` 재점검**: 위 변경은 모두 Python/runtime 레벨이라 추가 hidden import/runtime hook/data bundle 수정 불필요
+* **`.gitignore` 보강**: 런타임 중 남을 수 있는 `*.json.tmp`, `*.json.broken.*` 패턴 추가
+* **문서 정합성 갱신**: `README.md`, `claude.md`, `gemini.md`, `update_history.md` 기준을 이번 동작으로 통일
+
+### 🧪 검증
+
+* `pytest -q` => `176 passed`

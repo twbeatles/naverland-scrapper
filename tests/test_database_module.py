@@ -160,6 +160,107 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(int(apt_rows[0][5]), 33000)
         self.assertEqual(int(vl_rows[0][5]), 22000)
 
+    def test_monthly_price_snapshots_support_metric_filters_and_hide_legacy_by_default(self):
+        saved = self.db.add_price_snapshots_bulk(
+            [
+                ("72001", "월세", 24.0, 50000, 55000, 52500, 2, "APT", "deposit", 0),
+                ("72001", "월세", 24.0, 90, 110, 100, 2, "APT", "rent", 0),
+                ("72001", "월세", 24.0, 40000, 42000, 41000, 1, "APT", "deposit", 1),
+            ]
+        )
+        self.assertEqual(saved, 3)
+
+        default_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT")
+        deposit_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT", price_metric="deposit")
+        rent_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT", price_metric="rent")
+        legacy_rows = self.db.get_price_snapshots(
+            "72001",
+            "월세",
+            asset_type="APT",
+            price_metric="deposit",
+            include_legacy_monthly=True,
+        )
+
+        self.assertEqual(len(default_rows), 1)
+        self.assertEqual(default_rows[0][7], "rent")
+        self.assertEqual(len(deposit_rows), 1)
+        self.assertEqual(deposit_rows[0][7], "deposit")
+        self.assertEqual(deposit_rows[0][8], 0)
+        self.assertEqual(len(rent_rows), 1)
+        self.assertEqual(rent_rows[0][7], "rent")
+        self.assertEqual(len(legacy_rows), 2)
+        self.assertTrue(any(int(row[8]) == 1 for row in legacy_rows))
+
+        pyeongs = self.db.get_price_snapshot_pyeongs("72001", asset_type="APT", trade_type="월세")
+        self.assertEqual(pyeongs, [24.0])
+
+    def test_monthly_snapshot_migration_marks_only_deposit_rows_without_rent_pair_as_legacy(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy_monthly_snapshots.db")
+        conn = sqlite3.connect(legacy_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """
+                CREATE TABLE price_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    complex_id TEXT,
+                    trade_type TEXT,
+                    pyeong REAL,
+                    min_price INTEGER,
+                    max_price INTEGER,
+                    avg_price INTEGER,
+                    item_count INTEGER,
+                    asset_type TEXT DEFAULT 'APT',
+                    price_metric TEXT DEFAULT 'price',
+                    snapshot_date DATE DEFAULT CURRENT_DATE
+                )
+                """
+            )
+            c.executemany(
+                """
+                INSERT INTO price_snapshots (
+                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                    asset_type, price_metric, snapshot_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    ("LEG-1", "월세", 24.0, 50000, 52000, 51000, 1, "APT", "price", "2026-03-01"),
+                    ("NEW-1", "월세", 24.0, 60000, 62000, 61000, 1, "APT", "deposit", "2026-03-02"),
+                    ("NEW-1", "월세", 24.0, 90, 100, 95, 1, "APT", "rent", "2026-03-02"),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        migrated_db = ComplexDatabase(legacy_path)
+        try:
+            legacy_rows = migrated_db.get_price_snapshots(
+                "LEG-1",
+                "월세",
+                asset_type="APT",
+                price_metric="deposit",
+                include_legacy_monthly=True,
+            )
+            current_deposit_rows = migrated_db.get_price_snapshots(
+                "NEW-1",
+                "월세",
+                asset_type="APT",
+                price_metric="deposit",
+                include_legacy_monthly=True,
+            )
+            current_default_rows = migrated_db.get_price_snapshots("NEW-1", "월세", asset_type="APT")
+
+            self.assertEqual(len(legacy_rows), 1)
+            self.assertEqual(legacy_rows[0][7], "deposit")
+            self.assertEqual(legacy_rows[0][8], 1)
+            self.assertEqual(len(current_deposit_rows), 1)
+            self.assertEqual(current_deposit_rows[0][8], 0)
+            self.assertEqual(len(current_default_rows), 1)
+            self.assertEqual(current_default_rows[0][7], "rent")
+        finally:
+            migrated_db.close()
+
     def test_delete_complex_purge_related_respects_snapshot_asset_scope(self):
         self.db.add_complex("ScopeApt", "88008", asset_type="APT")
         self.db.add_complex("ScopeVl", "88008", asset_type="VL")

@@ -24,6 +24,7 @@ class TestCacheAndManagers(unittest.TestCase):
         self.tmp_path = Path(self.tmp.name)
 
     def tearDown(self):
+        SettingsManager._instance = None
         self.tmp.cleanup()
 
     def test_crawl_cache_set_get_clear(self):
@@ -124,6 +125,8 @@ class TestCacheAndManagers(unittest.TestCase):
             history.add({"complexes": [{"name": "단지A", "cid": "11111"}], "trade_types": ["전세"]})
             history.add({"complexes": [{"name": "단지A", "cid": "11111"}], "trade_types": ["매매"]})
             self.assertEqual(len(history.get_recent()), 3)
+            self.assertAlmostEqual(settings.get("geo_last_lat"), 37.5608, places=4)
+            self.assertAlmostEqual(settings.get("geo_last_lon"), 126.9888, places=4)
 
     def test_crawl_cache_empty_result_with_custom_ttl(self):
         cache_path = self.tmp_path / "crawl_cache.json"
@@ -197,6 +200,36 @@ class TestCacheAndManagers(unittest.TestCase):
             rows = mgr.get_recent(10)
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]["매물ID"], "A2")
+
+    def test_settings_manager_recovers_from_broken_json_and_quarantines_file(self):
+        settings_path = self.tmp_path / "settings.json"
+        settings_path.write_text("{broken", encoding="utf-8")
+
+        with patch("src.core.managers.SETTINGS_PATH", settings_path):
+            SettingsManager._instance = None
+            settings = SettingsManager()
+
+        self.assertEqual(settings.get("theme"), "dark")
+        backups = list(self.tmp_path.glob("settings.json.broken.settings.*"))
+        self.assertEqual(len(backups), 1)
+        self.assertFalse((self.tmp_path / "settings.json.tmp").exists())
+
+    def test_crawl_cache_recovers_from_broken_json_and_rewrites_atomically(self):
+        cache_path = self.tmp_path / "crawl_cache.json"
+        cache_path.write_text("{broken", encoding="utf-8")
+
+        with patch("src.core.cache.CACHE_PATH", cache_path):
+            cache = CrawlCache(ttl_minutes=30)
+            self.assertIsNone(cache.get("12345", "매매"))
+            backups = list(self.tmp_path.glob("crawl_cache.json.broken.crawl_cache.*"))
+            self.assertEqual(len(backups), 1)
+
+            cache.set("12345", "매매", [{"id": 1}])
+            cache.flush()
+
+        stored = json.loads(cache_path.read_text(encoding="utf-8"))
+        self.assertIn("12345_매매", stored)
+        self.assertFalse((self.tmp_path / "crawl_cache.json.tmp").exists())
 
 
 if __name__ == "__main__":

@@ -16,6 +16,10 @@ from PyInstaller.utils.hooks import collect_submodules
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)
 # do not require spec changes.
+# Functional reliability changes (monthly snapshot metric split, schedule geo full profile,
+# atomic JSON runtime state storage/quarantine, VL houses URL parsing, DB restore crawler
+# shutdown hardening) are also Python/runtime-level only and do not require extra
+# PyInstaller datas/hooks.
 project_dir = Path.cwd().resolve()
 # Default distribution profile is onedir with bundled Chromium.
 # This avoids onefile extraction overhead and matches the current README/doc baseline.

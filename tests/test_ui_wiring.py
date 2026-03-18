@@ -659,6 +659,7 @@ class TestUIWiring(unittest.TestCase):
             patch("src.ui.app.QFileDialog.getOpenFileName", return_value=(restore_path, "Database (*.db)")),
             patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
             patch.object(app.crawler_tab, "shutdown_crawl", return_value=True) as mock_shutdown_crawl,
+            patch.object(app.geo_tab, "shutdown_crawl", return_value=True) as mock_geo_shutdown,
             patch.object(app.db, "restore_database", return_value=True) as mock_restore,
             patch.object(app, "_load_initial_data") as mock_reload,
             patch("src.ui.app.QMessageBox.information"),
@@ -667,6 +668,7 @@ class TestUIWiring(unittest.TestCase):
             app._restore_db()
 
         mock_shutdown_crawl.assert_called_once()
+        mock_geo_shutdown.assert_called_once()
         mock_restore.assert_called_once_with(Path(restore_path))
         mock_reload.assert_called_once()
         self.assertEqual(app.schedule_timer.stop_called, 1)
@@ -709,12 +711,63 @@ class TestUIWiring(unittest.TestCase):
             patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
             patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
             patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
+            patch.object(app.geo_tab, "shutdown_crawl", return_value=True) as mock_geo_shutdown,
             patch.object(app.db, "restore_database") as mock_restore,
             patch("src.ui.app.QMessageBox.warning") as mock_warning,
             patch("src.ui.app.QApplication.processEvents", return_value=None),
         ):
             app._restore_db()
 
+        mock_restore.assert_not_called()
+        mock_geo_shutdown.assert_not_called()
+        mock_warning.assert_called_once()
+        self.assertEqual(app.schedule_timer.start_calls, [60000])
+        self.assertFalse(app._maintenance_mode)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_restore_db_aborts_when_geo_shutdown_fails(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from src.ui.app import RealEstateApp
+
+        class _TimerStub:
+            def __init__(self, active=True):
+                self.active = active
+                self.stop_called = 0
+                self.start_calls = []
+
+            def isActive(self):
+                return self.active
+
+            def stop(self):
+                self.stop_called += 1
+                self.active = False
+
+            def start(self, ms):
+                self.start_calls.append(ms)
+                self.active = True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+        app.schedule_timer = _TimerStub(active=True)
+
+        with (
+            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
+            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=True) as mock_shutdown_crawl,
+            patch.object(app.geo_tab, "shutdown_crawl", return_value=False),
+            patch.object(app.db, "restore_database") as mock_restore,
+            patch("src.ui.app.QMessageBox.warning") as mock_warning,
+            patch("src.ui.app.QApplication.processEvents", return_value=None),
+        ):
+            app._restore_db()
+
+        mock_shutdown_crawl.assert_called_once()
         mock_restore.assert_not_called()
         mock_warning.assert_called_once()
         self.assertEqual(app.schedule_timer.start_calls, [60000])
@@ -795,6 +848,64 @@ class TestUIWiring(unittest.TestCase):
                 app.db.close()
             app.deleteLater()
             self._qt_app.processEvents()
+
+    def test_stats_tab_monthly_metric_selector_defaults_to_rent_and_can_switch_to_deposit(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_monthly_metrics.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+            try:
+                self.assertTrue(app.db.add_complex("월세단지", "91001", asset_type="APT"))
+                self.assertEqual(
+                    app.db.add_price_snapshots_bulk(
+                        [
+                            ("91001", "월세", 24.0, 50000, 55000, 52500, 2, "APT", "deposit", 0),
+                            ("91001", "월세", 24.0, 90, 110, 100, 2, "APT", "rent", 0),
+                            ("91001", "월세", 24.0, 40000, 42000, 41000, 1, "APT", "deposit", 1),
+                        ]
+                    ),
+                    3,
+                )
+
+                app._load_stats_complexes()
+                for i in range(app.stats_complex_combo.count()):
+                    data = app.stats_complex_combo.itemData(i)
+                    if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "91001":
+                        app.stats_complex_combo.setCurrentIndex(i)
+                        break
+                app.stats_type_combo.setCurrentText("월세")
+                app._on_stats_complex_changed(app.stats_complex_combo.currentIndex())
+                app._load_stats()
+
+                self.assertFalse(app.stats_metric_label.isHidden())
+                self.assertFalse(app.stats_metric_combo.isHidden())
+                self.assertEqual(app.stats_metric_combo.currentData(), "rent")
+                self.assertIn("월세", app.stats_table.horizontalHeaderItem(3).text())
+                self.assertEqual(_table_text(app.stats_table, 0, 5), "100")
+
+                app.stats_metric_combo.setCurrentIndex(app.stats_metric_combo.findData("deposit"))
+                app._load_stats()
+
+                self.assertEqual(app.stats_metric_combo.currentData(), "deposit")
+                self.assertIn("보증금", app.stats_table.horizontalHeaderItem(3).text())
+                self.assertEqual(_table_text(app.stats_table, 0, 5), "52500")
+            finally:
+                if hasattr(app, "schedule_timer") and app.schedule_timer:
+                    app.schedule_timer.stop()
+                if hasattr(app, "db") and app.db:
+                    app.db.close()
+                app.deleteLater()
+                self._qt_app.processEvents()
 
     def test_settings_dialog_preserves_zero_values(self):
         from src.ui.dialogs.settings import SettingsDialog
@@ -1532,40 +1643,38 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_scheduled_geo_run_uses_geo_defaults_and_vl_support(self):
+    def test_scheduled_geo_run_uses_schedule_geo_profile_without_overwriting_last_manual_coords(self):
         from src.ui.app import RealEstateApp
-
-        def _settings_get(key, default=None):
-            overrides = {
-                "geo_default_zoom": 14,
-                "geo_grid_rings": 2,
-                "geo_grid_step_px": 360,
-                "geo_sweep_dwell_ms": 900,
-                "geo_asset_types": ["APT", "VL"],
-                "schedule_config": {},
-            }
-            return overrides.get(key, default)
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
             app = RealEstateApp()
 
         with (
-            patch("src.ui.app.settings.get", side_effect=_settings_get),
             patch("src.ui.app.settings.update", return_value=None),
+            patch.object(app.geo_tab, "_save_last_geo_coordinates") as mock_save_last,
             patch.object(app.geo_tab, "start_crawling") as mock_geo_start,
             patch.object(app.crawler_tab, "start_crawling") as mock_complex_start,
         ):
             app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
             app.schedule_geo_lat.setValue(37.4321)
             app.schedule_geo_lon.setValue(127.1234)
+            app.schedule_geo_zoom.setValue(14)
+            app.schedule_geo_rings.setValue(2)
+            app.schedule_geo_step.setValue(360)
+            app.schedule_geo_dwell.setValue(900)
+            app.schedule_geo_asset_apt.setChecked(False)
+            app.schedule_geo_asset_vl.setChecked(True)
             app._run_scheduled()
 
         self.assertAlmostEqual(app.geo_tab.spin_lat.value(), 37.4321, places=4)
         self.assertAlmostEqual(app.geo_tab.spin_lon.value(), 127.1234, places=4)
         self.assertEqual(app.geo_tab.spin_zoom.value(), 14)
         self.assertEqual(app.geo_tab.spin_rings.value(), 2)
-        self.assertTrue(app.geo_tab.check_asset_apt.isChecked())
+        self.assertEqual(app.geo_tab.spin_step.value(), 360)
+        self.assertEqual(app.geo_tab.spin_dwell.value(), 900)
+        self.assertFalse(app.geo_tab.check_asset_apt.isChecked())
         self.assertTrue(app.geo_tab.check_asset_vl.isChecked())
+        mock_save_last.assert_not_called()
         mock_geo_start.assert_called_once()
         mock_complex_start.assert_not_called()
 

@@ -175,6 +175,18 @@ class ComplexDatabaseCoercionMixin:
         return token or "APT"
 
     @staticmethod
+    def _normalize_price_metric(price_metric, trade_type=None, default: str = "price") -> str:
+        token = str(price_metric or "").strip().lower()
+        if token in {"price", "deposit", "rent"}:
+            return token
+        if str(trade_type or "").strip() == "월세":
+            return "deposit"
+        fallback = str(default or "").strip().lower()
+        if fallback in {"price", "deposit", "rent"}:
+            return fallback
+        return "price"
+
+    @staticmethod
     def _normalize_alert_asset_scope(asset_type, default: str = "ALL") -> str:
         token = str(asset_type or "").strip().upper()
         if token in {"APT", "VL", "ALL"}:
@@ -499,5 +511,20 @@ class ComplexDatabaseCoercionMixin:
         max_price = self._coerce_price(self._row_value(row, "max_price", 4, 0), default=0)
         avg_price = self._coerce_price(self._row_value(row, "avg_price", 5, 0), default=0)
         item_count = max(0, self._coerce_int(self._row_value(row, "item_count", 6, 0), default=0))
-        return (snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count)
+        price_metric = self._normalize_price_metric(
+            self._row_value(row, "price_metric", 7, "price"),
+            trade_type=trade_type,
+        )
+        legacy_monthly = max(0, self._coerce_int(self._row_value(row, "legacy_monthly", 8, 0), default=0))
+        return (
+            snapshot_date,
+            trade_type,
+            pyeong,
+            min_price,
+            max_price,
+            avg_price,
+            item_count,
+            price_metric,
+            legacy_monthly,
+        )
     

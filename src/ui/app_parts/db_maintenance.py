@@ -10,6 +10,22 @@ class AppDatabaseMaintenanceMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
+    def _shutdown_active_crawlers_for_maintenance(self: Any, timeout_ms: int = 8000) -> tuple[bool, str]:
+        targets = [
+            ("크롤링", getattr(self, "crawler_tab", None)),
+            ("지도 탐색", getattr(self, "geo_tab", None)),
+        ]
+        for label, tab in targets:
+            if tab is None:
+                continue
+            try:
+                ok = bool(tab.shutdown_crawl(timeout_ms=timeout_ms))
+            except Exception:
+                ok = False
+            if not ok:
+                return False, label
+        return True, ""
+
     def _enter_maintenance_mode(self: Any, reason: str):
         if self._maintenance_mode:
             return
@@ -108,18 +124,16 @@ class AppDatabaseMaintenanceMixin:
             if hasattr(self, "schedule_timer") and self.schedule_timer:
                 self.schedule_timer.stop()
 
-            crawler_tab = getattr(self, "crawler_tab", None)
-            if crawler_tab is not None:
-                ok = crawler_tab.shutdown_crawl(timeout_ms=8000)
-                if not ok:
-                    self.status_bar.showMessage("⚠️ 크롤링 스레드 종료 후 다시 복원을 시도하세요.")
-                    QMessageBox.warning(
-                        self,
-                        "복원 중단",
-                        "진행 중인 크롤링 스레드를 안전하게 종료하지 못해 DB 복원을 중단했습니다.",
-                    )
-                    ui_logger.warning("DB 복원 중단: 크롤링 스레드 종료 실패")
-                    return
+            ok, failed_label = self._shutdown_active_crawlers_for_maintenance(timeout_ms=8000)
+            if not ok:
+                self.status_bar.showMessage(f"⚠️ {failed_label} 종료 후 다시 DB 복원을 시도하세요.")
+                QMessageBox.warning(
+                    self,
+                    "복원 중단",
+                    f"진행 중인 {failed_label} 작업을 안전하게 종료하지 못해 DB 복원을 중단했습니다.",
+                )
+                ui_logger.warning(f"DB 복원 중단: {failed_label} 스레드 종료 실패")
+                return
 
             self.status_bar.showMessage("🔄 DB 복원 중...")
             QApplication.processEvents()

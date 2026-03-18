@@ -10,6 +10,41 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
 
+    def _append_snapshot_asset_filter(self, sql_parts: list[str], params: list[Any], asset_type) -> None:
+        if self._is_all_filter_value(asset_type):
+            return
+        asset_token = self._normalize_asset_type(asset_type)
+        if asset_token == "APT":
+            sql_parts.append("AND (asset_type = ? OR COALESCE(asset_type, '') = '')")
+            params.append("APT")
+        else:
+            sql_parts.append("AND asset_type = ?")
+            params.append(asset_token)
+
+    def _append_snapshot_metric_filter(
+        self,
+        sql_parts: list[str],
+        params: list[Any],
+        *,
+        trade_type=None,
+        price_metric=None,
+        include_legacy_monthly: bool = False,
+    ) -> None:
+        trade_type_token = str(trade_type or "").strip()
+        if trade_type_token:
+            sql_parts.append("AND trade_type = ?")
+            params.append(trade_type_token)
+        if not include_legacy_monthly:
+            sql_parts.append("AND COALESCE(legacy_monthly, 0) = 0")
+        if self._is_all_filter_value(price_metric):
+            if trade_type_token == "월세":
+                sql_parts.append("AND price_metric = ?")
+                params.append("rent")
+            return
+        metric_token = self._normalize_price_metric(price_metric, trade_type=trade_type_token)
+        sql_parts.append("AND price_metric = ?")
+        params.append(metric_token)
+
     def add_crawl_history(
         self,
         name,
@@ -113,33 +148,41 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         finally:
             self._pool.return_connection(conn)
     
-    def get_complex_price_history(self, complex_id, trade_type=None, pyeong=None, asset_type=None):
+    def get_complex_price_history(
+        self,
+        complex_id,
+        trade_type=None,
+        pyeong=None,
+        asset_type=None,
+        price_metric=None,
+        include_legacy_monthly: bool = False,
+    ):
         conn = self._pool.get_connection()
         try:
-            sql = '''
-                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count
+            sql_parts = [
+                """
+                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                       COALESCE(price_metric, 'price') AS price_metric,
+                       COALESCE(legacy_monthly, 0) AS legacy_monthly
                 FROM price_snapshots
                 WHERE complex_id = ?
-            '''
+                """
+            ]
             params = [complex_id]
+            self._append_snapshot_metric_filter(
+                sql_parts,
+                params,
+                trade_type=trade_type,
+                price_metric=price_metric,
+                include_legacy_monthly=include_legacy_monthly,
+            )
+            self._append_snapshot_asset_filter(sql_parts, params, asset_type)
 
-            if not self._is_all_filter_value(trade_type):
-                sql += ' AND trade_type = ?'
-                params.append(trade_type)
-            if not self._is_all_filter_value(asset_type):
-                asset_token = self._normalize_asset_type(asset_type)
-                if asset_token == "APT":
-                    sql += " AND (asset_type = ? OR COALESCE(asset_type, '') = '')"
-                    params.append("APT")
-                else:
-                    sql += " AND asset_type = ?"
-                    params.append(asset_token)
-
-            sql += ' ORDER BY snapshot_date DESC, pyeong'
+            sql_parts.append("ORDER BY snapshot_date DESC, pyeong")
 
             raw_rows = self._fetchall_safe(
                 conn,
-                sql,
+                " ".join(sql_parts),
                 params=params,
                 context="가격 히스토리 조회(price_snapshots)",
             )
@@ -156,7 +199,17 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 if normalized is None:
                     skipped += 1
                     continue
-                snapshot_date, row_trade_type, row_pyeong, min_price, max_price, avg_price, _item_count = normalized
+                (
+                    snapshot_date,
+                    row_trade_type,
+                    row_pyeong,
+                    min_price,
+                    max_price,
+                    avg_price,
+                    _item_count,
+                    row_price_metric,
+                    row_legacy_monthly,
+                ) = normalized
                 if pyeong_filter is not None and abs(row_pyeong - pyeong_filter) > 1e-6:
                     continue
                 result.append(
@@ -167,12 +220,17 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                         min_price,
                         max_price,
                         avg_price,
+                        row_price_metric,
+                        row_legacy_monthly,
                     )
                 )
 
             if skipped:
                 logger.debug(f"price history skipped malformed rows: {skipped}")
-            logger.debug(f"가격 히스토리 조회: {len(result)}건 (조건: {trade_type}, {pyeong}, {asset_type})")
+            logger.debug(
+                f"가격 히스토리 조회: {len(result)}건 "
+                f"(조건: trade={trade_type}, pyeong={pyeong}, asset={asset_type}, metric={price_metric})"
+            )
             return result
         except Exception as e:
             self._log_corruption_detected("가격 히스토리 조회", e)
@@ -192,15 +250,29 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         item_count,
         *,
         asset_type="APT",
+        price_metric="price",
+        legacy_monthly=0,
     ):
         """Store one price snapshot row."""
         conn = self._pool.get_connection()
         try:
             asset_token = self._normalize_asset_type(asset_type)
+            metric_token = self._normalize_price_metric(price_metric, trade_type=trade_type)
             conn.cursor().execute(
-                'INSERT INTO price_snapshots (complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_type) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                (complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_token)
+                'INSERT INTO price_snapshots (complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_type, price_metric, legacy_monthly) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    complex_id,
+                    trade_type,
+                    pyeong,
+                    min_price,
+                    max_price,
+                    avg_price,
+                    item_count,
+                    asset_token,
+                    metric_token,
+                    max(0, self._coerce_int(legacy_monthly, default=0)),
+                )
             )
             conn.commit()
             return True
@@ -226,13 +298,47 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 if len(values) == 7:
                     complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count = values
                     asset_token = "APT"
+                    metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                    legacy_monthly = 0
                 elif len(values) == 8:
                     first_token = str(values[0] or "").strip().upper()
                     if first_token in {"APT", "VL"}:
                         asset_token = values[0]
                         complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count = values[1:8]
+                        metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                        legacy_monthly = 0
                     else:
                         complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_token = values
+                        metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                        legacy_monthly = 0
+                elif len(values) == 10:
+                    first_token = str(values[0] or "").strip().upper()
+                    if first_token in {"APT", "VL"}:
+                        asset_token = values[0]
+                        (
+                            complex_id,
+                            trade_type,
+                            pyeong,
+                            min_price,
+                            max_price,
+                            avg_price,
+                            item_count,
+                            metric_token,
+                            legacy_monthly,
+                        ) = values[1:10]
+                    else:
+                        (
+                            complex_id,
+                            trade_type,
+                            pyeong,
+                            min_price,
+                            max_price,
+                            avg_price,
+                            item_count,
+                            asset_token,
+                            metric_token,
+                            legacy_monthly,
+                        ) = values
                 else:
                     skipped += 1
                     continue
@@ -251,6 +357,8 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                         self._coerce_price(avg_price, default=0),
                         max(0, self._coerce_int(item_count, default=0)),
                         self._normalize_asset_type(asset_token),
+                        self._normalize_price_metric(metric_token, trade_type=trade_type),
+                        max(0, self._coerce_int(legacy_monthly, default=0)),
                     )
                 )
             if not normalized_rows:
@@ -258,8 +366,9 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             conn.cursor().executemany(
                 '''
                 INSERT INTO price_snapshots (
-                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                    asset_type, price_metric, legacy_monthly
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 normalized_rows
             )
@@ -273,23 +382,30 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         finally:
             self._pool.return_connection(conn)
     
-    def get_price_snapshot_pyeongs(self, complex_id, asset_type=None):
+    def get_price_snapshot_pyeongs(
+        self,
+        complex_id,
+        asset_type=None,
+        trade_type=None,
+        price_metric=None,
+        include_legacy_monthly: bool = False,
+    ):
         conn = self._pool.get_connection()
         try:
-            sql = "SELECT DISTINCT pyeong FROM price_snapshots WHERE complex_id = ?"
+            sql_parts = ["SELECT DISTINCT pyeong FROM price_snapshots WHERE complex_id = ?"]
             params = [complex_id]
-            if not self._is_all_filter_value(asset_type):
-                asset_token = self._normalize_asset_type(asset_type)
-                if asset_token == "APT":
-                    sql += " AND (asset_type = ? OR COALESCE(asset_type, '') = '')"
-                    params.append("APT")
-                else:
-                    sql += " AND asset_type = ?"
-                    params.append(asset_token)
-            sql += " ORDER BY pyeong"
+            self._append_snapshot_metric_filter(
+                sql_parts,
+                params,
+                trade_type=trade_type,
+                price_metric=price_metric,
+                include_legacy_monthly=include_legacy_monthly,
+            )
+            self._append_snapshot_asset_filter(sql_parts, params, asset_type)
+            sql_parts.append("ORDER BY pyeong")
             rows = self._fetchall_safe(
                 conn,
-                sql,
+                " ".join(sql_parts),
                 params=params,
                 context="가격 스냅샷 평형 조회(price_snapshots)",
             )
@@ -309,39 +425,47 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def get_price_snapshots(self, complex_id, trade_type=None, asset_type=None, pyeong=None):
+    def get_price_snapshots(
+        self,
+        complex_id,
+        trade_type=None,
+        asset_type=None,
+        pyeong=None,
+        price_metric=None,
+        include_legacy_monthly: bool = False,
+    ):
         """Load stored price snapshot rows."""
         conn = self._pool.get_connection()
         try:
-            sql = '''
-                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count
-                FROM price_snapshots 
+            sql_parts = [
+                """
+                SELECT snapshot_date, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                       COALESCE(price_metric, 'price') AS price_metric,
+                       COALESCE(legacy_monthly, 0) AS legacy_monthly
+                FROM price_snapshots
                 WHERE complex_id = ?
-            '''
+                """
+            ]
             params = [complex_id]
-            
-            if not self._is_all_filter_value(trade_type):
-                sql += ' AND trade_type = ?'
-                params.append(trade_type)
-            if not self._is_all_filter_value(asset_type):
-                asset_token = self._normalize_asset_type(asset_type)
-                if asset_token == "APT":
-                    sql += " AND (asset_type = ? OR COALESCE(asset_type, '') = '')"
-                    params.append("APT")
-                else:
-                    sql += " AND asset_type = ?"
-                    params.append(asset_token)
+            self._append_snapshot_metric_filter(
+                sql_parts,
+                params,
+                trade_type=trade_type,
+                price_metric=price_metric,
+                include_legacy_monthly=include_legacy_monthly,
+            )
+            self._append_snapshot_asset_filter(sql_parts, params, asset_type)
             if not self._is_all_filter_value(pyeong):
                 parsed_pyeong = self._coerce_float(pyeong, default=None)
                 if parsed_pyeong is not None:
-                    sql += " AND pyeong = ?"
+                    sql_parts.append("AND pyeong = ?")
                     params.append(parsed_pyeong)
             
-            sql += ' ORDER BY snapshot_date DESC, trade_type, pyeong'
+            sql_parts.append('ORDER BY snapshot_date DESC, trade_type, pyeong')
             
             raw_rows = self._fetchall_safe(
                 conn,
-                sql,
+                " ".join(sql_parts),
                 params=params,
                 context="가격 스냅샷 조회(price_snapshots)",
             )
@@ -356,7 +480,10 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
 
             if skipped:
                 logger.debug(f"price snapshot skipped malformed rows: {skipped}")
-            logger.debug(f"price snapshots loaded: {len(result)} (asset={asset_type})")
+            logger.debug(
+                f"price snapshots loaded: {len(result)} "
+                f"(asset={asset_type}, trade={trade_type}, metric={price_metric})"
+            )
             return result
         except Exception as e:
             self._log_corruption_detected("가격 스냅샷 조회", e)

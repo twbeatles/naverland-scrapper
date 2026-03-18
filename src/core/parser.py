@@ -13,11 +13,14 @@ class NaverURLParser:
 
     PATTERNS = [
         r"new\.land\.naver\.com/complexes/(\d+)",
+        r"new\.land\.naver\.com/houses/(\d+)",
         r"land\.naver\.com/complex/(\d+)",
         r"complexNo=(\d+)",
         r"complexNo=(\d+).*articleId=\d+",
         r"/api/.*complex[=/](\d+)",
+        r"/api/.*houses?[=/](\d+)",
         r"m\.land\.naver\.com.*complex[=/](\d+)",
+        r"m\.land\.naver\.com.*houses?[=/](\d+)",
     ]
     _URL_RE = re.compile(r"https?://[^\s<>\"']+")
     _STANDALONE_ID_LINE_RE = re.compile(r"^\s*(\d+)\s*$")

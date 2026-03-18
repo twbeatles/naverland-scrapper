@@ -10,13 +10,65 @@ class AppStatsScheduleMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
-    def _schedule_geo_defaults(self: Any):
-        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+    @staticmethod
+    def _normalize_geo_asset_types(asset_types) -> list[str]:
         normalized_assets = []
-        for asset in asset_types:
+        for asset in asset_types or []:
             token = str(asset or "").strip().upper()
             if token in {"APT", "VL"} and token not in normalized_assets:
                 normalized_assets.append(token)
+        return normalized_assets or ["APT", "VL"]
+
+    def _selected_schedule_geo_assets(self: Any) -> list[str]:
+        selected = []
+        if getattr(self, "schedule_geo_asset_apt", None) and self.schedule_geo_asset_apt.isChecked():
+            selected.append("APT")
+        if getattr(self, "schedule_geo_asset_vl", None) and self.schedule_geo_asset_vl.isChecked():
+            selected.append("VL")
+        return selected or ["APT", "VL"]
+
+    def _set_schedule_geo_assets(self: Any, asset_types) -> None:
+        asset_tokens = set(self._normalize_geo_asset_types(asset_types))
+        if hasattr(self, "schedule_geo_asset_apt"):
+            self.schedule_geo_asset_apt.setChecked("APT" in asset_tokens)
+        if hasattr(self, "schedule_geo_asset_vl"):
+            self.schedule_geo_asset_vl.setChecked("VL" in asset_tokens)
+
+    def _refresh_stats_metric_visibility(self: Any) -> None:
+        visible = str(self.stats_type_combo.currentText() or "") == "월세"
+        self.stats_metric_label.setVisible(visible)
+        self.stats_metric_combo.setVisible(visible)
+
+    def _current_stats_price_metric(self: Any):
+        trade_type = str(self.stats_type_combo.currentText() or "")
+        if trade_type == "월세":
+            return str(self.stats_metric_combo.currentData() or "rent")
+        if trade_type in {"매매", "전세"}:
+            return "price"
+        return None
+
+    def _stats_metric_display_name(self: Any, price_metric: str | None) -> str:
+        metric_token = str(price_metric or "").strip().lower()
+        if metric_token == "rent":
+            return "월세"
+        if metric_token == "deposit":
+            return "보증금"
+        return "가격"
+
+    def _update_stats_table_headers(self: Any, price_metric: str | None) -> None:
+        metric_name = self._stats_metric_display_name(price_metric)
+        self.stats_table.setHorizontalHeaderLabels(
+            ["날짜", "유형", "평형", f"최저 {metric_name}", f"최고 {metric_name}", f"평균 {metric_name}"]
+        )
+
+    def _on_stats_type_changed(self: Any, *_args):
+        self._refresh_stats_metric_visibility()
+        self._on_stats_complex_changed(self.stats_complex_combo.currentIndex())
+
+    def _schedule_geo_defaults(self: Any):
+        normalized_assets = self._normalize_geo_asset_types(
+            settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        )
         return {
             "lat": float(settings.get("schedule_geo_lat", 37.5608) or 37.5608),
             "lon": float(settings.get("schedule_geo_lon", 126.9888) or 126.9888),
@@ -28,7 +80,6 @@ class AppStatsScheduleMixin:
         }
 
     def _collect_schedule_config(self: Any):
-        geo_defaults = self._schedule_geo_defaults()
         mode = str(self.schedule_mode_combo.currentData() or "complex")
         return {
             "enabled": bool(self.check_schedule.isChecked()),
@@ -38,11 +89,11 @@ class AppStatsScheduleMixin:
             "geo": {
                 "lat": float(self.schedule_geo_lat.value()),
                 "lon": float(self.schedule_geo_lon.value()),
-                "zoom": int(geo_defaults["zoom"]),
-                "rings": int(geo_defaults["rings"]),
-                "step_px": int(geo_defaults["step_px"]),
-                "dwell_ms": int(geo_defaults["dwell_ms"]),
-                "asset_types": list(geo_defaults["asset_types"]),
+                "zoom": int(self.schedule_geo_zoom.value()),
+                "rings": int(self.schedule_geo_rings.value()),
+                "step_px": int(self.schedule_geo_step.value()),
+                "dwell_ms": int(self.schedule_geo_dwell.value()),
+                "asset_types": self._selected_schedule_geo_assets(),
             },
         }
 
@@ -69,6 +120,12 @@ class AppStatsScheduleMixin:
         self.schedule_group_combo.blockSignals(True)
         self.schedule_geo_lat.blockSignals(True)
         self.schedule_geo_lon.blockSignals(True)
+        self.schedule_geo_zoom.blockSignals(True)
+        self.schedule_geo_rings.blockSignals(True)
+        self.schedule_geo_step.blockSignals(True)
+        self.schedule_geo_dwell.blockSignals(True)
+        self.schedule_geo_asset_apt.blockSignals(True)
+        self.schedule_geo_asset_vl.blockSignals(True)
         try:
             self.check_schedule.setChecked(bool(config.get("enabled", False)))
             parsed_time = QTime.fromString(time_text, "HH:mm")
@@ -85,6 +142,11 @@ class AppStatsScheduleMixin:
 
             lat = geo_config.get("lat", settings.get("schedule_geo_lat", 37.5608))
             lon = geo_config.get("lon", settings.get("schedule_geo_lon", 126.9888))
+            zoom = geo_config.get("zoom", settings.get("geo_default_zoom", 15))
+            rings = geo_config.get("rings", settings.get("geo_grid_rings", 1))
+            step_px = geo_config.get("step_px", settings.get("geo_grid_step_px", 480))
+            dwell_ms = geo_config.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600))
+            asset_types = geo_config.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"])
             try:
                 self.schedule_geo_lat.setValue(float(lat))
             except (TypeError, ValueError):
@@ -93,6 +155,23 @@ class AppStatsScheduleMixin:
                 self.schedule_geo_lon.setValue(float(lon))
             except (TypeError, ValueError):
                 self.schedule_geo_lon.setValue(126.9888)
+            try:
+                self.schedule_geo_zoom.setValue(int(zoom))
+            except (TypeError, ValueError):
+                self.schedule_geo_zoom.setValue(15)
+            try:
+                self.schedule_geo_rings.setValue(int(rings))
+            except (TypeError, ValueError):
+                self.schedule_geo_rings.setValue(1)
+            try:
+                self.schedule_geo_step.setValue(int(step_px))
+            except (TypeError, ValueError):
+                self.schedule_geo_step.setValue(480)
+            try:
+                self.schedule_geo_dwell.setValue(int(dwell_ms))
+            except (TypeError, ValueError):
+                self.schedule_geo_dwell.setValue(600)
+            self._set_schedule_geo_assets(asset_types)
         finally:
             self.check_schedule.blockSignals(False)
             self.time_edit.blockSignals(False)
@@ -100,6 +179,12 @@ class AppStatsScheduleMixin:
             self.schedule_group_combo.blockSignals(False)
             self.schedule_geo_lat.blockSignals(False)
             self.schedule_geo_lon.blockSignals(False)
+            self.schedule_geo_zoom.blockSignals(False)
+            self.schedule_geo_rings.blockSignals(False)
+            self.schedule_geo_step.blockSignals(False)
+            self.schedule_geo_dwell.blockSignals(False)
+            self.schedule_geo_asset_apt.blockSignals(False)
+            self.schedule_geo_asset_vl.blockSignals(False)
 
         self._on_schedule_mode_changed()
         self._save_schedule_config()
@@ -173,18 +258,16 @@ class AppStatsScheduleMixin:
         if mode == "geo_sweep":
             geo = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
             self.tabs.setCurrentWidget(self.geo_tab)
-            self.geo_tab.spin_lat.setValue(float(geo.get("lat", self.schedule_geo_lat.value())))
-            self.geo_tab.spin_lon.setValue(float(geo.get("lon", self.schedule_geo_lon.value())))
-            self.geo_tab.spin_zoom.setValue(int(geo.get("zoom", settings.get("geo_default_zoom", 15) or 15)))
-            self.geo_tab.spin_rings.setValue(int(geo.get("rings", settings.get("geo_grid_rings", 1) or 1)))
-            self.geo_tab.spin_step.setValue(int(geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)))
-            self.geo_tab.spin_dwell.setValue(
-                int(geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600))
+            self.geo_tab.apply_geo_profile(
+                lat=float(geo.get("lat", self.schedule_geo_lat.value())),
+                lon=float(geo.get("lon", self.schedule_geo_lon.value())),
+                zoom=int(geo.get("zoom", settings.get("geo_default_zoom", 15) or 15)),
+                rings=int(geo.get("rings", settings.get("geo_grid_rings", 1) or 1)),
+                step_px=int(geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)),
+                dwell_ms=int(geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600)),
+                asset_types=geo.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]),
+                persist_last=False,
             )
-            asset_types = geo.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"])
-            asset_tokens = {str(asset or "").strip().upper() for asset in asset_types}
-            self.geo_tab.check_asset_apt.setChecked("APT" in asset_tokens or not asset_tokens)
-            self.geo_tab.check_asset_vl.setChecked("VL" in asset_tokens or not asset_tokens)
             self.geo_tab.start_crawling()
             self.status_bar.showMessage(
                 f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
@@ -407,6 +490,9 @@ class AppStatsScheduleMixin:
             return
         ttype = self.stats_type_combo.currentText()
         if ttype == "전체": ttype = None
+        price_metric = self._current_stats_price_metric()
+        self._refresh_stats_metric_visibility()
+        self._update_stats_table_headers(price_metric)
 
         pyeong = self.stats_pyeong_combo.currentData()
         if pyeong is None:
@@ -416,7 +502,13 @@ class AppStatsScheduleMixin:
                 if pyeong is None:
                     ui_logger.warning(f"평형 파싱 실패: {pyeong_text}")
 
-        snapshots = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type, pyeong=pyeong)
+        snapshots = self.db.get_price_snapshots(
+            cid,
+            ttype,
+            asset_type=asset_type,
+            pyeong=pyeong,
+            price_metric=price_metric,
+        )
 
         self.stats_table.blockSignals(True)
         self.stats_table.setUpdatesEnabled(False)
@@ -427,7 +519,8 @@ class AppStatsScheduleMixin:
         try:
             self.stats_table.setRowCount(0)
             self.stats_table.setRowCount(len(snapshots))
-            for row, (date, typ, py, min_p, max_p, avg_p, cnt) in enumerate(snapshots):
+            for row, snapshot in enumerate(snapshots):
+                date, typ, py, min_p, max_p, avg_p, cnt, row_metric, _legacy_monthly = snapshot
                 parsed_py = self._parse_pyeong_value(py)
                 py_text = (
                     f"{self._format_pyeong_value(parsed_py)}평"
@@ -444,10 +537,11 @@ class AppStatsScheduleMixin:
                 if parsed_py is not None:
                     chart_data["type"] = typ
                     chart_data["py"] = parsed_py
-                    chart_data["date"].append(date)
-                    chart_data["avg"].append(avg_p)
-                    chart_data["min"].append(min_p)
-                    chart_data["max"].append(max_p)
+                chart_data["date"].append(date)
+                chart_data["avg"].append(avg_p)
+                chart_data["min"].append(min_p)
+                chart_data["max"].append(max_p)
+                chart_data["metric"] = row_metric
         finally:
             self.stats_table.blockSignals(False)
             self.stats_table.setUpdatesEnabled(True)
@@ -465,7 +559,8 @@ class AppStatsScheduleMixin:
         title = (
             f"{self.stats_complex_combo.currentText()} - "
             f"{chart_data.get('type', '')} "
-            f"{self._format_pyeong_value(chart_data.get('py', 0))}평 가격 추이"
+            f"{self._format_pyeong_value(chart_data.get('py', 0))}평 "
+            f"{self._stats_metric_display_name(chart_data.get('metric', price_metric))} 추이"
         )
         self.chart_widget.update_chart(
             chart_data["date"],
@@ -477,6 +572,7 @@ class AppStatsScheduleMixin:
     
     def _on_stats_complex_changed(self: Any, index):
         """통계 탭 단지 변경 시 평형 콤보박스 업데이트"""
+        self._refresh_stats_metric_visibility()
         selected = self.stats_complex_combo.currentData()
         asset_type = None
         cid = ""
@@ -495,7 +591,19 @@ class AppStatsScheduleMixin:
             return
 
         try:
-            pyeongs = sorted(set(self.db.get_price_snapshot_pyeongs(cid, asset_type=asset_type)))
+            selected_trade_type = self.stats_type_combo.currentText()
+            if selected_trade_type == "전체":
+                selected_trade_type = None
+            pyeongs = sorted(
+                set(
+                    self.db.get_price_snapshot_pyeongs(
+                        cid,
+                        asset_type=asset_type,
+                        trade_type=selected_trade_type,
+                        price_metric=self._current_stats_price_metric(),
+                    )
+                )
+            )
         except Exception as e:
             ui_logger.warning(f"평형 목록 로드 실패: {e}")
             pyeongs = []

@@ -4,6 +4,7 @@ from typing import Dict, Optional, List
 from threading import Lock
 from src.utils.paths import CACHE_PATH
 from src.utils.logger import get_logger
+from src.utils.json_store import atomic_write_json, load_json_with_recovery
 
 class CrawlCache:
     """크롤링 결과 캐시 (v12.0)"""
@@ -106,31 +107,30 @@ class CrawlCache:
     
     def _load(self):
         """캐시 파일 로드"""
-        if CACHE_PATH.exists():
-            try:
-                with open(CACHE_PATH, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    # 만료된 항목 필터링
-                    now = datetime.now()
-                    for key, entry in data.items():
-                        try:
-                            cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
-                            has_payload = isinstance(entry.get("raw_items"), list) or isinstance(
-                                entry.get("items"), list
-                            )
-                            if now - cached_at < self._entry_ttl(entry) and has_payload:
-                                self._cache[key] = entry
-                        except (ValueError, TypeError):
-                            continue
-            except (OSError, json.JSONDecodeError) as e:
-                get_logger('CrawlCache').warning(f"캐시 로드 실패: {e}")
+        data = load_json_with_recovery(
+            CACHE_PATH,
+            default_factory=dict,
+            logger_name="CrawlCache",
+            label="crawl_cache",
+        )
+        if isinstance(data, dict):
+            now = datetime.now()
+            for key, entry in data.items():
+                try:
+                    cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
+                    has_payload = isinstance(entry.get("raw_items"), list) or isinstance(
+                        entry.get("items"), list
+                    )
+                    if now - cached_at < self._entry_ttl(entry) and has_payload:
+                        self._cache[key] = entry
+                except (ValueError, TypeError):
+                    continue
         self._evict_if_needed()
     
     def _save(self):
         """캐시 파일 저장"""
         try:
-            with open(CACHE_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self._cache, f, ensure_ascii=False, indent=2)
+            atomic_write_json(CACHE_PATH, self._cache)
             self._dirty = False
             self._last_flush_at = datetime.now()
         except OSError as e:

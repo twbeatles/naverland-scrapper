@@ -258,13 +258,13 @@ class CrawlerTabCrawlControlMixin:
             self._add_complexes_from_url(urls)
 
     def _add_complexes_from_url(self: Any, urls):
+        from src.core.parser import NaverURLParser
+
         count = 0
         for url in urls:
-            m = re.search(r'/complexes/(\d+)', url)
-            if m:
-                cid = m.group(1)
-                if self._add_row(f"단지_{cid}", cid):
-                    count += 1
+            cid = NaverURLParser.extract_complex_id(str(url or ""))
+            if cid and self._add_row(f"단지_{cid}", cid):
+                count += 1
         self.status_message.emit(f"{count}개 URL 등록 완료")
 
     def _open_complex_url(self: Any):
@@ -504,27 +504,48 @@ class CrawlerTabCrawlControlMixin:
             asset_type = str(item.get("자산유형", "APT") or "APT").strip().upper() or "APT"
             if asset_type not in {"APT", "VL"}:
                 asset_type = "APT"
-            
-            # 가격 추출
+
             if ttype == "매매":
-                price = PriceConverter.to_int(item.get("매매가", "0"))
+                metric_prices = [("price", PriceConverter.to_int(item.get("매매가", "0")))]
+            elif ttype == "전세":
+                metric_prices = [("price", PriceConverter.to_int(item.get("보증금", "0")))]
+            elif ttype == "월세":
+                metric_prices = [
+                    ("deposit", PriceConverter.to_int(item.get("보증금", "0"))),
+                    ("rent", PriceConverter.to_int(item.get("월세", "0"))),
+                ]
             else:
-                price = PriceConverter.to_int(item.get("보증금", "0"))
-            
-            if cid and ttype and price > 0:
-                # 평형 그룹화 (5평 단위)
+                metric_prices = []
+
+            if cid and ttype:
                 pyeong_group = round(pyeong / 5) * 5
-                key = (asset_type, cid, ttype, pyeong_group)
-                grouped[key].append(price)
+                for price_metric, price in metric_prices:
+                    if price <= 0:
+                        continue
+                    key = (asset_type, cid, ttype, pyeong_group, price_metric)
+                    grouped[key].append(price)
         
         # 스냅샷 저장
         rows = []
-        for (asset_type, cid, ttype, pyeong), prices in grouped.items():
+        for (asset_type, cid, ttype, pyeong, price_metric), prices in grouped.items():
             if prices:
                 min_price = min(prices)
                 max_price = max(prices)
                 avg_price = sum(prices) // len(prices)
-                rows.append((cid, ttype, pyeong, min_price, max_price, avg_price, len(prices), asset_type))
+                rows.append(
+                    (
+                        cid,
+                        ttype,
+                        pyeong,
+                        min_price,
+                        max_price,
+                        avg_price,
+                        len(prices),
+                        asset_type,
+                        price_metric,
+                        0,
+                    )
+                )
 
         saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
         self.append_log(f"📊 가격 스냅샷 {saved}건 저장", 10)

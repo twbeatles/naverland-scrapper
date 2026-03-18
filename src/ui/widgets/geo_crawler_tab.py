@@ -40,6 +40,16 @@ class GeoCrawlerTab(CrawlerTab):
         except (TypeError, ValueError):
             return int(default)
 
+    @staticmethod
+    def _float_setting(key, default):
+        raw = settings.get(key, default)
+        if raw is None:
+            return float(default)
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return float(default)
+
     def _setup_complex_list_group(self, layout):
         group = QGroupBox("4️⃣ 지리 탐색")
         grid = QGridLayout()
@@ -47,14 +57,14 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_lat = QDoubleSpinBox()
         self.spin_lat.setRange(33.0, 39.5)
         self.spin_lat.setDecimals(6)
-        self.spin_lat.setValue(37.5608)
+        self.spin_lat.setValue(self._float_setting("geo_last_lat", 37.5608))
         grid.addWidget(QLabel("위도:"), 0, 0)
         grid.addWidget(self.spin_lat, 0, 1)
 
         self.spin_lon = QDoubleSpinBox()
         self.spin_lon.setRange(124.0, 132.1)
         self.spin_lon.setDecimals(6)
-        self.spin_lon.setValue(126.9888)
+        self.spin_lon.setValue(self._float_setting("geo_last_lon", 126.9888))
         grid.addWidget(QLabel("경도:"), 1, 0)
         grid.addWidget(self.spin_lon, 1, 1)
 
@@ -131,6 +141,41 @@ class GeoCrawlerTab(CrawlerTab):
             }
         )
 
+    def _save_last_geo_coordinates(self):
+        settings.update(
+            {
+                "geo_last_lat": float(self.spin_lat.value()),
+                "geo_last_lon": float(self.spin_lon.value()),
+            }
+        )
+
+    def apply_geo_profile(
+        self,
+        *,
+        lat: float,
+        lon: float,
+        zoom: int,
+        rings: int,
+        step_px: int,
+        dwell_ms: int,
+        asset_types,
+        persist_last: bool = True,
+    ):
+        asset_tokens = {str(asset or "").strip().upper() for asset in (asset_types or [])}
+        self.spin_lat.setValue(float(lat))
+        self.spin_lon.setValue(float(lon))
+        self.spin_zoom.setValue(int(zoom))
+        self.spin_rings.setValue(max(0, int(rings)))
+        self.spin_step.setValue(int(step_px))
+        self.spin_dwell.setValue(int(dwell_ms))
+        self.check_asset_apt.setChecked("APT" in asset_tokens or not asset_tokens)
+        self.check_asset_vl.setChecked("VL" in asset_tokens or not asset_tokens)
+        if persist_last:
+            self._skip_last_geo_save_once = False
+            self._save_last_geo_coordinates()
+        else:
+            self._skip_last_geo_save_once = True
+
     def update_runtime_settings(self):
         super().update_runtime_settings()
         self.spin_zoom.setValue(self._int_setting("geo_default_zoom", 15))
@@ -169,6 +214,10 @@ class GeoCrawlerTab(CrawlerTab):
             asset_types.append("VL")
         if not asset_types:
             asset_types = ["APT", "VL"]
+        skip_last_geo_save_once = bool(getattr(self, "_skip_last_geo_save_once", False))
+        self._skip_last_geo_save_once = False
+        if not skip_last_geo_save_once:
+            self._save_last_geo_coordinates()
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)

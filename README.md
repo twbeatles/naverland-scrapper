@@ -368,3 +368,31 @@ python src/main.py
   - `.gitignore`는 현재 build/log/data/backup/Playwright 산출물 기준으로 추가 수정이 필요하지 않았습니다.
 - Validation:
   - `pytest -q` => `149 passed`
+
+## v15.0.15 Functional Reliability Update (2026-03-18)
+
+- URL batch registration now accepts both `complexes/{complex_id}` and `houses/{complex_id}?articleId=...` style Naver URLs.
+- `NaverURLParser` is the single parser used for URL batch/manual registration flows.
+- Monthly price snapshots now persist two metrics for `월세`:
+  - `price_metric=deposit`
+  - `price_metric=rent`
+- Monthly stats default to `월세 금액` and expose a metric selector for `보증금`.
+- Legacy deposit-only monthly snapshot rows are preserved but hidden from default queries and stats screens.
+- Scheduled `geo_sweep` runs now persist and replay a full geo profile:
+  - `lat`, `lon`, `zoom`, `rings`, `step_px`, `dwell_ms`, `asset_types`
+- Manual Geo tab runs remember the last user-entered coordinates via `geo_last_lat` / `geo_last_lon`.
+- Scheduled geo runs do not overwrite the remembered manual coordinates.
+- DB restore now stops both active crawl modes before replacement:
+  - regular crawler
+  - geo sweep crawler
+- Runtime JSON state files now use atomic write + broken-file quarantine:
+  - `settings.json`
+  - `presets.json`
+  - `search_history.json`
+  - `recently_viewed.json`
+  - `crawl_cache.json`
+- Packaging / ignore review:
+  - `naverland-scrapper.spec` was rechecked and still needs no extra hidden import/runtime hook/data bundle changes.
+  - `.gitignore` now ignores `*.json.tmp` and `*.json.broken.*` runtime artifacts.
+- Validation:
+  - `pytest -q` => `176 passed`
