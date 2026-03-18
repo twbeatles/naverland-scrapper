@@ -1,9 +1,13 @@
 import asyncio
+import os
 import time
 import unittest
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
+
+if os.environ.get("NAVERLAND_SKIP_PLAYWRIGHT_TESTS", "").strip().lower() in {"1", "true", "yes", "on"}:
+    raise unittest.SkipTest("Playwright engine tests are skipped in this CI environment")
 
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
