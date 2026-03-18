@@ -13,6 +13,42 @@ class PlaywrightComplexModeMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
 
+    async def _process_raw_items_with_filtered_details(
+        self,
+        raw_items: list[dict],
+        trade_type: str,
+    ) -> int:
+        matched_count = 0
+        detail_candidates: list[dict] = []
+
+        for raw_item in raw_items or []:
+            if not isinstance(raw_item, dict):
+                continue
+            item = dict(raw_item)
+            if self.thread._check_filters(item, trade_type):
+                detail_candidates.append(item)
+                continue
+            self.thread._enrich_item_with_history_and_alerts(item)
+            self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1
+            self.thread.stats["detail_fetch_skipped_count"] = (
+                int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + 1
+            )
+
+        if detail_candidates:
+            detailed_items = await self._enrich_items_with_mobile_details(detail_candidates)
+            for detailed_item in detailed_items:
+                processed_item = self.thread._enrich_item_with_history_and_alerts(dict(detailed_item))
+                if self.thread._check_filters(processed_item, trade_type):
+                    if self.thread._push_item(processed_item):
+                        matched_count += 1
+                else:
+                    self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1
+
+        self.thread._flush_history_updates(force=True)
+        self.thread._flush_pending_items_if_needed(force=True)
+        self.thread.emit_stats()
+        return matched_count
+
     async def _run_complex_mode(self):
         await self._ensure_started()
         total = len(self.thread.targets) * len(self.thread.trade_types)
@@ -166,7 +202,10 @@ class PlaywrightComplexModeMixin:
             if cached is not None:
                 self.thread.log(f"   캐시 히트: {len(cached)}건 로드")
                 self.thread.stats["cache_hits"] = self.thread.stats.get("cache_hits", 0) + 1
-                matched = self.thread._process_raw_items(cached, trade_type)
+                matched = await self._process_raw_items_with_filtered_details(
+                    list(cached or []),
+                    trade_type,
+                )
                 return {"count": matched, "raw_count": len(cached), "cache_hit": True}
 
         collect_result = await self._collect_target_raw_items(
@@ -206,7 +245,7 @@ class PlaywrightComplexModeMixin:
                     )
                 elif drain_timed_out:
                     self.thread.log("   ⚠️ drain timeout detected, negative cache skipped", 30)
-        matched = self.thread._process_raw_items(raw_items, trade_type)
+        matched = await self._process_raw_items_with_filtered_details(raw_items, trade_type)
         return {
             "count": matched,
             "raw_count": len(raw_items),
@@ -331,16 +370,8 @@ class PlaywrightComplexModeMixin:
             if raw_items:
                 break
 
-        if not raw_items:
-            return {
-                "raw_items": [],
-                "response_seen": response_seen,
-                "parse_success": bool(parse_success and not parse_failed),
-                "drain_timed_out": drain_timed_out,
-            }
-        enriched = await self._enrich_items_with_mobile_details(raw_items)
         return {
-            "raw_items": enriched,
+            "raw_items": raw_items,
             "response_seen": response_seen,
             "parse_success": bool(parse_success and not parse_failed),
             "drain_timed_out": drain_timed_out,

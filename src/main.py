@@ -72,7 +72,7 @@ def main():
     cleanup_old_logs()
     logger.info("애플리케이션 시작")
 
-    ok, errors = run_preflight_checks(logger=logger)
+    ok, errors = run_preflight_checks(logger=logger, profile="startup")
     if not ok:
         for error in errors:
             logger.error(error)

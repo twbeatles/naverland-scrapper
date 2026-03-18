@@ -304,8 +304,12 @@ class AppTabSetupMixin:
     def _setup_dashboard_tab(self: Any):
         self.dashboard_tab = QWidget()
         self.dashboard_layout = QVBoxLayout(self.dashboard_tab)
+        self.dashboard_layout.setContentsMargins(12, 12, 12, 12)
         self.dashboard_widget = None
-        self._ensure_dashboard_widget()
+        self.dashboard_placeholder = QLabel("대시보드는 첫 진입 시 로드됩니다.")
+        self.dashboard_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dashboard_placeholder.setObjectName("hintLabel")
+        self.dashboard_layout.addWidget(self.dashboard_placeholder)
         self.tabs.addTab(self.dashboard_tab, "📊 대시보드")
     
     def _setup_favorites_tab(self: Any):
@@ -551,6 +555,11 @@ class AppTabSetupMixin:
         self.dashboard_widget = DashboardWidget(self.db, theme=self.current_theme)
         if hasattr(self.dashboard_widget, "warning_signal"):
             self.dashboard_widget.warning_signal.connect(self._on_dashboard_warning)
+        placeholder = getattr(self, "dashboard_placeholder", None)
+        if placeholder is not None:
+            placeholder.hide()
+            placeholder.deleteLater()
+            self.dashboard_placeholder = None
         self.dashboard_layout.addWidget(self.dashboard_widget)
         if self.collected_data:
             self.dashboard_widget.set_data(self.collected_data)
@@ -572,7 +581,9 @@ class AppTabSetupMixin:
                 ui_logger.exception(f"통계 탭 로드 실패: {e}")
                 self.status_bar.showMessage("⚠️ 통계 탭 로드 중 오류가 발생했습니다.")
         elif index == self.TAB_DASHBOARD:
-            self.dashboard_widget.refresh()
+            self._ensure_dashboard_widget()
+            if self.dashboard_widget is not None:
+                self.dashboard_widget.refresh()
         elif index == self.TAB_FAVORITES:
             self.favorites_tab.refresh()
 

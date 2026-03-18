@@ -91,6 +91,7 @@ class _ThreadStub:
             "parse_fail_count": 0,
             "detail_success_count": 0,
             "detail_fail_count": 0,
+            "detail_fetch_skipped_count": 0,
             "blocked_page_count": 0,
             "geo_discovered_count": 0,
             "geo_dedup_count": 0,
@@ -100,6 +101,9 @@ class _ThreadStub:
         }
         self.logged = []
         self.registered = []
+        self.filtered_ids = set()
+        self.pushed_items = []
+        self.enriched_items = []
         self.progress_signal = _SignalStub()
         self.complex_finished_signal = _SignalStub()
         self.stop_flag = False
@@ -193,6 +197,22 @@ class _ThreadStub:
 
     def _flush_history_updates(self, force=False):
         return 0
+
+    def _flush_pending_items_if_needed(self, force=False):
+        return None
+
+    def _check_filters(self, data, trade_type):
+        article_id = str(data.get("매물ID", "") or data.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
+        return article_id not in self.filtered_ids
+
+    def _enrich_item_with_history_and_alerts(self, data):
+        row = dict(data or {})
+        self.enriched_items.append(row)
+        return row
+
+    def _push_item(self, item):
+        self.pushed_items.append(dict(item or {}))
+        return True
 
     def record_crawl_history(self, *args, **kwargs):
         self.history_calls.append((args, kwargs))
@@ -611,6 +631,109 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(int(thread.stats.get("detail_fail_count", 0)), 1)
         finally:
             engine._loop.close()
+
+    async def test_filter_miss_skips_detail_fetch_but_preserves_history_tracking(self):
+        thread = _ThreadStub()
+        thread.filtered_ids = {"MISS-1"}
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _collect(*_args, **_kwargs):
+            return {
+                "raw_items": [{"매물ID": "MISS-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}],
+                "response_seen": True,
+                "parse_success": True,
+                "drain_timed_out": False,
+            }
+
+        engine._collect_target_raw_items = _collect
+        engine._enrich_items_with_mobile_details = AsyncMock(return_value=[])
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "80808", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(result["count"], 0)
+        engine._enrich_items_with_mobile_details.assert_not_awaited()
+        self.assertEqual(int(thread.stats.get("filtered_out", 0)), 1)
+        self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 1)
+        self.assertEqual(len(thread.enriched_items), 1)
+        self.assertEqual(len(thread.pushed_items), 0)
+
+    async def test_filter_hit_fetches_detail_and_pushes_detailed_item(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+
+        raw_item = {"매물ID": "HIT-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}
+
+        async def _collect(*_args, **_kwargs):
+            return {
+                "raw_items": [dict(raw_item)],
+                "response_seen": True,
+                "parse_success": True,
+                "drain_timed_out": False,
+            }
+
+        async def _detail(items):
+            self.assertEqual(len(items), 1)
+            enriched = dict(items[0])
+            enriched["기전세금(원)"] = 350_000_000
+            enriched["부동산상호"] = "테스트부동산"
+            return [enriched]
+
+        engine._collect_target_raw_items = _collect
+        engine._enrich_items_with_mobile_details = AsyncMock(side_effect=_detail)
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "90909", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(result["count"], 1)
+        engine._enrich_items_with_mobile_details.assert_awaited_once()
+        self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 0)
+        self.assertEqual(len(thread.pushed_items), 1)
+        self.assertEqual(int(thread.pushed_items[0].get("기전세금(원)", 0)), 350_000_000)
+        self.assertEqual(str(thread.pushed_items[0].get("부동산상호", "")), "테스트부동산")
+
+    async def test_cache_hit_fetches_details_only_for_filter_hits(self):
+        thread = _ThreadStub()
+        thread.filtered_ids = {"MISS-2"}
+        trade_type = thread.trade_types[0]
+        cache = _CacheStub()
+        thread.cache = cache
+        engine = PlaywrightCrawlerEngine(thread)
+
+        cache.set(
+            "91919",
+            trade_type,
+            [
+                {"매물ID": "MISS-2", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0},
+                {"매물ID": "HIT-2", "거래유형": trade_type, "매매가": "12000", "면적(㎡)": 84.0},
+            ],
+            mode="complex",
+            asset_type="APT",
+        )
+
+        async def _detail(items):
+            self.assertEqual([str(item.get("매물ID", "")) for item in items], ["HIT-2"])
+            enriched = dict(items[0])
+            enriched["부동산상호"] = "캐시상세"
+            return [enriched]
+
+        engine._enrich_items_with_mobile_details = AsyncMock(side_effect=_detail)
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "91919", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(result["cache_hit"])
+        self.assertEqual(result["count"], 1)
+        engine._enrich_items_with_mobile_details.assert_awaited_once()
+        self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 1)
+        self.assertEqual(len(thread.enriched_items), 2)
+        self.assertEqual(len(thread.pushed_items), 1)
+        self.assertEqual(str(thread.pushed_items[0].get("부동산상호", "")), "캐시상세")
 
     async def test_geo_mode_skips_history_when_no_trade_types_succeeded(self):
         thread = _ThreadStub()

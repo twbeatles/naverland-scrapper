@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.preflight:
         from src.utils.preflight import run_preflight_checks
 
-        ok, errors = run_preflight_checks()
+        ok, errors = run_preflight_checks(profile="full")
         # In windowed builds prints are not visible, but exit code is still useful for CI.
         for msg in errors:
             print(msg)

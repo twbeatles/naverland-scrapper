@@ -316,6 +316,7 @@ class GeoCrawlerTab(CrawlerTab):
         response_seen = int(stats.get("response_seen_count", 0) or 0)
         parse_fail = int(stats.get("parse_fail_count", 0) or 0)
         detail_fail = int(stats.get("detail_fail_count", 0) or 0)
+        detail_skip = int(stats.get("detail_fetch_skipped_count", 0) or 0)
         blocked_count = int(stats.get("blocked_page_count", 0) or 0)
         geo_incomplete = bool(stats.get("geo_incomplete", False))
         incomplete_reasons = ", ".join(
@@ -329,6 +330,7 @@ class GeoCrawlerTab(CrawlerTab):
             response_seen,
             parse_fail,
             detail_fail,
+            detail_skip,
             blocked_count,
             geo_incomplete,
             incomplete_reasons,
@@ -339,7 +341,8 @@ class GeoCrawlerTab(CrawlerTab):
         message = (
             "Geo 발견 "
             f"{discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
-            f" / 응답 {response_seen} / 파싱실패 {parse_fail} / 상세실패 {detail_fail} / 차단 {blocked_count}"
+            f" / 응답 {response_seen} / 파싱실패 {parse_fail} / 상세실패 {detail_fail}"
+            f" / 상세스킵 {detail_skip} / 차단 {blocked_count}"
         )
         if geo_incomplete:
             message += f" / incomplete {incomplete_reasons or 'unknown'}"

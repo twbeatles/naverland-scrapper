@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Literal
 from typing import Iterable, Optional
 
 from src.utils.logger import get_logger
@@ -190,12 +191,16 @@ def run_preflight_checks(
     data_dir: Optional[Path] = None,
     log_dir: Optional[Path] = None,
     logger=None,
+    profile: Literal["full", "startup"] = "full",
 ) -> tuple[bool, list[str]]:
     base = base_dir or Path(__file__).resolve().parent.parent.parent
     data = data_dir or DATA_DIR
     logs = log_dir or LOG_DIR
     app_logger = logger or get_logger("Preflight")
     settings_path = data / "settings.json"
+    profile_token = str(profile or "full").strip().lower()
+    if profile_token not in {"full", "startup"}:
+        profile_token = "full"
 
     errors: list[str] = []
 
@@ -227,7 +232,11 @@ def run_preflight_checks(
             else:
                 app_logger.warning("%s", message)
 
-    if not missing_required and should_run_source_integrity_checks():
+    if (
+        profile_token == "full"
+        and not missing_required
+        and should_run_source_integrity_checks()
+    ):
         internal_failures = find_internal_import_failures(REQUIRED_INTERNAL_IMPORTS)
         if internal_failures:
             errors.append(
@@ -252,7 +261,7 @@ def run_preflight_checks(
 
 
 def main() -> int:
-    ok, errors = run_preflight_checks()
+    ok, errors = run_preflight_checks(profile="full")
     if ok:
         return 0
     for message in errors:

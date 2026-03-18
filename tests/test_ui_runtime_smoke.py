@@ -61,16 +61,60 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         w.deleteLater()
         self._qt_app.processEvents()
 
-    def test_app_initializes_noncritical_tabs_eagerly(self):
+    def test_app_defers_dashboard_widget_until_first_open(self):
         from src.ui.app import RealEstateApp
 
         w = RealEstateApp()
 
         self.assertIsNotNone(getattr(w, "db_tab", None))
         self.assertIsNotNone(getattr(w, "favorites_tab", None))
-        self.assertIsNotNone(getattr(w, "dashboard_widget", None))
+        self.assertIsNone(getattr(w, "dashboard_widget", None))
         self.assertIs(w.tabs.widget(w.TAB_DB), w.db_tab)
         self.assertIs(w.tabs.widget(w.TAB_FAVORITES), w.favorites_tab)
+
+        w.tabs.setCurrentWidget(w.dashboard_tab)
+        w._refresh_tab()
+        self.assertIsNotNone(getattr(w, "dashboard_widget", None))
+
+        if hasattr(w, "schedule_timer") and w.schedule_timer:
+            w.schedule_timer.stop()
+        if hasattr(w, "tray_icon") and w.tray_icon:
+            w.tray_icon.hide()
+        if hasattr(w, "db") and w.db:
+            w.db.close()
+
+        w.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_dashboard_first_open_receives_existing_collected_data(self):
+        from src.ui.app import RealEstateApp
+
+        w = RealEstateApp()
+        sample_data = [
+            {
+                "단지명": "지연대시보드단지",
+                "단지ID": "10101",
+                "매물ID": "D1",
+                "거래유형": "매매",
+                "매매가": "1억 2,000만",
+                "보증금": "",
+                "월세": "",
+                "면적(평)": 33.0,
+                "층/방향": "10층",
+                "타입/특징": "테스트",
+                "수집시각": "2026-03-18 09:00:00",
+                "is_new": True,
+                "price_change": 0,
+            }
+        ]
+        w._on_crawl_data_collected(sample_data)
+        self.assertIsNone(getattr(w, "dashboard_widget", None))
+
+        w.tabs.setCurrentWidget(w.dashboard_tab)
+        w._refresh_tab()
+
+        self.assertIsNotNone(getattr(w, "dashboard_widget", None))
+        self.assertEqual(len(getattr(w.dashboard_widget, "_data", [])), 1)
 
         if hasattr(w, "schedule_timer") and w.schedule_timer:
             w.schedule_timer.stop()

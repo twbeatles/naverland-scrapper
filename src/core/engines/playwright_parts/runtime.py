@@ -57,6 +57,7 @@ class PlaywrightRuntimeMixin:
         stats.setdefault("parse_fail_count", 0)
         stats.setdefault("detail_success_count", 0)
         stats.setdefault("detail_fail_count", 0)
+        stats.setdefault("detail_fetch_skipped_count", 0)
         stats.setdefault("blocked_page_count", 0)
         stats.setdefault("geo_incomplete", False)
         stats.setdefault("geo_incomplete_count", 0)

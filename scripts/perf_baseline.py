@@ -22,6 +22,7 @@ from src.core.item_parser import ItemParser
 from src.ui.app import RealEstateApp
 from src.ui.widgets.cards import CardViewWidget
 from src.utils.paths import LOG_DIR, ensure_directories
+from src.utils.preflight import run_preflight_checks
 
 
 def _benchmark_parser():
@@ -113,6 +114,52 @@ def _benchmark_app_init(app):
     return {"init_elapsed_sec": elapsed}
 
 
+def _benchmark_preflight_startup():
+    start = time.perf_counter()
+    ok, errors = run_preflight_checks(profile="startup")
+    elapsed = time.perf_counter() - start
+    return {
+        "ok": bool(ok),
+        "error_count": len(errors),
+        "elapsed_sec": elapsed,
+    }
+
+
+def _benchmark_app_startup_without_dashboard(app):
+    start = time.perf_counter()
+    window = RealEstateApp()
+    elapsed = time.perf_counter() - start
+
+    if hasattr(window, "schedule_timer") and window.schedule_timer:
+        window.schedule_timer.stop()
+    if hasattr(window, "tray_icon") and window.tray_icon:
+        window.tray_icon.hide()
+    if hasattr(window, "db") and window.db:
+        window.db.close()
+    window.deleteLater()
+    app.processEvents()
+    return {"init_elapsed_sec": elapsed}
+
+
+def _benchmark_dashboard_first_open(app):
+    window = RealEstateApp()
+    start = time.perf_counter()
+    window.tabs.setCurrentWidget(window.dashboard_tab)
+    window._refresh_tab()
+    app.processEvents()
+    elapsed = time.perf_counter() - start
+
+    if hasattr(window, "schedule_timer") and window.schedule_timer:
+        window.schedule_timer.stop()
+    if hasattr(window, "tray_icon") and window.tray_icon:
+        window.tray_icon.hide()
+    if hasattr(window, "db") and window.db:
+        window.db.close()
+    window.deleteLater()
+    app.processEvents()
+    return {"open_elapsed_sec": elapsed}
+
+
 def main():
     ensure_directories()
     app = QApplication.instance() or QApplication([])
@@ -122,6 +169,9 @@ def main():
         "parser": _benchmark_parser(),
         "cache": _benchmark_cache(),
         "card_render": _benchmark_card_render(app),
+        "preflight_startup": _benchmark_preflight_startup(),
+        "app_startup_without_dashboard": _benchmark_app_startup_without_dashboard(app),
+        "dashboard_first_open": _benchmark_dashboard_first_open(app),
         "app_init": _benchmark_app_init(app),
     }
 
@@ -134,6 +184,9 @@ def main():
     print(f"- cache set(100): {results['cache']['set_100_elapsed_sec']:.4f}s")
     print(f"- cache flush: {results['cache']['flush_elapsed_sec']:.4f}s")
     print(f"- card set_data(1000): {results['card_render']['set_data_elapsed_sec']:.4f}s")
+    print(f"- preflight startup: {results['preflight_startup']['elapsed_sec']:.4f}s")
+    print(f"- app startup(no dashboard): {results['app_startup_without_dashboard']['init_elapsed_sec']:.4f}s")
+    print(f"- dashboard first open: {results['dashboard_first_open']['open_elapsed_sec']:.4f}s")
     print(f"- app init: {results['app_init']['init_elapsed_sec']:.4f}s")
     print(f"- json: {out_path}")
 

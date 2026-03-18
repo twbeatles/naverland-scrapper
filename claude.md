@@ -9,7 +9,7 @@
     - 다중 단지 크롤링 & 그룹 관리
     - Playwright 기본 엔진 + Selenium fallback(일반 단지 수집 `complex` 모드 전용, `geo_sweep`은 Playwright 전용)
     - 지도 탐색 탭 기반 좌표 sweep (APT/VL, 매매/전세/월세)
-    - 응답 가로채기 기반 고속 목록 수집 + 모바일 상세 병렬 수집
+    - 응답 가로채기 기반 고속 목록 수집 + 필터 통과 매물 우선 모바일 상세 수집
     - 실시간 가격 추세 분석 & 시각화 (히스토그램, 파이차트)
     - Excel/CSV/JSON 내보내기 (템플릿 지원)
     - 카드 뷰/대시보드/즐겨찾기/최근 본 매물
@@ -83,7 +83,7 @@
   - 엔진 오케스트레이션 레이어로 축소되고 `PlaywrightCrawlerEngine`/`SeleniumCrawlerEngine` 선택 및 fallback을 담당.
   - `crawl_mode=complex|geo_sweep`, `engine_name`, `GeoSweepConfig`, `discovered_complex_signal`을 지원.
 - `PlaywrightCrawlerEngine`:
-  - 기본 Chromium 엔진, response interception 기반 목록 수집, 모바일 상세 워커 풀 수집을 담당.
+  - 기본 Chromium 엔진, response interception 기반 목록 수집, 필터 통과 매물 우선 모바일 상세 워커 풀 수집을 담당.
   - 지도 sweep에서 발견한 단지를 즉시 DB에 등록하고 같은 실행 흐름에서 상세 수집까지 연결.
 - `CrawlCache`:
   - 캐시 키는 기본 `complex_id + trade_type`에 `mode/asset_type/source_lat/source_lon/source_zoom/marker_id` 컨텍스트 네임스페이스를 결합해 모드 간 메타데이터 오염을 차단.
@@ -98,7 +98,7 @@
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
 - **Web Automation**: 
-    - `playwright` (기본 Chromium 엔진, response interception, 모바일 상세 병렬 수집)
+    - `playwright` (기본 Chromium 엔진, response interception, 필터 통과 매물 우선 모바일 상세 수집)
     - `undetected-chromedriver` (동적 콘텐츠 & 우회)
     - `selenium` (fallback 및 DevTools 계층)
     - `beautifulsoup4` (파싱)
@@ -492,9 +492,10 @@ COLORS["light"] = {
 - UI/module baseline:
   - `CardViewWidget`, `ArticleCard`는 `src/ui/widgets/cards.py` 소속.
   - `src/ui/widgets/dashboard.py`는 대시보드 집계/차트 위젯 전용.
-  - 비핵심 탭 lazy loading은 제거되었고 `startup_lazy_noncritical_tabs`는 레거시 호환용 `False` 고정 키만 유지.
+  - `startup_lazy_noncritical_tabs`는 레거시 호환용 `False` 고정 키만 유지하고, 현재는 대시보드만 첫 진입 시 생성됩니다.
 - Performance baseline:
-  - 대시보드는 통계 캐시 + 소멸 count TTL 캐시 + 지연 차트 캔버스 생성 사용.
+  - 대시보드는 통계 캐시 + 소멸 count TTL 캐시 + 지연 차트 캔버스 + 첫 탭 진입 시 위젯 생성 사용.
+  - 일반 앱 시작은 lightweight preflight를 사용하고 `--preflight`는 full internal import smoke를 유지합니다.
   - 결과 렌더링은 행 검색 캐시 사전 구성, 로그 maximum block count, 카드 스타일 캐시를 사용.
 - Ignore baseline:
   - `.gitignore`에 `.mypy_cache/`, `.ruff_cache/`, `.nox/`, `node_modules/`, `coverage.xml`를 추가해 로컬 개발 산출물 유입을 예방.

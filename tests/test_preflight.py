@@ -148,6 +148,48 @@ class TestPreflight(unittest.TestCase):
             self.assertTrue(ok)
             self.assertEqual(errors, [])
 
+    def test_startup_profile_skips_internal_import_smoke(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures") as import_smoke,
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                    profile="startup",
+                )
+            import_smoke.assert_not_called()
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
+
+    def test_full_profile_keeps_internal_import_smoke(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]) as import_smoke,
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                    profile="full",
+                )
+            import_smoke.assert_called_once()
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()

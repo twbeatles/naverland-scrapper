@@ -1,5 +1,22 @@
 ## **v15.0.14 (2026-03-17)**
 
+**Startup preflight 경량화 + Dashboard 지연 로드 + Playwright 상세 수집 범위 최적화**
+
+* startup 성능 최적화:
+  - `run_preflight_checks(profile="startup" | "full")` 지원 추가
+  - 일반 앱 실행은 lightweight preflight로 전환하고 `--preflight`/`python -m src.utils.preflight`는 full internal import smoke 유지
+  - 대시보드는 시작 시 placeholder만 만들고 첫 탭 진입에서 `DashboardWidget`을 생성하도록 변경
+  - `scripts/perf_baseline.py`에 `preflight_startup`, `app_startup_without_dashboard`, `dashboard_first_open` 지표 추가
+  - `naverland-scrapper.spec` 재점검 결과, hidden import/runtime hook/data bundle 규칙 추가 변경은 필요하지 않음
+* Playwright complex 수집 최적화:
+  - cache는 base raw item 기준으로 유지하고, 가격/면적 필터 통과 매물만 모바일 상세 fetch worker pool로 전달
+  - 필터 탈락 매물도 base 정보 기준 history/change tracking은 유지하되 detail-only 필드는 채우지 않음
+  - crawler stats payload에 `detail_fetch_skipped_count` 추가, Geo 상태바에 상세 skip 수 노출
+* `.gitignore` 점검:
+  - 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분하며 이번 패스에서 추가 패턴은 필요하지 않음
+* 검증:
+  - `python -m pytest -q` -> `167 passed`
+
 **문서/.spec/.gitignore 정합성 재점검 + 성능 리팩토링 기준 동기화**
 
 ### ✅ 핵심 반영

@@ -10,10 +10,11 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-17 (.spec/doc/gitignore/runtime-status/performance consistency pass):
+# Rechecked on 2026-03-18 (.spec/doc/gitignore/runtime-status/performance consistency pass):
 # no extra hidden imports/hooks required.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
-# UI performance refactors (`src/ui/widgets/cards.py`, dashboard deferred chart init)
+# UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
+# lightweight startup preflight)
 # do not require spec changes.
 project_dir = Path.cwd().resolve()
 # Default distribution profile is onedir with bundled Chromium.
