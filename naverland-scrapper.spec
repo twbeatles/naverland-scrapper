@@ -10,7 +10,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-18 (.spec/doc/gitignore/runtime-status/performance consistency pass):
+# Rechecked on 2026-03-19 (.spec/doc/gitignore/runtime-status/functional consistency pass):
 # no extra hidden imports/hooks required.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
@@ -20,6 +20,10 @@ from PyInstaller.utils.hooks import collect_submodules
 # atomic JSON runtime state storage/quarantine, VL houses URL parsing, DB restore crawler
 # shutdown hardening) are also Python/runtime-level only and do not require extra
 # PyInstaller datas/hooks.
+# 2026-03-19 functional consistency batch (recently-viewed article-open routing,
+# schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
+# deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not
+# require additional PyInstaller datas, hidden imports, or hooks.
 project_dir = Path.cwd().resolve()
 # Default distribution profile is onedir with bundled Chromium.
 # This avoids onefile extraction overhead and matches the current README/doc baseline.

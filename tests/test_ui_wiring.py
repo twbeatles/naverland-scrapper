@@ -1,7 +1,9 @@
 import importlib.util
+import copy
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -606,6 +608,248 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_app_article_open_paths_track_recently_viewed(self):
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtWidgets import QTableWidgetItem
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        sample = {
+            "단지명": "최근본단지",
+            "단지ID": "70001",
+            "매물ID": "A1",
+            "거래유형": "매매",
+            "매매가": "1억",
+            "보증금": "",
+            "월세": "",
+            "면적(평)": 33.0,
+            "층/방향": "10층",
+            "타입/특징": "테이블열기",
+            "수집시각": "2026-03-19 09:00:00",
+            "자산유형": "APT",
+        }
+
+        app.crawler_tab._append_rows_batch([sample])
+        app.crawler_tab.result_table.selectRow(0)
+        app.favorites_tab.table.setRowCount(1)
+        favorite_item = QTableWidgetItem("즐겨찾기단지")
+        favorite_item.setData(
+            Qt.ItemDataRole.UserRole,
+            {
+                "complex_name": "즐겨찾기단지",
+                "complex_id": "70001",
+                "article_id": "F1",
+                "asset_type": "VL",
+                "trade_type": "전세",
+                "price_text": "8,000만",
+                "area_pyeong": 24.0,
+                "floor_info": "5층",
+            },
+        )
+        app.favorites_tab.table.setItem(0, 0, favorite_item)
+        app.favorites_tab.table.selectRow(0)
+
+        with patch("src.ui.app.webbrowser.open") as mock_open:
+            app.crawler_tab._open_article_url()
+            card_sample = dict(sample)
+            card_sample["매물ID"] = "A2"
+            card_sample["타입/특징"] = "카드열기"
+            app.crawler_tab.card_view.article_clicked.emit(card_sample)
+            app.favorites_tab._open_article()
+
+        recent = app.recently_viewed.get_recent(5)
+        recent_keys = [
+            (row.get("자산유형"), row.get("단지ID"), row.get("매물ID"))
+            for row in recent
+        ]
+        self.assertEqual(
+            recent_keys[:3],
+            [("VL", "70001", "F1"), ("APT", "70001", "A2"), ("APT", "70001", "A1")],
+        )
+        self.assertEqual(mock_open.call_count, 3)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_schedule_check_runs_once_within_catchup_window(self):
+        from PyQt6.QtCore import QTime
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 3, 19, 9, 5, 0)
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.check_schedule.setChecked(True)
+                app.time_edit.setTime(QTime(9, 0))
+                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_group_combo.clear()
+                app.schedule_group_combo.addItem("테스트그룹", 10)
+
+                with (
+                    patch("src.ui.app.datetime", _FixedDateTime),
+                    patch.object(
+                        app.db,
+                        "get_complexes_in_group",
+                        return_value=[(1, "APT단지", "APT", "11111", "")],
+                    ),
+                    patch.object(app.crawler_tab, "start_crawling") as mock_start,
+                ):
+                    app._check_schedule()
+                    app._check_schedule()
+
+                self.assertEqual(mock_start.call_count, 1)
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"),
+                    "2026-03-19|09:00|complex|10",
+                )
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_schedule_busy_retry_within_same_window(self):
+        from PyQt6.QtCore import QTime
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 3, 19, 9, 5, 0)
+
+        class _RunningThread:
+            def isRunning(self):
+                return True
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.check_schedule.setChecked(True)
+                app.time_edit.setTime(QTime(9, 0))
+                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_group_combo.clear()
+                app.schedule_group_combo.addItem("테스트그룹", 10)
+                app.crawler_tab.crawler_thread = _RunningThread()
+
+                with patch("src.ui.app.datetime", _FixedDateTime):
+                    app._check_schedule()
+
+                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+
+                app.crawler_tab.crawler_thread = None
+                with (
+                    patch("src.ui.app.datetime", _FixedDateTime),
+                    patch.object(
+                        app.db,
+                        "get_complexes_in_group",
+                        return_value=[(1, "APT단지", "APT", "11111", "")],
+                    ),
+                    patch.object(app.crawler_tab, "start_crawling") as mock_start,
+                ):
+                    app._check_schedule()
+
+                mock_start.assert_called_once()
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"),
+                    "2026-03-19|09:00|complex|10",
+                )
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_schedule_no_target_retry_within_same_window(self):
+        from PyQt6.QtCore import QTime
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 3, 19, 9, 5, 0)
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.check_schedule.setChecked(True)
+                app.time_edit.setTime(QTime(9, 0))
+                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_group_combo.clear()
+                app.schedule_group_combo.addItem("테스트그룹", 10)
+
+                with (
+                    patch("src.ui.app.datetime", _FixedDateTime),
+                    patch.object(
+                        app.db,
+                        "get_complexes_in_group",
+                        side_effect=[
+                            [(1, "VL단지", "VL", "22222", "")],
+                            [(1, "APT단지", "APT", "11111", "")],
+                        ],
+                    ),
+                    patch.object(app.crawler_tab, "start_crawling") as mock_start,
+                ):
+                    app._check_schedule()
+                    self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                    app._check_schedule()
+
+                mock_start.assert_called_once()
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"),
+                    "2026-03-19|09:00|complex|10",
+                )
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_app_advanced_filter_wiring_to_crawler_tab(self):
         from src.ui.app import RealEstateApp
 
@@ -890,14 +1134,18 @@ class TestUIWiring(unittest.TestCase):
                 self.assertFalse(app.stats_metric_label.isHidden())
                 self.assertFalse(app.stats_metric_combo.isHidden())
                 self.assertEqual(app.stats_metric_combo.currentData(), "rent")
-                self.assertIn("월세", app.stats_table.horizontalHeaderItem(3).text())
+                rent_header = app.stats_table.horizontalHeaderItem(3)
+                assert rent_header is not None
+                self.assertIn("월세", rent_header.text())
                 self.assertEqual(_table_text(app.stats_table, 0, 5), "100")
 
                 app.stats_metric_combo.setCurrentIndex(app.stats_metric_combo.findData("deposit"))
                 app._load_stats()
 
                 self.assertEqual(app.stats_metric_combo.currentData(), "deposit")
-                self.assertIn("보증금", app.stats_table.horizontalHeaderItem(3).text())
+                deposit_header = app.stats_table.horizontalHeaderItem(3)
+                assert deposit_header is not None
+                self.assertIn("보증금", deposit_header.text())
                 self.assertEqual(_table_text(app.stats_table, 0, 5), "52500")
             finally:
                 if hasattr(app, "schedule_timer") and app.schedule_timer:

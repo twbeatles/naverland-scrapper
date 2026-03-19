@@ -265,6 +265,10 @@ class CrawlerTabResultRenderMixin:
 
     def _build_row_payload_from_data(self: Any, data, trade_type, price_int, area_val, price_change, is_new):
         payload = dict(data or {})
+        payload["단지명"] = str(payload.get("단지명", "") or "")
+        payload["단지ID"] = str(payload.get("단지ID", "") or "")
+        payload["매물ID"] = str(payload.get("매물ID", "") or "")
+        payload["자산유형"] = str(payload.get("자산유형", "APT") or "APT").strip().upper() or "APT"
         payload["거래유형"] = trade_type
         payload["price_int"] = int(price_int or 0)
         payload["면적(평)"] = float(area_val or 0)

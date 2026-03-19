@@ -126,6 +126,74 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         w.deleteLater()
         self._qt_app.processEvents()
 
+    def test_dashboard_clears_stale_state_when_data_becomes_empty(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.dashboard import DashboardWidget
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "dashboard_clear.db"))
+            widget = DashboardWidget(db)
+            try:
+                sample_data = [
+                    {
+                        "단지명": "대시보드단지",
+                        "단지ID": "40101",
+                        "매물ID": "D1",
+                        "거래유형": "매매",
+                        "매매가": "1억 2,000만",
+                        "보증금": "",
+                        "월세": "",
+                        "면적(평)": 33.0,
+                        "층/방향": "10층",
+                        "타입/특징": "테스트",
+                        "수집시각": "2026-03-18 09:00:00",
+                        "is_new": True,
+                        "price_change": 500,
+                    }
+                ]
+
+                with patch.object(db, "count_disappeared_articles", return_value=2):
+                    widget.set_data(sample_data)
+
+                total_label = getattr(widget.total_card, "_value_label", None)
+                self.assertIsNotNone(total_label)
+                assert total_label is not None
+                self.assertEqual(total_label.text(), "1")
+
+                widget.set_data([])
+
+                self.assertEqual(total_label.text(), "0")
+                self.assertFalse(widget.empty_label.isHidden())
+                self.assertIn("총 매물 0건", widget.trend_label.text())
+                self.assertIsNone(widget._last_trade_chart_sig)
+                self.assertIsNone(widget._last_price_chart_sig)
+            finally:
+                db.close()
+                widget.deleteLater()
+                self._qt_app.processEvents()
+
+    def test_dashboard_hides_trend_frame_when_setting_disabled(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.dashboard import DashboardWidget
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "dashboard_trend_visibility.db"))
+
+            def _settings_get(key, default=None):
+                if key == "show_trend_analysis":
+                    return False
+                return default
+
+            with patch("src.ui.widgets.dashboard.settings.get", side_effect=_settings_get):
+                widget = DashboardWidget(db)
+                widget.refresh()
+
+            self.assertTrue(widget.trend_frame.isHidden())
+
+            db.close()
+            widget.deleteLater()
+            self._qt_app.processEvents()
+
     def test_dialogs_instantiation(self):
         from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog
 

@@ -62,6 +62,7 @@ class AppTabSetupMixin:
             history_manager=self.history_manager,
             theme=self.current_theme,
             maintenance_guard=lambda: self._maintenance_mode,
+            article_open_handler=self._open_article_and_track,
         )
         tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
         tab.favorite_keys_provider = lambda: set(self.favorite_keys)
@@ -78,6 +79,7 @@ class AppTabSetupMixin:
             history_manager=self.history_manager,
             theme=self.current_theme,
             maintenance_guard=lambda: self._maintenance_mode,
+            article_open_handler=self._open_article_and_track,
         )
         tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
         tab.favorite_keys_provider = lambda: set(self.favorite_keys)
@@ -118,7 +120,12 @@ class AppTabSetupMixin:
         if tab is None:
             from src.ui.widgets.tabs import FavoritesTab
 
-            tab = FavoritesTab(self.db, theme=self.current_theme, favorite_toggled=self._on_favorite_toggled)
+            tab = FavoritesTab(
+                self.db,
+                theme=self.current_theme,
+                favorite_toggled=self._on_favorite_toggled,
+                article_open_handler=self._open_article_and_track,
+            )
             self.favorites_tab = tab
         return tab
 

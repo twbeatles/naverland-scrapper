@@ -7,6 +7,8 @@ if TYPE_CHECKING:
 
 
 class AppStatsScheduleMixin:
+    SCHEDULE_CATCHUP_WINDOW_MINUTES = 10
+
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
@@ -81,11 +83,14 @@ class AppStatsScheduleMixin:
 
     def _collect_schedule_config(self: Any):
         mode = str(self.schedule_mode_combo.currentData() or "complex")
+        current = settings.get("schedule_config", {}) or {}
         return {
             "enabled": bool(self.check_schedule.isChecked()),
             "mode": mode,
             "time": self.time_edit.time().toString("HH:mm"),
             "group_id": self.schedule_group_combo.currentData(),
+            "last_run_slot": str(current.get("last_run_slot", "") or ""),
+            "last_run_at": str(current.get("last_run_at", "") or ""),
             "geo": {
                 "lat": float(self.schedule_geo_lat.value()),
                 "lon": float(self.schedule_geo_lon.value()),
@@ -107,6 +112,49 @@ class AppStatsScheduleMixin:
             }
         )
         return config
+
+    def _schedule_target_descriptor(self: Any, config: dict[str, Any]) -> str:
+        mode = str(config.get("mode", "complex") or "complex")
+        if mode == "geo_sweep":
+            geo = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
+            asset_types = self._normalize_geo_asset_types(geo.get("asset_types", ["APT", "VL"]))
+            return (
+                f"{float(geo.get('lat', 37.5608)):.6f}/"
+                f"{float(geo.get('lon', 126.9888)):.6f}/"
+                f"{int(geo.get('zoom', 15))}/"
+                f"{int(geo.get('rings', 1))}/"
+                f"{int(geo.get('step_px', 480))}/"
+                f"{int(geo.get('dwell_ms', 600))}/"
+                f"{','.join(asset_types)}"
+            )
+        return str(config.get("group_id", "") or "")
+
+    def _schedule_slot_for(self: Any, config: dict[str, Any], now_dt=None) -> str:
+        current_dt = now_dt or datetime.now()
+        time_text = str(config.get("time", "09:00") or "09:00")
+        mode = str(config.get("mode", "complex") or "complex")
+        target = self._schedule_target_descriptor(config)
+        return f"{current_dt.strftime('%Y-%m-%d')}|{time_text}|{mode}|{target}"
+
+    def _remember_schedule_skip(self: Any, slot: str, reason: str, message: str) -> None:
+        notice_key = (slot, reason)
+        if getattr(self, "_schedule_skip_notice_key", None) == notice_key:
+            return
+        self._schedule_skip_notice_key = notice_key
+        self.status_bar.showMessage(message)
+        ui_logger.info(f"{message} [slot={slot}]")
+
+    def _mark_schedule_run_started(self: Any, config: dict[str, Any], slot: str) -> None:
+        config["last_run_slot"] = slot
+        config["last_run_at"] = DateTimeHelper.now_string()
+        self._schedule_skip_notice_key = None
+        settings.update(
+            {
+                "schedule_config": config,
+                "schedule_geo_lat": config["geo"]["lat"],
+                "schedule_geo_lon": config["geo"]["lon"],
+            }
+        )
 
     def _load_schedule_config(self: Any):
         config = settings.get("schedule_config", {}) or {}
@@ -222,21 +270,44 @@ class AppStatsScheduleMixin:
 
     def _check_schedule(self: Any):
         if not self.check_schedule.isChecked():
-            return
-        mode = str(self.schedule_mode_combo.currentData() or "complex")
-        if mode == "complex" and self.schedule_group_combo.count() == 0:
-            return
-        now = QTime.currentTime()
-        target = self.time_edit.time()
-        if now.hour() == target.hour() and now.minute() == target.minute():
-            if not self.is_scheduled_run:
-                self.is_scheduled_run = True
-                self._run_scheduled()
-        else:
             self.is_scheduled_run = False
+            self._schedule_skip_notice_key = None
+            return
+        config = self._collect_schedule_config()
+        mode = str(config.get("mode", "complex") or "complex")
+        if mode == "complex" and self.schedule_group_combo.count() == 0:
+            self.is_scheduled_run = False
+            self._schedule_skip_notice_key = None
+            return
 
-    def _run_scheduled(self: Any):
-        mode = str(self.schedule_mode_combo.currentData() or "complex")
+        current_dt = datetime.now()
+        target_time = QTime.fromString(str(config.get("time", "09:00") or "09:00"), "HH:mm")
+        if not target_time.isValid():
+            target_time = QTime(9, 0)
+        target_dt = current_dt.replace(
+            hour=target_time.hour(),
+            minute=target_time.minute(),
+            second=0,
+            microsecond=0,
+        )
+        catchup_deadline = target_dt + timedelta(minutes=self.SCHEDULE_CATCHUP_WINDOW_MINUTES)
+        if current_dt < target_dt or current_dt >= catchup_deadline:
+            self.is_scheduled_run = False
+            self._schedule_skip_notice_key = None
+            return
+
+        slot = self._schedule_slot_for(config, current_dt)
+        if str(config.get("last_run_slot", "") or "") == slot:
+            self.is_scheduled_run = True
+            self._schedule_skip_notice_key = None
+            return
+
+        self.is_scheduled_run = bool(self._run_scheduled(slot=slot))
+
+    def _run_scheduled(self: Any, slot: str | None = None) -> bool:
+        config = self._collect_schedule_config()
+        mode = str(config.get("mode", "complex") or "complex")
+        active_slot = slot or self._schedule_slot_for(config)
         crawler_running = bool(
             hasattr(self, "crawler_tab")
             and getattr(self.crawler_tab, "crawler_thread", None)
@@ -248,13 +319,13 @@ class AppStatsScheduleMixin:
             and self.geo_tab.crawler_thread.isRunning()
         )
         if crawler_running or geo_running:
-            self.status_bar.showMessage("⏸ 예약 작업 건너뜀: 다른 크롤링이 이미 실행 중입니다.")
-            ui_logger.info(
-                f"예약 작업 스킵: crawler_running={crawler_running}, geo_running={geo_running}"
+            self._remember_schedule_skip(
+                active_slot,
+                "busy",
+                "⏸ 예약 작업 건너뜀: 다른 크롤링이 이미 실행 중입니다.",
             )
-            return
+            return False
 
-        config = self._save_schedule_config()
         if mode == "geo_sweep":
             geo = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
             self.tabs.setCurrentWidget(self.geo_tab)
@@ -265,19 +336,22 @@ class AppStatsScheduleMixin:
                 rings=int(geo.get("rings", settings.get("geo_grid_rings", 1) or 1)),
                 step_px=int(geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)),
                 dwell_ms=int(geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600)),
-                asset_types=geo.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]),
+                asset_types=self._normalize_geo_asset_types(
+                    geo.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"])
+                ),
                 persist_last=False,
             )
             self.geo_tab.start_crawling()
+            self._mark_schedule_run_started(config, active_slot)
             self.status_bar.showMessage(
                 f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
             )
-            return
+            return True
 
-        gid = self.schedule_group_combo.currentData()
+        gid = config.get("group_id", self.schedule_group_combo.currentData())
         if gid is None:
-            self.status_bar.showMessage("⏸ 예약 작업 중단: 선택된 그룹이 없습니다.")
-            return
+            self._remember_schedule_skip(active_slot, "missing_group", "⏸ 예약 작업 중단: 선택된 그룹이 없습니다.")
+            return False
 
         self.tabs.setCurrentWidget(self.crawler_tab)
         self.crawler_tab.clear_tasks()
@@ -296,10 +370,16 @@ class AppStatsScheduleMixin:
             self.status_bar.showMessage(msg)
             ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
         if loaded_count <= 0:
-            self.status_bar.showMessage("⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.")
-            return
+            self._remember_schedule_skip(
+                active_slot,
+                "no_target",
+                "⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.",
+            )
+            return False
         self.crawler_tab.start_crawling()
+        self._mark_schedule_run_started(config, active_slot)
         self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
+        return True
 
 
     def _update_group_empty_state(self: Any):

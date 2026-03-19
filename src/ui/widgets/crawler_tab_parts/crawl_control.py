@@ -561,6 +561,10 @@ class CrawlerTabCrawlControlMixin:
         row = self.result_table.currentRow()
         if row < 0:
             return
+        payload = self._row_payload_cache[row] if row < len(self._row_payload_cache) else {}
+        if payload and callable(getattr(self, "article_open_handler", None)):
+            self.article_open_handler(payload)
+            return
         item = self.result_table.item(row, self.COL_URL)
         url = item.text() if item else ""
         if url:

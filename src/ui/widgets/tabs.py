@@ -13,11 +13,12 @@ logger = get_logger("FavoritesTab")
 class FavoritesTab(QWidget):
     """즐겨찾기 탭 (v13.0)"""
     
-    def __init__(self, db, theme="dark", parent=None, favorite_toggled=None):
+    def __init__(self, db, theme="dark", parent=None, favorite_toggled=None, article_open_handler=None):
         super().__init__(parent)
         self.db = db
         self._theme = theme
         self._favorite_toggled = favorite_toggled
+        self._article_open_handler = article_open_handler
         self._setup_ui()
     
     def _setup_ui(self):
@@ -204,6 +205,22 @@ class FavoritesTab(QWidget):
         
         item_data = item.data(Qt.ItemDataRole.UserRole)
         if item_data:
+            article_payload = {
+                "단지명": str(item_data.get("complex_name", "") or ""),
+                "단지ID": str(item_data.get("complex_id", "") or ""),
+                "매물ID": str(item_data.get("article_id", "") or ""),
+                "자산유형": str(item_data.get("asset_type", "APT") or "APT").strip().upper() or "APT",
+                "거래유형": str(item_data.get("trade_type", "") or ""),
+                "매매가": str(item_data.get("price_text", "") or "") if str(item_data.get("trade_type", "") or "") == "매매" else "",
+                "보증금": str(item_data.get("price_text", "") or "") if str(item_data.get("trade_type", "") or "") != "매매" else "",
+                "월세": "",
+                "면적(평)": item_data.get("area_pyeong", 0),
+                "층/방향": str(item_data.get("floor_info", "") or ""),
+                "타입/특징": str(item_data.get("feature_text", "") or ""),
+            }
+            if callable(self._article_open_handler):
+                self._article_open_handler(article_payload)
+                return
             url = get_article_url(
                 item_data.get("complex_id", ""),
                 item_data.get("article_id", ""),

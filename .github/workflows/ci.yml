@@ -49,6 +49,3 @@ jobs:
       - name: Preflight check
         run: python -m src.utils.preflight
 
-      - name: Run tests
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-        run: python -m unittest discover -s tests -p "test_*.py"

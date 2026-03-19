@@ -336,8 +336,8 @@ COLORS["light"] = {
 - UI:
   - DB 탭 삭제 UX에 확인 모달 + `관련 이력까지 삭제` 옵션(기본 off) 추가.
 - CI:
-  - push에서는 테스트 미실행 유지.
-  - 테스트 실행 이벤트를 `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`로 확장.
+  - GitHub CI는 현재 테스트를 실행하지 않습니다.
+  - 수행 범위는 정적 검사와 preflight 점검입니다.
 
 ## 0-8. v15.0.4 Crawling Risk Audit + Split Refactor Notes (2026-03-07)
 - 크롤링/스크래핑 감사 리포트 추가: `crawling_scraping_risk_audit_2026-03-07.md`
@@ -481,7 +481,7 @@ COLORS["light"] = {
   - Disappeared marking is skipped when there are zero successfully validated pairs.
 - Packaging/docs:
   - `naverland-scrapper.spec` was rechecked after the runtime-safety rollout; no hidden import/runtime hook changes were required.
-  - Slim packaging remains the default, but a Playwright runtime still needs either local Chromium or a bundled Chromium build.
+  - The default packaging profile remains `onedir + bundled Chromium`; slim builds still require either local Chromium or an explicit bundled-Chromium build when `playwright` is the effective engine.
 - Validation:
   - `pytest -q` => `149 passed`
 
@@ -528,3 +528,25 @@ COLORS["light"] = {
   - `.gitignore` now ignores `*.json.tmp` and `*.json.broken.*` runtime artifacts
 - Validation:
   - `pytest -q` => `176 passed`
+
+## 0-18. v15.0.16 Functional Consistency Pass (2026-03-19)
+- Article-open / recently-viewed contract:
+  - article open is now routed through a single app-level handler
+  - crawler result table double-click, crawler cards, recent-view dialog cards, and favorites-tab open all feed the same recently-viewed tracking path
+  - `RecentlyViewedManager` now dedupes on `(asset_type, complex_id, article_id)` and respects `recently_viewed_count`
+- Schedule contract:
+  - scheduled runs now use a persisted slot model with a fixed 10-minute catch-up window
+  - `schedule_config` stores `last_run_slot` and `last_run_at`
+  - busy / invalid / no-target skips do not consume the slot, so retries can happen inside the same window
+- Dashboard / settings contract:
+  - `DashboardWidget.refresh()` explicitly clears stale cards/charts/trend text when `_data` is empty
+  - `show_trend_analysis` now controls `trend_frame` visibility at runtime
+  - trend text is a deterministic summary of total/new/up/down/disappeared + dominant trade type
+  - `result_tab_mode` is deprecated and scrubbed from persisted settings; `startup_lazy_noncritical_tabs` remains a legacy no-op key while only the dashboard still loads lazily
+- Packaging / ignore / CI review:
+  - `naverland-scrapper.spec` still needs no extra hidden imports/runtime hooks/data bundles for this batch
+  - `.gitignore` current rules remain sufficient for PyInstaller/build/log/runtime artifacts; no new ignore patterns were needed
+  - GitHub CI currently runs static checks and preflight only; tests are not executed there
+- Validation:
+  - `python -m pytest -q` => `182 passed`
+  - `npx pyright` => `0 errors`

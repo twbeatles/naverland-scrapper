@@ -98,6 +98,7 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertTrue(settings.get("geo_incomplete_safety_mode"))
             self.assertFalse(settings.get("startup_lazy_noncritical_tabs"))
             self.assertTrue(settings.get("compact_duplicate_listings"))
+            self.assertIsNone(settings.get("result_tab_mode"))
             settings.update(
                 {
                     "history_batch_size": 320,
@@ -106,6 +107,7 @@ class TestCacheAndManagers(unittest.TestCase):
                     "geo_incomplete_safety_mode": False,
                     "startup_lazy_noncritical_tabs": False,
                     "compact_duplicate_listings": False,
+                    "result_tab_mode": "combined",
                 }
             )
             self.assertEqual(settings.get("history_batch_size"), 320)
@@ -114,6 +116,7 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertFalse(settings.get("geo_incomplete_safety_mode"))
             self.assertFalse(settings.get("startup_lazy_noncritical_tabs"))
             self.assertFalse(settings.get("compact_duplicate_listings"))
+            self.assertIsNone(settings.get("result_tab_mode"))
 
             presets = FilterPresetManager()
             presets.add("기본", {"trade": "매매"})
@@ -193,13 +196,17 @@ class TestCacheAndManagers(unittest.TestCase):
     def test_recently_viewed_manager(self):
         storage_path = self.tmp_path / "recently_viewed.json"
         with patch.object(RecentlyViewedManager, "STORAGE_PATH", storage_path):
-            mgr = RecentlyViewedManager()
-            mgr.add({"매물ID": "A1", "단지명": "단지A"})
-            mgr.add({"매물ID": "A2", "단지명": "단지A"})
+            mgr = RecentlyViewedManager(max_items=2)
+            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A"})
+            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "VL", "단지명": "단지A"})
+            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A-최신"})
+            mgr.add({"매물ID": "A2", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A"})
 
-            rows = mgr.get_recent(10)
+            rows = mgr.get_recent()
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]["매물ID"], "A2")
+            self.assertEqual(rows[1]["자산유형"], "APT")
+            self.assertEqual(rows[1]["단지명"], "단지A-최신")
 
     def test_settings_manager_recovers_from_broken_json_and_quarantines_file(self):
         settings_path = self.tmp_path / "settings.json"

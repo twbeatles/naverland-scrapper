@@ -17,13 +17,22 @@ class CrawlerTabUISetupMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
-    def __init__(self: Any, db, history_manager=None, theme="dark", parent=None, maintenance_guard=None):
+    def __init__(
+        self: Any,
+        db,
+        history_manager=None,
+        theme="dark",
+        parent=None,
+        maintenance_guard=None,
+        article_open_handler=None,
+    ):
         base_init: Any = super().__init__
         base_init(parent)
         self.db = db
         self.history_manager = history_manager
         self.current_theme = theme
         self._maintenance_guard = maintenance_guard
+        self.article_open_handler = article_open_handler
         self.crawler_thread: Any | None = None
         self.crawl_cache: Any | None = None
         self.collected_data: list[ResultRow] = []
@@ -569,9 +578,12 @@ class CrawlerTabUISetupMixin:
         self.view_stack.addWidget(self.result_table)
         
         self.card_view = CardViewWidget(is_dark=(self.current_theme == "dark"))
-        self.card_view.article_clicked.connect(
-            lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
-        )
+        if callable(self.article_open_handler):
+            self.card_view.article_clicked.connect(self.article_open_handler)
+        else:
+            self.card_view.article_clicked.connect(
+                lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
+            )
         self.view_stack.addWidget(self.card_view)
         
         if self.view_mode == "card":

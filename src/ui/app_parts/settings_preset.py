@@ -91,6 +91,10 @@ class AppSettingsPresetMixin:
             self.crawler_tab.update_runtime_settings()
         if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'update_runtime_settings'):
             self.geo_tab.update_runtime_settings()
+        if hasattr(self, "recently_viewed") and hasattr(self.recently_viewed, "set_max_items"):
+            self.recently_viewed.set_max_items(settings.get("recently_viewed_count", 50))
+        if self.dashboard_widget is not None and hasattr(self.dashboard_widget, "refresh"):
+            self.dashboard_widget.refresh()
     
     def _save_preset(self: Any):
         name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")

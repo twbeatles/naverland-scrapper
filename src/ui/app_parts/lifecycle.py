@@ -21,7 +21,9 @@ class AppLifecycleMixin:
         self.settings_manager = SettingsManager()
         self.preset_manager = FilterPresetManager()
         self.history_manager = SearchHistoryManager(max_items=settings.get("max_search_history", 20))
-        self.recently_viewed = RecentlyViewedManager()
+        self.recently_viewed = RecentlyViewedManager(
+            max_items=settings.get("recently_viewed_count", RecentlyViewedManager.MAX_ITEMS)
+        )
         self.advanced_filters: dict[str, Any] | None = None
         self.collected_data: list[dict[str, Any]] = []
         self.is_scheduled_run = False
@@ -34,6 +36,7 @@ class AppLifecycleMixin:
         self.favorite_keys: set[tuple[str, str, str]] = set()
         self._shortcuts: dict[str, Any] = {}
         self.schedule_timer: Any | None = None
+        self._schedule_skip_notice_key: tuple[str, str] | None = None
         self.db = ComplexDatabase()
         self._noncritical_loaded = {
             "history": True,
@@ -437,6 +440,26 @@ class AppLifecycleMixin:
             except Exception as e:
                 ui_logger.warning(f"알림 표시 실패: {e}")
 
+    def _open_article_and_track(self: Any, article: dict) -> None:
+        payload = dict(article or {})
+        complex_id = str(payload.get("단지ID", payload.get("complex_id", "")) or "").strip()
+        article_id = str(payload.get("매물ID", payload.get("article_id", "")) or "").strip()
+        asset_type = (
+            str(payload.get("자산유형", payload.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
+        )
+        if not complex_id or not article_id:
+            self.status_bar.showMessage("⏸ 매물 링크를 열 수 없습니다.")
+            return
+
+        payload["단지ID"] = complex_id
+        payload["매물ID"] = article_id
+        payload["자산유형"] = asset_type
+        try:
+            self.recently_viewed.add(payload)
+        except Exception as e:
+            ui_logger.debug(f"최근 본 매물 기록 실패 (무시): {e}")
+        webbrowser.open(get_article_url(complex_id, article_id, asset_type))
+
     def _show_recently_viewed_dialog(self: Any):
         """최근 본 매물 다이얼로그 (v13.0)"""
         dlg = QDialog(self)
@@ -446,7 +469,8 @@ class AppLifecycleMixin:
         layout = QVBoxLayout(dlg)
         
         # 안내 문구
-        info = QLabel("최근에 확인한 매물 목록입니다 (최대 50개).")
+        recent_limit = int(getattr(self.recently_viewed, "max_items", settings.get("recently_viewed_count", 50)) or 50)
+        info = QLabel(f"최근에 확인한 매물 목록입니다 (최대 {recent_limit}개).")
         info.setStyleSheet("color: #888; margin-bottom: 10px;")
         layout.addWidget(info)
         
@@ -462,9 +486,7 @@ class AppLifecycleMixin:
 
             card_view = CardViewWidget(is_dark=(self.current_theme=="dark"))
             card_view.set_data(self._decorate_items_with_favorite_state(recent_items))
-            card_view.article_clicked.connect(
-                lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
-            )
+            card_view.article_clicked.connect(self._open_article_and_track)
             card_view.favorite_toggled.connect(self._on_favorite_toggled)
             layout.addWidget(card_view)
         

@@ -215,6 +215,29 @@ python src/main.py
 - `.gitignore` 점검 결과:
   - 기존 build/log/data/Playwright 산출물 규칙은 유지하고, 개발 도구 캐시(`.mypy_cache/`, `.ruff_cache/`, `.nox/`, `node_modules/`, `coverage.xml`)를 예방적으로 추가했습니다.
 
+## v15.0.16 Functional Consistency Pass (2026-03-19)
+
+- 최근 본 매물 동선 정합화:
+  - 매물 열기 경로를 app-level handler로 통합했습니다.
+  - 결과 테이블 더블클릭, 카드뷰 클릭, 최근 본 매물 다이얼로그, 즐겨찾기 탭 열기 버튼이 모두 같은 최근 본 매물 기록 경로를 사용합니다.
+  - `recently_viewed_count`가 실제 저장/표시 최대 개수에 반영되고, dedupe 키는 `(asset_type, complex_id, article_id)`로 고정됩니다.
+- 예약 실행 안정화:
+  - exact-minute match 대신 slot 기반 catch-up window(10분)로 동작합니다.
+  - `schedule_config`에는 `last_run_slot`, `last_run_at` 내부 메타가 저장됩니다.
+  - busy / no-target skip은 같은 window 안에서 재시도 가능하며, 실제 시작된 경우에만 slot을 소비합니다.
+- 대시보드 / 설정 정합화:
+  - 빈 데이터 진입 시 카드/차트/trend 문구를 명시적으로 clear 하도록 정리했습니다.
+  - `show_trend_analysis`가 실제 trend frame visibility를 제어합니다.
+  - trend 영역은 placeholder 대신 현재 집계 기반 summary를 표시합니다.
+  - `result_tab_mode`는 deprecated key로 제거했고, `startup_lazy_noncritical_tabs`는 레거시 no-op 키로만 유지됩니다.
+- Packaging / docs / ignore review:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않았습니다.
+  - `.gitignore`는 현재 build/log/data/Playwright/runtime artifact 규칙으로 충분하며 새 ignore 패턴은 추가하지 않았습니다.
+  - GitHub CI는 현재 테스트를 실행하지 않고, 정적 검사와 preflight 점검만 수행합니다.
+- Validation:
+  - `python -m pytest -q` => `182 passed`
+  - `npx pyright` => `0 errors`
+
 
 ## v15.0.1 Runtime Notes (2026-03-06)
 
@@ -244,7 +267,7 @@ python src/main.py
 - Playwright 경로에 메모리 워치독(500MB)을 추가해 임계치 초과 시 browser/context/page pool을 recycle하고 통계(`playwright_recycle_count`, `playwright_last_recycle_reason`)를 노출합니다.
 - DB `complexes`는 `(asset_type, complex_id)` 복합 unique로 자동 마이그레이션되며, legacy row는 `asset_type='APT'`로 승격됩니다.
 - DB 탭 삭제 UX에 확인 모달과 `관련 이력까지 삭제` 옵션(기본 off)을 추가했습니다.
-- CI는 push 시 테스트 미실행 정책을 유지하고, `pull_request`, `workflow_dispatch`, nightly `schedule(UTC 18:00)`에서 테스트를 실행합니다.
+- GitHub CI는 현재 테스트를 실행하지 않고, 정적 검사와 preflight 점검만 수행합니다.
 - `naverland-scrapper.spec`은 이번 반영 범위에서 추가 수정 없이 현재 설정(Playwright hidden import/runtime hook/Chromium bundle)으로 유지합니다.
 
 ## v15.0.4 Crawling Audit Notes (2026-03-07)

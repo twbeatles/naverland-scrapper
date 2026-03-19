@@ -1,3 +1,46 @@
+## **v15.0.16 (2026-03-19)**
+
+**기능 정합성 배치 + 문서/.spec/.gitignore 재점검**
+
+### ✅ 핵심 반영
+
+* 최근 본 매물 동선 통합
+  - app-level `_open_article_and_track()` 경로를 추가해 결과 테이블 더블클릭, 카드뷰 클릭, 최근 본 매물 다이얼로그, 즐겨찾기 탭 열기를 모두 같은 경로로 통일
+  - `RecentlyViewedManager` dedupe 기준을 `(asset_type, complex_id, article_id)`로 확장
+  - `recently_viewed_count`가 실제 저장/표시 개수와 안내 문구에 반영
+* 예약 실행 안정화
+  - exact-minute match를 제거하고 10분 catch-up window 기반 slot 스케줄링으로 전환
+  - `schedule_config.last_run_slot`, `schedule_config.last_run_at` 내부 메타를 저장
+  - busy / no-target skip은 slot을 소비하지 않아 같은 window 안 재시도 가능
+* 대시보드/설정 정합화
+  - 대시보드 empty refresh 시 카드/차트/trend 상태를 명시적으로 clear
+  - `show_trend_analysis`가 실제 trend frame visibility를 제어
+  - trend 텍스트를 현재 집계 기반 summary로 고정
+  - `result_tab_mode`는 deprecated key로 제거, `startup_lazy_noncritical_tabs`는 레거시 no-op 키로 유지
+
+### 📦 .spec / 문서 / 무시규칙 정합성
+
+* `.spec` 재점검 결과:
+  - `naverland-scrapper.spec`는 이번 범위에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - 최근 본 매물 공통 open handler, schedule slot 메타, dashboard stale-state clear는 모두 runtime/UI 레벨 변경으로 분류
+* 문서 동기화:
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 동일 기준 반영
+  - 최신 기준:
+    - 기본 PyInstaller 프로필은 `onedir + Chromium bundle`
+    - GitHub CI는 테스트 미실행, 정적 검사 + preflight만 수행
+    - `result_tab_mode`는 deprecated
+    - `startup_lazy_noncritical_tabs`는 레거시 호환용 no-op 키
+* `.gitignore` 재점검 결과:
+  - 현재 build/log/data/Playwright/runtime artifact 규칙으로 충분
+  - 이번 범위에서는 새 ignore 패턴 추가 없이 재점검 메모만 반영
+
+### 🧪 검증
+
+* `python -m pytest -q`
+  - 결과: `182 passed`
+* `npx pyright`
+  - 결과: `0 errors`
+
 ## **v15.0.14 (2026-03-17)**
 
 **Startup preflight 경량화 + Dashboard 지연 로드 + Playwright 상세 수집 범위 최적화**

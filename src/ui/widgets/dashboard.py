@@ -17,6 +17,7 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 from src.utils.constants import TRADE_COLORS
+from src.core.managers import SettingsManager
 from src.utils.helpers import PriceConverter
 from src.utils.logger import get_logger
 from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
@@ -24,6 +25,7 @@ from src.ui.styles import COLORS
 from src.ui.widgets.components import EmptyStateWidget
 
 logger = get_logger("Dashboard")
+settings = SettingsManager()
 
 class StatCard(QFrame):
     def __init__(self, parent=None):
@@ -131,6 +133,7 @@ class DashboardWidget(QWidget):
         self.trend_label.setWordWrap(True)
         trend_layout.addWidget(self.trend_label)
         layout.addWidget(self.trend_frame)
+        self.trend_frame.setVisible(bool(settings.get("show_trend_analysis", True)))
 
         # 빈 상태 안내
         self.empty_label = EmptyStateWidget(
@@ -292,26 +295,83 @@ class DashboardWidget(QWidget):
         self._last_price_chart_sig = None
         # 차트 색상 업데이트
         self.refresh()
+
+    @staticmethod
+    def _set_card_value(card, text: str):
+        child = getattr(card, "_value_label", None)
+        if child is not None:
+            child.setText(text)
+
+    def _clear_chart(self, figure, canvas, placeholder, message: str):
+        if placeholder is not None:
+            placeholder.setText(message)
+        if figure is None or canvas is None:
+            return
+        try:
+            figure.clear()
+            ax = figure.add_subplot(111)
+            ax.axis("off")
+            text_color = "white" if self._theme == "dark" else "black"
+            ax.text(0.5, 0.5, message, ha="center", va="center", color=text_color)
+            figure.tight_layout()
+            canvas.draw()
+        except Exception as e:
+            logger.debug(f"대시보드 차트 초기화 실패 (무시): {e}")
+
+    def _clear_dashboard(self):
+        self._set_card_value(self.total_card, "0")
+        self._set_card_value(self.new_card, "0")
+        self._set_card_value(self.up_card, "0")
+        self._set_card_value(self.down_card, "0")
+        self._set_card_value(self.disappeared_card, "0")
+        self._last_trade_chart_sig = None
+        self._last_price_chart_sig = None
+        self._clear_chart(self.trade_figure, self.trade_canvas, self._trade_placeholder, "데이터가 없습니다.")
+        self._clear_chart(self.price_figure, self.price_canvas, self._price_placeholder, "데이터가 없습니다.")
+        self.trend_label.setText("총 매물 0건\n신규 0건 · 상승 0건 · 하락 0건 · 소멸 0건\n최다 거래유형: 없음")
+
+    @staticmethod
+    def _dominant_trade_type(trade_counts: dict) -> str:
+        dominant_label = ""
+        dominant_count = 0
+        for label, count in trade_counts.items():
+            numeric_count = int(count or 0)
+            if numeric_count > dominant_count:
+                dominant_label = str(label)
+                dominant_count = numeric_count
+        if dominant_count <= 0:
+            return "없음"
+        return f"{dominant_label} ({dominant_count}건)"
+
+    def _trend_summary_text(self, stats: dict, disappeared_count: int) -> str:
+        return (
+            f"총 매물 {int(stats.get('total', 0) or 0)}건\n"
+            f"신규 {int(stats.get('new_count', 0) or 0)}건 · "
+            f"상승 {int(stats.get('price_up', 0) or 0)}건 · "
+            f"하락 {int(stats.get('price_down', 0) or 0)}건 · "
+            f"소멸 {int(disappeared_count or 0)}건\n"
+            f"최다 거래유형: {self._dominant_trade_type(stats.get('trade_counts', {}))}"
+        )
     
     def refresh(self):
         """대시보드 새로고침"""
+        show_trend = bool(settings.get("show_trend_analysis", True))
+        self.trend_frame.setVisible(show_trend)
         if not self._data:
+            self._clear_dashboard()
             self.empty_label.show()
             return
         self.empty_label.hide()
 
         stats = self._build_stats_snapshot()
+        disappeared_count = self._get_disappeared_count()
 
-        def safe_set_text(card, text):
-            child = getattr(card, "_value_label", None)
-            if child is not None:
-                child.setText(text)
-
-        safe_set_text(self.total_card, str(stats["total"]))
-        safe_set_text(self.new_card, str(stats["new_count"]))
-        safe_set_text(self.up_card, str(stats["price_up"]))
-        safe_set_text(self.down_card, str(stats["price_down"]))
-        safe_set_text(self.disappeared_card, str(self._get_disappeared_count()))
+        self._set_card_value(self.total_card, str(stats["total"]))
+        self._set_card_value(self.new_card, str(stats["new_count"]))
+        self._set_card_value(self.up_card, str(stats["price_up"]))
+        self._set_card_value(self.down_card, str(stats["price_down"]))
+        self._set_card_value(self.disappeared_card, str(disappeared_count))
+        self.trend_label.setText(self._trend_summary_text(stats, disappeared_count))
 
         if self._ensure_chart_canvases():
             try:
