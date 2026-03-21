@@ -98,6 +98,63 @@ def _benchmark_card_render(app):
     return {"items": 1000, "set_data_elapsed_sec": elapsed}
 
 
+def _benchmark_compact_live_batches(app):
+    from src.core.database import ComplexDatabase
+    from src.ui.widgets.crawler_tab import CrawlerTab
+
+    def _make_batch(start_index: int):
+        batch = []
+        for i in range(start_index, start_index + 30):
+            batch.append(
+                {
+                    "단지명": f"테스트단지{i}",
+                    "단지ID": "11111",
+                    "거래유형": "매매",
+                    "매매가": str(10000 + i),
+                    "보증금": "",
+                    "월세": "",
+                    "면적(평)": 34.0,
+                    "평당가_표시": "294만",
+                    "층/방향": "10층 남향",
+                    "타입/특징": "테스트",
+                    "매물ID": f"A{i}",
+                    "수집시각": "2026-02-20 10:00:00",
+                    "is_new": False,
+                    "price_change": 0,
+                    "자산유형": "APT",
+                }
+            )
+        return batch
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = ComplexDatabase(os.path.join(tmp, "perf_compact_batches.db"))
+        tab = CrawlerTab(db)
+        tab._compact_duplicates = True
+        tab.view_mode = "table"
+        tab.btn_view_mode.setChecked(False)
+        tab.view_stack.setCurrentWidget(tab.result_table)
+
+        start = time.perf_counter()
+        for start_index in range(0, 3000, 30):
+            tab._on_items_batch(_make_batch(start_index))
+        app.processEvents()
+        elapsed = time.perf_counter() - start
+
+        rows = tab.result_table.rowCount()
+        groups = len(getattr(tab, "_compact_items_by_key", {}) or {})
+        db.close()
+        tab.deleteLater()
+        app.processEvents()
+
+    return {
+        "items": 3000,
+        "batch_size": 30,
+        "groups": groups,
+        "rows": rows,
+        "elapsed_sec": elapsed,
+    }
+
+
 def _benchmark_app_init(app):
     start = time.perf_counter()
     window = RealEstateApp()
@@ -169,6 +226,7 @@ def main():
         "parser": _benchmark_parser(),
         "cache": _benchmark_cache(),
         "card_render": _benchmark_card_render(app),
+        "compact_live_batches": _benchmark_compact_live_batches(app),
         "preflight_startup": _benchmark_preflight_startup(),
         "app_startup_without_dashboard": _benchmark_app_startup_without_dashboard(app),
         "dashboard_first_open": _benchmark_dashboard_first_open(app),
@@ -184,6 +242,7 @@ def main():
     print(f"- cache set(100): {results['cache']['set_100_elapsed_sec']:.4f}s")
     print(f"- cache flush: {results['cache']['flush_elapsed_sec']:.4f}s")
     print(f"- card set_data(1000): {results['card_render']['set_data_elapsed_sec']:.4f}s")
+    print(f"- compact live batches(3000/30): {results['compact_live_batches']['elapsed_sec']:.4f}s")
     print(f"- preflight startup: {results['preflight_startup']['elapsed_sec']:.4f}s")
     print(f"- app startup(no dashboard): {results['app_startup_without_dashboard']['init_elapsed_sec']:.4f}s")
     print(f"- dashboard first open: {results['dashboard_first_open']['open_elapsed_sec']:.4f}s")

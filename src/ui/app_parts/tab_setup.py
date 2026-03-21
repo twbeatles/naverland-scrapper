@@ -621,8 +621,10 @@ class AppTabSetupMixin:
         if self.collected_data:
             self.dashboard_widget.set_data(self.collected_data)
 
-    def _refresh_tab(self: Any):
-        index = self.tabs.currentIndex()
+    def _refresh_tab(self: Any, index=None):
+        force = index is None
+        if index is None:
+            index = self.tabs.currentIndex()
         if index == self.TAB_GEO:
             return
         if index == self.TAB_DB:
@@ -630,18 +632,31 @@ class AppTabSetupMixin:
         elif index == self.TAB_GROUP:
             self._ensure_group_tab().load_groups()
         elif index == self.TAB_HISTORY:
+            if not force and self._noncritical_loaded.get("history", False):
+                return
             self._load_history()
+            self._mark_noncritical_loaded("history")
         elif index == self.TAB_STATS:
+            if not force and self._noncritical_loaded.get("stats", False):
+                return
             try:
+                self._load_stats_complexes()
                 self._load_stats()
+                self._mark_noncritical_loaded("stats")
             except Exception as e:
                 ui_logger.exception(f"통계 탭 로드 실패: {e}")
                 self.status_bar.showMessage("⚠️ 통계 탭 로드 중 오류가 발생했습니다.")
         elif index == self.TAB_DASHBOARD:
+            if not force and self._noncritical_loaded.get("dashboard", False):
+                return
             self._ensure_dashboard_widget()
             if self.dashboard_widget is not None:
-                self.dashboard_widget.refresh()
+                self.dashboard_widget.set_data(self.collected_data)
+                self._mark_noncritical_loaded("dashboard")
         elif index == self.TAB_FAVORITES:
+            if not force and self._noncritical_loaded.get("favorites", False):
+                return
             self.favorites_tab.refresh()
+            self._mark_noncritical_loaded("favorites")
 
 

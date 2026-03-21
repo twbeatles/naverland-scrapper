@@ -547,6 +547,30 @@ class ComplexDatabaseArticleOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
+    def get_favorite_keys(self):
+        conn = self._pool.get_connection()
+        try:
+            rows = conn.cursor().execute(
+                """
+                SELECT COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, article_id, complex_id
+                FROM article_favorites
+                WHERE is_favorite = 1
+                """
+            ).fetchall()
+            keys = set()
+            for row in rows:
+                article_id = str(row["article_id"] or "")
+                complex_id = str(row["complex_id"] or "")
+                asset_type = self._normalize_listing_asset_type(row["asset_type"])
+                if article_id and complex_id:
+                    keys.add((asset_type, article_id, complex_id))
+            return keys
+        except Exception as e:
+            logger.error(f"favorite key read failed: {e}")
+            return set()
+        finally:
+            self._pool.return_connection(conn)
+
     def get_article_favorite_info(self, article_id, complex_id, asset_type="APT"):
         asset_token = self._normalize_listing_asset_type(asset_type)
         conn = self._pool.get_connection()

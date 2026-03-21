@@ -1,6 +1,6 @@
-# Rechecked 2026-03-19:
+# Rechecked 2026-03-21:
 # current build/log/data/Playwright/runtime-artifact ignore rules remain sufficient
-# for the spec/doc/functional consistency pass and local PyInstaller builds.
+# for the performance-refactor/doc/spec pass and local PyInstaller builds.
 # Python
 __pycache__/
 *.py[cod]

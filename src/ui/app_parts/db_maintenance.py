@@ -155,11 +155,7 @@ class AppDatabaseMaintenanceMixin:
             group_tab = getattr(self, "group_tab", None)
             if group_tab is not None:
                 group_tab.load_groups()
-            favorites_tab = getattr(self, "favorites_tab", None)
-            if favorites_tab is not None:
-                favorites_tab.refresh()
-            if self.dashboard_widget is not None:
-                self.dashboard_widget.refresh()
+            self._refresh_tab(self.tabs.currentIndex())
             self.status_bar.showMessage("✅ DB 복원 완료!")
             QMessageBox.information(self, "복원 완료", "DB 복원이 완료되었습니다!")
             ui_logger.info("DB 복원 완료")

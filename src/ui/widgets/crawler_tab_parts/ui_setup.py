@@ -46,6 +46,12 @@ class CrawlerTabUISetupMixin:
         self._compact_duplicates: bool = bool(settings.get("compact_duplicate_listings", True))
         self._compact_items_by_key: dict[CompactRowKey, ResultRow] = {}
         self._compact_rows_data: list[ResultRow] = []
+        self._compact_row_index_by_key: dict[CompactRowKey, int] = {}
+        self._compact_source_keys_by_key: dict[CompactRowKey, set[FavoriteKey]] = {}
+        self._compact_key_by_article: dict[FavoriteKey, set[CompactRowKey]] = {}
+        self._compact_dirty_keys: set[CompactRowKey] = set()
+        self._compact_full_refresh_pending: bool = False
+        self._card_refresh_pending: bool = False
         self.favorite_keys_provider: FavoriteKeyProvider | None = None
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -55,6 +61,14 @@ class CrawlerTabUISetupMixin:
             debounce_ms = 220
         self._search_timer.setInterval(debounce_ms)
         self._search_timer.timeout.connect(self._apply_search_filter)
+        self._compact_refresh_timer = QTimer(self)
+        self._compact_refresh_timer.setSingleShot(True)
+        self._compact_refresh_timer.setInterval(60)
+        self._compact_refresh_timer.timeout.connect(self._flush_compact_updates)
+        self._card_refresh_timer = QTimer(self)
+        self._card_refresh_timer.setSingleShot(True)
+        self._card_refresh_timer.setInterval(180)
+        self._card_refresh_timer.timeout.connect(self._flush_card_view_refresh)
         self._splitter_save_timer = QTimer(self)
         self._splitter_save_timer.setSingleShot(True)
         self._splitter_save_timer.setInterval(250)

@@ -431,7 +431,7 @@ COLORS["light"] = {
 - UI/module baseline:
   - `CardViewWidget`, `ArticleCard`는 `src/ui/widgets/cards.py` 소속.
   - `src/ui/widgets/dashboard.py`는 대시보드 집계/차트 위젯 전용.
-  - `startup_lazy_noncritical_tabs`는 레거시 호환용 `False` 고정 키만 유지하고, 현재는 대시보드만 첫 진입 시 생성됩니다.
+  - `startup_lazy_noncritical_tabs`는 레거시 호환용 `False` 고정 키만 유지하고, 현재는 대시보드만 첫 진입 시 생성되며 history/stats/favorites는 hidden-tab stale refresh 정책으로 다음 진입 때 갱신됩니다.
 - Performance baseline:
   - 대시보드는 통계 캐시 + 소멸 count TTL 캐시 + 지연 차트 캔버스 + 첫 탭 진입 시 위젯 생성 사용.
   - 일반 앱 시작은 lightweight preflight를 사용하고 `--preflight`는 full internal import smoke를 유지합니다.
@@ -481,11 +481,27 @@ COLORS["light"] = {
   - `DashboardWidget.refresh()` explicitly clears stale cards/charts/trend text when `_data` is empty
   - `show_trend_analysis` now controls `trend_frame` visibility at runtime
   - trend text is a deterministic summary of total/new/up/down/disappeared + dominant trade type
-  - `result_tab_mode` is deprecated and scrubbed from persisted settings; `startup_lazy_noncritical_tabs` remains a legacy no-op key while only the dashboard still loads lazily
+  - `result_tab_mode` is deprecated and scrubbed from persisted settings; `startup_lazy_noncritical_tabs` remains a legacy no-op key while dashboard is still first-open lazy and history/stats/favorites use hidden-tab stale refresh
 - Packaging / ignore / CI review:
   - `naverland-scrapper.spec` still needs no extra hidden imports/runtime hooks/data bundles for this batch
   - `.gitignore` current rules remain sufficient for PyInstaller/build/log/runtime artifacts; no new ignore patterns were needed
   - GitHub CI currently runs static checks and preflight only; tests are not executed there
 - Validation:
   - `python -m pytest -q` => `182 passed`
+
+## 0-19. v15.0.17 Performance Refactor (2026-03-21)
+- Compact live rendering:
+  - `compact_duplicate_listings=True` 경로는 배치마다 전체 테이블을 다시 그리지 않고 `dirty key -> row` 증분 갱신을 사용합니다.
+  - compact 신규 row는 실시간 수집 중 append 중심으로 반영하고, 전체 정렬 재구성은 사용자 정렬 변경이나 수집 완료 시점에만 수행합니다.
+  - card view는 현재 보이는 경우에만 coalesced timer로 다시 그리며, table view에서는 hidden card refresh를 생략합니다.
+- Favorites / app refresh policy:
+  - `ComplexDatabase.get_favorite_keys()`가 경량 `(asset_type, article_id, complex_id)` 집합을 직접 반환합니다.
+  - app-level favorite toggle은 crawler/geo 결과 전체 rebuild 대신 해당 key의 collected/card state만 갱신합니다.
+  - `history`, `stats`, `favorites`, `dashboard`는 crawl/restore 이후 hidden 상태면 즉시 refresh하지 않고 stale로 표시한 뒤 다음 탭 진입 때 1회만 갱신합니다.
+- Benchmarks / validation:
+  - `scripts/perf_baseline.py`에 `compact_live_batches(3000/30)` 지표를 추가했습니다.
+  - 2026-03-21 baseline: `compact_live_batches(3000/30) ~= 0.1572s`
+  - Validation:
+    - `python -m pytest tests/test_ui_wiring.py -q` => `47 passed`
+    - `python -m pytest tests/test_performance_smoke.py -q` => `3 passed`
   - `npx pyright` => `0 errors`

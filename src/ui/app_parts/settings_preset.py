@@ -214,6 +214,9 @@ class AppSettingsPresetMixin:
 
     def _refresh_favorite_keys(self: Any):
         try:
+            if hasattr(self.db, "get_favorite_keys"):
+                self.favorite_keys = set(self.db.get_favorite_keys() or set())
+                return
             favorites = self.db.get_favorites()
             keys = set()
             for fav in favorites:
@@ -256,11 +259,18 @@ class AppSettingsPresetMixin:
             else:
                 self.favorite_keys.discard(key)
             if hasattr(self, "crawler_tab"):
-                self.crawler_tab._rebuild_result_views_from_collected_data()
+                self.crawler_tab._update_favorite_state_for_key(key, is_fav)
             if hasattr(self, "geo_tab"):
-                self.geo_tab._rebuild_result_views_from_collected_data()
+                self.geo_tab._update_favorite_state_for_key(key, is_fav)
             if hasattr(self, 'favorites_tab'):
-                self.favorites_tab.refresh()
+                if self.tabs.currentWidget() is self.favorites_tab:
+                    self.favorites_tab.refresh()
+                    if hasattr(self, "_noncritical_loaded"):
+                        self._noncritical_loaded["favorites"] = True
+                elif hasattr(self, "_mark_noncritical_stale"):
+                    self._mark_noncritical_stale("favorites")
+                elif hasattr(self, "_noncritical_loaded"):
+                    self._noncritical_loaded["favorites"] = False
     
     def _check_advanced_filter(self: Any, d):
         if hasattr(self, "crawler_tab"):

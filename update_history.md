@@ -1,3 +1,33 @@
+## **v15.0.17 (2026-03-21)**
+
+**성능 최적화 리팩토링 + hidden-tab stale refresh 동기화**
+
+### 주요 반영
+
+* compact 실시간 렌더링 최적화
+  - `compact_duplicate_listings=True` 경로에서 배치마다 전체 재렌더하던 흐름을 제거하고 `dirty key -> row` 증분 갱신으로 전환
+  - compact 신규 row는 실시간 수집 중 append 중심으로 반영하고, 전체 정렬 재구성은 사용자 정렬 변경 또는 수집 완료 시점에만 수행
+  - card view는 현재 보이는 경우에만 coalesced timer로 다시 그리며, table view에서는 hidden card refresh를 생략
+* 즐겨찾기/결과 갱신 비용 축소
+  - `ComplexDatabase.get_favorite_keys()` 추가: 경량 `(asset_type, article_id, complex_id)` 집합 조회
+  - app-level favorite toggle이 crawler/geo result 전체 rebuild 대신 해당 key의 collected/card state만 갱신
+* hidden-tab stale refresh 정책 적용
+  - `history`, `stats`, `favorites`, `dashboard`는 crawl 완료나 DB restore 이후 hidden 상태면 즉시 refresh하지 않고 stale로만 표시
+  - 다음 탭 진입 시 1회만 refresh하며, 현재 보고 있는 탭만 즉시 갱신
+* 계측/테스트 보강
+  - `scripts/perf_baseline.py`에 `compact_live_batches(3000/30)` 지표 추가
+  - `tests/test_ui_wiring.py`에 favorite toggle 부분 갱신 / hidden-tab stale refresh 회귀 테스트 추가
+  - `tests/test_performance_smoke.py`에 compact unique 3000/30 batch smoke 추가
+
+### 검증
+
+* `python -m pytest tests/test_ui_wiring.py -q`
+  - 결과: `47 passed`
+* `python -m pytest tests/test_performance_smoke.py -q`
+  - 결과: `3 passed`
+* `python scripts/perf_baseline.py`
+  - 기준치: `compact_live_batches(3000/30) = 0.1572s`
+
 ## **v15.0.16 (2026-03-19)**
 
 **기능 정합성 배치 + 문서/.spec/.gitignore 재점검**

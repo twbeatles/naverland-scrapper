@@ -140,6 +140,7 @@ _rebind_inherited_methods(
     "toggle_favorite",
     "update_article_note",
     "get_favorites",
+    "get_favorite_keys",
     "_integrity_check_file",
     "_validate_restored_database",
     "backup_database",

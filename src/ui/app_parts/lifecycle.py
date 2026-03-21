@@ -39,9 +39,10 @@ class AppLifecycleMixin:
         self._schedule_skip_notice_key: tuple[str, str] | None = None
         self.db = ComplexDatabase()
         self._noncritical_loaded = {
-            "history": True,
-            "stats": True,
-            "favorites": True,
+            "history": False,
+            "stats": False,
+            "favorites": False,
+            "dashboard": False,
         }
         
         # v11.0: Toast 알림 시스템
@@ -192,23 +193,29 @@ class AppLifecycleMixin:
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self._check_schedule)
         self.schedule_timer.start(60000)
+
+    def _mark_noncritical_stale(self: Any, *names: str):
+        for name in names:
+            if name in self._noncritical_loaded:
+                self._noncritical_loaded[name] = False
+
+    def _mark_noncritical_loaded(self: Any, name: str):
+        if name in self._noncritical_loaded:
+            self._noncritical_loaded[name] = True
     
     def _load_initial_data(self: Any):
         self._load_history()
-        self._noncritical_loaded["history"] = True
+        self._mark_noncritical_loaded("history")
         self._load_stats_complexes()
-        self._noncritical_loaded["stats"] = True
+        self._mark_noncritical_stale("stats")
         self._refresh_favorite_keys()
-        self._noncritical_loaded["favorites"] = True
+        self._mark_noncritical_stale("favorites", "dashboard")
         group_tab = getattr(self, "group_tab", None)
         if group_tab is not None:
             group_tab.load_groups()
         db_tab = getattr(self, "db_tab", None)
         if db_tab is not None:
             db_tab.load_data()
-        favorites_tab = getattr(self, "favorites_tab", None)
-        if favorites_tab is not None:
-            favorites_tab.refresh()
         self._load_schedule_groups()
         self._load_schedule_config()
         
@@ -221,15 +228,8 @@ class AppLifecycleMixin:
 
     def _on_crawl_data_collected(self: Any, data):
         self.collected_data = list(data) if data else []
-        self._load_history()
-        self._load_stats_complexes()
-        if self.tabs.currentWidget() is self.stats_tab:
-            self._load_stats()
-        if self.dashboard_widget is not None:
-            self.dashboard_widget.set_data(self.collected_data)
-        favorites_tab = getattr(self, "favorites_tab", None)
-        if favorites_tab is not None:
-            favorites_tab.refresh()
+        self._mark_noncritical_stale("history", "stats", "favorites", "dashboard")
+        self._refresh_tab(self.tabs.currentIndex())
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
 
     def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):

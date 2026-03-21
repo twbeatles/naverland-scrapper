@@ -129,11 +129,31 @@ class CrawlerTabResultRenderMixin:
         if bool(incoming.get("is_new") or incoming.get("신규여부")):
             existing["is_new"] = True
             existing["신규여부"] = True
-        in_change = self._normalize_price_change(incoming.get("price_change", incoming.get("가격변동", 0)))
-        ex_change = self._normalize_price_change(existing.get("price_change", existing.get("가격변동", 0)))
+        in_change = self._normalize_price_change(
+            incoming.get("price_change", incoming.get("가격변동", 0))
+        )
+        ex_change = self._normalize_price_change(
+            existing.get("price_change", existing.get("가격변동", 0))
+        )
         if abs(in_change) > abs(ex_change):
             existing["price_change"] = in_change
             existing["가격변동"] = in_change
+
+    def _consume_compact_item(self: Any, item):
+        compact_key = self._get_compact_key(item)
+        article_key = self._favorite_key_for_item(item)
+        existing = self._compact_items_by_key.get(compact_key)
+        created = existing is None
+        if created:
+            existing = dict(item or {})
+            existing["duplicate_count"] = 1
+            self._compact_items_by_key[compact_key] = existing
+        else:
+            self._merge_compact_item(existing, item)
+        if article_key:
+            self._compact_source_keys_by_key.setdefault(compact_key, set()).add(article_key)
+            self._compact_key_by_article.setdefault(article_key, set()).add(compact_key)
+        return compact_key, existing, created
 
     def _reset_result_state(self: Any):
         self.result_table.setRowCount(0)
@@ -142,6 +162,16 @@ class CrawlerTabResultRenderMixin:
         self._row_hidden_state = {}
         self._compact_items_by_key = {}
         self._compact_rows_data = []
+        self._compact_row_index_by_key = {}
+        self._compact_source_keys_by_key = {}
+        self._compact_key_by_article = {}
+        self._compact_dirty_keys = set()
+        self._compact_full_refresh_pending = False
+        self._card_refresh_pending = False
+        if hasattr(self, "_compact_refresh_timer"):
+            self._compact_refresh_timer.stop()
+        if hasattr(self, "_card_refresh_timer"):
+            self._card_refresh_timer.stop()
 
     def _rebuild_result_views_from_collected_data(self: Any):
         self._reset_result_state()
@@ -153,7 +183,10 @@ class CrawlerTabResultRenderMixin:
             return
 
         if self._compact_duplicates:
-            self._append_rows_compact_batch(display_data)
+            for item in display_data:
+                compact_key, _existing, _created = self._consume_compact_item(item)
+                self._recompute_compact_row_favorite(compact_key)
+            self._render_compact_rows()
             if self.view_mode == "card":
                 self.card_view.set_data(list(self._compact_rows_data))
         else:
@@ -187,11 +220,14 @@ class CrawlerTabResultRenderMixin:
     def append_log(self: Any, msg, level=20):
         theme_colors = COLORS[self.current_theme]
         color = theme_colors["text_primary"]
-        
-        if level >= 40: color = theme_colors["error"]
-        elif level >= 30: color = theme_colors["warning"]
-        elif level == 10: color = theme_colors["text_secondary"]
-        
+
+        if level >= 40:
+            color = theme_colors["error"]
+        elif level >= 30:
+            color = theme_colors["warning"]
+        elif level == 10:
+            color = theme_colors["text_secondary"]
+
         try:
             max_lines = max(200, int(settings.get("max_log_lines", 1500)))
         except (TypeError, ValueError):
@@ -201,9 +237,128 @@ class CrawlerTabResultRenderMixin:
             doc.setMaximumBlockCount(max_lines)
             self._log_max_block_count = max_lines
         self.log_browser.append(f'<span style="color:{color}">{msg}</span>')
-        # Scroll to bottom
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
+
+    def _compact_sort_descriptor(self: Any):
+        criterion = str(self.combo_sort.currentText() or "")
+        sort_key = criterion.split(" ")[0] if criterion else "가격"
+        is_asc = "↑" in criterion
+        return sort_key, is_asc
+
+    def _compact_sort_value(self: Any, data):
+        sort_key, _is_asc = self._compact_sort_descriptor()
+        if sort_key == "가격":
+            return self._extract_price_values(data)[2]
+        if sort_key == "면적":
+            return self._area_float(data.get("면적(평)", 0))
+        if sort_key in ("거래", "거래유형"):
+            return str(data.get("거래유형", "") or "")
+        return str(data.get("단지명", "") or "")
+
+    def _find_compact_insert_index(self: Any, data):
+        target = self._compact_sort_value(data)
+        _sort_key, is_asc = self._compact_sort_descriptor()
+        for index, current in enumerate(self._compact_rows_data):
+            current_value = self._compact_sort_value(current)
+            if is_asc:
+                if target < current_value:
+                    return index
+            else:
+                if target > current_value:
+                    return index
+        return len(self._compact_rows_data)
+
+    def _reindex_compact_row_map(self: Any, start_row: int = 0):
+        if start_row <= 0:
+            self._compact_row_index_by_key = {}
+            start_row = 0
+        for row in range(start_row, len(self._compact_rows_data)):
+            self._compact_row_index_by_key[self._get_compact_key(self._compact_rows_data[row])] = row
+
+    def _recompute_compact_row_favorite(self: Any, compact_key):
+        row = self._compact_items_by_key.get(compact_key)
+        if row is None:
+            return False
+        favorite_keys = self._favorite_keys_snapshot()
+        source_keys = self._compact_source_keys_by_key.get(compact_key, set())
+        is_favorite = any(source_key in favorite_keys for source_key in source_keys)
+        row["is_favorite"] = bool(is_favorite)
+        return bool(is_favorite)
+
+    def _compact_updates_should_coalesce(self: Any) -> bool:
+        thread = getattr(self, "crawler_thread", None)
+        if thread is None:
+            return False
+        try:
+            return bool(thread.isRunning())
+        except Exception:
+            return False
+
+    def _schedule_compact_refresh(self: Any, *, full: bool = False, immediate: bool = False):
+        if full:
+            self._compact_full_refresh_pending = True
+        if immediate or not self._compact_updates_should_coalesce():
+            if hasattr(self, "_compact_refresh_timer"):
+                self._compact_refresh_timer.stop()
+            self._flush_compact_updates()
+            return
+        self._compact_refresh_timer.start()
+
+    def _flush_compact_updates(self: Any):
+        if self._compact_full_refresh_pending:
+            self._compact_full_refresh_pending = False
+            self._compact_dirty_keys.clear()
+            self._render_compact_rows()
+            return
+
+        dirty_keys = [
+            key
+            for key in self._compact_dirty_keys
+            if key in self._compact_items_by_key and key in self._compact_row_index_by_key
+        ]
+        if not dirty_keys:
+            self._compact_dirty_keys.clear()
+            return
+
+        self.result_table.setSortingEnabled(False)
+        self.result_table.setUpdatesEnabled(False)
+        self.result_table.blockSignals(True)
+        try:
+            for compact_key in dirty_keys:
+                row = self._compact_row_index_by_key.get(compact_key)
+                if row is None:
+                    continue
+                data = self._compact_items_by_key.get(compact_key)
+                if data is None:
+                    continue
+                self._set_result_row(row, data)
+                self._apply_current_filter_to_row(row)
+        finally:
+            self.result_table.blockSignals(False)
+            self.result_table.setUpdatesEnabled(True)
+        self._compact_dirty_keys.clear()
+
+    def _schedule_card_view_refresh(self: Any, *, immediate: bool = False):
+        self._card_refresh_pending = True
+        if self.view_mode != "card" or self.view_stack.currentWidget() is not self.card_view:
+            return
+        if immediate or not self._compact_updates_should_coalesce():
+            if hasattr(self, "_card_refresh_timer"):
+                self._card_refresh_timer.stop()
+            self._flush_card_view_refresh()
+            return
+        if self._card_refresh_timer.isActive():
+            return
+        self._card_refresh_timer.start()
+
+    def _flush_card_view_refresh(self: Any):
+        if not self._card_refresh_pending:
+            return
+        self._card_refresh_pending = False
+        if self.view_mode != "card" or self.view_stack.currentWidget() is not self.card_view:
+            return
+        self._apply_card_filters(self._pending_search_text)
 
     def _on_items_batch(self: Any, items):
         if not items:
@@ -214,14 +369,18 @@ class CrawlerTabResultRenderMixin:
             return
         if self._compact_duplicates:
             self._append_rows_compact_batch(visible_items)
-            if self.view_mode == "card":
-                self.card_view.set_data(list(self._compact_rows_data))
+            if self.view_mode == "card" and self.view_stack.currentWidget() is self.card_view:
+                self._schedule_card_view_refresh()
         else:
             self._append_rows_batch(visible_items)
-            if self.view_mode == "card":
+            if (
+                self.view_mode == "card"
+                and self.view_stack.currentWidget() is self.card_view
+                and (self._advanced_filters or self._pending_search_text)
+            ):
+                self._schedule_card_view_refresh()
+            elif self.view_mode == "card":
                 self.card_view.append_data(visible_items)
-        if self.view_mode == "card" and (self._advanced_filters or self._pending_search_text or self._compact_duplicates):
-            self._apply_card_filters(self._pending_search_text)
 
     def _sync_row_search_cache(self: Any, row):
         values = []
@@ -314,7 +473,9 @@ class CrawlerTabResultRenderMixin:
         for item in source:
             trade_type, _, price_int = self._extract_price_values(item)
             area_val = self._area_float(item.get("면적(평)", 0))
-            price_change = self._normalize_price_change(item.get("price_change", item.get("가격변동", 0)))
+            price_change = self._normalize_price_change(
+                item.get("price_change", item.get("가격변동", 0))
+            )
             is_new = bool(item.get("is_new") or item.get("신규여부"))
             payload = self._build_row_payload_from_data(
                 data=item,
@@ -324,7 +485,11 @@ class CrawlerTabResultRenderMixin:
                 price_change=price_change,
                 is_new=is_new,
             )
-            url = get_article_url(item.get("단지ID", ""), item.get("매물ID", ""), item.get("자산유형", "APT"))
+            url = get_article_url(
+                item.get("단지ID", ""),
+                item.get("매물ID", ""),
+                item.get("자산유형", "APT"),
+            )
             if url:
                 lookup[url] = payload
         return lookup
@@ -345,7 +510,9 @@ class CrawlerTabResultRenderMixin:
     def _set_result_row(self: Any, row, data):
         trade_type, price_text, price_int = self._extract_price_values(data)
         area_val = self._area_float(data.get("면적(평)", 0))
-        price_change = self._normalize_price_change(data.get("price_change", data.get("가격변동", 0)))
+        price_change = self._normalize_price_change(
+            data.get("price_change", data.get("가격변동", 0))
+        )
 
         show_new_badge = bool(settings.get("show_new_badge", True))
         show_price_change = bool(settings.get("show_price_change", True))
@@ -367,17 +534,11 @@ class CrawlerTabResultRenderMixin:
         self.result_table.setItem(row, self.COL_AREA, area_item)
 
         pyeong_price_text = str(data.get("평당가_표시", "-"))
-        self.result_table.setItem(
-            row, self.COL_PYEONG_PRICE, QTableWidgetItem(pyeong_price_text)
-        )
+        self.result_table.setItem(row, self.COL_PYEONG_PRICE, QTableWidgetItem(pyeong_price_text))
         floor_text = str(data.get("층/방향", ""))
-        self.result_table.setItem(
-            row, self.COL_FLOOR, QTableWidgetItem(floor_text)
-        )
+        self.result_table.setItem(row, self.COL_FLOOR, QTableWidgetItem(floor_text))
         feature_text = str(data.get("타입/특징", ""))
-        self.result_table.setItem(
-            row, self.COL_FEATURE, QTableWidgetItem(feature_text)
-        )
+        self.result_table.setItem(row, self.COL_FEATURE, QTableWidgetItem(feature_text))
 
         dup_count = int(data.get("duplicate_count", 1) or 1)
         dup_count_text = f"{dup_count}건"
@@ -395,23 +556,11 @@ class CrawlerTabResultRenderMixin:
         asset_type_text = str(data.get("자산유형", ""))
         self.result_table.setItem(row, self.COL_ASSET_TYPE, QTableWidgetItem(asset_type_text))
         prev_jeonse_text = self._format_won_value(data.get("기전세금(원)", 0))
-        self.result_table.setItem(
-            row,
-            self.COL_PREV_JEONSE,
-            QTableWidgetItem(prev_jeonse_text),
-        )
+        self.result_table.setItem(row, self.COL_PREV_JEONSE, QTableWidgetItem(prev_jeonse_text))
         gap_amount_text = self._format_won_value(data.get("갭금액(원)", 0), signed=True)
-        self.result_table.setItem(
-            row,
-            self.COL_GAP_AMOUNT,
-            QTableWidgetItem(gap_amount_text),
-        )
+        self.result_table.setItem(row, self.COL_GAP_AMOUNT, QTableWidgetItem(gap_amount_text))
         gap_ratio_text = self._format_gap_ratio(data.get("갭비율", 0))
-        self.result_table.setItem(
-            row,
-            self.COL_GAP_RATIO,
-            QTableWidgetItem(gap_ratio_text),
-        )
+        self.result_table.setItem(row, self.COL_GAP_RATIO, QTableWidgetItem(gap_ratio_text))
 
         collect_time = str(data.get("수집시각", ""))
         self.result_table.setItem(row, self.COL_COLLECTED_AT, QTableWidgetItem(collect_time))
@@ -466,31 +615,41 @@ class CrawlerTabResultRenderMixin:
         return payload, searchable
 
     def _append_rows_compact_batch(self: Any, items):
+        if not items:
+            return
+        self.result_table.setSortingEnabled(False)
+        new_rows = []
         for item in items:
-            key = self._get_compact_key(item)
-            if key in self._compact_items_by_key:
-                self._merge_compact_item(self._compact_items_by_key[key], item)
-            else:
-                compact_item = dict(item)
-                compact_item["duplicate_count"] = 1
-                self._compact_items_by_key[key] = compact_item
-        self._render_compact_rows()
+            compact_key, compact_item, created = self._consume_compact_item(item)
+            self._recompute_compact_row_favorite(compact_key)
+            if created:
+                new_rows.append((compact_key, compact_item))
+            self._compact_dirty_keys.add(compact_key)
+        if new_rows:
+            start_row = self.result_table.rowCount()
+            self.result_table.setRowCount(start_row + len(new_rows))
+            for offset, (compact_key, compact_item) in enumerate(new_rows):
+                row = start_row + offset
+                self._compact_rows_data.append(compact_item)
+                self._row_search_cache.append("")
+                self._row_payload_cache.append({})
+                self._compact_row_index_by_key[compact_key] = row
+        self._schedule_compact_refresh()
 
     def _sort_compact_rows(self: Any, rows):
-        criterion = self.combo_sort.currentText()
-        key = criterion.split(" ")[0]
-        is_asc = "↑" in criterion
-
-        if key == "가격":
+        sort_key, is_asc = self._compact_sort_descriptor()
+        if sort_key == "가격":
             rows.sort(key=lambda d: self._extract_price_values(d)[2], reverse=not is_asc)
-        elif key == "면적":
+        elif sort_key == "면적":
             rows.sort(key=lambda d: self._area_float(d.get("면적(평)", 0)), reverse=not is_asc)
-        elif key in ("거래", "거래유형"):
+        elif sort_key in ("거래", "거래유형"):
             rows.sort(key=lambda d: str(d.get("거래유형", "")), reverse=not is_asc)
         else:
             rows.sort(key=lambda d: str(d.get("단지명", "")), reverse=not is_asc)
 
     def _render_compact_rows(self: Any):
+        for compact_key in list(self._compact_items_by_key.keys()):
+            self._recompute_compact_row_favorite(compact_key)
         rows = list(self._compact_items_by_key.values())
         self._sort_compact_rows(rows)
         self._compact_rows_data = rows
@@ -502,6 +661,7 @@ class CrawlerTabResultRenderMixin:
         self._row_search_cache = [""] * len(rows)
         self._row_payload_cache = [{} for _ in rows]
         self._row_hidden_state = {}
+        self._reindex_compact_row_map()
 
         try:
             for row, data in enumerate(rows):
@@ -510,6 +670,48 @@ class CrawlerTabResultRenderMixin:
         finally:
             self.result_table.blockSignals(False)
             self.result_table.setUpdatesEnabled(True)
+        self._compact_dirty_keys.clear()
+        self._compact_full_refresh_pending = False
+
+    def _update_favorite_state_for_key(self: Any, favorite_key, is_favorite: bool):
+        if not favorite_key:
+            return
+
+        favorite_state = bool(is_favorite)
+        for item in self.collected_data:
+            if self._favorite_key_for_item(item) == favorite_key:
+                item["is_favorite"] = favorite_state
+
+        if self._compact_duplicates:
+            affected_compact_keys = set(self._compact_key_by_article.get(favorite_key) or set())
+            for compact_key in affected_compact_keys:
+                self._recompute_compact_row_favorite(compact_key)
+                self._compact_dirty_keys.add(compact_key)
+            if affected_compact_keys:
+                self._schedule_compact_refresh(immediate=True)
+                self.card_view.update_favorite_state(
+                    lambda item: self._get_compact_key(item) in affected_compact_keys,
+                    lambda item: bool(
+                        self._compact_items_by_key.get(self._get_compact_key(item), {}).get("is_favorite")
+                    ),
+                )
+            return
+
+        for payload in self._row_payload_cache:
+            if not isinstance(payload, dict):
+                continue
+            payload_key = (
+                str(payload.get("자산유형", "APT") or "APT").strip().upper() or "APT",
+                str(payload.get("매물ID", "") or ""),
+                str(payload.get("단지ID", "") or ""),
+            )
+            if payload_key == favorite_key:
+                payload["is_favorite"] = favorite_state
+
+        self.card_view.update_favorite_state(
+            lambda item: self._favorite_key_for_item(item) == favorite_key,
+            lambda _item: favorite_state,
+        )
 
     def _append_rows_batch(self: Any, items):
         start_row = self.result_table.rowCount()
@@ -541,4 +743,3 @@ class CrawlerTabResultRenderMixin:
         finally:
             self.result_table.blockSignals(False)
             self.result_table.setUpdatesEnabled(True)
-

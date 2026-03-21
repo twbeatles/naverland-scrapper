@@ -449,6 +449,10 @@ class CrawlerTabCrawlControlMixin:
             except Exception as e:
                 self.append_log(f"⚠️ 가격 스냅샷 저장 실패: {e}", 30)
 
+            if self._compact_duplicates and self._compact_items_by_key:
+                self._schedule_compact_refresh(full=True, immediate=True)
+                self._schedule_card_view_refresh(immediate=True)
+
             if settings.get("play_sound_on_complete", True):
                 try:
                     QApplication.beep()

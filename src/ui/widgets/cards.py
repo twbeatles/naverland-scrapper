@@ -104,13 +104,14 @@ class ArticleCard(QFrame):
 
         theme_key = "dark" if self.is_dark else "light"
         accent = COLORS[theme_key]["accent"]
-        self.fav_btn = QPushButton("★" if self.data.get("is_favorite") else "☆")
+        self.fav_btn = QPushButton("")
         self.fav_btn.setFixedSize(30, 30)
         fav_style = self._FAVORITE_STYLE_CACHE.get(accent)
         if fav_style is None:
             fav_style = f"border: none; font-size: 18px; background: transparent; color: {accent};"
             self._FAVORITE_STYLE_CACHE[accent] = fav_style
         self.fav_btn.setStyleSheet(fav_style)
+        self.set_favorite_state(bool(self.data.get("is_favorite")))
         self.fav_btn.clicked.connect(self._toggle_favorite)
         top_layout.addWidget(self.fav_btn)
 
@@ -160,12 +161,16 @@ class ArticleCard(QFrame):
 
         layout.addStretch()
 
+    def set_favorite_state(self, is_favorite: bool):
+        self.data["is_favorite"] = bool(is_favorite)
+        self.fav_btn.setText("★" if is_favorite else "☆")
+
     def _toggle_favorite(self):
         article_id = self.data.get("매물ID", "")
         complex_id = self.data.get("단지ID", "")
         asset_type = str(self.data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
         is_fav = self.fav_btn.text() == "☆"
-        self.fav_btn.setText("★" if is_fav else "☆")
+        self.set_favorite_state(is_fav)
         self.favorite_toggled.emit(article_id, complex_id, asset_type, is_fav)
 
     def mousePressEvent(self, a0):
@@ -252,6 +257,30 @@ class CardViewWidget(QScrollArea):
 
         if self._render_cursor >= had_count:
             self._render_next_page()
+
+    def update_favorite_state(self, predicate, state_provider):
+        if not callable(predicate) or not callable(state_provider):
+            return
+
+        changed = False
+        for article in self._all_data:
+            try:
+                if not predicate(article):
+                    continue
+            except Exception:
+                continue
+            article["is_favorite"] = bool(state_provider(article))
+            changed = True
+
+        if not changed:
+            return
+
+        for card in self._cards:
+            try:
+                if predicate(card.data):
+                    card.set_favorite_state(bool(state_provider(card.data)))
+            except Exception:
+                continue
 
     def _calc_columns(self) -> int:
         viewport = self.viewport()

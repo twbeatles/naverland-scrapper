@@ -1933,6 +1933,125 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_favorite_toggle_updates_result_views_without_full_rebuild(self):
+        from src.ui.app import RealEstateApp
+
+        sample = {
+            "단지명": "즐찾단지",
+            "단지ID": "71001",
+            "거래유형": "매매",
+            "매매가": "10000",
+            "보증금": "",
+            "월세": "",
+            "면적(평)": 30.0,
+            "평당가_표시": "333만",
+            "층/방향": "10층",
+            "타입/특징": "alpha",
+            "매물ID": "A1",
+            "수집시각": "2026-03-15 10:00:00",
+            "자산유형": "APT",
+        }
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        for tab in (app.crawler_tab, app.geo_tab):
+            tab.view_mode = "card"
+            tab.btn_view_mode.setChecked(True)
+            tab.view_stack.setCurrentWidget(tab.card_view)
+            tab.collected_data = [dict(sample)]
+            tab._rebuild_result_views_from_collected_data()
+
+        with (
+            patch.object(app.crawler_tab, "_rebuild_result_views_from_collected_data") as crawler_rebuild,
+            patch.object(app.geo_tab, "_rebuild_result_views_from_collected_data") as geo_rebuild,
+        ):
+            app._on_favorite_toggled("A1", "71001", "APT", True)
+
+        self.assertFalse(crawler_rebuild.called)
+        self.assertFalse(geo_rebuild.called)
+        self.assertIn(("APT", "A1", "71001"), app.favorite_keys)
+        self.assertTrue(app.crawler_tab.collected_data[0]["is_favorite"])
+        self.assertTrue(app.geo_tab.collected_data[0]["is_favorite"])
+        self.assertTrue(app.crawler_tab.card_view._all_data[0]["is_favorite"])
+        self.assertFalse(app._noncritical_loaded["favorites"])
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_hidden_tabs_refresh_only_when_opened_after_collection(self):
+        from src.ui.app import RealEstateApp
+
+        sample_data = [
+            {
+                "단지명": "stale단지",
+                "단지ID": "91001",
+                "매물ID": "S1",
+                "거래유형": "매매",
+                "매매가": "1억 1,000만",
+                "보증금": "",
+                "월세": "",
+                "면적(평)": 34.0,
+                "층/방향": "10층",
+                "타입/특징": "stale",
+                "수집시각": "2026-03-20 10:00:00",
+                "is_new": True,
+                "price_change": 0,
+            }
+        ]
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.tabs.setCurrentWidget(app.crawler_tab)
+
+        with (
+            patch.object(app, "_load_history", wraps=app._load_history) as load_history,
+            patch.object(app, "_load_stats_complexes", wraps=app._load_stats_complexes) as load_stats_complexes,
+            patch.object(app, "_load_stats", wraps=app._load_stats) as load_stats,
+            patch.object(app.favorites_tab, "refresh", wraps=app.favorites_tab.refresh) as favorites_refresh,
+            patch.object(app, "_ensure_dashboard_widget", wraps=app._ensure_dashboard_widget) as ensure_dashboard,
+        ):
+            app._on_crawl_data_collected(sample_data)
+
+            self.assertFalse(load_history.called)
+            self.assertFalse(load_stats_complexes.called)
+            self.assertFalse(load_stats.called)
+            self.assertFalse(favorites_refresh.called)
+            self.assertFalse(ensure_dashboard.called)
+            self.assertFalse(app._noncritical_loaded["history"])
+            self.assertFalse(app._noncritical_loaded["stats"])
+            self.assertFalse(app._noncritical_loaded["favorites"])
+            self.assertFalse(app._noncritical_loaded["dashboard"])
+
+            app._refresh_tab(app.TAB_HISTORY)
+            self.assertTrue(load_history.called)
+            self.assertTrue(app._noncritical_loaded["history"])
+
+            app._refresh_tab(app.TAB_STATS)
+            self.assertTrue(load_stats_complexes.called)
+            self.assertTrue(load_stats.called)
+            self.assertTrue(app._noncritical_loaded["stats"])
+
+            app._refresh_tab(app.TAB_FAVORITES)
+            self.assertTrue(favorites_refresh.called)
+            self.assertTrue(app._noncritical_loaded["favorites"])
+
+            app._refresh_tab(app.TAB_DASHBOARD)
+            self.assertTrue(ensure_dashboard.called)
+            self.assertTrue(app._noncritical_loaded["dashboard"])
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

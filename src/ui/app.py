@@ -127,6 +127,8 @@ _rebind_inherited_methods(
     "_save_json",
     "_init_tray",
     "_init_timers",
+    "_mark_noncritical_stale",
+    "_mark_noncritical_loaded",
     "_load_initial_data",
     "_open_article_and_track",
     "_ensure_chart_widget",

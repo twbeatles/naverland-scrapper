@@ -206,8 +206,13 @@ class CrawlerTabFiltersSearchMixin:
         is_asc = "↑" in criterion
         key = criterion.split(" ")[0]
         if self._compact_duplicates:
-            self._render_compact_rows()
-            self._apply_card_filters(self._pending_search_text)
+            self._schedule_compact_refresh(
+                full=True,
+                immediate=not self._compact_updates_should_coalesce(),
+            )
+            self._schedule_card_view_refresh(
+                immediate=not self._compact_updates_should_coalesce(),
+            )
             return
 
         col = col_map.get(key, self.COL_COMPLEX)
