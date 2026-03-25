@@ -12,7 +12,7 @@ from PyQt6.QtGui import QTextCursor, QRegularExpressionValidator
 import webbrowser
 import re
 
-from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url
+from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url, get_complex_url
 from src.core.managers import SettingsManager
 from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard

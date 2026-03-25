@@ -123,6 +123,10 @@ class PlaywrightGeoModeMixin:
                         source_zoom=zoom,
                         marker_id=str(row.get("marker_id", "")),
                     )
+                    if bool(result.get("block_like_redirect", False)):
+                        raise RuntimeError(str(result.get("block_reason", "") or "block-like redirect"))
+                    if bool(result.get("capture_failed", False)):
+                        raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
                     count = int(result.get("count", 0))
                     complex_count += count
                     if trade_type not in complex_trade_types:
@@ -244,39 +248,59 @@ class PlaywrightGeoModeMixin:
             f"https://new.land.naver.com/{base_kind}?"
             + urlencode({"ms": f"{lat},{lon},{zoom}", "a": asset_type, "tradeTypes": trade_code})
         )
-        await self._async_retry(
-            f"geo goto {asset_type}/{trade_type}",
-            lambda: self._desktop_page.goto(url, wait_until="domcontentloaded"),
-        )
-        try:
-            await self._async_retry(
-                "geo canvas wait",
-                lambda: self._desktop_page.wait_for_selector("canvas", timeout=15000),
-            )
-        except Exception:
-            self.thread.log("geo canvas wait timeout", 10)
-        await self._human_like_recenter(lat, lon, zoom)
-        switched = await self._switch_to_listing_markers()
-        if not switched:
-            self.thread._mark_geo_incomplete(
-                "marker_switch_fail",
-                f"{asset_type}/{trade_type}",
-            )
-            return False
-        coords = build_grid_sweep_coords(lat, lon, zoom, rings=geo.rings, step_px=geo.step_px)
-        dwell_ms = max(100, int(geo.dwell_ms))
-        total = len(coords)
-        for idx, (target_lat, target_lon) in enumerate(coords, 1):
-            if self.thread._should_stop():
-                break
-            self.thread.log(f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10)
-            await self._drag_to_latlon(target_lat, target_lon)
+        last_failure = ""
+        for plan in self._build_entry_plans(url):
             try:
-                await self._desktop_page.mouse.wheel(0, -40)
-            except Exception:
-                pass
-            await self._desktop_page.wait_for_timeout(dwell_ms)
-        return True
+                await self._run_entry_plan(
+                    self._desktop_page,
+                    plan,
+                    label=f"geo {asset_type}/{trade_type}",
+                )
+                page_state = await self._classify_page_state(self._desktop_page)
+                if bool(page_state.get("block_like_redirect", False)):
+                    last_failure = str(
+                        page_state.get("block_reason", "") or page_state.get("final_url", "") or "block-like redirect"
+                    )
+                    continue
+                try:
+                    await self._async_retry(
+                        "geo canvas wait",
+                        lambda: self._desktop_page.wait_for_selector("canvas", timeout=15000),
+                    )
+                except Exception:
+                    self.thread.log("geo canvas wait timeout", 10)
+                await self._human_like_recenter(lat, lon, zoom)
+                switched = await self._switch_to_listing_markers()
+                if not switched:
+                    self.thread._mark_geo_incomplete(
+                        "marker_switch_fail",
+                        f"{asset_type}/{trade_type}",
+                    )
+                    return False
+                coords = build_grid_sweep_coords(lat, lon, zoom, rings=geo.rings, step_px=geo.step_px)
+                dwell_ms = max(100, int(geo.dwell_ms))
+                total = len(coords)
+                for idx, (target_lat, target_lon) in enumerate(coords, 1):
+                    if self.thread._should_stop():
+                        break
+                    self.thread.log(f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10)
+                    await self._drag_to_latlon(target_lat, target_lon)
+                    try:
+                        await self._desktop_page.mouse.wheel(0, -40)
+                    except Exception:
+                        pass
+                    await self._desktop_page.wait_for_timeout(dwell_ms)
+                return True
+            except Exception as exc:
+                last_failure = str(exc)
+                self.thread.log(
+                    f"   geo entry plan 실패({asset_type}/{trade_type}, {plan.get('name', 'direct')}): {exc}",
+                    20,
+                )
+                continue
+        if await self._maybe_enable_headed_fallback(last_failure or f"geo {asset_type}/{trade_type}"):
+            return await self._scan_geo_asset_type(asset_type, trade_type, lat, lon, zoom, geo)
+        raise RuntimeError(f"block-like redirect: {last_failure or url}")
 
     async def _get_ms(self):
         if not self._desktop_page:

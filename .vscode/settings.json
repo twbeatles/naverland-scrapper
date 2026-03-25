@@ -4,6 +4,21 @@
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.autoSearchPaths": false,
+  "python.analysis.include": [
+    "${workspaceFolder}/app_entry.py",
+    "${workspaceFolder}/src",
+    "${workspaceFolder}/tests"
+  ],
+  "python.analysis.exclude": [
+    "${workspaceFolder}/.git",
+    "${workspaceFolder}/.pytest_cache",
+    "${workspaceFolder}/.venv",
+    "${workspaceFolder}/build",
+    "${workspaceFolder}/dist",
+    "${workspaceFolder}/data",
+    "${workspaceFolder}/logs"
+  ],
   "python.analysis.extraPaths": [
     "${workspaceFolder}",
     "${workspaceFolder}/src"

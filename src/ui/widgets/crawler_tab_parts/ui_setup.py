@@ -395,8 +395,8 @@ class CrawlerTabUISetupMixin:
         self.input_id = QLineEdit()
         self.input_id.setPlaceholderText("단지 ID")
         self.input_id.setToolTip(
-            "네이버 부동산 URL에서 단지 ID를 확인하세요.\n"
-            "예: new.land.naver.com/complexes/12345 → ID: 12345"
+            "네이버 부동산 URL family에 따라 단지 경로가 다를 수 있습니다.\n"
+            "예: /complexes/12345 또는 complexNo=12345 → ID: 12345"
         )
         self._complex_id_regex = QRegularExpression(r"^\d+$")
         self.input_id.setValidator(QRegularExpressionValidator(self._complex_id_regex, self))

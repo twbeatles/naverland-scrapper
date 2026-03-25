@@ -174,6 +174,7 @@ src/
     ├── logger.py               # get_logger()
     ├── paths.py                # DATA_DIR, DB_PATH, LOG_DIR
     ├── preflight.py            # 실행 전 의존성/브라우저 점검
+    ├── live_smoke.py           # GUI 없이 Playwright 실사이트 smoke probe
     ├── runtime_playwright.py   # frozen 환경 Playwright 경로 설정
     ├── retry_handler.py        # RetryHandler (지수 백오프)
     ├── retry.py                # 재시도 유틸리티 (legacy)
@@ -243,7 +244,7 @@ src/
 ## 5. File System
 ```
 Root/
-├── app_entry.py             # PyInstaller/CLI 진입점 (`--preflight` 지원)
+├── app_entry.py             # PyInstaller/CLI 진입점 (`--preflight`, `--live-smoke` 지원)
 ├── src/                    # 소스 코드 (모듈화)
 ├── tests/                  # pytest 테스트
 ├── data/                   # 데이터 저장
@@ -566,3 +567,21 @@ COLORS["light"] = {
   - Validation:
     - `python -m pytest tests/test_ui_wiring.py -q` => `47 passed`
     - `python -m pytest tests/test_performance_smoke.py -q` => `3 passed`
+
+## 0-20. v15.0.18 Typing / Encoding / Smoke Consistency Pass (2026-03-25)
+- Repo-wide typing baseline:
+  - workspace 기준 `pyright`를 재실행해 새 `live_smoke.py`, 테스트 더블 monkeypatch, Windows registry helper 타입 오류를 정리했습니다.
+  - 현재 기준 검증 명령은 `pyright`이며 결과는 `0 errors`입니다.
+- Encoding baseline:
+  - root `.md/.spec/.gitignore/.editorconfig/.vscode/settings.json/.github/workflows/ci.yml`까지 UTF-8/BOM/mojibake 스캔 대상으로 고정했습니다.
+  - 2026-03-25 스캔 기준 실제 UTF-8 손상은 발견되지 않았습니다.
+- Workspace / smoke baseline:
+  - `.vscode/settings.json`은 `include/exclude/extraPaths/files.encoding`을 명시해 Pylance 범위를 `app_entry.py + src + tests`로 고정합니다.
+  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...]`로 GUI 없이 Playwright 실사이트 경로를 점검할 수 있습니다.
+  - 2026-03-25 headless smoke 결과:
+    - `fin.land` 200
+    - `new.land` 200
+    - `m.land` -> `fin.land` map redirect
+- Packaging / ignore review:
+  - `naverland-scrapper.spec`는 이번 패스에서도 hidden import/runtime hook/data bundle 추가 수정이 필요하지 않았습니다.
+  - `.gitignore`는 `pyright_report*.json`을 추가로 무시하고 `.vscode/settings.json`은 계속 추적합니다.

@@ -11,6 +11,7 @@ from src.core.services.response_capture import (
     normalize_article_payload,
     normalize_marker_payload,
 )
+from src.utils.helpers import ChromeParamHelper
 from src.utils.logger import get_logger
 from .base import CrawlerEngine
 
@@ -100,7 +101,19 @@ _rebind_inherited_methods(
     "_check_memory_and_recycle_if_needed",
     "_ensure_started",
     "_shutdown_async",
+    "_launch_browser",
+    "_launch_browser_once",
+    "_profile_root",
+    "_storage_state_path",
+    "_create_context",
+    "_save_context_state",
+    "_warmup_runtime_pages",
+    "_warmup_page",
+    "_build_entry_plans",
+    "_run_entry_plan",
+    "_maybe_enable_headed_fallback",
     "_setup_blocking",
+    "_classify_page_state",
     "_spawn_response_task",
     "_drain_pending_response_tasks",
     "_run_complex_mode",

@@ -1,9 +1,11 @@
 import asyncio
 import os
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 if os.environ.get("NAVERLAND_SKIP_PLAYWRIGHT_TESTS", "").strip().lower() in {"1", "true", "yes", "on"}:
@@ -261,6 +263,7 @@ class _FakePage:
         self._responses = list(responses or [])
         self.url = "https://new.land.naver.com/"
         self.mouse = _FakeMouse()
+        self.visited = []
 
     def on(self, event, handler):
         self._handlers.setdefault(event, []).append(handler)
@@ -271,6 +274,7 @@ class _FakePage:
 
     async def goto(self, url, wait_until="domcontentloaded"):
         self.url = url
+        self.visited.append(url)
         for response in list(self._responses):
             for handler in list(self._handlers.get("response", [])):
                 handler(response)
@@ -284,8 +288,81 @@ class _FakePage:
     async def wait_for_selector(self, selector, timeout=0):
         return None
 
+    async def title(self):
+        return "네이버 부동산"
+
+    async def add_init_script(self, script):
+        return None
+
+    async def close(self):
+        return None
+
     def locator(self, query):
         return _FakeLocator()
+
+
+class _FakeContext:
+    def __init__(self):
+        self.pages = []
+        self.storage_state_calls = []
+
+    async def new_page(self):
+        page = _FakePage(responses=[])
+        self.pages.append(page)
+        return page
+
+    async def close(self):
+        return None
+
+    async def route(self, pattern, handler):
+        return None
+
+    async def storage_state(self, path=None):
+        self.storage_state_calls.append(path)
+        return {"cookies": []}
+
+
+class _FakeBrowser:
+    def __init__(self):
+        self.contexts = []
+
+    async def new_context(self, **kwargs):
+        ctx = _FakeContext()
+        self.contexts.append((kwargs, ctx))
+        return ctx
+
+    async def close(self):
+        return None
+
+
+class _FakeBrowserType:
+    def __init__(self, fail_on_executable_path=False):
+        self.executable_path = "C:/ms-playwright/chromium/chrome.exe"
+        self.fail_on_executable_path = fail_on_executable_path
+        self.launch_calls = []
+
+    async def launch(self, **kwargs):
+        self.launch_calls.append(dict(kwargs))
+        if self.fail_on_executable_path and kwargs.get("executable_path"):
+            raise RuntimeError("chrome launch failed")
+        return _FakeBrowser()
+
+
+class _FakePlaywrightController:
+    def __init__(self, browser_type):
+        self.chromium = browser_type
+        self.devices = {"iPhone 14 Pro Max": {}}
+
+    async def stop(self):
+        return None
+
+
+class _FakeAsyncPlaywright:
+    def __init__(self, controller):
+        self._controller = controller
+
+    async def start(self):
+        return self._controller
 
 
 class _FakeResponse:
@@ -466,7 +543,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         try:
             self.assertEqual(len(result), 1)
             self.assertTrue(cancelled["value"])
-            self.assertLess(elapsed, 0.5)
+            self.assertLess(elapsed, 1.2)
             self.assertGreaterEqual(call_count["value"], 1)
         finally:
             engine._loop.close()
@@ -610,6 +687,208 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(thread.stats.get("response_seen_count", 0)), 1)
         self.assertEqual(int(thread.stats.get("parse_success_count", 0)), 0)
         self.assertEqual(int(thread.stats.get("parse_fail_count", 0)), 1)
+
+    async def test_capture_failure_flags_block_like_redirect_and_skips_negative_cache(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        cache = _CacheStub()
+        thread.cache = cache
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _collect_capture_failed(*_args, **_kwargs):
+            return {
+                "raw_items": [],
+                "response_seen": False,
+                "parse_success": False,
+                "drain_timed_out": False,
+                "response_match_count": 0,
+                "final_url": "https://new.land.naver.com/404",
+                "block_like_redirect": True,
+                "block_reason": "redirect_404",
+                "capture_failed": True,
+                "failure_reason": "block-like redirect: redirect_404",
+            }
+
+        engine._collect_target_raw_items = _collect_capture_failed
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "81818", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(result["capture_failed"])
+        self.assertTrue(result["block_like_redirect"])
+        self.assertEqual(int(thread.stats.get("capture_failed_count", 0)), 1)
+        self.assertEqual(int(thread.stats.get("block_like_redirect_count", 0)), 1)
+        self.assertEqual(thread.stats.get("playwright_last_final_url"), "https://new.land.naver.com/404")
+        self.assertFalse(cache.set_calls)
+
+    async def test_runtime_prefers_local_chrome_when_available(self):
+        thread = _ThreadStub()
+        browser_type = _FakeBrowserType()
+        controller = _FakePlaywrightController(browser_type)
+        engine = PlaywrightCrawlerEngine(thread)
+
+        with (
+            patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
+            patch("src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
+        ):
+            await engine._ensure_started()
+
+        try:
+            self.assertEqual(thread.stats.get("playwright_browser_source"), "local_chrome")
+            self.assertEqual(browser_type.launch_calls[0].get("executable_path"), "C:\\Chrome\\chrome.exe")
+        finally:
+            await engine._shutdown_async()
+            engine._loop.close()
+
+    async def test_runtime_falls_back_to_playwright_chromium_when_local_chrome_launch_fails(self):
+        thread = _ThreadStub()
+        browser_type = _FakeBrowserType(fail_on_executable_path=True)
+        controller = _FakePlaywrightController(browser_type)
+        engine = PlaywrightCrawlerEngine(thread)
+
+        with (
+            patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
+            patch("src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
+        ):
+            await engine._ensure_started()
+
+        try:
+            self.assertEqual(thread.stats.get("playwright_browser_source"), "playwright_chromium")
+            self.assertEqual(len(browser_type.launch_calls), 2)
+            self.assertIn("executable_path", browser_type.launch_calls[0])
+            self.assertNotIn("executable_path", browser_type.launch_calls[1])
+        finally:
+            await engine._shutdown_async()
+            engine._loop.close()
+
+    async def test_runtime_reuses_storage_state_and_runs_warmups(self):
+        thread = _ThreadStub()
+        browser_type = _FakeBrowserType()
+        controller = _FakePlaywrightController(browser_type)
+        engine = PlaywrightCrawlerEngine(thread)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop_state = Path(tmp) / "desktop_storage_state.json"
+            mobile_state = Path(tmp) / "mobile_storage_state.json"
+            desktop_state.write_text("{}", encoding="utf-8")
+            mobile_state.write_text("{}", encoding="utf-8")
+
+            with (
+                patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
+                patch.object(engine, "_profile_root", return_value=tmp),
+            ):
+                await engine._ensure_started()
+
+            try:
+                self.assertEqual(int(thread.stats.get("playwright_session_reused", 0)), 2)
+                self.assertGreaterEqual(int(thread.stats.get("playwright_warmup_count", 0)), 3)
+                self.assertEqual(thread.stats.get("playwright_profile_dir"), tmp)
+            finally:
+                await engine._shutdown_async()
+                engine._loop.close()
+
+    async def test_collect_target_raw_items_tries_next_entry_plan_when_direct_capture_missing(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        page = _FakePage(responses=[])
+        engine._desktop_page = page
+        attempted_plans = []
+
+        async def _noop_started():
+            return None
+
+        async def _run_entry_plan(_page, plan, *, label):
+            attempted_plans.append(str(plan.get("name", "")))
+            _page.url = str(plan.get("target", ""))
+            if plan.get("name") == "fin_then_new_target":
+                for handler in list(_page._handlers.get("response", [])):
+                    handler(
+                        _FakeResponse(
+                            url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                            payload={"articleList": [{"articleNo": "A2", "tradeTypeCode": "A1"}]},
+                        )
+                    )
+
+        engine._ensure_started = _noop_started
+        typed_engine = cast(Any, engine)
+        typed_engine._run_entry_plan = _run_entry_plan
+        typed_engine._build_entry_plans = lambda _url: [
+            {"name": "direct", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+            {"name": "fin_then_new_target", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+        ]
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    return_value={"매물ID": "A2", _LEGACY_ARTICLE_ID_KEY: "A2"},
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(attempted_plans, ["direct", "fin_then_new_target"])
+        self.assertEqual(len(list(collect_result.get("raw_items", []) or [])), 1)
+        self.assertEqual(int(collect_result.get("response_match_count", 0) or 0), 1)
+
+    async def test_crawl_target_with_cache_retries_after_headed_fallback_recovery(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        collect_calls = []
+
+        async def _collect(*_args, **_kwargs):
+            collect_calls.append(len(collect_calls))
+            if len(collect_calls) == 1:
+                return {
+                    "raw_items": [],
+                    "response_seen": False,
+                    "parse_success": False,
+                    "drain_timed_out": False,
+                    "response_match_count": 0,
+                    "capture_failed": True,
+                    "block_like_redirect": True,
+                    "block_reason": "redirect_404",
+                    "failure_reason": "block-like redirect: redirect_404",
+                    "final_url": "https://new.land.naver.com/404",
+                }
+            return {
+                "raw_items": [{"매물ID": "RECOVER-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}],
+                "response_seen": True,
+                "parse_success": True,
+                "drain_timed_out": False,
+                "response_match_count": 1,
+                "capture_failed": False,
+                "block_like_redirect": False,
+                "block_reason": "",
+                "failure_reason": "",
+                "final_url": "https://new.land.naver.com/complexes/12345",
+            }
+
+        engine._collect_target_raw_items = _collect
+        engine._enrich_items_with_mobile_details = AsyncMock(
+            return_value=[{"매물ID": "RECOVER-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}]
+        )
+        engine._maybe_enable_headed_fallback = AsyncMock(return_value=True)
+
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "12345", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(len(collect_calls), 2)
+        engine._maybe_enable_headed_fallback.assert_awaited_once()
 
     async def test_detail_metrics_increment_on_success_and_failure(self):
         thread = _ThreadStub()

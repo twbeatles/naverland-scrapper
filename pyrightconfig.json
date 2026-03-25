@@ -9,10 +9,12 @@
     ".git",
     ".pytest_cache",
     ".venv",
+    ".vscode",
     "build",
     "dist",
     "data",
-    "logs"
+    "logs",
+    "pyright_report*.json"
   ],
   "pythonVersion": "3.9",
   "pythonPlatform": "Windows",

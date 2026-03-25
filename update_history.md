@@ -1,3 +1,36 @@
+## **v15.0.18 (2026-03-25)**
+
+**Repo-wide Pylance/Pyright 정리 + 인코딩 정합성 재점검 + live smoke 문서화**
+
+### 주요 반영
+
+* Pylance/Pyright 정리
+  - `src/utils/helpers.py`의 Windows registry helper 타입 오류를 정리
+  - `src/utils/live_smoke.py`의 Playwright launch 시그니처를 명시 호출 형태로 바꿔 optional call / kwargs 타입 오류 제거
+  - `tests/test_playwright_engine_stabilization.py`의 monkeypatch 경로를 `cast(Any, engine)` 기반으로 정리해 attribute assignment 진단 제거
+* 인코딩/문서 가드 강화
+  - `tests/test_mojibake_scan.py`가 이제 root의 모든 `*.md`와 `.gitignore/.editorconfig/pyrightconfig.json/.vscode/settings.json/.github/workflows/ci.yml/.spec`까지 UTF-8/BOM/mojibake 대상으로 검사
+  - 2026-03-25 기준 repo-wide 스캔에서 실제 UTF-8 손상 파일은 발견되지 않음
+* Workspace/실사이트 점검 경로 보강
+  - `.vscode/settings.json`에 `include/exclude/autoSearchPaths/extraPaths` 기준을 추가해 로컬 Pylance 범위를 `app_entry.py + src + tests`로 고정
+  - `pyrightconfig.json`과 `.gitignore`에 `pyright_report*.json` 대응을 추가
+  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...]` 경로를 README/AI 문서와 동기화
+* `.spec` / 문서 재점검
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - `README.md`, `claude.md`, `gemini.md`에 typing/encoding/live smoke 기준을 반영
+
+### 검증
+
+* `pyright`
+  - 결과: `0 errors`
+* `python -m pytest tests/test_helpers.py tests/test_parser_module.py tests/test_preflight.py tests/test_detail_fetcher.py tests/test_playwright_engine_stabilization.py tests/test_app_entry.py tests/test_ui_wiring.py tests/test_mojibake_scan.py -q`
+  - 결과: `106 passed`
+* `python app_entry.py --live-smoke --smoke-headless`
+  - 2026-03-25 결과:
+    - `fin.land` 200
+    - `new.land` 200
+    - `m.land` -> `fin.land` map redirect
+
 ## **v15.0.17 (2026-03-21)**
 
 **성능 최적화 리팩토링 + hidden-tab stale refresh 동기화**

@@ -270,7 +270,7 @@ class CrawlerTabCrawlControlMixin:
     def _open_complex_url(self: Any):
         item = self.table_list.item(self.table_list.currentRow(), 1)
         if item:
-            url = f"https://new.land.naver.com/complexes/{item.text()}"
+            url = get_complex_url(item.text())
             webbrowser.open(url)
 
     def start_crawling(self: Any):
@@ -308,6 +308,7 @@ class CrawlerTabCrawlControlMixin:
         self._reset_result_state()
         self.card_view.set_data([])
         self.grouped_rows = {}
+        self._last_complex_status_stats = None
         
         target_list = self._normalize_task_table()
         if not target_list:
@@ -435,10 +436,30 @@ class CrawlerTabCrawlControlMixin:
         return False
 
     def _on_crawl_finished(self: Any, data):
+        final_stats = {}
+        thread = self.crawler_thread
+        if thread and hasattr(thread, "stats"):
+            try:
+                final_stats = dict(thread.stats or {})
+            except Exception:
+                final_stats = {}
         try:
             self.btn_save.setEnabled(True)
             self.progress_widget.complete()
             self.append_log(f"✅ 크롤링 완료: 총 {len(data)}건 수집")
+            if final_stats:
+                self.append_log(
+                    "📌 진단 요약: "
+                    f"browser={final_stats.get('playwright_browser_source', '-')}, "
+                    f"entry_plan={final_stats.get('playwright_last_entry_plan', '-')}, "
+                    f"response={int(final_stats.get('response_seen_count', 0) or 0)}, "
+                    f"match={int(final_stats.get('response_match_count', 0) or 0)}, "
+                    f"capture_fail={int(final_stats.get('capture_failed_count', 0) or 0)}, "
+                    f"block_like={int(final_stats.get('block_like_redirect_count', 0) or 0)}, "
+                    f"detail_partial={int(final_stats.get('detail_partial_count', 0) or 0)}, "
+                    f"detail_fail={int(final_stats.get('detail_fail_count', 0) or 0)}",
+                    10,
+                )
 
             if self.crawl_cache:
                 self.crawl_cache.flush()
@@ -491,6 +512,45 @@ class CrawlerTabCrawlControlMixin:
             price_up=stats.get("price_up", 0),
             price_down=stats.get("price_down", 0),
         )
+        browser_source = str(stats.get("playwright_browser_source", "") or "")
+        response_seen = int(stats.get("response_seen_count", 0) or 0)
+        response_match = int(stats.get("response_match_count", 0) or 0)
+        parse_fail = int(stats.get("parse_fail_count", 0) or 0)
+        capture_failed = int(stats.get("capture_failed_count", 0) or 0)
+        block_like = int(stats.get("block_like_redirect_count", 0) or 0)
+        detail_partial = int(stats.get("detail_partial_count", 0) or 0)
+        detail_fail = int(stats.get("detail_fail_count", 0) or 0)
+        final_url = str(stats.get("playwright_last_final_url", "") or "")
+        block_reason = str(stats.get("playwright_last_block_reason", "") or "")
+        entry_plan = str(stats.get("playwright_last_entry_plan", "") or "")
+        snapshot = (
+            browser_source,
+            response_seen,
+            response_match,
+            parse_fail,
+            capture_failed,
+            block_like,
+            detail_partial,
+            detail_fail,
+            final_url,
+            block_reason,
+            entry_plan,
+        )
+        if getattr(self, "_last_complex_status_stats", None) == snapshot:
+            return
+        self._last_complex_status_stats = snapshot
+        message = (
+            f"PW {browser_source or '-'} / 응답 {response_seen} / 매칭 {response_match}"
+            f" / 파싱실패 {parse_fail} / capture실패 {capture_failed}"
+            f" / block-like {block_like} / 상세부분 {detail_partial} / 상세실패 {detail_fail}"
+        )
+        if entry_plan:
+            message += f" / plan {entry_plan}"
+        if block_reason:
+            message += f" / reason {block_reason}"
+        elif final_url:
+            message += f" / final {final_url}"
+        self.status_message.emit(message)
 
     def _save_price_snapshots(self: Any):
         """크롤링 결과를 가격 스냅샷으로 저장"""

@@ -1,6 +1,53 @@
-from datetime import datetime
-import winreg
 import re
+from datetime import datetime
+from pathlib import Path
+import os
+import winreg
+
+
+def _normalize_asset_type(asset_type: str) -> str:
+    token = str(asset_type or "APT").strip().upper()
+    return token if token in {"APT", "VL"} else "APT"
+
+
+def build_complex_url(complex_id, *, asset_type="APT", preferred_family="new"):
+    """단지 URL 생성."""
+    cid = str(complex_id or "").strip()
+    if not cid:
+        return ""
+
+    family = str(preferred_family or "new").strip().lower()
+    normalized_asset = _normalize_asset_type(asset_type)
+    path = "houses" if normalized_asset == "VL" else "complexes"
+
+    if family == "m":
+        return f"https://m.land.naver.com/{path}/{cid}"
+    return f"https://new.land.naver.com/{path}/{cid}"
+
+
+def build_article_url(
+    article_id,
+    *,
+    complex_id=None,
+    asset_type="APT",
+    preferred_family="fin",
+):
+    """매물상세 URL 생성."""
+    aid = str(article_id or "").strip()
+    if not aid:
+        return ""
+
+    family = str(preferred_family or "fin").strip().lower()
+    normalized_asset = _normalize_asset_type(asset_type)
+    if family == "m":
+        return f"https://m.land.naver.com/article/info/{aid}"
+    if family == "new":
+        cid = str(complex_id or "").strip()
+        if not cid:
+            return ""
+        path = "houses" if normalized_asset == "VL" else "complexes"
+        return f"https://new.land.naver.com/{path}/{cid}?articleId={aid}"
+    return f"https://fin.land.naver.com/articles/{aid}"
 
 class PriceConverter:
     @staticmethod
@@ -76,16 +123,93 @@ class PricePerPyeongCalculator:
             return "-"
         return PriceConverter.to_string(price_per_pyeong) + "/평"
 
-def get_complex_url(complex_id):
-    """단지 URL 생성"""
-    return f"https://new.land.naver.com/complexes/{complex_id}"
+def get_complex_url(complex_id, asset_type="APT", preferred_family="new"):
+    """호환용 단지 URL 생성."""
+    return build_complex_url(
+        complex_id,
+        asset_type=asset_type,
+        preferred_family=preferred_family,
+    )
 
-def get_article_url(complex_id, article_id, asset_type="APT"):
-    """매물상세 URL 생성"""
-    path = "houses" if str(asset_type or "").upper() == "VL" else "complexes"
-    return f"https://new.land.naver.com/{path}/{complex_id}?articleId={article_id}"
+
+def get_article_url(complex_id, article_id, asset_type="APT", preferred_family="fin"):
+    """호환용 매물상세 URL 생성."""
+    return build_article_url(
+        article_id,
+        complex_id=complex_id,
+        asset_type=asset_type,
+        preferred_family=preferred_family,
+    )
 
 class ChromeParamHelper:
+    @staticmethod
+    def _iter_registry_app_paths():
+        key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"
+        for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                key = winreg.OpenKey(root, key_path)
+                try:
+                    value, _ = winreg.QueryValueEx(key, "")
+                finally:
+                    winreg.CloseKey(key)
+                if value:
+                    yield str(value)
+            except FileNotFoundError:
+                continue
+            except Exception:
+                continue
+
+    @staticmethod
+    def _iter_candidate_paths():
+        seen = set()
+        for candidate in ChromeParamHelper._iter_registry_app_paths():
+            token = str(candidate or "").strip()
+            if token and token not in seen:
+                seen.add(token)
+                yield token
+
+        roots = [
+            os.environ.get("PROGRAMFILES", ""),
+            os.environ.get("PROGRAMFILES(X86)", ""),
+            os.environ.get("LOCALAPPDATA", ""),
+        ]
+        suffixes = [
+            Path("Google/Chrome/Application/chrome.exe"),
+            Path("Google/Chrome Beta/Application/chrome.exe"),
+            Path("Google/Chrome SxS/Application/chrome.exe"),
+        ]
+        for root in roots:
+            if not root:
+                continue
+            for suffix in suffixes:
+                candidate = str(Path(root) / suffix)
+                if candidate not in seen:
+                    seen.add(candidate)
+                    yield candidate
+
+        for candidate in (
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+        ):
+            if candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+    @staticmethod
+    def get_chrome_executable_path():
+        """설치된 Chrome 실행 파일 경로를 반환합니다."""
+        for candidate in ChromeParamHelper._iter_candidate_paths():
+            try:
+                if Path(candidate).exists():
+                    return str(Path(candidate))
+            except OSError:
+                continue
+        return ""
+
     @staticmethod
     def get_chrome_major_version():
         """레지스트리에서 설치된 Chrome의 메이저 버전을 가져옵니다."""

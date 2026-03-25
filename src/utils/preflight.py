@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 from typing import Iterable, Optional
 
+from src.utils.helpers import ChromeParamHelper
 from src.utils.logger import get_logger
 from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH
 
@@ -156,6 +157,9 @@ def _find_browser_executable_under(root: Path) -> str:
 def find_missing_playwright_browser() -> str:
     if importlib.util.find_spec("playwright") is None:
         return "playwright"
+    local_chrome = ChromeParamHelper.get_chrome_executable_path()
+    if local_chrome:
+        return ""
     for candidate in _iter_playwright_browser_path_candidates():
         executable = _find_browser_executable_under(candidate)
         if executable:
@@ -219,14 +223,14 @@ def run_preflight_checks(
     elif not should_skip_playwright_browser_check():
         missing_browser = find_missing_playwright_browser()
         if missing_browser:
-            message = "Playwright Chromium 브라우저가 준비되지 않았습니다: " + missing_browser
+            message = "Playwright 브라우저(로컬 Chrome 또는 Chromium)가 준비되지 않았습니다: " + missing_browser
             if should_require_playwright_browser():
                 errors.append(message)
-                app_logger.error("Playwright Chromium 누락: %s", missing_browser)
+                app_logger.error("Playwright browser 누락: %s", missing_browser)
             elif get_effective_crawl_engine(settings_path) == "playwright":
                 errors.append(message)
                 app_logger.error(
-                    "Playwright Chromium required for effective crawl_engine=playwright: %s",
+                    "Playwright browser required for effective crawl_engine=playwright: %s",
                     missing_browser,
                 )
             else:

@@ -22,6 +22,81 @@ class NaverURLParser:
         r"m\.land\.naver\.com.*complex[=/](\d+)",
         r"m\.land\.naver\.com.*houses?[=/](\d+)",
     ]
+    _PARSE_PATTERNS = (
+        {
+            "pattern": re.compile(r"new\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE),
+            "family": "new",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(
+                r"new\.land\.naver\.com/houses/(\d+)(?:\?[^\s#]*articleId=(\d+)[^\s#]*)?",
+                re.IGNORECASE,
+            ),
+            "family": "new",
+            "entity_type": "complex",
+            "asset_type": "VL",
+            "complex_group": 1,
+            "article_group": 2,
+        },
+        {
+            "pattern": re.compile(r"land\.naver\.com/complex/(\d+)", re.IGNORECASE),
+            "family": "legacy",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(r"complexNo=(\d+)(?:.*?articleId=(\d+))?", re.IGNORECASE),
+            "family": "legacy",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+            "article_group": 2,
+        },
+        {
+            "pattern": re.compile(r"/api/.*complex[=/](\d+)", re.IGNORECASE),
+            "family": "api",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(r"/api/.*houses?[=/](\d+)", re.IGNORECASE),
+            "family": "api",
+            "entity_type": "complex",
+            "asset_type": "VL",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(r"m\.land\.naver\.com/article/(?:info|view)/(\d+)", re.IGNORECASE),
+            "family": "m",
+            "entity_type": "article",
+            "article_group": 1,
+        },
+        {
+            "pattern": re.compile(r"m\.land\.naver\.com.*complex[=/](\d+)", re.IGNORECASE),
+            "family": "m",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(r"m\.land\.naver\.com.*houses?[=/](\d+)", re.IGNORECASE),
+            "family": "m",
+            "entity_type": "complex",
+            "asset_type": "VL",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(r"fin\.land\.naver\.com/articles/(\d+)", re.IGNORECASE),
+            "family": "fin",
+            "entity_type": "article",
+            "article_group": 1,
+        },
+    )
     _URL_RE = re.compile(r"https?://[^\s<>\"']+")
     _STANDALONE_ID_LINE_RE = re.compile(r"^\s*(\d+)\s*$")
     _CONTEXT_ID_LINE_RE = re.compile(
@@ -35,11 +110,65 @@ class NaverURLParser:
     @classmethod
     def extract_complex_id(cls, url):
         """URL에서 단지 ID를 추출한다."""
-        for pattern in cls.PATTERNS:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        return None
+        parsed = cls.parse_url_info(url)
+        complex_id = str(parsed.get("complex_id", "") or "").strip()
+        return complex_id or None
+
+    @classmethod
+    def extract_article_id(cls, url):
+        """URL에서 매물 ID를 추출한다."""
+        parsed = cls.parse_url_info(url)
+        article_id = str(parsed.get("article_id", "") or "").strip()
+        return article_id or None
+
+    @classmethod
+    def parse_url_info(cls, url_or_text):
+        """URL 문자열을 구조화해 반환한다."""
+        raw = str(url_or_text or "").strip()
+        if not raw:
+            return {
+                "url": "",
+                "family": "",
+                "entity_type": "",
+                "asset_type": "",
+                "complex_id": "",
+                "article_id": "",
+            }
+
+        url = cls._URL_RE.search(raw)
+        token = url.group(0) if url else raw
+        for entry in cls._PARSE_PATTERNS:
+            match = entry["pattern"].search(token)
+            if not match:
+                continue
+            complex_group = entry.get("complex_group")
+            article_group = entry.get("article_group")
+            complex_id = match.group(complex_group) if complex_group else ""
+            article_id = match.group(article_group) if article_group and match.lastindex and match.lastindex >= article_group else ""
+            if not article_id:
+                article_match = re.search(r"articleId=(\d+)", token, re.IGNORECASE)
+                if article_match:
+                    article_id = article_match.group(1)
+            entity_type = str(entry.get("entity_type", "") or "")
+            if article_id and entity_type != "article":
+                entity_type = "article"
+            return {
+                "url": token,
+                "family": str(entry.get("family", "") or ""),
+                "entity_type": entity_type,
+                "asset_type": str(entry.get("asset_type", "") or ""),
+                "complex_id": str(complex_id or ""),
+                "article_id": str(article_id or ""),
+            }
+
+        return {
+            "url": token,
+            "family": "",
+            "entity_type": "",
+            "asset_type": "",
+            "complex_id": "",
+            "article_id": "",
+        }
 
     @classmethod
     def extract_from_text(cls, text):
@@ -110,5 +239,18 @@ class NaverURLParser:
         except RetryCancelledError:
             raise
         except Exception as e:
-            get_logger("NaverURLParser").debug(f"단지명 조회 실패 ({complex_id}): {e}")
+            logger = get_logger("NaverURLParser")
+            if isinstance(e, HTTPError):
+                response_body = ""
+                try:
+                    response_body = e.read().decode("utf-8", errors="ignore")
+                except Exception:
+                    response_body = ""
+                status = int(getattr(e, "code", 0) or 0)
+                if status == 429 or "TOO_MANY_REQUESTS" in response_body:
+                    logger.warning(f"단지명 조회 rate limit ({complex_id}): status={status}")
+                else:
+                    logger.debug(f"단지명 조회 HTTP 실패 ({complex_id}): status={status}, body={response_body[:160]}")
+            else:
+                logger.debug(f"단지명 조회 실패 ({complex_id}): {e}")
             return f"단지_{complex_id}"

@@ -86,6 +86,7 @@ class URLBatchDialog(QDialog):
             "예시:\n"
             "https://new.land.naver.com/complexes/102378\n"
             "https://land.naver.com/complex?complexNo=123456\n"
+            "https://m.land.naver.com/complex/123456\n"
             "123456\n"
             "789012"
         )

@@ -363,10 +363,17 @@ class GeoCrawlerTab(CrawlerTab):
         drain_wait = int(stats.get("response_drain_wait_count", 0) or 0)
         drain_timeout = int(stats.get("response_drain_timeout_count", 0) or 0)
         response_seen = int(stats.get("response_seen_count", 0) or 0)
+        response_match = int(stats.get("response_match_count", 0) or 0)
         parse_fail = int(stats.get("parse_fail_count", 0) or 0)
+        detail_partial = int(stats.get("detail_partial_count", 0) or 0)
         detail_fail = int(stats.get("detail_fail_count", 0) or 0)
         detail_skip = int(stats.get("detail_fetch_skipped_count", 0) or 0)
         blocked_count = int(stats.get("blocked_page_count", 0) or 0)
+        capture_failed = int(stats.get("capture_failed_count", 0) or 0)
+        block_like = int(stats.get("block_like_redirect_count", 0) or 0)
+        browser_source = str(stats.get("playwright_browser_source", "") or "")
+        entry_plan = str(stats.get("playwright_last_entry_plan", "") or "")
+        block_reason = str(stats.get("playwright_last_block_reason", "") or "")
         geo_incomplete = bool(stats.get("geo_incomplete", False))
         incomplete_reasons = ", ".join(
             str(x) for x in (stats.get("geo_incomplete_reasons", []) or []) if str(x)
@@ -377,10 +384,17 @@ class GeoCrawlerTab(CrawlerTab):
             drain_wait,
             drain_timeout,
             response_seen,
+            response_match,
             parse_fail,
+            detail_partial,
             detail_fail,
             detail_skip,
             blocked_count,
+            capture_failed,
+            block_like,
+            browser_source,
+            entry_plan,
+            block_reason,
             geo_incomplete,
             incomplete_reasons,
         )
@@ -390,9 +404,15 @@ class GeoCrawlerTab(CrawlerTab):
         message = (
             "Geo 발견 "
             f"{discovered} / 중복제거 {dedup} / drain대기 {drain_wait} / drain타임아웃 {drain_timeout}"
-            f" / 응답 {response_seen} / 파싱실패 {parse_fail} / 상세실패 {detail_fail}"
-            f" / 상세스킵 {detail_skip} / 차단 {blocked_count}"
+            f" / 브라우저 {browser_source or '-'} / 응답 {response_seen} / 매칭 {response_match}"
+            f" / 파싱실패 {parse_fail} / 상세부분 {detail_partial} / 상세실패 {detail_fail}"
+            f" / 상세스킵 {detail_skip} / capture실패 {capture_failed} / block-like {block_like}"
+            f" / 차단 {blocked_count}"
         )
+        if entry_plan:
+            message += f" / plan {entry_plan}"
+        if block_reason:
+            message += f" / reason {block_reason}"
         if geo_incomplete:
             message += f" / incomplete {incomplete_reasons or 'unknown'}"
         self.status_message.emit(message)
@@ -411,9 +431,16 @@ class GeoCrawlerTab(CrawlerTab):
         drain_wait = int(final_stats.get("response_drain_wait_count", 0) or 0)
         drain_timeout = int(final_stats.get("response_drain_timeout_count", 0) or 0)
         response_seen = int(final_stats.get("response_seen_count", 0) or 0)
+        response_match = int(final_stats.get("response_match_count", 0) or 0)
         parse_fail = int(final_stats.get("parse_fail_count", 0) or 0)
+        detail_partial = int(final_stats.get("detail_partial_count", 0) or 0)
         detail_fail = int(final_stats.get("detail_fail_count", 0) or 0)
         blocked_count = int(final_stats.get("blocked_page_count", 0) or 0)
+        capture_failed = int(final_stats.get("capture_failed_count", 0) or 0)
+        block_like = int(final_stats.get("block_like_redirect_count", 0) or 0)
+        browser_source = str(final_stats.get("playwright_browser_source", "") or "")
+        entry_plan = str(final_stats.get("playwright_last_entry_plan", "") or "")
+        block_reason = str(final_stats.get("playwright_last_block_reason", "") or "")
         geo_incomplete = bool(final_stats.get("geo_incomplete", False))
         incomplete_reasons = ", ".join(
             str(x) for x in (final_stats.get("geo_incomplete_reasons", []) or []) if str(x)
@@ -422,14 +449,22 @@ class GeoCrawlerTab(CrawlerTab):
         self.append_log(
             "📌 Geo 요약: "
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}, "
-            f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}",
+            f"브라우저 {browser_source or '-'}, 응답 {response_seen}, 매칭 {response_match}, "
+            f"파싱실패 {parse_fail}, 상세부분 {detail_partial}, 상세실패 {detail_fail}, "
+            f"capture실패 {capture_failed}, block-like {block_like}, 차단 {blocked_count}",
             10,
         )
         summary_message = (
             "Geo 완료: "
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}, "
-            f"응답 {response_seen}, 파싱실패 {parse_fail}, 상세실패 {detail_fail}, 차단 {blocked_count}"
+            f"브라우저 {browser_source or '-'}, 응답 {response_seen}, 매칭 {response_match}, "
+            f"파싱실패 {parse_fail}, 상세부분 {detail_partial}, 상세실패 {detail_fail}, "
+            f"capture실패 {capture_failed}, block-like {block_like}, 차단 {blocked_count}"
         )
+        if entry_plan:
+            summary_message += f", plan {entry_plan}"
+        if block_reason:
+            summary_message += f", reason {block_reason}"
         self.status_message.emit(summary_message)
         if geo_incomplete:
             incomplete_message = f"Geo incomplete: {incomplete_reasons or 'unknown'}"

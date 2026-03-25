@@ -19,6 +19,37 @@ class TestNaverURLParser(unittest.TestCase):
         url = "https://new.land.naver.com/houses/654321?articleId=999999999"
         self.assertEqual(NaverURLParser.extract_complex_id(url), "654321")
 
+        url = "https://fin.land.naver.com/articles/2513105556"
+        self.assertIsNone(NaverURLParser.extract_complex_id(url))
+
+    def test_extract_article_id(self):
+        url = "https://new.land.naver.com/houses/654321?articleId=999999999"
+        self.assertEqual(NaverURLParser.extract_article_id(url), "999999999")
+
+        url = "https://m.land.naver.com/article/info/2513105556"
+        self.assertEqual(NaverURLParser.extract_article_id(url), "2513105556")
+
+        url = "https://fin.land.naver.com/articles/2513105556"
+        self.assertEqual(NaverURLParser.extract_article_id(url), "2513105556")
+
+    def test_parse_url_info_returns_structured_metadata(self):
+        parsed = NaverURLParser.parse_url_info(
+            "https://new.land.naver.com/houses/654321?articleId=999999999"
+        )
+        self.assertEqual(parsed["family"], "new")
+        self.assertEqual(parsed["entity_type"], "article")
+        self.assertEqual(parsed["asset_type"], "VL")
+        self.assertEqual(parsed["complex_id"], "654321")
+        self.assertEqual(parsed["article_id"], "999999999")
+
+        parsed_fin = NaverURLParser.parse_url_info(
+            "https://fin.land.naver.com/articles/2513105556"
+        )
+        self.assertEqual(parsed_fin["family"], "fin")
+        self.assertEqual(parsed_fin["entity_type"], "article")
+        self.assertEqual(parsed_fin["article_id"], "2513105556")
+        self.assertEqual(parsed_fin["complex_id"], "")
+
     def test_extract_from_text(self):
         text = "https://land.naver.com/complex/11111\n단지ID: 22222"
         results = NaverURLParser.extract_from_text(text)

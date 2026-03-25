@@ -496,9 +496,9 @@ class AppTabSetupMixin:
             <span class="step-num">1</span>
             <span class="step-title">단지 ID 찾기</span><br>
             <span class="step-desc">
-                <a href="https://new.land.naver.com">네이버 부동산</a>에서 아파트를 검색하세요.<br>
-                URL에서 <code>/complexes/</code> 뒤의 숫자가 <b>단지 ID</b>입니다.<br>
-                예시: <code>new.land.naver.com/complexes/<b>123456</b></code>
+                네이버 부동산에서 단지를 연 뒤 현재 URL의 단지 식별자를 확인하세요.<br>
+                보통 <code>/complexes/123456</code> 또는 <code>complexNo=123456</code> 형태의 숫자가 <b>단지 ID</b>입니다.<br>
+                브라우저 URL family는 시점에 따라 달라질 수 있습니다.
             </span>
         </div>
 

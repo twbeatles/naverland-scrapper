@@ -83,6 +83,10 @@ class PlaywrightComplexModeMixin:
                 self.thread.log(f"\n[{current}/{total}] {name} - {trade_type}")
                 try:
                     result = await self._crawl_target_with_cache(name, cid, trade_type)
+                    if bool(result.get("block_like_redirect", False)):
+                        raise RuntimeError(str(result.get("block_reason", "") or "block-like redirect"))
+                    if bool(result.get("capture_failed", False)):
+                        raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
                     count = int(result.get("count", 0))
                     complex_count += count
                     if trade_type not in complex_trade_types:
@@ -206,7 +210,17 @@ class PlaywrightComplexModeMixin:
                     list(cached or []),
                     trade_type,
                 )
-                return {"count": matched, "raw_count": len(cached), "cache_hit": True}
+                return {
+                    "count": matched,
+                    "raw_count": len(cached),
+                    "cache_hit": True,
+                    "response_match_count": 0,
+                    "capture_failed": False,
+                    "block_like_redirect": False,
+                    "block_reason": "",
+                    "failure_reason": "",
+                    "final_url": "",
+                }
 
         collect_result = await self._collect_target_raw_items(
             name,
@@ -219,22 +233,62 @@ class PlaywrightComplexModeMixin:
             source_zoom=source_zoom,
             marker_id=cache_marker_id if is_complex_mode else marker_id,
         )
+        if bool(collect_result.get("capture_failed", False)) or bool(collect_result.get("block_like_redirect", False)):
+            recovery_reason = str(
+                collect_result.get("failure_reason", "")
+                or collect_result.get("block_reason", "")
+                or "capture recovery"
+            )
+            if await self._maybe_enable_headed_fallback(recovery_reason):
+                collect_result = await self._collect_target_raw_items(
+                    name,
+                    cid,
+                    trade_type,
+                    asset_type=cache_asset_type if is_complex_mode else asset_type,
+                    mode=mode_token,
+                    source_lat=source_lat,
+                    source_lon=source_lon,
+                    source_zoom=source_zoom,
+                    marker_id=cache_marker_id if is_complex_mode else marker_id,
+                )
         raw_items = list(collect_result.get("raw_items", []) or [])
         response_seen = bool(collect_result.get("response_seen", False))
         parse_success = bool(collect_result.get("parse_success", response_seen))
         drain_timed_out = bool(collect_result.get("drain_timed_out", False))
+        response_match_count = int(collect_result.get("response_match_count", 0) or 0)
+        final_url = str(collect_result.get("final_url", "") or "")
+        block_like_redirect = bool(collect_result.get("block_like_redirect", False))
+        block_reason = str(collect_result.get("block_reason", "") or "")
+        capture_failed = bool(collect_result.get("capture_failed", False))
+        failure_reason = str(collect_result.get("failure_reason", "") or "")
         if response_seen:
             self.thread.stats["response_seen_count"] = int(self.thread.stats.get("response_seen_count", 0)) + 1
         if parse_success:
             self.thread.stats["parse_success_count"] = int(self.thread.stats.get("parse_success_count", 0)) + 1
         elif response_seen:
             self.thread.stats["parse_fail_count"] = int(self.thread.stats.get("parse_fail_count", 0)) + 1
+        self.thread.stats["response_match_count"] = int(self.thread.stats.get("response_match_count", 0)) + response_match_count
+        if final_url:
+            self.thread.stats["playwright_last_final_url"] = final_url
+        if block_reason:
+            self.thread.stats["playwright_last_block_reason"] = block_reason
+        if block_like_redirect:
+            self.thread.stats["block_like_redirect_count"] = int(self.thread.stats.get("block_like_redirect_count", 0)) + 1
+        if capture_failed:
+            self.thread.stats["capture_failed_count"] = int(self.thread.stats.get("capture_failed_count", 0)) + 1
         if cache:
             if raw_items:
                 cache.set(cid, trade_type, raw_items, **cache_ctx)
             else:
                 ttl_seconds = int(max(0, self.thread.negative_cache_ttl_minutes) * 60)
-                if response_seen and parse_success and not drain_timed_out and ttl_seconds > 0:
+                if (
+                    response_seen
+                    and parse_success
+                    and not drain_timed_out
+                    and not capture_failed
+                    and not block_like_redirect
+                    and ttl_seconds > 0
+                ):
                     cache.set(
                         cid,
                         trade_type,
@@ -245,6 +299,8 @@ class PlaywrightComplexModeMixin:
                     )
                 elif drain_timed_out:
                     self.thread.log("   ⚠️ drain timeout detected, negative cache skipped", 30)
+                elif capture_failed or block_like_redirect:
+                    self.thread.log("   ⚠️ capture failure detected, negative cache skipped", 30)
         matched = await self._process_raw_items_with_filtered_details(raw_items, trade_type)
         return {
             "count": matched,
@@ -253,6 +309,12 @@ class PlaywrightComplexModeMixin:
             "response_seen": response_seen,
             "parse_success": parse_success,
             "drain_timed_out": drain_timed_out,
+            "response_match_count": response_match_count,
+            "capture_failed": capture_failed,
+            "block_like_redirect": block_like_redirect,
+            "block_reason": block_reason,
+            "failure_reason": failure_reason,
+            "final_url": final_url,
         }
 
     async def _collect_target_raw_items(
@@ -275,106 +337,161 @@ class PlaywrightComplexModeMixin:
         parse_success = False
         parse_failed = False
         drain_timed_out = False
+        response_match_count = 0
+        final_url = ""
+        block_like_redirect = False
+        block_reason = ""
+        confirmed_capture = False
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
             page = self._desktop_page
             if page is None:
                 break
-            pending_tasks: set[asyncio.Task] = set()
-
-            async def _consume(response):
-                nonlocal response_seen, parse_success, parse_failed
-                url = response.url
-                expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
-                if expected not in url:
-                    return
-                response_seen = True
-                try:
-                    payload = await response.json()
-                except Exception:
-                    parse_failed = True
-                    return
-                article_list = payload.get("articleList") or payload.get("articles") or []
-                if not isinstance(article_list, list):
-                    parse_failed = True
-                    return
-                parse_success = True
-                for article in article_list:
-                    if detect_trade_type(article, requested_trade_type=trade_type) != trade_type:
-                        continue
-                    payload_marker_id = "" if mode == "complex" else str(marker_id or cid or "")
-                    item = normalize_article_payload(
-                        article,
-                        complex_name=name,
-                        complex_id=cid,
-                        requested_trade_type=trade_type,
-                        asset_type=path_asset,
-                        mode=mode,
-                        lat=source_lat,
-                        lon=source_lon,
-                        zoom=source_zoom,
-                        marker_id=payload_marker_id,
-                    )
-                    aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
-                    if not aid or aid in seen_ids:
-                        continue
-                    seen_ids.add(aid)
-                    raw_items.append(item)
-
-            def _handle(response):
-                try:
-                    self._spawn_response_task(pending_tasks, _consume(response))
-                except Exception:
-                    return None
-
-            page.on("response", _handle)
-            try:
-                url = (
-                    f"https://new.land.naver.com/{base_kind}/{cid}?"
-                    + urlencode(
-                        {
-                            "ms": f"{source_lat or 37.5},{source_lon or 127},{source_zoom or 16}",
-                            "a": path_asset,
-                            "tradeTypes": _TRADE_TO_CODE.get(trade_type, "A1"),
-                        }
-                    )
+            target_url = (
+                f"https://new.land.naver.com/{base_kind}/{cid}?"
+                + urlencode(
+                    {
+                        "ms": f"{source_lat or 37.5},{source_lon or 127},{source_zoom or 16}",
+                        "a": path_asset,
+                        "tradeTypes": _TRADE_TO_CODE.get(trade_type, "A1"),
+                    }
                 )
-                await self._async_retry(
-                    f"article goto {base_kind}/{cid}",
-                    lambda: page.goto(url, wait_until="domcontentloaded"),
-                )
-                try:
-                    await self._async_retry(
-                        f"article load {base_kind}/{cid}",
-                        lambda: page.wait_for_load_state("networkidle", timeout=6000),
-                    )
-                except Exception:
-                    pass
-                for text in ["매매", trade_type]:
+            )
+            for plan in self._build_entry_plans(target_url):
+                pending_tasks: set[asyncio.Task] = set()
+                plan_response_seen = False
+                plan_parse_success = False
+                plan_parse_failed = False
+                plan_block_like_redirect = False
+                plan_block_reason = ""
+                plan_final_url = ""
+
+                async def _consume(response):
+                    nonlocal response_seen, parse_success, parse_failed, response_match_count
+                    nonlocal plan_response_seen, plan_parse_success, plan_parse_failed
+                    url = response.url
+                    expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
+                    if expected not in url:
+                        return
+                    response_match_count += 1
+                    response_seen = True
+                    plan_response_seen = True
                     try:
-                        await page.locator(f"text={text}").first.click(timeout=1000)
-                        await page.wait_for_timeout(400)
+                        payload = await response.json()
                     except Exception:
-                        continue
-                await page.wait_for_timeout(1800)
-            finally:
+                        parse_failed = True
+                        plan_parse_failed = True
+                        return
+                    article_list = payload.get("articleList") or payload.get("articles") or []
+                    if not isinstance(article_list, list):
+                        parse_failed = True
+                        plan_parse_failed = True
+                        return
+                    parse_success = True
+                    plan_parse_success = True
+                    for article in article_list:
+                        if detect_trade_type(article, requested_trade_type=trade_type) != trade_type:
+                            continue
+                        payload_marker_id = "" if mode == "complex" else str(marker_id or cid or "")
+                        item = normalize_article_payload(
+                            article,
+                            complex_name=name,
+                            complex_id=cid,
+                            requested_trade_type=trade_type,
+                            asset_type=path_asset,
+                            mode=mode,
+                            lat=source_lat,
+                            lon=source_lon,
+                            zoom=source_zoom,
+                            marker_id=payload_marker_id,
+                        )
+                        aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
+                        if not aid or aid in seen_ids:
+                            continue
+                        seen_ids.add(aid)
+                        raw_items.append(item)
+
+                def _handle(response):
+                    try:
+                        self._spawn_response_task(pending_tasks, _consume(response))
+                    except Exception:
+                        return None
+
+                page.on("response", _handle)
                 try:
-                    page.remove_listener("response", _handle)
-                except Exception:
-                    pass
-                _, timed_out = await self._drain_pending_response_tasks(
-                    pending_tasks,
-                    label=f"article_capture:{base_kind}/{cid}",
-                )
-                drain_timed_out = drain_timed_out or bool(timed_out)
+                    await self._run_entry_plan(
+                        page,
+                        plan,
+                        label=f"article {base_kind}/{cid}",
+                    )
+                    try:
+                        await self._async_retry(
+                            f"article load {base_kind}/{cid}",
+                            lambda: page.wait_for_load_state("networkidle", timeout=6000),
+                        )
+                    except Exception:
+                        pass
+                    for text in ["매매", trade_type]:
+                        try:
+                            await page.locator(f"text={text}").first.click(timeout=1000)
+                            await page.wait_for_timeout(400)
+                        except Exception:
+                            continue
+                    await page.wait_for_timeout(1800)
+                    page_state = await self._classify_page_state(page)
+                    plan_final_url = str(page_state.get("final_url", "") or "")
+                    plan_block_like_redirect = bool(page_state.get("block_like_redirect", False))
+                    plan_block_reason = str(page_state.get("block_reason", "") or "")
+                except Exception as exc:
+                    self.thread.log(
+                        f"   entry plan 실패({base_kind}/{cid}, {plan.get('name', 'direct')}): {exc}",
+                        20,
+                    )
+                finally:
+                    try:
+                        page.remove_listener("response", _handle)
+                    except Exception:
+                        pass
+                    _, timed_out = await self._drain_pending_response_tasks(
+                        pending_tasks,
+                        label=f"article_capture:{base_kind}/{cid}:{plan.get('name', 'direct')}",
+                    )
+                    drain_timed_out = drain_timed_out or bool(timed_out)
+
+                if plan_final_url:
+                    final_url = plan_final_url
+                block_like_redirect = bool(plan_block_like_redirect and not raw_items)
+                if plan_block_reason:
+                    block_reason = plan_block_reason
+                if plan_response_seen and plan_parse_success:
+                    confirmed_capture = True
+                if raw_items:
+                    break
+                if plan_response_seen and plan_parse_success and not plan_parse_failed and not plan_block_like_redirect:
+                    break
             if raw_items:
                 break
+
+        capture_failed = bool(not raw_items and not confirmed_capture and (block_like_redirect or not response_seen or parse_failed))
+        failure_reason = ""
+        if block_like_redirect:
+            failure_reason = f"block-like redirect: {block_reason or final_url or 'unknown'}"
+        elif not response_seen:
+            failure_reason = f"response capture missing: {final_url or 'no_final_url'}"
+        elif parse_failed:
+            failure_reason = f"response parse failed: {final_url or 'no_final_url'}"
 
         return {
             "raw_items": raw_items,
             "response_seen": response_seen,
             "parse_success": bool(parse_success and not parse_failed),
             "drain_timed_out": drain_timed_out,
+            "response_match_count": response_match_count,
+            "final_url": final_url,
+            "block_like_redirect": block_like_redirect,
+            "block_reason": block_reason,
+            "capture_failed": capture_failed,
+            "failure_reason": failure_reason,
         }
 
     async def _enrich_items_with_mobile_details(self, items: list[dict]) -> list[dict]:
@@ -391,7 +508,28 @@ class PlaywrightComplexModeMixin:
                     f"mobile detail {article_no}",
                     lambda: fetch_mobile_article_detail(page, article_no),
                 )
-                if detail:
+                detail_meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
+                missing_field_count = int(detail_meta.get("missing_field_count", 0) or 0)
+                if missing_field_count > 0:
+                    self.thread.stats["detail_missing_field_total"] = (
+                        int(self.thread.stats.get("detail_missing_field_total", 0)) + missing_field_count
+                    )
+                network_response_count = int(detail_meta.get("network_response_count", 0) or 0)
+                if network_response_count > 0:
+                    self.thread.stats["detail_network_response_total"] = (
+                        int(self.thread.stats.get("detail_network_response_total", 0)) + network_response_count
+                    )
+                hydration_hit = int(detail_meta.get("hydration_hit", 0) or 0)
+                if hydration_hit > 0:
+                    self.thread.stats["detail_hydration_hit_count"] = (
+                        int(self.thread.stats.get("detail_hydration_hit_count", 0)) + hydration_hit
+                    )
+                parse_state = str(detail_meta.get("detail_parse_state", "") or "")
+                if parse_state == "partial":
+                    self.thread.stats["detail_partial_count"] = (
+                        int(self.thread.stats.get("detail_partial_count", 0)) + 1
+                    )
+                if detail and parse_state != "failed":
                     detail_success = True
                     self.thread.stats["detail_fetch_success"] = (
                         int(self.thread.stats.get("detail_fetch_success", 0)) + 1

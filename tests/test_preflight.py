@@ -89,7 +89,36 @@ class TestPreflight(unittest.TestCase):
                     log_dir=base / "logs",
                 )
             self.assertFalse(ok)
-            self.assertTrue(any("Playwright Chromium" in err for err in errors))
+            self.assertTrue(any("Playwright 브라우저" in err for err in errors))
+
+    def test_run_preflight_checks_accepts_local_chrome_without_playwright_chromium(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch.dict(
+                    os.environ,
+                    {
+                        "NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK": "",
+                        "NAVERLAND_REQUIRE_PLAYWRIGHT_BROWSER": "",
+                    },
+                    clear=False,
+                ),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                )
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
 
     def test_run_preflight_checks_warns_only_when_effective_engine_is_selenium(self):
         with tempfile.TemporaryDirectory() as tmp:

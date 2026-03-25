@@ -12,6 +12,10 @@ from PyInstaller.utils.hooks import collect_submodules
 # Assume the spec is invoked from repository root.
 # Rechecked on 2026-03-21 (.spec/doc/gitignore/runtime-status/performance refactor pass):
 # no extra hidden imports/hooks required.
+# Rechecked on 2026-03-25 (repo-wide pyright/encoding/live-smoke consistency pass):
+# `app_entry.py --live-smoke`, `.vscode/settings.json`, `pyrightconfig.json`,
+# and repo-wide typing/encoding guardrails are runtime/editor-only changes and
+# do not require extra PyInstaller datas, hidden imports, or hooks.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)

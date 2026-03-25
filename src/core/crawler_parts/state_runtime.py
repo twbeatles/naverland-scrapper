@@ -71,10 +71,27 @@ class CrawlerStateRuntimeMixin:
             "detail_fetch_success": 0,
             "detail_success_count": 0,
             "detail_fail_count": 0,
+            "detail_partial_count": 0,
+            "detail_missing_field_total": 0,
             "detail_fetch_skipped_count": 0,
             "blocked_page_count": 0,
             "playwright_recycle_count": 0,
             "playwright_last_recycle_reason": "",
+            "playwright_browser_source": "",
+            "playwright_browser_path": "",
+            "playwright_profile_dir": "",
+            "playwright_session_reused": 0,
+            "playwright_headed_fallback_used": 0,
+            "playwright_warmup_count": 0,
+            "playwright_last_entry_plan": "",
+            "playwright_last_final_url": "",
+            "playwright_last_page_title": "",
+            "playwright_last_block_reason": "",
+            "response_match_count": 0,
+            "capture_failed_count": 0,
+            "block_like_redirect_count": 0,
+            "detail_network_response_total": 0,
+            "detail_hydration_hit_count": 0,
             "fallback_trigger_count": 0,
             "fallback_last_reason": "",
             "block_detect_count": 0,
@@ -341,10 +358,27 @@ class CrawlerStateRuntimeMixin:
             "detail_fetch_success": self.stats.get("detail_fetch_success", 0),
             "detail_success_count": self.stats.get("detail_success_count", 0),
             "detail_fail_count": self.stats.get("detail_fail_count", 0),
+            "detail_partial_count": self.stats.get("detail_partial_count", 0),
+            "detail_missing_field_total": self.stats.get("detail_missing_field_total", 0),
             "detail_fetch_skipped_count": self.stats.get("detail_fetch_skipped_count", 0),
             "blocked_page_count": self.stats.get("blocked_page_count", 0),
             "playwright_recycle_count": self.stats.get("playwright_recycle_count", 0),
             "playwright_last_recycle_reason": self.stats.get("playwright_last_recycle_reason", ""),
+            "playwright_browser_source": self.stats.get("playwright_browser_source", ""),
+            "playwright_browser_path": self.stats.get("playwright_browser_path", ""),
+            "playwright_profile_dir": self.stats.get("playwright_profile_dir", ""),
+            "playwright_session_reused": self.stats.get("playwright_session_reused", 0),
+            "playwright_headed_fallback_used": self.stats.get("playwright_headed_fallback_used", 0),
+            "playwright_warmup_count": self.stats.get("playwright_warmup_count", 0),
+            "playwright_last_entry_plan": self.stats.get("playwright_last_entry_plan", ""),
+            "playwright_last_final_url": self.stats.get("playwright_last_final_url", ""),
+            "playwright_last_page_title": self.stats.get("playwright_last_page_title", ""),
+            "playwright_last_block_reason": self.stats.get("playwright_last_block_reason", ""),
+            "response_match_count": self.stats.get("response_match_count", 0),
+            "capture_failed_count": self.stats.get("capture_failed_count", 0),
+            "block_like_redirect_count": self.stats.get("block_like_redirect_count", 0),
+            "detail_network_response_total": self.stats.get("detail_network_response_total", 0),
+            "detail_hydration_hit_count": self.stats.get("detail_hydration_hit_count", 0),
             "fallback_trigger_count": self.stats.get("fallback_trigger_count", 0),
             "fallback_last_reason": self.stats.get("fallback_last_reason", ""),
             "block_detect_count": self.stats.get("block_detect_count", 0),
@@ -419,6 +453,10 @@ class CrawlerStateRuntimeMixin:
         if "temporary blocked page detected" in text:
             return True
         if "blocked page" in text:
+            return True
+        if "block-like redirect" in text:
+            return True
+        if "redirect_404" in text:
             return True
         for pattern in getattr(self, "BLOCKED_PAGE_PATTERNS", ()):
             token = str(pattern or "").lower()

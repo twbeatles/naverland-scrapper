@@ -4,13 +4,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SCAN_ROOTS = (ROOT / "src", ROOT / "tests")
-ROOT_TEXT_FILES = (
+ROOT_FIXED_TEXT_FILES = (
     ROOT / "app_entry.py",
-    ROOT / "README.md",
-    ROOT / "claude.md",
-    ROOT / "gemini.md",
-    ROOT / "update_history.md",
     ROOT / "naverland-scrapper.spec",
+    ROOT / ".gitignore",
     ROOT / ".editorconfig",
     ROOT / "pyrightconfig.json",
     ROOT / ".vscode" / "settings.json",
@@ -34,7 +31,12 @@ def _line_has_mojibake(line: str) -> bool:
 def _iter_tracked_text_files():
     seen = set()
 
-    for path in ROOT_TEXT_FILES:
+    for path in sorted(ROOT.glob("*.md")):
+        if path.exists() and path not in seen:
+            seen.add(path)
+            yield path
+
+    for path in ROOT_FIXED_TEXT_FILES:
         if path.exists() and path not in seen:
             seen.add(path)
             yield path
