@@ -16,6 +16,11 @@ from PyInstaller.utils.hooks import collect_submodules
 # `app_entry.py --live-smoke`, `.vscode/settings.json`, `pyrightconfig.json`,
 # and repo-wide typing/encoding guardrails are runtime/editor-only changes and
 # do not require extra PyInstaller datas, hidden imports, or hooks.
+# Rechecked on 2026-04-10 (live-site reliability/doc/spec/gitignore pass):
+# detail parser front-api mapping, 429 fast-fallback name lookup cooldown,
+# expanded live smoke probes/CLI flags, and helper-based URL family cleanup
+# remain runtime/UI-only and do not require extra PyInstaller datas, hidden
+# imports, or hooks.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)

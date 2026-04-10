@@ -230,6 +230,18 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             dlg.deleteLater()
             self._qt_app.processEvents()
 
+    def test_url_batch_dialog_placeholder_and_get_urls_follow_current_family_rules(self):
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        dlg = URLBatchDialog()
+        placeholder = dlg.input_text.placeholderText()
+        self.assertIn("https://new.land.naver.com/complexes/102378", placeholder)
+        self.assertIn("https://fin.land.naver.com/articles/2539123450", placeholder)
+        dlg._selected_complexes = [("테스트단지", "102378")]
+        self.assertEqual(dlg.get_urls(), ["https://new.land.naver.com/complexes/102378"])
+        dlg.deleteLater()
+        self._qt_app.processEvents()
+
     def test_url_batch_dialog_cancel_restores_button_state(self):
         from src.ui.dialogs.batch import URLBatchDialog
 

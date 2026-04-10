@@ -1,11 +1,12 @@
 import json
 import re
+import time
 import urllib.request
 from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
 
 from src.utils.logger import get_logger
-from src.utils.retry_handler import RetryCancelledError, RetryHandler
+from src.utils.retry_handler import RetryCancelledError
 
 
 class NaverURLParser:
@@ -105,7 +106,9 @@ class NaverURLParser:
     )
     _COMPLEX_QUERY_RE = re.compile(r"complexNo=(\d+)", re.IGNORECASE)
 
-    _retry_handler = RetryHandler(max_retries=2, base_delay=1.0)
+    _name_cache: dict[str, str] = {}
+    _name_lookup_cooldown_until: float = 0.0
+    _NAME_LOOKUP_COOLDOWN_SECONDS = 300.0
 
     @classmethod
     def extract_complex_id(cls, url):
@@ -228,29 +231,73 @@ class NaverURLParser:
             return data.get("complexDetail", {}).get("complexName", f"단지_{complex_id}")
 
     @classmethod
+    def _fallback_name(cls, complex_id):
+        return f"단지_{complex_id}"
+
+    @staticmethod
+    def _is_cancelled(cancel_checker) -> bool:
+        if not callable(cancel_checker):
+            return False
+        try:
+            return bool(cancel_checker())
+        except Exception:
+            return False
+
+    @classmethod
+    def _activate_name_lookup_cooldown(cls):
+        cls._name_lookup_cooldown_until = max(
+            float(cls._name_lookup_cooldown_until or 0.0),
+            time.monotonic() + float(cls._NAME_LOOKUP_COOLDOWN_SECONDS),
+        )
+
+    @classmethod
+    def _consume_http_error_body(cls, error: HTTPError) -> str:
+        try:
+            return error.read().decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+    @classmethod
+    def _reset_runtime_state_for_tests(cls):
+        cls._name_cache.clear()
+        cls._name_lookup_cooldown_until = 0.0
+
+    @classmethod
     def fetch_complex_name(cls, complex_id, cancel_checker=None):
         """단지 ID로 단지명을 조회한다."""
+        cid = str(complex_id or "").strip()
+        fallback_name = cls._fallback_name(cid)
+        if not cid:
+            return fallback_name
+        if cls._is_cancelled(cancel_checker):
+            raise RetryCancelledError("lookup cancelled before attempt")
+
+        cached = cls._name_cache.get(cid, "")
+        if cached:
+            return cached
+
+        if time.monotonic() < float(cls._name_lookup_cooldown_until or 0.0):
+            return fallback_name
+
+        logger = get_logger("NaverURLParser")
         try:
-            return cls._retry_handler.execute_with_retry(
-                cls._fetch_name_impl,
-                complex_id,
-                cancel_checker=cancel_checker,
-            )
+            name = str(cls._fetch_name_impl(cid) or "").strip() or fallback_name
+            if name and not name.startswith("단지_"):
+                cls._name_cache[cid] = name
+            return name
         except RetryCancelledError:
             raise
         except Exception as e:
-            logger = get_logger("NaverURLParser")
+            if cls._is_cancelled(cancel_checker):
+                raise RetryCancelledError("lookup cancelled after exception") from e
             if isinstance(e, HTTPError):
-                response_body = ""
-                try:
-                    response_body = e.read().decode("utf-8", errors="ignore")
-                except Exception:
-                    response_body = ""
+                response_body = cls._consume_http_error_body(e)
                 status = int(getattr(e, "code", 0) or 0)
                 if status == 429 or "TOO_MANY_REQUESTS" in response_body:
-                    logger.warning(f"단지명 조회 rate limit ({complex_id}): status={status}")
+                    cls._activate_name_lookup_cooldown()
+                    logger.warning(f"단지명 조회 rate limit ({cid}): status={status}")
                 else:
-                    logger.debug(f"단지명 조회 HTTP 실패 ({complex_id}): status={status}, body={response_body[:160]}")
+                    logger.debug(f"단지명 조회 HTTP 실패 ({cid}): status={status}, body={response_body[:160]}")
             else:
-                logger.debug(f"단지명 조회 실패 ({complex_id}): {e}")
-            return f"단지_{complex_id}"
+                logger.debug(f"단지명 조회 실패 ({cid}): {e}")
+            return fallback_name

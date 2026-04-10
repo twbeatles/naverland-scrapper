@@ -209,6 +209,11 @@ def _find_named_value(value, wanted_keys: set[str]):
 
 
 def _first_phone_from_value(value) -> str:
+    if isinstance(value, dict):
+        for item in value.values():
+            phone = _first_phone_from_value(item)
+            if phone:
+                return phone
     if isinstance(value, str):
         matches = re.findall(r"(0\d{1,2}-\d{3,4}-\d{4})", value)
         return matches[0] if matches else ""
@@ -220,28 +225,54 @@ def _first_phone_from_value(value) -> str:
     return ""
 
 
+def _phone_list_from_value(value) -> list[str]:
+    ordered: list[str] = []
+
+    def _append(phone: str) -> None:
+        token = str(phone or "").strip()
+        if token and token not in ordered:
+            ordered.append(token)
+
+    if isinstance(value, dict):
+        for item in value.values():
+            for phone in _phone_list_from_value(item):
+                _append(phone)
+        return ordered
+    if isinstance(value, str):
+        for match in re.findall(r"(0\d{1,2}-\d{3,4}-\d{4})", value):
+            _append(match)
+        return ordered
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            for phone in _phone_list_from_value(item):
+                _append(phone)
+    return ordered
+
+
 def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dict:
     artifacts = dict(artifacts or {})
     source_tree = {
         "hydration_state": artifacts.get("hydration_state", {}),
         "responses": artifacts.get("responses", []),
     }
-    office = _find_named_value(source_tree, {"brokerName", "officeName", "realtorName"})
+    office = _find_named_value(source_tree, {"brokerageName", "officeName", "realtorName"})
     if office and not str(fields.get("부동산상호", "") or "").strip():
         fields["부동산상호"] = str(office).strip()
 
     agent_name = _find_named_value(
         source_tree,
-        {"agentName", "brokerRepresentativeName", "representativeName"},
+        {"brokerName", "agentName", "brokerRepresentativeName", "representativeName"},
     )
     if agent_name and not str(fields.get("중개사이름", "") or "").strip():
         fields["중개사이름"] = str(agent_name).strip()
 
-    if not str(fields.get("전화1", "") or "").strip():
+    if not str(fields.get("전화1", "") or "").strip() or not str(fields.get("전화2", "") or "").strip():
         phone_value = _find_named_value(source_tree, {"phone", "phones", "telNo", "telephone", "mobileNo"})
-        phone = _first_phone_from_value(phone_value)
-        if phone:
-            fields["전화1"] = phone
+        phones = _phone_list_from_value(phone_value)
+        if phones and not str(fields.get("전화1", "") or "").strip():
+            fields["전화1"] = phones[0]
+        if len(phones) >= 2 and not str(fields.get("전화2", "") or "").strip():
+            fields["전화2"] = phones[1]
 
     if int(fields.get("기전세금(원)", 0) or 0) <= 0:
         prev_jeonse_value = _find_named_value(
@@ -370,9 +401,17 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
         if office_match:
             office = office_match.group(1).strip()
     if not office:
-        office = grab(r"brokerName\s+([^\n]+)") or grab(r"officeName\s+([^\n]+)")
+        office = (
+            grab(r"brokerageName\s+([^\n]+)")
+            or grab(r"officeName\s+([^\n]+)")
+            or grab(r"realtorName\s+([^\n]+)")
+        )
     if not agent_name:
-        agent_name = grab(r"agentName\s+([^\n]+)") or grab(r"brokerRepresentativeName\s+([^\n]+)")
+        agent_name = (
+            grab(r"brokerName\s+([^\n]+)")
+            or grab(r"agentName\s+([^\n]+)")
+            or grab(r"brokerRepresentativeName\s+([^\n]+)")
+        )
 
     max_match = re.search(r"(\d+)\s*년\s*내\s*최고\s*([\d,억\s만]+)", combined_text)
     min_match = re.search(r"(\d+)\s*년\s*내\s*최저\s*([\d,억\s만]+)", combined_text)
@@ -393,6 +432,44 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
         "전세_기간내_최고(원)": jeonse_max or 0,
         "전세_기간내_최저(원)": jeonse_min or 0,
         "기전세금(원)": prev_jeonse or 0,
+    }
+
+
+def _detail_core_field_score(fields: dict) -> int:
+    return sum(
+        1
+        for flag in (
+            bool(str(fields.get("부동산상호", "") or "").strip()),
+            bool(str(fields.get("중개사이름", "") or "").strip()),
+            bool(str(fields.get("전화1", "") or "").strip() or str(fields.get("전화2", "") or "").strip()),
+            int(fields.get("기전세금(원)", 0) or 0) > 0,
+        )
+        if flag
+    )
+
+
+def _detail_candidate_score(fields: dict, meta: dict) -> int:
+    core_score = _detail_core_field_score(fields)
+    parse_state = str(meta.get("detail_parse_state", "") or "")
+    state_bonus = {"failed": 0, "partial": 100, "success": 200}.get(parse_state, 0)
+    response_bonus = min(20, int(meta.get("network_response_count", 0) or 0) * 2)
+    hydration_bonus = 5 if int(meta.get("hydration_hit", 0) or 0) > 0 else 0
+    return state_bonus + core_score * 25 + response_bonus + hydration_bonus
+
+
+def _merge_detail_artifacts(primary: dict | None, secondary: dict | None) -> dict:
+    base = dict(primary or {})
+    extra = dict(secondary or {})
+    responses = list(base.get("responses", []) or [])
+    for item in list(extra.get("responses", []) or []):
+        if item not in responses:
+            responses.append(item)
+    return {
+        "body_text": str(extra.get("body_text", "") or base.get("body_text", "") or ""),
+        "html_text": str(extra.get("html_text", "") or base.get("html_text", "") or ""),
+        "hydration_state": extra.get("hydration_state", {}) or base.get("hydration_state", {}) or {},
+        "responses": responses,
+        "corpus_text": str(extra.get("corpus_text", "") or base.get("corpus_text", "") or ""),
     }
 
 
@@ -432,10 +509,12 @@ async def fetch_mobile_article_detail(detail_page, article_no: str) -> dict:
     if not article_no:
         return {}
 
-    body_text = ""
-    corpus_text = ""
-    selected_source = ""
-    selected_artifacts: dict = {}
+    best_source = ""
+    best_artifacts: dict = {}
+    best_fields: dict = {}
+    best_meta: dict = {}
+    best_body_text = ""
+    best_score = -1
     for source, url in (
         ("fin_article", f"https://fin.land.naver.com/articles/{article_no}"),
         ("m_info", f"https://m.land.naver.com/article/info/{article_no}"),
@@ -446,38 +525,39 @@ async def fetch_mobile_article_detail(detail_page, article_no: str) -> dict:
         candidate_corpus = str(artifacts.get("corpus_text", "") or "")
         if _is_not_found_body(candidate_body) and not candidate_corpus:
             continue
-        body_text = candidate_body
-        corpus_text = candidate_corpus
-        selected_source = source
-        selected_artifacts = artifacts
-        if _is_meaningful_body(candidate_body) or len(candidate_corpus) >= 120:
+        merged_artifacts = dict(artifacts)
+
+        try:
+            await detail_page.locator("text=실거래가").first.click()
+            await detail_page.wait_for_timeout(250)
+            await detail_page.locator("text=전세").first.click()
+            inline_artifacts = await _collect_inline_artifacts(detail_page)
+            merged_artifacts = _merge_detail_artifacts(artifacts, inline_artifacts)
+        except Exception:
+            pass
+
+        body_text = str(merged_artifacts.get("body_text", "") or candidate_body or "")
+        corpus_text = str(merged_artifacts.get("corpus_text", "") or candidate_corpus or "")
+        fields = _parse_detail_fields(body_text, fallback_text=corpus_text)
+        fields = _backfill_fields_from_artifacts(fields, merged_artifacts)
+        meta = _build_detail_meta(source, body_text, fields, merged_artifacts)
+        score = _detail_candidate_score(fields, meta)
+
+        if score > best_score:
+            best_source = source
+            best_artifacts = merged_artifacts
+            best_fields = fields
+            best_meta = meta
+            best_body_text = body_text
+            best_score = score
+
+        if _detail_core_field_score(fields) > 0 and str(meta.get("detail_parse_state", "")) in {"partial", "success"}:
             break
 
-    try:
-        await detail_page.locator("text=실거래가").first.click()
-        await detail_page.wait_for_timeout(250)
-        await detail_page.locator("text=전세").first.click()
-        inline_artifacts = await _collect_inline_artifacts(detail_page)
-        refreshed_body = str(inline_artifacts.get("body_text", "") or "")
-        refreshed_corpus = str(inline_artifacts.get("corpus_text", "") or "")
-        if refreshed_body:
-            body_text = refreshed_body
-        if refreshed_corpus:
-            corpus_text = refreshed_corpus
-            selected_artifacts = {
-                "body_text": body_text,
-                "html_text": inline_artifacts.get("html_text", ""),
-                "hydration_state": inline_artifacts.get("hydration_state", {}),
-                "responses": list(selected_artifacts.get("responses", []) or []),
-                "corpus_text": refreshed_corpus,
-            }
-    except Exception:
-        pass
-
-    fields = _parse_detail_fields(body_text, fallback_text=corpus_text)
-    fields = _backfill_fields_from_artifacts(fields, selected_artifacts)
-    fields["_detail_meta"] = _build_detail_meta(selected_source, body_text, fields, selected_artifacts)
-    return fields
+    final_fields = dict(best_fields)
+    final_meta = dict(best_meta) if best_meta else _build_detail_meta(best_source, best_body_text, final_fields, best_artifacts)
+    final_fields["_detail_meta"] = final_meta
+    return final_fields
 
 
 def apply_mobile_detail(item: dict, detail: dict | None) -> dict:

@@ -23,28 +23,33 @@ class TestPerformanceSmoke(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = ComplexDatabase(os.path.join(tmp, "perf_filter.db"))
             tab = CrawlerTab(db)
-            rows = 10000
-            cols = tab.result_table.columnCount()
-            tab.result_table.setRowCount(rows)
-            tab._row_search_cache = []
-            for r in range(rows):
-                values = []
-                for c in range(cols):
-                    text = f"row{r} col{c} alpha"
-                    values.append(text)
-                    tab.result_table.setItem(r, c, QTableWidgetItem(text))
-                tab._row_search_cache.append(" ".join(values).lower())
+            try:
+                rows = 10000
+                cols = tab.result_table.columnCount()
+                tab.result_table.setRowCount(rows)
+                tab._row_search_cache = []
+                for r in range(rows):
+                    values = []
+                    for c in range(cols):
+                        text = f"row{r} col{c} alpha"
+                        values.append(text)
+                        tab.result_table.setItem(r, c, QTableWidgetItem(text))
+                    tab._row_search_cache.append(" ".join(values).lower())
 
-            self._qt_app.processEvents()
-            start = time.perf_counter()
-            tab._filter_results("zzzzz_not_found")
-            self._qt_app.processEvents()
-            elapsed = time.perf_counter() - start
-            self.assertLess(elapsed, 0.6)
-
-            db.close()
-            tab.deleteLater()
-            self._qt_app.processEvents()
+                self._qt_app.processEvents()
+                # Warm one no-op pass so Qt lazily-created table/card internals do not
+                # dominate the actual miss-filter measurement on slower CI/Windows runs.
+                tab._filter_results("")
+                self._qt_app.processEvents()
+                start = time.perf_counter()
+                tab._filter_results("zzzzz_not_found")
+                self._qt_app.processEvents()
+                elapsed = time.perf_counter() - start
+                self.assertLess(elapsed, 0.6)
+            finally:
+                db.close()
+                tab.deleteLater()
+                self._qt_app.processEvents()
 
     def test_append_rows_batch_large_smoke(self):
         from src.core.database import ComplexDatabase

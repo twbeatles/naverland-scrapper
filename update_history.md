@@ -1,3 +1,38 @@
+## **v15.0.19 (2026-04-10)**
+
+**실사이트 신뢰성 복구 + 문서/.spec/.gitignore 정합성 재점검**
+
+### 주요 반영
+
+* 상세 확장 수집 복구
+  - `src/core/services/detail_fetcher.py`의 source 선택 기준을 body 길이 대신 실제 필드 확보 점수로 전환
+  - `front-api` payload의 `brokerageName`, `brokerName`, `phone.brokerage/mobile`, `prevJeonse*`를 우선 해석
+  - `detail_source`, `detail_parse_state`, `missing_field_count`, `network_response_count`, `hydration_hit` 메타 유지
+* 단지명 조회 fast-fallback 안정화
+  - `NaverURLParser.fetch_complex_name()`가 성공 조회명을 process cache에 저장
+  - direct API `429` 발생 시 5분 cooldown을 활성화하고 즉시 `단지_{id}` fallback 반환
+  - 긴 재시도 대기를 제거해 URL batch 등록 시 UI block 가능성 축소
+* Live smoke / URL 정합
+  - `app_entry.py --live-smoke`에 `--smoke-complex-id`, `--smoke-article-id` 추가
+  - 기본 smoke가 `home + complex + detail` probe를 수행하고 detail probe는 `front-api/v1/article/agent` 응답 확보까지 확인
+  - `URLBatchDialog`와 Selenium complex fallback이 helper 기반 URL 생성으로 통일
+* 문서 / 패키징 / 무시 규칙 재점검
+  - `README.md`, `claude.md`, `gemini.md`에 최신 smoke CLI, URL family, fast-fallback 정책 반영
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - `.gitignore`는 `.playwright-mcp/`만 예방적으로 추가
+
+### 검증
+
+* `python -m pyright`
+  - 결과: `0 errors`
+* `python -m pytest -q`
+  - 결과: `205 passed`
+* `python app_entry.py --live-smoke --smoke-headless`
+  - 2026-04-10 결과:
+    - `home` probe ok
+    - `complex` probe ok (`102378`)
+    - `detail` probe ok (`2539123450`, `front-api/v1/article/agent` 응답 확인)
+
 ## **v15.0.18 (2026-03-25)**
 
 **Repo-wide Pylance/Pyright 정리 + 인코딩 정합성 재점검 + live smoke 문서화**

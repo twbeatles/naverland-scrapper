@@ -26,7 +26,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from src.utils.constants import CRAWL_SPEED_PRESETS
-from src.utils.helpers import PriceConverter, ChromeParamHelper
+from src.utils.helpers import PriceConverter, ChromeParamHelper, get_complex_url
 from src.utils.retry_handler import RetryCancelledError, RetryHandler
 from src.core.engines import PlaywrightCrawlerEngine, SeleniumCrawlerEngine
 from src.core.item_parser import ItemParser

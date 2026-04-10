@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from src.core.crawler import *  # noqa: F403
 
 from src.core.crawler_parts.dom_scroll_parse import BlockedPageError
+from src.utils.helpers import get_complex_url
 
 
 class CrawlerSeleniumFlowMixin:
@@ -261,7 +262,8 @@ class CrawlerSeleniumFlowMixin:
                 return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
         
         trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
-        url = f"https://new.land.naver.com/complexes/{cid}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
+        base_url = get_complex_url(cid, asset_type="APT", preferred_family="new")
+        url = f"{base_url}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
 
         try:
             parse_result = self.retry_handler.execute_with_retry(

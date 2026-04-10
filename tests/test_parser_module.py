@@ -1,7 +1,10 @@
 import os
 import sys
+import time
 import unittest
+from email.message import Message
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -9,6 +12,9 @@ from src.core.parser import NaverURLParser
 
 
 class TestNaverURLParser(unittest.TestCase):
+    def setUp(self):
+        NaverURLParser._reset_runtime_state_for_tests()
+
     def test_extract_complex_id(self):
         url = "https://land.naver.com/complex/123456"
         self.assertEqual(NaverURLParser.extract_complex_id(url), "123456")
@@ -116,6 +122,44 @@ class TestNaverURLParser(unittest.TestCase):
     def test_fetch_complex_name_fallback_on_error(self, _mock_fetch):
         name = NaverURLParser.fetch_complex_name("99999")
         self.assertEqual(name, "단지_99999")
+
+    def test_fetch_complex_name_activates_cooldown_on_429_and_skips_requery(self):
+        class _RateLimitHTTPError(HTTPError):
+            def __init__(self):
+                super().__init__(
+                    "https://new.land.naver.com/api/complexes/102378?sameAddressGroup=false",
+                    429,
+                    "Too Many Requests",
+                    hdrs=Message(),
+                    fp=None,
+                )
+
+            def read(self, n=None):
+                return b'{"success":false,"code":"TOO_MANY_REQUESTS"}'
+
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_name_impl",
+            side_effect=[_RateLimitHTTPError(), AssertionError("should not requery during cooldown")],
+        ) as mock_fetch:
+            name1 = NaverURLParser.fetch_complex_name("102378")
+            name2 = NaverURLParser.fetch_complex_name("102378")
+
+        self.assertEqual(name1, "단지_102378")
+        self.assertEqual(name2, "단지_102378")
+        self.assertEqual(mock_fetch.call_count, 1)
+        self.assertGreater(NaverURLParser._name_lookup_cooldown_until, time.monotonic())
+
+    def test_fetch_complex_name_uses_process_cache_after_success(self):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_name_impl",
+            side_effect=["테스트단지", AssertionError("should reuse cache")],
+        ) as mock_fetch:
+            first = NaverURLParser.fetch_complex_name("55555")
+            second = NaverURLParser.fetch_complex_name("55555")
+
+        self.assertEqual(first, "테스트단지")
+        self.assertEqual(second, "테스트단지")
+        self.assertEqual(mock_fetch.call_count, 1)
 
 
 if __name__ == "__main__":

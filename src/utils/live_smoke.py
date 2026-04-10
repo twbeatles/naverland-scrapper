@@ -30,6 +30,9 @@ _BLOCK_PATTERNS = (
     "bot detection",
 )
 
+DEFAULT_SMOKE_COMPLEX_ID = "102378"
+DEFAULT_SMOKE_ARTICLE_ID = "2539123450"
+
 
 def default_live_smoke_urls() -> list[str]:
     return [
@@ -37,6 +40,192 @@ def default_live_smoke_urls() -> list[str]:
         "https://new.land.naver.com/",
         "https://m.land.naver.com/",
     ]
+
+
+def _build_smoke_line(
+    *,
+    ok: bool,
+    kind: str,
+    target: str,
+    final_url: str,
+    status: int | None,
+    title: str,
+    reason: str = "",
+    extra: str = "",
+) -> str:
+    prefix = "[ok]" if ok else "[fail]"
+    line = f"{prefix} [{kind}] {target} -> {final_url or '-'} status={status if status is not None else '-'}"
+    if title:
+        line += f" title={title}"
+    if extra:
+        line += f" {extra}"
+    if reason:
+        line += f" reason={reason}"
+    return line
+
+
+def _append_reason(reason: str, token: str) -> str:
+    current = str(reason or "").strip()
+    item = str(token or "").strip()
+    if not item:
+        return current
+    if not current:
+        return item
+    if item in current.split(","):
+        return current
+    return f"{current},{item}"
+
+
+async def _new_smoke_page(context):
+    page = await context.new_page()
+    await page.add_init_script(
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+    )
+    return page
+
+
+async def _navigate_probe(page, url: str, timeout_ms: int) -> dict:
+    response = await page.goto(url, wait_until="domcontentloaded", timeout=max(1000, int(timeout_ms)))
+    try:
+        await page.wait_for_load_state("networkidle", timeout=2500)
+    except Exception:
+        pass
+    final_url = str(getattr(page, "url", "") or "")
+    try:
+        title = await page.title()
+    except Exception:
+        title = ""
+    status = int(response.status) if response is not None and getattr(response, "status", None) is not None else None
+    ok, reason = _classify_probe(final_url, title, status)
+    return {
+        "ok": ok,
+        "reason": reason,
+        "status": status,
+        "final_url": final_url,
+        "title": title,
+    }
+
+
+async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool, list[str]]:
+    overall_ok = True
+    messages: list[str] = []
+    for url in urls:
+        try:
+            result = await _navigate_probe(page, url, timeout_ms)
+            messages.append(
+                _build_smoke_line(
+                    ok=bool(result["ok"]),
+                    kind="home",
+                    target=url,
+                    final_url=str(result["final_url"] or ""),
+                    status=result["status"],
+                    title=str(result["title"] or ""),
+                    reason=str(result["reason"] or ""),
+                )
+            )
+            overall_ok = overall_ok and bool(result["ok"])
+        except Exception as exc:
+            messages.append(f"[fail] [home] {url} -> exception={exc}")
+            overall_ok = False
+    return overall_ok, messages
+
+
+async def _capture_response_status(page, matcher, timeout_ms: int):
+    matched_status = None
+    matched_event = asyncio.Event()
+
+    def _handle(response):
+        nonlocal matched_status
+        try:
+            if not matcher(str(getattr(response, "url", "") or "")):
+                return
+            matched_status = int(getattr(response, "status", 0) or 0)
+            matched_event.set()
+        except Exception:
+            return None
+
+    can_listen = hasattr(page, "on") and hasattr(page, "remove_listener")
+    if can_listen:
+        try:
+            page.on("response", _handle)
+        except Exception:
+            can_listen = False
+    try:
+        try:
+            await asyncio.wait_for(matched_event.wait(), timeout=max(0.1, float(timeout_ms) / 1000.0))
+        except Exception:
+            pass
+        return bool(matched_event.is_set()), matched_status
+    finally:
+        if can_listen:
+            try:
+                page.remove_listener("response", _handle)
+            except Exception:
+                pass
+
+
+async def _run_complex_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
+    cid = str(complex_id or "").strip()
+    if not cid:
+        return False, "[fail] [complex] missing complex id"
+
+    target_url = f"https://new.land.naver.com/complexes/{cid}"
+    expected = f"/api/articles/complex/{cid}"
+    capture_task = asyncio.create_task(
+        _capture_response_status(page, lambda url: expected in str(url or ""), timeout_ms)
+    )
+    result = await _navigate_probe(page, target_url, timeout_ms)
+    articles_seen, articles_status = await capture_task
+    reason = str(result["reason"] or "")
+    if not articles_seen:
+        reason = _append_reason(reason, "articles_capture_missing")
+    elif articles_status is not None and int(articles_status) >= 400:
+        reason = _append_reason(reason, f"articles_http_{int(articles_status)}")
+    ok = bool(result["ok"]) and articles_seen and (articles_status is None or int(articles_status) < 400)
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="complex",
+        target=target_url,
+        final_url=str(result["final_url"] or ""),
+        status=result["status"],
+        title=str(result["title"] or ""),
+        reason=reason,
+        extra=f"api_articles={articles_status if articles_status is not None else '-'}",
+    )
+
+
+async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[bool, str]:
+    aid = str(article_id or "").strip()
+    if not aid:
+        return False, "[fail] [detail] missing article id"
+
+    target_url = f"https://fin.land.naver.com/articles/{aid}"
+    expected_agent = f"/front-api/v1/article/agent?articleNumber={aid}"
+    capture_task = asyncio.create_task(
+        _capture_response_status(page, lambda url: expected_agent in str(url or ""), timeout_ms)
+    )
+    result = await _navigate_probe(page, target_url, timeout_ms)
+    reason = str(result["reason"] or "")
+    final_url = str(result["final_url"] or "")
+    lower_final_url = final_url.lower()
+    agent_seen, agent_status = await capture_task
+    if not agent_seen:
+        reason = _append_reason(reason, "agent_capture_missing")
+        if "/map" in lower_final_url:
+            reason = _append_reason(reason, "generic_map_only")
+    elif agent_status is not None and int(agent_status) >= 400:
+        reason = _append_reason(reason, f"agent_http_{int(agent_status)}")
+    ok = bool(result["ok"]) and agent_seen and (agent_status is None or int(agent_status) < 400)
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="detail",
+        target=target_url,
+        final_url=final_url,
+        status=result["status"],
+        title=str(result["title"] or ""),
+        reason=reason,
+        extra=f"agent_api={agent_status if agent_status is not None else '-'}",
+    )
 
 
 def _classify_probe(final_url: str, title: str, status: int | None) -> tuple[bool, str]:
@@ -60,6 +249,8 @@ async def _run_live_smoke_async(
     *,
     headless: bool = False,
     timeout_ms: int = 12000,
+    complex_id: str = DEFAULT_SMOKE_COMPLEX_ID,
+    article_id: str = DEFAULT_SMOKE_ARTICLE_ID,
 ) -> tuple[bool, list[str]]:
     if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
         return False, ["Playwright is not installed."]
@@ -90,36 +281,34 @@ async def _run_live_smoke_async(
             locale="ko-KR",
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         )
-        page = await context.new_page()
-        await page.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-        )
         messages.append(f"[info] browser={browser_source} mode={'headless' if headless else 'headed'}")
-        for url in [str(item or "").strip() for item in urls if str(item or "").strip()]:
-            try:
-                response = await page.goto(url, wait_until="domcontentloaded", timeout=max(1000, int(timeout_ms)))
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=2500)
-                except Exception:
-                    pass
-                final_url = str(getattr(page, "url", "") or "")
-                try:
-                    title = await page.title()
-                except Exception:
-                    title = ""
-                status = int(response.status) if response is not None and getattr(response, "status", None) is not None else None
-                ok, reason = _classify_probe(final_url, title, status)
-                prefix = "[ok]" if ok else "[fail]"
-                line = f"{prefix} {url} -> {final_url or '-'} status={status if status is not None else '-'}"
-                if title:
-                    line += f" title={title}"
-                if reason:
-                    line += f" reason={reason}"
-                messages.append(line)
-                overall_ok = overall_ok and ok
-            except Exception as exc:
-                messages.append(f"[fail] {url} -> exception={exc}")
-                overall_ok = False
+        home_page = await _new_smoke_page(context)
+        try:
+            home_ok, home_messages = await _run_home_probes(
+                home_page,
+                [str(item or "").strip() for item in urls if str(item or "").strip()],
+                timeout_ms,
+            )
+            messages.extend(home_messages)
+            overall_ok = overall_ok and home_ok
+        finally:
+            await home_page.close()
+
+        complex_page = await _new_smoke_page(context)
+        try:
+            complex_ok, complex_line = await _run_complex_probe(complex_page, complex_id, timeout_ms)
+            messages.append(complex_line)
+            overall_ok = overall_ok and complex_ok
+        finally:
+            await complex_page.close()
+
+        detail_page = await _new_smoke_page(context)
+        try:
+            detail_ok, detail_line = await _run_detail_probe(detail_page, article_id, timeout_ms)
+            messages.append(detail_line)
+            overall_ok = overall_ok and detail_ok
+        finally:
+            await detail_page.close()
         await context.close()
     finally:
         if browser is not None:
@@ -139,6 +328,8 @@ def run_live_smoke(
     *,
     headless: bool = False,
     timeout_ms: int = 12000,
+    complex_id: str = DEFAULT_SMOKE_COMPLEX_ID,
+    article_id: str = DEFAULT_SMOKE_ARTICLE_ID,
 ) -> tuple[bool, list[str]]:
     probe_urls = list(urls or default_live_smoke_urls())
     return asyncio.run(
@@ -146,5 +337,7 @@ def run_live_smoke(
             probe_urls,
             headless=headless,
             timeout_ms=timeout_ms,
+            complex_id=str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
+            article_id=str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
         )
     )

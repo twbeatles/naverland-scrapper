@@ -1,6 +1,10 @@
 # Rechecked 2026-03-21:
 # current build/log/data/Playwright/runtime-artifact ignore rules remain sufficient
 # for the performance-refactor/doc/spec pass and local PyInstaller builds.
+# Rechecked 2026-04-10:
+# added `.playwright-mcp/` for local browser tooling artifacts; existing
+# build/log/data/Playwright/runtime-artifact rules otherwise remain sufficient
+# for the live-site reliability/doc/spec consistency pass.
 # Python
 __pycache__/
 *.py[cod]
@@ -41,6 +45,7 @@ backups/
 playwright-report/
 test-results/
 .playwright/
+.playwright-mcp/
 ms-playwright/
 
 # IDE

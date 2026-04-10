@@ -80,7 +80,22 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         article_no = "2513105556"
         page = _FakePage(
             {
-                f"https://fin.land.naver.com/articles/{article_no}": "실거래가",
+                f"https://fin.land.naver.com/articles/{article_no}": "\n".join(
+                    [
+                        "네이버페이 부동산",
+                        "실거래가",
+                        "지도",
+                        "단지",
+                        "주변 환경",
+                        "관심단지",
+                        "매물 상세",
+                        "본문",
+                        "지역 정보",
+                        "가격 정보",
+                        "생활권",
+                        "교통",
+                    ]
+                ),
                 f"https://m.land.naver.com/article/info/{article_no}": "\n".join(
                     [
                         "실거래가",
@@ -130,9 +145,8 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                     "__NEXT_DATA__": {
                         "props": {
                             "pageProps": {
-                                "brokerName": "행복공인중개사",
-                                "agentName": "김중개",
-                                "phone": "02-987-6543",
+                                "brokerageName": "행복공인중개사",
+                                "brokerName": "김중개",
                             }
                         }
                     }
@@ -142,7 +156,10 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                 url: [
                     _FakeResponse(
                         "https://fin.land.naver.com/front-api/article/2529610450",
-                        {"prevJeonse": "1억 1,000만", "phones": ["02-987-6543"]},
+                        {
+                            "prevJeonse": "1억 1,000만",
+                            "phone": {"brokerage": "02-987-6543", "mobile": "010-1234-5678"},
+                        },
                     )
                 ]
             },
@@ -153,6 +170,7 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["부동산상호"], "행복공인중개사")
         self.assertEqual(detail["중개사이름"], "김중개")
         self.assertEqual(detail["전화1"], "02-987-6543")
+        self.assertEqual(detail["전화2"], "010-1234-5678")
         self.assertEqual(int(detail["기전세금(원)"]), 110_000_000)
         self.assertEqual(int(detail["_detail_meta"]["network_response_count"]), 1)
         self.assertEqual(int(detail["_detail_meta"]["hydration_hit"]), 1)

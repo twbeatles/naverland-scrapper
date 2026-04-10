@@ -180,18 +180,25 @@ class CrawlerTabFiltersSearchMixin:
     def _filter_results(self: Any, text):
         self._pending_search_text = text or ""
         rows = self.result_table.rowCount()
-        for r in range(rows):
-            if r >= len(self._row_search_cache):
-                values = []
-                for c in range(self.result_table.columnCount()):
-                    item = self.result_table.item(r, c)
-                    if item:
-                        values.append(item.text())
-                self._row_search_cache.append(" ".join(values).lower())
-            if r >= len(self._row_payload_cache):
-                self._row_payload_cache.append(self._build_row_payload_from_table(r))
-            self._apply_current_filter_to_row(r)
-            
+        updates_enabled = self.result_table.updatesEnabled()
+        self.result_table.setUpdatesEnabled(False)
+        try:
+            for r in range(rows):
+                if r >= len(self._row_search_cache):
+                    values = []
+                    for c in range(self.result_table.columnCount()):
+                        item = self.result_table.item(r, c)
+                        if item:
+                            values.append(item.text())
+                    self._row_search_cache.append(" ".join(values).lower())
+                if r >= len(self._row_payload_cache):
+                    self._row_payload_cache.append(self._build_row_payload_from_table(r))
+                self._apply_current_filter_to_row(r)
+        finally:
+            self.result_table.setUpdatesEnabled(updates_enabled)
+            if updates_enabled:
+                self.result_table.viewport().update()
+
         # Card filtering
         self._apply_card_filters(self._pending_search_text)
 

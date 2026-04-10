@@ -39,6 +39,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Use headless browser for --live-smoke. Default is headed.",
     )
+    parser.add_argument(
+        "--smoke-complex-id",
+        default="102378",
+        help="Sample complex id used by the built-in complex probe in --live-smoke mode.",
+    )
+    parser.add_argument(
+        "--smoke-article-id",
+        default="2539123450",
+        help="Sample article id used by the built-in detail probe in --live-smoke mode.",
+    )
     return parser.parse_args(argv)
 
 
@@ -64,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             urls,
             headless=bool(args.smoke_headless),
             timeout_ms=max(1000, int(args.smoke_timeout_ms or 12000)),
+            complex_id=str(args.smoke_complex_id or "102378"),
+            article_id=str(args.smoke_article_id or "2539123450"),
         )
         for msg in messages:
             print(msg)

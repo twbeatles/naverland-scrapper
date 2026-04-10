@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.parser import NaverURLParser
+from src.utils.helpers import get_complex_url
 from src.utils.retry_handler import RetryCancelledError
 
 
@@ -86,7 +87,8 @@ class URLBatchDialog(QDialog):
             "예시:\n"
             "https://new.land.naver.com/complexes/102378\n"
             "https://land.naver.com/complex?complexNo=123456\n"
-            "https://m.land.naver.com/complex/123456\n"
+            "https://m.land.naver.com/article/info/2513105556\n"
+            "https://fin.land.naver.com/articles/2539123450\n"
             "123456\n"
             "789012"
         )
@@ -267,4 +269,4 @@ class URLBatchDialog(QDialog):
         return list(self._selected_complexes)
 
     def get_urls(self):
-        return [f"https://new.land.naver.com/complexes/{cid}" for _, cid in self._selected_complexes]
+        return [get_complex_url(cid) for _, cid in self._selected_complexes]

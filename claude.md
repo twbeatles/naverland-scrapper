@@ -577,7 +577,7 @@ COLORS["light"] = {
   - 2026-03-25 스캔 기준 실제 UTF-8 손상은 발견되지 않았습니다.
 - Workspace / smoke baseline:
   - `.vscode/settings.json`은 `include/exclude/extraPaths/files.encoding`을 명시해 Pylance 범위를 `app_entry.py + src + tests`로 고정합니다.
-  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...]`로 GUI 없이 Playwright 실사이트 경로를 점검할 수 있습니다.
+  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...] [--smoke-complex-id ...] [--smoke-article-id ...]`로 GUI 없이 Playwright 실사이트 경로를 점검할 수 있습니다.
   - 2026-03-25 headless smoke 결과:
     - `fin.land` 200
     - `new.land` 200
@@ -585,3 +585,17 @@ COLORS["light"] = {
 - Packaging / ignore review:
   - `naverland-scrapper.spec`는 이번 패스에서도 hidden import/runtime hook/data bundle 추가 수정이 필요하지 않았습니다.
   - `.gitignore`는 `pyright_report*.json`을 추가로 무시하고 `.vscode/settings.json`은 계속 추적합니다.
+
+## 0-21. v15.0.19 Live-Site Reliability / Docs Sync (2026-04-10)
+- Detail enrichment contract:
+  - `src/core/services/detail_fetcher.py`는 source 선택 기준을 body 길이 대신 실제 필드 확보 점수로 전환합니다.
+  - `front-api` payload의 `brokerageName -> 부동산상호`, `brokerName -> 중개사이름`, `phone.brokerage/mobile -> 전화1/전화2`, `prevJeonse* -> 기전세금`을 우선 해석합니다.
+  - meta 필드 `detail_source`, `detail_parse_state`, `missing_field_count`, `network_response_count`, `hydration_hit`은 유지됩니다.
+- Name lookup / URL registration contract:
+  - `NaverURLParser.fetch_complex_name()`는 성공 조회명을 process cache에 저장합니다.
+  - direct API `429` 발생 시 5분 cooldown을 활성화하고 즉시 `단지_{id}` fallback을 반환합니다.
+  - `URLBatchDialog`는 `new.land complex`, `land.naver.com complexNo`, `m.land`, `fin.land article` 예시를 표시하고, URL family는 시점에 따라 달라질 수 있음을 전제로 helper 기반 URL 생성만 사용합니다.
+- Smoke / packaging contract:
+  - 기본 live smoke는 `home + complex + detail` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.
+  - 2026-04-10 headless smoke 결과는 `home/complex/detail` 모두 성공이며, detail probe는 `front-api/v1/article/agent` 응답 확보까지 확인했습니다.
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않았고, `.gitignore`에는 `.playwright-mcp/`만 예방적으로 추가했습니다.
