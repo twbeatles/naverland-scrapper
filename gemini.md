@@ -538,3 +538,25 @@ COLORS["light"] = {
   - 기본 live smoke는 `home + complex + detail` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.
   - 2026-04-10 headless smoke 결과는 `home/complex/detail` 모두 성공이며, detail probe는 `front-api/v1/article/agent` 응답 확보까지 확인했습니다.
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않았고, `.gitignore`에는 `.playwright-mcp/`만 예방적으로 추가했습니다.
+
+## 0-22. v15.0.20 Schedule / Asset Scope / CI Reliability Sync (2026-04-11)
+- Schedule start contract:
+  - `CrawlerTab.start_crawling()` / `GeoCrawlerTab.start_crawling()` now return `bool`.
+  - the return value means the crawl thread was actually created and the start path entered successfully.
+  - scheduled `complex` / `geo_sweep` runs consume `schedule_config.last_run_slot` only when that return value is `True`.
+- Scheduled task preservation contract:
+  - `complex` scheduled runs snapshot the existing manual task list before loading scheduled APT targets.
+  - if group loading yields no runnable APT target, or if `start_crawling()` returns `False`, the manual task rows and selection are restored immediately.
+- Runtime dedupe contract:
+  - `_item_dedupe_key()` now uses `(asset_type, complex_id, article_id, trade_type)`.
+  - legacy blank asset scope is normalized to `APT` before runtime dedupe comparison.
+  - this supersedes the older non-asset-scoped runtime dedupe note from the 2026-03-07 pass.
+- CI / packaging contract:
+  - GitHub CI now runs `compileall`, `npx --yes pyright`, targeted pytest subset, and `python -m src.utils.preflight`.
+  - the pytest subset is `tests/test_ui_wiring.py`, `tests/test_geo_tab_wiring.py`, `tests/test_crawler_regressions.py`.
+  - `QT_QPA_PLATFORM=offscreen` is fixed in CI for the UI-safe subset.
+  - `naverland-scrapper.spec` was rechecked on 2026-04-11 and still needs no extra hidden import/runtime hook/data bundle changes.
+- Validation:
+  - `python -m pytest -q` => `210 passed`
+  - `npx --yes pyright` => `0 errors, 0 warnings, 0 informations`
+  - `python -m src.utils.preflight` => pass (`plyer` optional warning only)

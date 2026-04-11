@@ -144,6 +144,33 @@ class AppStatsScheduleMixin:
         self.status_bar.showMessage(message)
         ui_logger.info(f"{message} [slot={slot}]")
 
+    def _snapshot_crawler_tasks(self: Any) -> tuple[list[tuple[str, str]], int]:
+        rows: list[tuple[str, str]] = []
+        table = getattr(getattr(self, "crawler_tab", None), "table_list", None)
+        if table is None:
+            return rows, -1
+        for row in range(table.rowCount()):
+            name_item = table.item(row, 0)
+            cid_item = table.item(row, 1)
+            rows.append(
+                (
+                    name_item.text() if name_item else "",
+                    cid_item.text() if cid_item else "",
+                )
+            )
+        return rows, table.currentRow()
+
+    def _restore_crawler_tasks(self: Any, rows: list[tuple[str, str]], current_row: int = -1) -> None:
+        if not hasattr(self, "crawler_tab"):
+            return
+        self.crawler_tab.clear_tasks()
+        for name, cid in rows:
+            self.crawler_tab._append_task_row(str(name), str(cid))
+        if rows and 0 <= current_row < len(rows):
+            self.crawler_tab.table_list.selectRow(current_row)
+        elif getattr(self.crawler_tab, "table_list", None) is not None:
+            self.crawler_tab.table_list.clearSelection()
+
     def _mark_schedule_run_started(self: Any, config: dict[str, Any], slot: str) -> None:
         config["last_run_slot"] = slot
         config["last_run_at"] = DateTimeHelper.now_string()
@@ -341,18 +368,20 @@ class AppStatsScheduleMixin:
                 ),
                 persist_last=False,
             )
-            self.geo_tab.start_crawling()
-            self._mark_schedule_run_started(config, active_slot)
-            self.status_bar.showMessage(
-                f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
-            )
-            return True
+            if self.geo_tab.start_crawling():
+                self._mark_schedule_run_started(config, active_slot)
+                self.status_bar.showMessage(
+                    f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
+                )
+                return True
+            return False
 
         gid = config.get("group_id", self.schedule_group_combo.currentData())
         if gid is None:
             self._remember_schedule_skip(active_slot, "missing_group", "⏸ 예약 작업 중단: 선택된 그룹이 없습니다.")
             return False
 
+        previous_rows, previous_current_row = self._snapshot_crawler_tasks()
         self.tabs.setCurrentWidget(self.crawler_tab)
         self.crawler_tab.clear_tasks()
         excluded_vl = 0
@@ -370,16 +399,19 @@ class AppStatsScheduleMixin:
             self.status_bar.showMessage(msg)
             ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
         if loaded_count <= 0:
+            self._restore_crawler_tasks(previous_rows, previous_current_row)
             self._remember_schedule_skip(
                 active_slot,
                 "no_target",
                 "⏸ 예약 작업 중단: 실행 가능한 APT 대상이 없습니다.",
             )
             return False
-        self.crawler_tab.start_crawling()
-        self._mark_schedule_run_started(config, active_slot)
-        self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
-        return True
+        if self.crawler_tab.start_crawling():
+            self._mark_schedule_run_started(config, active_slot)
+            self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
+            return True
+        self._restore_crawler_tasks(previous_rows, previous_current_row)
+        return False
 
 
     def _update_group_empty_state(self: Any):

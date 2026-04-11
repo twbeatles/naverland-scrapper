@@ -21,6 +21,11 @@ from PyInstaller.utils.hooks import collect_submodules
 # expanded live smoke probes/CLI flags, and helper-based URL family cleanup
 # remain runtime/UI-only and do not require extra PyInstaller datas, hidden
 # imports, or hooks.
+# Rechecked on 2026-04-11 (schedule/asset-scope/CI reliability pass):
+# actual-start-gated schedule slot consumption, scheduled task snapshot/restore,
+# asset-scoped runtime item dedupe, and targeted pytest CI expansion remain
+# runtime/test/documentation-level changes and do not require extra PyInstaller
+# datas, hidden imports, or hooks.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)

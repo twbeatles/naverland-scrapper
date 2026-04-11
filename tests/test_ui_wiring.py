@@ -44,7 +44,7 @@ class TestUIWiring(unittest.TestCase):
             tab.add_task("테스트단지", "12345")
 
             with patch.object(CrawlerThread, "start", return_value=None):
-                tab.start_crawling()
+                self.assertTrue(tab.start_crawling())
 
             self.assertEqual(len(history.calls), 1)
             self.assertEqual(history.calls[0]["complexes"][0]["cid"], "12345")
@@ -841,6 +841,98 @@ class TestUIWiring(unittest.TestCase):
                     app_settings.get("schedule_config", {}).get("last_run_slot"),
                     "2026-03-19|09:00|complex|10",
                 )
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_schedule_start_failure_restores_manual_tasks_and_keeps_slot_empty(self):
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.schedule_group_combo.clear()
+                app.schedule_group_combo.addItem("테스트그룹", 10)
+                app.crawler_tab.clear_tasks()
+                app.crawler_tab.add_task("기존단지", "99999")
+                app.crawler_tab.table_list.selectRow(0)
+
+                with (
+                    patch.object(
+                        app.db,
+                        "get_complexes_in_group",
+                        return_value=[(1, "예약단지", "APT", "11111", "")],
+                    ),
+                    patch.object(app.crawler_tab, "start_crawling", return_value=False) as mock_start,
+                ):
+                    self.assertFalse(app._run_scheduled())
+
+                mock_start.assert_called_once()
+                self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존단지")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
+                self.assertEqual(app.crawler_tab.table_list.currentRow(), 0)
+                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_schedule_no_target_restore_preserves_manual_tasks_and_keeps_slot_empty(self):
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.schedule_group_combo.clear()
+                app.schedule_group_combo.addItem("테스트그룹", 11)
+                app.crawler_tab.clear_tasks()
+                app.crawler_tab.add_task("기존단지", "99999")
+                app.crawler_tab.table_list.selectRow(0)
+
+                with (
+                    patch.object(
+                        app.db,
+                        "get_complexes_in_group",
+                        return_value=[(1, "VL단지", "VL", "22222", "")],
+                    ),
+                    patch.object(app.crawler_tab, "start_crawling") as mock_start,
+                ):
+                    self.assertFalse(app._run_scheduled())
+
+                mock_start.assert_not_called()
+                self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존단지")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
+                self.assertEqual(app.crawler_tab.table_list.currentRow(), 0)
+                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
         finally:
             app_settings._settings = original_settings
             if hasattr(app, "schedule_timer") and app.schedule_timer:

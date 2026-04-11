@@ -423,6 +423,32 @@ class TestCrawlerRegressions(unittest.TestCase):
         thread._push_item(dict(no_article_id))
         self.assertEqual(len(thread.collected_data), 3)
 
+    def test_push_item_keeps_asset_scoped_duplicates_separate(self):
+        thread = self._build_thread(price_filter={"enabled": False})
+
+        apt_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "APT"}
+        vl_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "VL"}
+
+        thread._push_item(dict(apt_item))
+        thread._push_item(dict(vl_item))
+
+        self.assertEqual(len(thread.collected_data), 2)
+        self.assertEqual(
+            {(row.get("자산유형"), row.get("단지ID"), row.get("매물ID")) for row in thread.collected_data},
+            {("APT", "12345", "A-1"), ("VL", "12345", "A-1")},
+        )
+
+    def test_push_item_treats_blank_asset_type_as_apt_for_legacy_dedupe(self):
+        thread = self._build_thread(price_filter={"enabled": False})
+
+        legacy_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매"}
+        apt_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "APT"}
+
+        thread._push_item(dict(legacy_item))
+        thread._push_item(dict(apt_item))
+
+        self.assertEqual(len(thread.collected_data), 1)
+
     def test_process_raw_items_counts_only_new_pushes(self):
         thread = self._build_thread(price_filter={"enabled": False})
         raw_items = [

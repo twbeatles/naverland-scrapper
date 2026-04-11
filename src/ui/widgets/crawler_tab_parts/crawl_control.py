@@ -273,7 +273,7 @@ class CrawlerTabCrawlControlMixin:
             url = get_complex_url(item.text())
             webbrowser.open(url)
 
-    def start_crawling(self: Any):
+    def start_crawling(self: Any) -> bool:
         from src.ui.widgets.crawler_tab import (
             _get_crawl_cache_cls,
             _get_crawler_thread_cls,
@@ -282,7 +282,7 @@ class CrawlerTabCrawlControlMixin:
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
             self.status_message.emit("이미 크롤링이 실행 중입니다.")
-            return
+            return False
 
         try:
             in_maintenance = bool(self._maintenance_guard()) if callable(self._maintenance_guard) else False
@@ -291,11 +291,25 @@ class CrawlerTabCrawlControlMixin:
         if in_maintenance:
             self.append_log("⛔ 유지보수 모드에서는 크롤링을 시작할 수 없습니다.", 30)
             self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
-            return
+            return False
 
         if self.table_list.rowCount() == 0:
             QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
-            return
+            return False
+        
+        target_list = self._normalize_task_table()
+        if not target_list:
+            QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
+            return False
+             
+        trade_types = []
+        if self.check_trade.isChecked(): trade_types.append("매매")
+        if self.check_jeonse.isChecked(): trade_types.append("전세")
+        if self.check_monthly.isChecked(): trade_types.append("월세")
+        
+        if not trade_types:
+            QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
+            return False
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -309,24 +323,6 @@ class CrawlerTabCrawlControlMixin:
         self.card_view.set_data([])
         self.grouped_rows = {}
         self._last_complex_status_stats = None
-        
-        target_list = self._normalize_task_table()
-        if not target_list:
-            QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
-            self.btn_start.setEnabled(True)
-            self.btn_stop.setEnabled(False)
-            return
-            
-        trade_types = []
-        if self.check_trade.isChecked(): trade_types.append("매매")
-        if self.check_jeonse.isChecked(): trade_types.append("전세")
-        if self.check_monthly.isChecked(): trade_types.append("월세")
-        
-        if not trade_types:
-            QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
-            self.btn_start.setEnabled(True)
-            self.btn_stop.setEnabled(False)
-            return
 
         area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
         price_filter = {
@@ -406,6 +402,7 @@ class CrawlerTabCrawlControlMixin:
         self.crawler_thread.start()
         
         self.crawling_started.emit()
+        return True
 
     def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():

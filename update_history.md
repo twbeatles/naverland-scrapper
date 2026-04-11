@@ -1,3 +1,40 @@
+## **v15.0.20 (2026-04-11)**
+
+**예약 실행/자산 스코프 신뢰성 보강 + CI pytest 확대 + .spec/.md 정합성 동기화**
+
+### 주요 반영
+
+* 예약 실행 actual-start 계약 고정
+  - `CrawlerTab.start_crawling()` / `GeoCrawlerTab.start_crawling()`을 `bool` 반환으로 통일
+  - validation early-return, 이미 실행 중, 유지보수 모드, 무효 타깃/거래유형 미선택이면 `False`
+  - 예약 `complex` / `geo_sweep` 실행은 실제 시작 성공 시에만 `schedule_config.last_run_slot`, `last_run_at`를 기록
+* `complex` 예약 실행 수동 task 보호
+  - 예약 실행 전 기존 수동 task list와 현재 선택 row를 snapshot
+  - 예약 그룹 적재 실패(`loaded_count <= 0`) 또는 `start_crawling() == False`면 기존 목록과 선택 상태를 즉시 복원
+  - 예약 시작 성공 시에만 예약 대상 목록을 유지
+* 런타임 item dedupe 자산 스코프 정합화
+  - `_item_dedupe_key()`를 `(asset_type, complex_id, article_id, trade_type)` 기준으로 변경
+  - legacy blank `asset_type`은 `APT`로 정규화
+  - `geo_sweep`의 APT/VL 혼합 결과가 runtime dedupe 단계에서 서로 드롭되지 않도록 정리
+* 회귀 테스트 / CI 보강
+  - `tests/test_ui_wiring.py`: 예약 시작 실패/무효 타깃 시 slot 미소비 + 수동 task 복원
+  - `tests/test_geo_tab_wiring.py`: scheduled geo start failure 시 slot 미소비
+  - `tests/test_crawler_regressions.py`: asset-scoped runtime dedupe + blank asset_type legacy 호환
+  - GitHub Actions는 이제 `compileall + pyright + targeted pytest subset + preflight`를 실행
+  - UI subset용 `QT_QPA_PLATFORM=offscreen` 환경을 CI에 고정
+* `.spec` / 문서 정합성 재점검
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - `README.md`, `claude.md`, `gemini.md`에 schedule actual-start 계약, asset-scoped runtime dedupe, CI pytest subset 기준을 동기화
+
+### 검증
+
+* `python -m pytest -q`
+  - 결과: `210 passed`
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m src.utils.preflight`
+  - 결과: pass (`plyer` optional warning only)
+
 ## **v15.0.19 (2026-04-10)**
 
 **실사이트 신뢰성 복구 + 문서/.spec/.gitignore 정합성 재점검**

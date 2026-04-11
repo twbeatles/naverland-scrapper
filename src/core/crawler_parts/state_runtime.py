@@ -300,6 +300,7 @@ class CrawlerStateRuntimeMixin:
     def _item_dedupe_key(self, item):
         if not isinstance(item, dict):
             return None
+        asset_type = str(item.get("자산유형", "") or item.get("asset_type", "")).strip().upper() or "APT"
         article_id = str(item.get("매물ID", "") or item.get("article_id", "")).strip()
         if not article_id:
             return None
@@ -307,7 +308,7 @@ class CrawlerStateRuntimeMixin:
         trade_type = str(item.get("거래유형", "") or item.get("trade_type", "")).strip()
         if not complex_id or not trade_type:
             return None
-        return (complex_id, article_id, trade_type)
+        return (asset_type, complex_id, article_id, trade_type)
 
     def log(self, msg, level=20): self.log_signal.emit(msg, level)
 

@@ -186,15 +186,15 @@ class GeoCrawlerTab(CrawlerTab):
         self.check_asset_apt.setChecked("APT" in asset_types)
         self.check_asset_vl.setChecked("VL" in asset_types)
 
-    def start_crawling(self):
+    def start_crawling(self) -> bool:
         global CrawlerThread
 
         if self._maintenance_guard and self._maintenance_guard():
             self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
-            return
+            return False
         if self.crawler_thread and self.crawler_thread.isRunning():
             QMessageBox.information(self, "알림", "이미 지리탐색이 실행 중입니다.")
-            return
+            return False
 
         trade_types = []
         if self.check_trade.isChecked():
@@ -205,7 +205,7 @@ class GeoCrawlerTab(CrawlerTab):
             trade_types.append("월세")
         if not trade_types:
             QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
-            return
+            return False
 
         asset_types = []
         if self.check_asset_apt.isChecked():
@@ -323,6 +323,7 @@ class GeoCrawlerTab(CrawlerTab):
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
         self.crawler_thread.start()
         self.crawling_started.emit()
+        return True
 
     def _on_discovered_complex(self, payload: dict):
         asset_type = str(payload.get("asset_type", "") or "")

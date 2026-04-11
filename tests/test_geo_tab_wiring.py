@@ -1,7 +1,9 @@
 import importlib.util
+import copy
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 
@@ -48,7 +50,7 @@ class TestGeoTabWiring(unittest.TestCase):
                 patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get),
                 patch("src.core.crawler.CrawlerThread.start", return_value=None),
             ):
-                tab.start_crawling()
+                self.assertTrue(tab.start_crawling())
 
             thread = tab.crawler_thread
             assert thread is not None
@@ -259,6 +261,50 @@ class TestGeoTabWiring(unittest.TestCase):
 
             db.close()
             tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_scheduled_geo_run_start_failure_keeps_slot_empty(self):
+        from PyQt6.QtCore import QTime
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        class _FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 3, 19, 9, 5, 0)
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = copy.deepcopy(
+                    app_settings._settings.get("schedule_config", {})
+                )
+                app_settings._settings["schedule_config"]["last_run_slot"] = ""
+                app_settings._settings["schedule_config"]["last_run_at"] = ""
+                app.check_schedule.setChecked(True)
+                app.time_edit.setTime(QTime(9, 0))
+                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+                app.schedule_geo_lat.setValue(37.4321)
+                app.schedule_geo_lon.setValue(127.1234)
+
+                with (
+                    patch("src.ui.app.datetime", _FixedDateTime),
+                    patch.object(app.geo_tab, "start_crawling", return_value=False) as mock_start,
+                ):
+                    app._check_schedule()
+
+                mock_start.assert_called_once()
+                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
             self._qt_app.processEvents()
 
     def test_geo_tab_restores_last_coordinates_and_saves_manual_location_on_start(self):
