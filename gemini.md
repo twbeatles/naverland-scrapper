@@ -552,9 +552,8 @@ COLORS["light"] = {
   - legacy blank asset scope is normalized to `APT` before runtime dedupe comparison.
   - this supersedes the older non-asset-scoped runtime dedupe note from the 2026-03-07 pass.
 - CI / packaging contract:
-  - GitHub CI now runs `compileall`, `npx --yes pyright`, targeted pytest subset, and `python -m src.utils.preflight`.
-  - the pytest subset is `tests/test_ui_wiring.py`, `tests/test_geo_tab_wiring.py`, `tests/test_crawler_regressions.py`.
-  - `QT_QPA_PLATFORM=offscreen` is fixed in CI for the UI-safe subset.
+  - GitHub CI runs `compileall`, `npx --yes pyright`, and `python -m src.utils.preflight`.
+  - pytest is not executed in CI.
   - `naverland-scrapper.spec` was rechecked on 2026-04-11 and still needs no extra hidden import/runtime hook/data bundle changes.
 - Validation:
   - `python -m pytest -q` => `210 passed`

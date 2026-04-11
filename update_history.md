@@ -16,15 +16,15 @@
   - `_item_dedupe_key()`를 `(asset_type, complex_id, article_id, trade_type)` 기준으로 변경
   - legacy blank `asset_type`은 `APT`로 정규화
   - `geo_sweep`의 APT/VL 혼합 결과가 runtime dedupe 단계에서 서로 드롭되지 않도록 정리
-* 회귀 테스트 / CI 보강
+* 회귀 테스트 / CI 정책 조정
   - `tests/test_ui_wiring.py`: 예약 시작 실패/무효 타깃 시 slot 미소비 + 수동 task 복원
   - `tests/test_geo_tab_wiring.py`: scheduled geo start failure 시 slot 미소비
   - `tests/test_crawler_regressions.py`: asset-scoped runtime dedupe + blank asset_type legacy 호환
-  - GitHub Actions는 이제 `compileall + pyright + targeted pytest subset + preflight`를 실행
-  - UI subset용 `QT_QPA_PLATFORM=offscreen` 환경을 CI에 고정
+  - GitHub Actions는 `compileall + pyright + preflight`를 실행
+  - pytest는 CI에서 실행하지 않도록 되돌렸습니다
 * `.spec` / 문서 정합성 재점검
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
-  - `README.md`, `claude.md`, `gemini.md`에 schedule actual-start 계약, asset-scoped runtime dedupe, CI pytest subset 기준을 동기화
+  - `README.md`, `claude.md`, `gemini.md`에 schedule actual-start 계약, asset-scoped runtime dedupe, CI 정책 기준을 동기화
 
 ### 검증
 

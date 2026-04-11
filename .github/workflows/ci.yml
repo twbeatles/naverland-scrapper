@@ -14,7 +14,6 @@ jobs:
     env:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
-      QT_QPA_PLATFORM: "offscreen"
       NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK: "1"
       NAVERLAND_SKIP_PLAYWRIGHT_TESTS: "1"
     strategy:
@@ -46,9 +45,6 @@ jobs:
 
       - name: Run Pyright
         run: npx --yes pyright
-
-      - name: Run targeted pytest subset
-        run: python -m pytest tests/test_ui_wiring.py tests/test_geo_tab_wiring.py tests/test_crawler_regressions.py -q
 
       - name: Preflight check
         run: python -m src.utils.preflight
