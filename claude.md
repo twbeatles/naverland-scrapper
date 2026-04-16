@@ -94,6 +94,26 @@
   - `GeoCrawlerTab` 추가, 설정에 `crawl_engine`, `playwright_*`, `geo_*` 항목 추가.
   - `naverland-scrapper.spec`는 Playwright hidden import, runtime hook, Chromium bundle 수집을 포함.
 
+## 0-5. v15.0.21 Asset / Runtime / CI Consistency (2026-04-16)
+- `NaverURLParser` / `URLBatchDialog`:
+  - `new.land.naver.com/houses/{id}` 계열 URL은 `VL` 자산 스코프를 유지한 채 추출/이름조회/등록됩니다.
+  - 단지명 조회 캐시는 `(asset_type, complex_id)` 기준으로 분리됩니다.
+- `CrawlerTab`:
+  - complex task 목록은 이제 `(asset_type, complex_id)` 기준으로 dedupe 됩니다.
+  - 수동 추가, DB/그룹/최근 검색 복원, URL 배치 등록이 모두 같은 자산 스코프 기준을 사용합니다.
+  - 같은 숫자 `cid`라도 `APT`와 `VL`은 동시에 목록에 존재할 수 있습니다.
+- `CrawlerThread` / engines:
+  - Playwright `complex` 모드는 target `asset_type`을 그대로 유지하며 `APT`와 `VL`을 모두 지원합니다.
+  - Selenium `complex` 모드는 현재 `APT`만 지원하며, `VL` 대상은 직접 시작과 fallback 모두 수행하지 않습니다.
+  - complex cache context는 `mode=complex`, `asset_type=<target asset_type>`, `marker_id=""` 기준입니다.
+- History / dashboard / UI:
+  - 월세 이력/가격변동/알림 비교는 `price_text="보증금/월세"`를 유지하면서 비교 기준값은 `월세 금액`을 우선 사용합니다.
+  - 대시보드 소멸 count는 DB 전체가 아니라 현재 visible `(asset_type, complex_id, trade_type)` 범위로 계산합니다.
+  - `FavoritesTab`의 비어 있던 `링크` 컬럼은 제거되었습니다.
+- CI / packaging:
+  - GitHub Actions는 현재 `compileall + pytest + pyright + preflight`를 실행합니다.
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않습니다.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
@@ -310,7 +330,7 @@ COLORS["light"] = {
 
 ## 0-5. v15.0 Stabilization Addendum (2026-03-06)
 - 신규 설정: `playwright_response_drain_timeout_ms` (default: `3000`)
-- 캐시 정책(복합 모드): `mode=complex`, `asset_type=APT`, `marker_id=""`로 정규화
+- 캐시 정책(복합 모드): 현재는 `mode=complex`, `asset_type=<target asset_type>`, `marker_id=""`로 정규화
 - 레거시 complex 캐시 키는 읽기 호환만 유지하고, 적중 시 정규 키로 승격 저장
 - `geo_sweep`는 Playwright 전용 유지, Selenium fallback 미지원
 - Geo 운영 통계 키: `geo_discovered_count`, `geo_dedup_count`, `response_drain_wait_count`, `response_drain_timeout_count`
@@ -318,7 +338,7 @@ COLORS["light"] = {
 ## 0-6. Packaging/Docs Consistency (2026-03-06)
 - `naverland-scrapper.spec` 점검 결과: 현 시점 코드 기준 추가 hidden import/runtime hook 변경 불필요
 - fallback 정책 정합: Selenium fallback은 `complex` 모드 전용, `geo_sweep`는 Playwright 전용
-- 캐시 정책 정합: `complex` 모드 컨텍스트는 `mode=complex`, `asset_type=APT`, `marker_id=""`로 엔진 공통 정규화
+- 캐시 정책 정합: `complex` 모드 컨텍스트는 `mode=complex`, `asset_type=<target asset_type>`, `marker_id=""`로 엔진 공통 정규화
 - 레거시 캐시 정책: legacy complex 키는 읽기 호환만 제공하고 적중 시 정규 키로 재저장
 
 ## 0-7. v15.0 Reliability Patch (2026-03-07)

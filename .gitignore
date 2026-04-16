@@ -5,6 +5,9 @@
 # added `.playwright-mcp/` for local browser tooling artifacts; existing
 # build/log/data/Playwright/runtime-artifact rules otherwise remain sufficient
 # for the live-site reliability/doc/spec consistency pass.
+# Rechecked 2026-04-16:
+# asset-scope/runtime-history/dashboard/doc-sync changes and CI pytest restoration
+# do not introduce additional generated artifacts; current ignore rules remain sufficient.
 # Python
 __pycache__/
 *.py[cod]

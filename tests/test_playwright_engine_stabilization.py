@@ -128,11 +128,35 @@ class _ThreadStub:
     def _should_stop(self):
         return bool(self.stop_flag)
 
-    def _pair_key(self, name, cid, trade_type):
-        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+    @staticmethod
+    def _normalize_target_asset_type(asset_type):
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
 
-    def _mark_pair_processed(self, name, cid, trade_type):
-        self._processed_pairs.add(self._pair_key(name, cid, trade_type))
+    def _normalize_target_entry(self, entry):
+        if isinstance(entry, (list, tuple)):
+            name = str(entry[0] if len(entry) >= 1 else "" or "")
+            cid = str(entry[1] if len(entry) >= 2 else "" or "")
+            asset_type = self._normalize_target_asset_type(entry[2] if len(entry) >= 3 else "APT")
+            return name, cid, asset_type
+        return "", "", "APT"
+
+    def _iter_targets(self):
+        for entry in self.targets or []:
+            name, cid, asset_type = self._normalize_target_entry(entry)
+            if cid:
+                yield name, cid, asset_type
+
+    def _pair_key(self, name, cid, trade_type, asset_type="APT"):
+        return (
+            self._normalize_target_asset_type(asset_type),
+            str(name or ""),
+            str(cid or ""),
+            str(trade_type or ""),
+        )
+
+    def _mark_pair_processed(self, name, cid, trade_type, asset_type="APT"):
+        self._processed_pairs.add(self._pair_key(name, cid, trade_type, asset_type=asset_type))
 
     def _sleep_interruptible(self, seconds, chunk_seconds=0.2):
         return True

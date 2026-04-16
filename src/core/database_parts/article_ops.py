@@ -39,7 +39,7 @@ class ComplexDatabaseArticleOpsMixin:
         conn = self._pool.get_connection()
         try:
             sql = """
-                SELECT article_id, price, status, last_price, price_change
+                SELECT article_id, price, price_text, status, last_price, price_change
                 FROM article_history
                 WHERE complex_id = ?
             """
@@ -60,6 +60,7 @@ class ComplexDatabaseArticleOpsMixin:
                     continue
                 result[str(aid)] = {
                     "price": int(row["price"] or 0),
+                    "price_text": str(row["price_text"] or ""),
                     "status": str(row["status"] or "active"),
                     "last_price": int(row["last_price"] or 0),
                     "price_change": int(row["price_change"] or 0),
@@ -672,12 +673,14 @@ class ComplexDatabaseArticleOpsMixin:
                 triple_chunk_size = min(200, max(1, 900 // 3))
 
                 for triple_chunk in _iter_chunks(normalized_triples, triple_chunk_size):
-                    where_triples = " OR ".join(
-                        ["(asset_type = ? AND complex_id = ? AND trade_type = ?)"] * len(triple_chunk)
-                    )
+                    clauses = []
                     params = []
                     for asset_type, complex_id, trade_type in triple_chunk:
-                        params.extend([asset_type, complex_id, trade_type])
+                        asset_where, asset_params = self._asset_scope_where(asset_type)
+                        clauses.append(f"(({asset_where}) AND complex_id = ? AND trade_type = ?)")
+                        params.extend(asset_params)
+                        params.extend([complex_id, trade_type])
+                    where_triples = " OR ".join(clauses)
                     c.execute(
                         f"""
                         UPDATE article_history
@@ -708,6 +711,62 @@ class ComplexDatabaseArticleOpsMixin:
                 conn.execute("PRAGMA busy_timeout=30000")
             except Exception:
                 pass
+            self._pool.return_connection(conn)
+
+    def count_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
+        normalized_triples: list[tuple[str, str, str]] = []
+        for pair in targets or []:
+            if not isinstance(pair, (list, tuple)):
+                continue
+            if len(pair) >= 3:
+                asset_type = self._normalize_listing_asset_type(pair[0])
+                complex_id = str(pair[1] or "").strip()
+                trade_type = str(pair[2] or "").strip()
+            elif len(pair) >= 2:
+                asset_type = "APT"
+                complex_id = str(pair[0] or "").strip()
+                trade_type = str(pair[1] or "").strip()
+            else:
+                continue
+            if asset_type and complex_id and trade_type:
+                normalized_triples.append((asset_type, complex_id, trade_type))
+
+        if not normalized_triples:
+            return 0
+
+        def _iter_chunks(rows, chunk_size):
+            size = max(1, int(chunk_size or 1))
+            for idx in range(0, len(rows), size):
+                yield rows[idx : idx + size]
+
+        conn = self._pool.get_connection()
+        try:
+            c = conn.cursor()
+            total = 0
+            triple_chunk_size = min(200, max(1, 900 // 3))
+            for triple_chunk in _iter_chunks(normalized_triples, triple_chunk_size):
+                clauses = []
+                params = []
+                for asset_type, complex_id, trade_type in triple_chunk:
+                    asset_where, asset_params = self._asset_scope_where(asset_type)
+                    clauses.append(f"(({asset_where}) AND complex_id = ? AND trade_type = ?)")
+                    params.extend(asset_params)
+                    params.extend([complex_id, trade_type])
+                row = c.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM article_history
+                    WHERE status='disappeared'
+                      AND ({' OR '.join(clauses)})
+                    """,
+                    params,
+                ).fetchone()
+                total += int(row[0] if row else 0)
+            return total
+        except Exception as e:
+            logger.error(f"count disappeared articles for targets failed: {e}")
+            return 0
+        finally:
             self._pool.return_connection(conn)
 
     def get_disappeared_articles(self, limit=50):

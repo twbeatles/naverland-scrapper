@@ -414,11 +414,13 @@ class CrawlerTabUISetupMixin:
         
         # ── 목록 ──
         self.table_list = QTableWidget()
-        self.table_list.setColumnCount(2)
-        self.table_list.setHorizontalHeaderLabels(["단지명", "ID"])
+        self.table_list.setColumnCount(3)
+        self.table_list.setHorizontalHeaderLabels(["단지명", "ID", "자산"])
         table_list_header = self.table_list.horizontalHeader()
         if table_list_header is not None:
             table_list_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table_list.setColumnWidth(1, 110)
+        self.table_list.setColumnWidth(2, 70)
         self.table_list.setMinimumHeight(120)
         self.table_list.setAlternatingRowColors(True)
         self.table_list.setToolTip("더블클릭하면 네이버 부동산 단지 페이지로 이동합니다.")

@@ -564,6 +564,53 @@ class TestComplexDatabase(unittest.TestCase):
             self.db._pool.return_connection(conn)
         self.assertEqual(disappeared_count, 3)
 
+    def test_count_disappeared_articles_for_targets_respects_asset_scope(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="DA1",
+                complex_id="32001",
+                complex_name="ScopeApt",
+                trade_type="SALE",
+                price=15000,
+                price_text="15000",
+                area=24.0,
+                floor="5",
+                feature="f",
+                extra={"asset_type": "APT"},
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                article_id="DV1",
+                complex_id="32001",
+                complex_name="ScopeVl",
+                trade_type="SALE",
+                price=25000,
+                price_text="25000",
+                area=24.0,
+                floor="5",
+                feature="f",
+                extra={"asset_type": "VL"},
+            )
+        )
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.cursor().execute(
+                "UPDATE article_history SET status='disappeared' WHERE article_id IN (?, ?)",
+                ("DA1", "DV1"),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(self.db.count_disappeared_articles_for_targets([("APT", "32001", "SALE")]), 1)
+        self.assertEqual(self.db.count_disappeared_articles_for_targets([("VL", "32001", "SALE")]), 1)
+        self.assertEqual(
+            self.db.count_disappeared_articles_for_targets([("APT", "32001", "SALE"), ("VL", "32001", "SALE")]),
+            2,
+        )
+
     def test_record_alert_notification_dedup_by_day_and_asset_type(self):
         first = self.db.record_alert_notification(
             alert_id=10,

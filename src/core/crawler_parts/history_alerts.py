@@ -160,7 +160,11 @@ class CrawlerHistoryAlertsMixin:
         original_prefill_complexes = self._fallback_prefill_complexes
         original_prefill_pairs = self._fallback_prefill_processed_target_pairs
         try:
-            allowed_pairs = set(self._remaining_pairs())
+            allowed_pairs = {
+                pair
+                for pair in set(self._remaining_pairs())
+                if not isinstance(pair, tuple) or len(pair) < 4 or str(pair[0] or "APT").strip().upper() == "APT"
+            }
             if start_name and start_cid and start_trade:
                 allowed_pairs.add(self._pair_key(start_name, start_cid, start_trade))
 
@@ -342,6 +346,26 @@ class CrawlerHistoryAlertsMixin:
         if not isinstance(data, dict):
             return data
 
+        def _representative_price_value(price_text: str, current_trade_type: str, fallback: int = 0) -> int:
+            raw = str(price_text or "").strip()
+            fallback_value = int(fallback or 0)
+            if not raw:
+                return fallback_value
+            if current_trade_type == "월세":
+                deposit_text = raw
+                monthly_text = ""
+                if "/" in raw:
+                    deposit_text, monthly_text = raw.split("/", 1)
+                monthly_value = PriceConverter.to_int(monthly_text)
+                if monthly_value > 0:
+                    return monthly_value
+                deposit_value = PriceConverter.to_int(deposit_text)
+                if deposit_value > 0:
+                    return deposit_value
+                return fallback_value
+            price_value = PriceConverter.to_int(raw)
+            return price_value if price_value > 0 else fallback_value
+
         trade_type = str(data.get("거래유형", "") or "")
         complex_id = str(data.get("단지ID", "") or "")
         article_id = str(data.get("매물ID", "") or "")
@@ -349,11 +373,13 @@ class CrawlerHistoryAlertsMixin:
 
         if trade_type == "매매":
             price_text = str(data.get("매매가", "") or "")
+        elif trade_type == "전세":
+            price_text = str(data.get("보증금", "") or "")
         else:
             deposit = str(data.get("보증금", "") or "")
             monthly = str(data.get("월세", "") or "")
             price_text = f"{deposit}/{monthly}" if monthly else deposit
-        price_int = PriceConverter.to_int(price_text.split("/")[0] if "/" in price_text else price_text)
+        price_int = _representative_price_value(price_text, trade_type)
         asset_type = str(data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
         if asset_type not in {"APT", "VL"}:
             asset_type = "APT"
@@ -370,13 +396,16 @@ class CrawlerHistoryAlertsMixin:
             history_map = self._get_history_state_map(complex_id, trade_type, asset_type)
             prev = history_map.get(article_id)
             prev_price = int(self._row_get(prev, "price", 0) or 0)
+            prev_price_text = str(self._row_get(prev, "price_text", "") or "")
+            prev_comparable_price = _representative_price_value(prev_price_text, trade_type, fallback=prev_price)
             is_new = prev is None
-            raw_price_change = 0 if is_new else price_int - prev_price
+            raw_price_change = 0 if is_new else price_int - prev_comparable_price
 
             history_map[article_id] = {
                 "price": price_int,
+                "price_text": price_text,
                 "status": "active",
-                "last_price": prev_price if prev_price > 0 else price_int,
+                "last_price": prev_comparable_price if prev_comparable_price > 0 else price_int,
                 "price_change": raw_price_change,
             }
 
@@ -391,7 +420,7 @@ class CrawlerHistoryAlertsMixin:
                     "area": area_pyeong,
                     "floor": str(data.get("층/방향", "") or ""),
                     "feature": str(data.get("타입/특징", "") or ""),
-                    "last_price": prev_price if prev_price > 0 else price_int,
+                    "last_price": prev_comparable_price if prev_comparable_price > 0 else price_int,
                     "asset_type": asset_type,
                     "source_mode": str(data.get("수집모드", self.crawl_mode) or self.crawl_mode),
                     "source_lat": float(data.get("위도", 0.0) or 0.0),

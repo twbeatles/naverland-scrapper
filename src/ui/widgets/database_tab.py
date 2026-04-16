@@ -253,5 +253,7 @@ class DatabaseTab(QWidget):
         if row < 0:
             return
         cid_item = self.table.item(row, self.COL_COMPLEX_ID)
+        asset_item = self.table.item(row, self.COL_ASSET)
         if cid_item:
-            webbrowser.open(get_complex_url(cid_item.text()))
+            asset_type = asset_item.text() if asset_item is not None else "APT"
+            webbrowser.open(get_complex_url(cid_item.text(), asset_type=asset_type))

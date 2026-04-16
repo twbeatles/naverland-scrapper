@@ -195,12 +195,13 @@ class CrawlerDomScrollParseMixin:
             }
         
         matched_count, skipped_type = 0, 0
+        captured_at = DateTimeHelper.now_string()
         
         for item in found_items:
             if self._should_stop():
                 break
             try:
-                data = ItemParser.parse_element(item, name, cid, ttype)
+                data = ItemParser.parse_element(item, name, cid, ttype, captured_at=captured_at)
                 if data and data.get("면적(㎡)", 0) > 0:
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:

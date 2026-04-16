@@ -93,7 +93,11 @@ class CrawlerSeleniumFlowMixin:
                 raise Exception("드라이버 초기화 실패")
             
             allowed_pairs = self._fallback_allowed_pairs
-            total = len(allowed_pairs) if allowed_pairs is not None else len(self.targets) * len(self.trade_types)
+            targets = list(self._iter_targets())
+            if allowed_pairs is not None:
+                total = len(allowed_pairs)
+            else:
+                total = sum(1 for _name, _cid, asset_type in targets if asset_type == "APT" for _ in self.trade_types)
             if total <= 0:
                 self.log("ℹ️ Selenium fallback 대상 pair가 없어 종료합니다.", 10)
                 return
@@ -101,9 +105,12 @@ class CrawlerSeleniumFlowMixin:
             processed_complexes = 0  # 처리한 단지 수
             processed_target_pairs = set()
             
-            for name, cid in self.targets:
+            for name, cid, asset_type in targets:
                 if self._should_stop():
                     break
+                if str(asset_type or "APT").strip().upper() != "APT":
+                    self.log(f"ℹ️ Selenium complex 모드는 {asset_type}:{cid} 대상을 건너뜁니다.", 20)
+                    continue
                 
                 # v14.0: 메모리 기반 드라이버 재시작 (500MB 임계치)
                 should_restart = False
@@ -138,7 +145,7 @@ class CrawlerSeleniumFlowMixin:
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
-                    pair_key = self._pair_key(name, cid, ttype)
+                    pair_key = self._pair_key(name, cid, ttype, asset_type=asset_type)
                     if allowed_pairs is not None and pair_key not in allowed_pairs:
                         continue
                     if ttype not in attempted_trade_types:
@@ -151,7 +158,12 @@ class CrawlerSeleniumFlowMixin:
                     self.progress_signal.emit(int(current / total * 100), f"{name} ({ttype})", remaining)
                     self.log(f"\\n📍 [{current}/{total}] {name} - {ttype}")
 
-                    cooldown_remaining = self._get_pair_blocked_cooldown_remaining(name, cid, ttype)
+                    cooldown_remaining = self._get_pair_blocked_cooldown_remaining(
+                        name,
+                        cid,
+                        ttype,
+                        asset_type=asset_type,
+                    )
                     if cooldown_remaining > 0:
                         self.log(
                             f"   ⏭ 차단 쿨다운으로 스킵: {name}({ttype}) {int(cooldown_remaining)}초 남음",
@@ -161,14 +173,14 @@ class CrawlerSeleniumFlowMixin:
                     self._current_pair = pair_key
                     
                     try:
-                        batch_result = self._crawl(driver, name, cid, ttype)
+                        batch_result = self._crawl(driver, name, cid, ttype, asset_type=asset_type)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
                         complex_trade_types.append(ttype)
                         if cid and ttype:
-                            processed_target_pairs.add(("APT", str(cid), str(ttype)))
+                            processed_target_pairs.add((str(asset_type), str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count
-                        self._mark_pair_processed(name, cid, ttype)
+                        self._mark_pair_processed(name, cid, ttype, asset_type=asset_type)
                         self.log(f"   ✅ {count}건 수집")
                     except RetryCancelledError:
                         self.log("   ⏹ 중단 요청으로 현재 작업을 종료합니다.", 20)
@@ -213,7 +225,7 @@ class CrawlerSeleniumFlowMixin:
                     int(complex_count),
                     engine="selenium",
                     mode=self.crawl_mode,
-                    asset_type="APT",
+                    asset_type=asset_type,
                     run_status=run_status,
                 )
 
@@ -235,14 +247,17 @@ class CrawlerSeleniumFlowMixin:
                 except Exception as e:
                     self.log(f"⚠️ Chrome 드라이버 종료 중 오류: {e}", 30)
     
-    def _crawl(self, driver, name, cid, ttype):
+    def _crawl(self, driver, name, cid, ttype, asset_type="APT"):
+        asset_token = str(asset_type or "APT").strip().upper() or "APT"
+        if asset_token != "APT":
+            raise ValueError("Selenium complex 모드는 APT만 지원합니다.")
         # v12.0: 캐시 확인
         if self.cache:
             cached_items = self.cache.get(
                 cid,
                 ttype,
                 mode=self.crawl_mode,
-                asset_type="APT",
+                asset_type=asset_token,
             )
             if cached_items is not None:
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
@@ -262,7 +277,7 @@ class CrawlerSeleniumFlowMixin:
                 return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
         
         trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
-        base_url = get_complex_url(cid, asset_type="APT", preferred_family="new")
+        base_url = get_complex_url(cid, asset_type=asset_token, preferred_family="new")
         url = f"{base_url}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
 
         try:
@@ -294,7 +309,7 @@ class CrawlerSeleniumFlowMixin:
             self.stats["parse_fail_count"] = int(self.stats.get("parse_fail_count", 0)) + 1
 
         if blocked_detected:
-            blocked_state = self._record_blocked_event(name, cid, ttype)
+            blocked_state = self._record_blocked_event(name, cid, ttype, asset_type=asset_token)
             if blocked_state.get("pair_cooldown_started"):
                 self.log(
                     f"   ⚠️ 동일 pair 차단 누적 -> {blocked_state.get('pair_cooldown_seconds', 90)}초 쿨다운 진입",
@@ -309,7 +324,7 @@ class CrawlerSeleniumFlowMixin:
             self.emit_stats()
             raise BlockedPageError("blocked page detected")
 
-        self._record_pair_success(name, cid, ttype)
+        self._record_pair_success(name, cid, ttype, asset_type=asset_token)
         
         # v15.x: raw items는 항상 저장하되 negative cache는 확정 빈 결과일 때만 저장
         if self.cache:
@@ -320,7 +335,7 @@ class CrawlerSeleniumFlowMixin:
                     ttype,
                     raw_items,
                     mode=self.crawl_mode,
-                    asset_type="APT",
+                    asset_type=asset_token,
                 )
             else:
                 negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
@@ -332,7 +347,7 @@ class CrawlerSeleniumFlowMixin:
                         ttl_seconds=negative_ttl_seconds,
                         reason="confirmed_empty",
                         mode=self.crawl_mode,
-                        asset_type="APT",
+                        asset_type=asset_token,
                     )
         
         self._flush_history_updates(force=True)

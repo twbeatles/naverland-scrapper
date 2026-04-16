@@ -279,7 +279,7 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_crawler_tab_db_load_excludes_vl_targets(self):
+    def test_crawler_tab_db_load_preserves_asset_type_targets(self):
         from PyQt6.QtWidgets import QDialog
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -303,15 +303,17 @@ class TestUIWiring(unittest.TestCase):
             with patch("src.ui.widgets.crawler_tab.MultiSelectDialog", _DialogStub):
                 tab._show_db_load_dialog()
 
-            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(tab.table_list.rowCount(), 2)
             self.assertEqual(_table_text(tab.table_list, 0, 1), "11001")
-            self.assertIn("APT만 지원", tab.log_browser.toPlainText())
+            self.assertEqual(_table_text(tab.table_list, 0, 2), "APT")
+            self.assertEqual(_table_text(tab.table_list, 1, 1), "11002")
+            self.assertEqual(_table_text(tab.table_list, 1, 2), "VL")
 
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_crawler_tab_group_load_excludes_vl_targets(self):
+    def test_crawler_tab_group_load_preserves_asset_type_targets(self):
         from PyQt6.QtWidgets import QDialog
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -341,9 +343,11 @@ class TestUIWiring(unittest.TestCase):
             with patch("src.ui.widgets.crawler_tab.MultiSelectDialog", _DialogStub):
                 tab._show_group_load_dialog()
 
-            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(tab.table_list.rowCount(), 2)
             self.assertEqual(_table_text(tab.table_list, 0, 1), "12001")
-            self.assertIn("APT만 지원", tab.log_browser.toPlainText())
+            self.assertEqual(_table_text(tab.table_list, 0, 2), "APT")
+            self.assertEqual(_table_text(tab.table_list, 1, 1), "12002")
+            self.assertEqual(_table_text(tab.table_list, 1, 2), "VL")
 
             db.close()
             tab.deleteLater()
@@ -1302,20 +1306,61 @@ class TestUIWiring(unittest.TestCase):
             db = ComplexDatabase(os.path.join(tmp, "ui_task_dedupe.db"))
             tab = CrawlerTab(db)
 
-            self.assertTrue(tab.add_task("첫단지", "12345"))
-            self.assertFalse(tab.add_task("둘단지", "12345"))
-            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertTrue(tab.add_task("첫단지", "12345", "APT"))
+            self.assertFalse(tab.add_task("둘단지", "12345", "APT"))
+            self.assertTrue(tab.add_task("빌라단지", "12345", "VL"))
+            self.assertEqual(tab.table_list.rowCount(), 2)
             self.assertEqual(_table_text(tab.table_list, 0, 0), "첫단지")
+            self.assertEqual(_table_text(tab.table_list, 0, 2), "APT")
+            self.assertEqual(_table_text(tab.table_list, 1, 0), "빌라단지")
+            self.assertEqual(_table_text(tab.table_list, 1, 2), "VL")
             self.assertIn("중복 스킵", tab.log_browser.toPlainText())
 
-            tab._append_task_row("레거시중복", "12345")
-            self.assertEqual(tab.table_list.rowCount(), 2)
+            tab._append_task_row("레거시중복", "12345", "APT")
+            self.assertEqual(tab.table_list.rowCount(), 3)
 
-            with patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls:
+            def _get_setting(key, default=None):
+                if key == "crawl_engine":
+                    return "playwright"
+                return default
+
+            with (
+                patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls,
+                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting),
+            ):
                 tab.start_crawling()
 
-            self.assertEqual(tab.table_list.rowCount(), 1)
-            self.assertEqual(mock_thread_cls.call_args.args[0], [("첫단지", "12345")])
+            self.assertEqual(tab.table_list.rowCount(), 2)
+            self.assertEqual(
+                mock_thread_cls.call_args.args[0],
+                [("첫단지", "12345", "APT"), ("빌라단지", "12345", "VL")],
+            )
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_rejects_selenium_start_for_vl_complex_targets(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_selenium_vl_guard.db"))
+            tab = CrawlerTab(db)
+            tab.add_task("빌라단지", "54321", "VL")
+
+            def _get_setting(key, default=None):
+                if key == "crawl_engine":
+                    return "selenium"
+                return default
+
+            with (
+                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting),
+                patch("src.ui.widgets.crawler_tab.QMessageBox.warning", return_value=None),
+            ):
+                self.assertFalse(tab.start_crawling())
+
+            self.assertIn("VL", tab.log_browser.toPlainText())
 
             db.close()
             tab.deleteLater()

@@ -26,6 +26,12 @@ from PyInstaller.utils.hooks import collect_submodules
 # asset-scoped runtime item dedupe, and targeted pytest CI expansion remain
 # runtime/test/documentation-level changes and do not require extra PyInstaller
 # datas, hidden imports, or hooks.
+# Rechecked on 2026-04-16 (asset-scope/monthly-history/dashboard/doc-sync pass):
+# VL houses URL asset preservation, complex task `(asset_type, complex_id)` dedupe,
+# scoped disappeared-count dashboard stats, 월세 rent-priority history comparison,
+# 즐겨찾기 column cleanup, and GitHub Actions pytest restoration remain
+# runtime/test/documentation-level changes and do not require extra PyInstaller
+# datas, hidden imports, or hooks.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)

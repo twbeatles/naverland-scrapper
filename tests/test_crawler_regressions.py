@@ -12,7 +12,7 @@ from src.core.crawler import CrawlerThread
 
 
 class _DBStub:
-    def get_article_history_state_bulk(self, _complex_id):
+    def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
         return {}
 
     def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):
@@ -78,6 +78,38 @@ class TestCrawlerRegressions(unittest.TestCase):
         self.assertTrue(thread._check_filters(both_ok, "월세"))
         self.assertFalse(thread._check_filters(deposit_fail, "월세"))
         self.assertFalse(thread._check_filters(rent_fail, "월세"))
+
+    def test_monthly_history_and_price_change_use_rent_metric(self):
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["월세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        first_item = {
+            "단지명": "월세단지",
+            "단지ID": "91001",
+            "매물ID": "M1",
+            "거래유형": "월세",
+            "매매가": "",
+            "보증금": "20000",
+            "월세": "100",
+            "면적(평)": 24.0,
+            "층/방향": "5층",
+            "타입/특징": "테스트",
+        }
+        first_out = thread._enrich_item_with_history_and_alerts(dict(first_item))
+        self.assertTrue(first_out["is_new"])
+
+        second_item = dict(first_item)
+        second_item["보증금"] = "25000"
+        second_item["월세"] = "80"
+        second_out = thread._enrich_item_with_history_and_alerts(second_item)
+
+        self.assertEqual(second_out["price_change"], -20)
 
     def test_cache_hit_reapplies_current_filters_using_raw_items(self):
         raw_items = [
@@ -285,7 +317,7 @@ class TestCrawlerRegressions(unittest.TestCase):
                 self.scoped_calls = 0
                 self.global_calls = 0
 
-            def get_article_history_state_bulk(self, _complex_id):
+            def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
                 return {}
 
             def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):

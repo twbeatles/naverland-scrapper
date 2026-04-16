@@ -23,7 +23,13 @@ class TestItemParser(unittest.TestCase):
         soup = BeautifulSoup(html, 'html.parser')
         item = soup.select_one(".item_inner")
         
-        data = ItemParser.parse_element(item, "Sample Complex", "12345", "매매")
+        data = ItemParser.parse_element(
+            item,
+            "Sample Complex",
+            "12345",
+            "매매",
+            captured_at="2026-04-16 12:00:00",
+        )
 
         self.assertEqual(data["단지명"], "Sample Complex")
         self.assertEqual(data["단지ID"], "12345")
@@ -56,9 +62,10 @@ class TestItemParser(unittest.TestCase):
         """
         item = BeautifulSoup(html, "html.parser").select_one(".item_inner")
         n = 1200
+        captured_at = "2026-04-16 12:00:00"
         start = time.perf_counter()
         for _ in range(n):
-            ItemParser.parse_element(item, "Sample", "12345", "매매")
+            ItemParser.parse_element(item, "Sample", "12345", "매매", captured_at=captured_at)
         elapsed = time.perf_counter() - start
         throughput = n / elapsed if elapsed > 0 else 0
         # 환경 편차를 고려한 스모크 하한

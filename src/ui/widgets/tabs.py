@@ -39,9 +39,9 @@ class FavoritesTab(QWidget):
         
         # 테이블
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "단지명", "거래유형", "가격", "면적", "층/방향", "메모", "추가일", "링크"
+            "단지명", "거래유형", "가격", "면적", "층/방향", "메모", "추가일"
         ])
         favorites_header = self.table.horizontalHeader()
         if favorites_header is not None:

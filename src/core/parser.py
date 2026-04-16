@@ -176,21 +176,42 @@ class NaverURLParser:
     @classmethod
     def extract_from_text(cls, text):
         """텍스트에서 모든 단지 URL/ID를 추출한다."""
+        raw_text = str(text or "")
         results = []
         seen = set()
 
-        urls = cls._URL_RE.findall(text)
+        urls = cls._URL_RE.findall(raw_text)
         for url in urls:
-            cid = cls.extract_complex_id(url)
-            if cid and cid not in seen:
-                results.append(("URL에서 추출", cid))
-                seen.add(cid)
+            parsed = cls.parse_url_info(url)
+            cid = str(parsed.get("complex_id", "") or "").strip()
+            asset_type = cls._normalize_asset_type(parsed.get("asset_type", "APT"))
+            dedupe_key = (asset_type, cid)
+            if cid and dedupe_key not in seen:
+                results.append(
+                    {
+                        "source": "URL에서 추출",
+                        "complex_id": cid,
+                        "asset_type": asset_type,
+                        "article_id": str(parsed.get("article_id", "") or ""),
+                        "url": str(parsed.get("url", url) or url),
+                    }
+                )
+                seen.add(dedupe_key)
 
-        for line in text.splitlines():
+        for line in raw_text.splitlines():
             cid = cls._extract_id_from_line(line)
-            if cid and cid not in seen:
-                results.append(("ID 직접 입력", cid))
-                seen.add(cid)
+            dedupe_key = ("APT", str(cid or "").strip())
+            if cid and dedupe_key not in seen:
+                results.append(
+                    {
+                        "source": "ID 직접 입력",
+                        "complex_id": str(cid),
+                        "asset_type": "APT",
+                        "article_id": "",
+                        "url": "",
+                    }
+                )
+                seen.add(dedupe_key)
 
         return results
 
@@ -220,15 +241,37 @@ class NaverURLParser:
 
         return None
 
+    @staticmethod
+    def _normalize_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
+
     @classmethod
-    def _fetch_name_impl(cls, complex_id):
+    def _name_cache_key(cls, complex_id, asset_type="APT") -> str:
+        return f"{cls._normalize_asset_type(asset_type)}:{str(complex_id or '').strip()}"
+
+    @classmethod
+    def _fetch_name_impl(cls, complex_id, asset_type="APT"):
         """네이버 API를 호출해 단지명을 조회한다."""
-        url = f"https://new.land.naver.com/api/complexes/{complex_id}?sameAddressGroup=false"
+        asset_token = cls._normalize_asset_type(asset_type)
+        entity_path = "houses" if asset_token == "VL" else "complexes"
+        url = f"https://new.land.naver.com/api/{entity_path}/{complex_id}?sameAddressGroup=false"
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("complexDetail", {}).get("complexName", f"단지_{complex_id}")
+            detail = data.get("complexDetail", {}) if isinstance(data, dict) else {}
+            name_candidates = (
+                detail.get("complexName"),
+                detail.get("name"),
+                data.get("complexName") if isinstance(data, dict) else "",
+                data.get("name") if isinstance(data, dict) else "",
+            )
+            for candidate in name_candidates:
+                token = str(candidate or "").strip()
+                if token:
+                    return token
+            return f"단지_{complex_id}"
 
     @classmethod
     def _fallback_name(cls, complex_id):
@@ -263,16 +306,18 @@ class NaverURLParser:
         cls._name_lookup_cooldown_until = 0.0
 
     @classmethod
-    def fetch_complex_name(cls, complex_id, cancel_checker=None):
+    def fetch_complex_name(cls, complex_id, asset_type="APT", cancel_checker=None):
         """단지 ID로 단지명을 조회한다."""
         cid = str(complex_id or "").strip()
+        asset_token = cls._normalize_asset_type(asset_type)
         fallback_name = cls._fallback_name(cid)
         if not cid:
             return fallback_name
         if cls._is_cancelled(cancel_checker):
             raise RetryCancelledError("lookup cancelled before attempt")
 
-        cached = cls._name_cache.get(cid, "")
+        cache_key = cls._name_cache_key(cid, asset_token)
+        cached = cls._name_cache.get(cache_key, "")
         if cached:
             return cached
 
@@ -281,9 +326,9 @@ class NaverURLParser:
 
         logger = get_logger("NaverURLParser")
         try:
-            name = str(cls._fetch_name_impl(cid) or "").strip() or fallback_name
+            name = str(cls._fetch_name_impl(cid, asset_type=asset_token) or "").strip() or fallback_name
             if name and not name.startswith("단지_"):
-                cls._name_cache[cid] = name
+                cls._name_cache[cache_key] = name
             return name
         except RetryCancelledError:
             raise
@@ -295,9 +340,11 @@ class NaverURLParser:
                 status = int(getattr(e, "code", 0) or 0)
                 if status == 429 or "TOO_MANY_REQUESTS" in response_body:
                     cls._activate_name_lookup_cooldown()
-                    logger.warning(f"단지명 조회 rate limit ({cid}): status={status}")
+                    logger.warning(f"단지명 조회 rate limit ({asset_token}:{cid}): status={status}")
                 else:
-                    logger.debug(f"단지명 조회 HTTP 실패 ({cid}): status={status}, body={response_body[:160]}")
+                    logger.debug(
+                        f"단지명 조회 HTTP 실패 ({asset_token}:{cid}): status={status}, body={response_body[:160]}"
+                    )
             else:
-                logger.debug(f"단지명 조회 실패 ({cid}): {e}")
+                logger.debug(f"단지명 조회 실패 ({asset_token}:{cid}): {e}")
             return fallback_name

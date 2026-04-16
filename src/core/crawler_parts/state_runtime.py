@@ -216,21 +216,51 @@ class CrawlerStateRuntimeMixin:
         speed_cfg = CRAWL_SPEED_PRESETS.get(self.speed, CRAWL_SPEED_PRESETS["보통"])
         return random.uniform(speed_cfg["min"], speed_cfg["max"])
 
-    def _pair_key(self, name, cid, trade_type):
-        return (str(name or ""), str(cid or ""), str(trade_type or ""))
+    @staticmethod
+    def _normalize_target_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
+
+    def _normalize_target_entry(self, entry):
+        if isinstance(entry, dict):
+            name = str(entry.get("name", "") or "")
+            cid = str(entry.get("cid", entry.get("complex_id", "")) or "")
+            asset_type = self._normalize_target_asset_type(entry.get("asset_type", "APT"))
+            return name, cid, asset_type
+        if isinstance(entry, (list, tuple)):
+            name = str(entry[0] if len(entry) >= 1 else "" or "")
+            cid = str(entry[1] if len(entry) >= 2 else "" or "")
+            asset_type = self._normalize_target_asset_type(entry[2] if len(entry) >= 3 else "APT")
+            return name, cid, asset_type
+        return "", "", "APT"
+
+    def _iter_targets(self):
+        for entry in self.targets or []:
+            name, cid, asset_type = self._normalize_target_entry(entry)
+            if not str(cid or "").strip():
+                continue
+            yield name, cid, asset_type
+
+    def _pair_key(self, name, cid, trade_type, asset_type="APT"):
+        return (
+            self._normalize_target_asset_type(asset_type),
+            str(name or ""),
+            str(cid or ""),
+            str(trade_type or ""),
+        )
 
     def _build_pair_sequence(self):
         pairs = []
-        for name, cid in self.targets:
+        for name, cid, asset_type in self._iter_targets():
             for trade_type in self.trade_types:
-                pairs.append(self._pair_key(name, cid, trade_type))
+                pairs.append(self._pair_key(name, cid, trade_type, asset_type))
         return pairs
 
     def _remaining_pairs(self):
         return [pair for pair in self._pair_sequence if pair not in self._processed_pairs]
 
-    def _mark_pair_processed(self, name, cid, trade_type):
-        self._processed_pairs.add(self._pair_key(name, cid, trade_type))
+    def _mark_pair_processed(self, name, cid, trade_type, asset_type="APT"):
+        self._processed_pairs.add(self._pair_key(name, cid, trade_type, asset_type))
 
     @staticmethod
     def _unique_trade_types(trade_types):
@@ -404,11 +434,11 @@ class CrawlerStateRuntimeMixin:
     def _cache_key(self, *parts):
         return tuple(str(part or "") for part in parts)
 
-    def _blocked_pair_key(self, name, cid, trade_type):
-        return self._pair_key(name, cid, trade_type)
+    def _blocked_pair_key(self, name, cid, trade_type, asset_type="APT"):
+        return self._pair_key(name, cid, trade_type, asset_type)
 
-    def _get_pair_blocked_cooldown_remaining(self, name, cid, trade_type) -> float:
-        key = self._blocked_pair_key(name, cid, trade_type)
+    def _get_pair_blocked_cooldown_remaining(self, name, cid, trade_type, asset_type="APT") -> float:
+        key = self._blocked_pair_key(name, cid, trade_type, asset_type)
         cooldown_until = float(self._blocked_pair_cooldown_until.get(key, 0.0) or 0.0)
         if cooldown_until <= 0.0:
             return 0.0
@@ -418,8 +448,8 @@ class CrawlerStateRuntimeMixin:
             return 0.0
         return remaining
 
-    def _record_blocked_event(self, name, cid, trade_type):
-        key = self._blocked_pair_key(name, cid, trade_type)
+    def _record_blocked_event(self, name, cid, trade_type, asset_type="APT"):
+        key = self._blocked_pair_key(name, cid, trade_type, asset_type)
         streak = int(self._blocked_pair_streaks.get(key, 0) or 0) + 1
         self._blocked_pair_streaks[key] = streak
         self._blocked_total_count = int(self._blocked_total_count) + 1
@@ -442,8 +472,8 @@ class CrawlerStateRuntimeMixin:
             "global_abort": global_abort,
         }
 
-    def _record_pair_success(self, name, cid, trade_type):
-        key = self._blocked_pair_key(name, cid, trade_type)
+    def _record_pair_success(self, name, cid, trade_type, asset_type="APT"):
+        key = self._blocked_pair_key(name, cid, trade_type, asset_type)
         self._blocked_pair_streaks[key] = 0
         self._blocked_pair_cooldown_until.pop(key, None)
 

@@ -31,17 +31,33 @@ class _NameLookupWorker(QObject):
     def cancel(self):
         self._cancelled = True
 
+    @staticmethod
+    def _normalize_result_entry(entry):
+        if isinstance(entry, dict):
+            source = str(entry.get("source", "") or "")
+            cid = str(entry.get("complex_id", entry.get("cid", "")) or "").strip()
+            asset_type = str(entry.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+            return source, cid, asset_type
+        if isinstance(entry, (list, tuple)):
+            source = str(entry[0] if len(entry) >= 1 else "" or "")
+            cid = str(entry[1] if len(entry) >= 2 else "" or "").strip()
+            asset_type = str(entry[2] if len(entry) >= 3 else "APT" or "APT").strip().upper() or "APT"
+            return source, cid, asset_type
+        return "", "", "APT"
+
     @pyqtSlot()
     def run(self):
         total = len(self._results)
         processed = 0
-        for idx, (_source, cid) in enumerate(self._results):
+        for idx, entry in enumerate(self._results):
+            _source, cid, asset_type = self._normalize_result_entry(entry)
             if self._cancelled:
                 break
 
             try:
                 name = NaverURLParser.fetch_complex_name(
                     cid,
+                    asset_type=asset_type,
                     cancel_checker=lambda: self._cancelled,
                 )
             except RetryCancelledError:
@@ -59,7 +75,7 @@ class _NameLookupWorker(QObject):
 class URLBatchDialog(QDialog):
     """URL 일괄 등록 다이얼로그."""
 
-    complexes_added = pyqtSignal(list)  # [(name, id), ...]
+    complexes_added = pyqtSignal(list)  # [(name, id, asset_type), ...]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -69,6 +85,7 @@ class URLBatchDialog(QDialog):
         self._worker_thread = None
         self._worker = None
         self._parsing = False
+        self._parsed_entries = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -139,7 +156,15 @@ class URLBatchDialog(QDialog):
 
     def _prepare_rows(self, results):
         self.result_table.setRowCount(0)
-        for _, cid in results:
+        self._parsed_entries = []
+        for entry in results:
+            _source, cid, asset_type = _NameLookupWorker._normalize_result_entry(entry)
+            self._parsed_entries.append(
+                {
+                    "complex_id": str(cid),
+                    "asset_type": str(asset_type or "APT").strip().upper() or "APT",
+                }
+            )
             row = self.result_table.rowCount()
             self.result_table.insertRow(row)
 
@@ -148,7 +173,7 @@ class URLBatchDialog(QDialog):
             self.result_table.setCellWidget(row, 0, chk)
             self.result_table.setItem(row, 1, QTableWidgetItem(str(cid)))
             self.result_table.setItem(row, 2, QTableWidgetItem(f"단지_{cid}"))
-            self.result_table.setItem(row, 3, QTableWidgetItem("조회 중..."))
+            self.result_table.setItem(row, 3, QTableWidgetItem(f"{asset_type} 조회 중..."))
 
     def _start_lookup_worker(self, results):
         self._cleanup_worker(wait=False)
@@ -201,7 +226,11 @@ class URLBatchDialog(QDialog):
             chk.setChecked(is_verified)
         self.result_table.setItem(row, 1, QTableWidgetItem(str(cid)))
         self.result_table.setItem(row, 2, QTableWidgetItem(str(name)))
-        status = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
+        asset_type = "APT"
+        if row < len(self._parsed_entries):
+            asset_type = str(self._parsed_entries[row].get("asset_type", "APT") or "APT").strip().upper() or "APT"
+        status_label = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
+        status = f"{status_label} ({asset_type})"
         self.result_table.setItem(row, 3, QTableWidgetItem(status))
         self.status_label.setText(f"🔍 이름 조회 중... ({row + 1}/{total})")
         QApplication.processEvents()
@@ -256,7 +285,12 @@ class URLBatchDialog(QDialog):
                 name_item = self.result_table.item(row, 2)
                 if not cid_item or not name_item:
                     continue
-                selected.append((name_item.text(), cid_item.text()))
+                asset_type = "APT"
+                if row < len(self._parsed_entries):
+                    asset_type = str(
+                        self._parsed_entries[row].get("asset_type", "APT") or "APT"
+                    ).strip().upper() or "APT"
+                selected.append((name_item.text(), cid_item.text(), asset_type))
 
         if selected:
             self._selected_complexes = list(selected)
@@ -269,4 +303,16 @@ class URLBatchDialog(QDialog):
         return list(self._selected_complexes)
 
     def get_urls(self):
-        return [get_complex_url(cid) for _, cid in self._selected_complexes]
+        urls = []
+        for item in self._selected_complexes:
+            if isinstance(item, dict):
+                cid = str(item.get("cid", item.get("complex_id", "")) or "").strip()
+                asset_type = str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+            elif isinstance(item, (list, tuple)):
+                cid = str(item[1] if len(item) >= 2 else "" or "").strip()
+                asset_type = str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper() or "APT"
+            else:
+                continue
+            if cid:
+                urls.append(get_complex_url(cid, asset_type=asset_type))
+        return urls

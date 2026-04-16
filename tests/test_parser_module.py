@@ -11,6 +11,22 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.core.parser import NaverURLParser
 
 
+def _entry_cid(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("complex_id", entry.get("cid", "")) or "")
+    if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+        return str(entry[1] or "")
+    return ""
+
+
+def _entry_asset(entry):
+    if isinstance(entry, dict):
+        return str(entry.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+    if isinstance(entry, (list, tuple)) and len(entry) >= 3:
+        return str(entry[2] or "APT").strip().upper() or "APT"
+    return "APT"
+
+
 class TestNaverURLParser(unittest.TestCase):
     def setUp(self):
         NaverURLParser._reset_runtime_state_for_tests()
@@ -59,7 +75,7 @@ class TestNaverURLParser(unittest.TestCase):
     def test_extract_from_text(self):
         text = "https://land.naver.com/complex/11111\n단지ID: 22222"
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
+        ids = [_entry_cid(entry) for entry in results]
         self.assertIn("11111", ids)
         self.assertIn("22222", ids)
 
@@ -71,9 +87,9 @@ class TestNaverURLParser(unittest.TestCase):
             parts.append(f"https://new.land.naver.com/complexes/{i}")  # duplicated URL
         text = "\n".join(parts)
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
-        self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(len(ids), 100)
+        keys = [(_entry_asset(entry), _entry_cid(entry)) for entry in results]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertEqual(len(keys), 100)
 
     def test_extract_from_text_ignores_contextless_numbers(self):
         text = "\n".join(
@@ -84,7 +100,7 @@ class TestNaverURLParser(unittest.TestCase):
             ]
         )
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
+        ids = [_entry_cid(entry) for entry in results]
         self.assertNotIn("987654321", ids)
         self.assertNotIn("1234567890", ids)
         self.assertNotIn("54321", ids)
@@ -92,18 +108,18 @@ class TestNaverURLParser(unittest.TestCase):
     def test_extract_from_text_accepts_standalone_id_lines(self):
         text = "12345\n67890"
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
+        ids = [_entry_cid(entry) for entry in results]
         self.assertIn("12345", ids)
         self.assertIn("67890", ids)
 
     def test_extract_from_text_accepts_short_standalone_id_lines(self):
         text = "1\n22"
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
+        ids = [_entry_cid(entry) for entry in results]
         self.assertIn("1", ids)
         self.assertIn("22", ids)
 
-    def test_extract_from_text_accepts_house_urls_and_deduplicates_with_complex_urls(self):
+    def test_extract_from_text_preserves_house_asset_scope_separately_from_complex_urls(self):
         text = "\n".join(
             [
                 "https://new.land.naver.com/houses/54321?articleId=111",
@@ -112,8 +128,11 @@ class TestNaverURLParser(unittest.TestCase):
             ]
         )
         results = NaverURLParser.extract_from_text(text)
-        ids = [cid for _, cid in results]
-        self.assertEqual(ids, ["54321"])
+        scoped_ids = {(_entry_asset(entry), _entry_cid(entry)) for entry in results}
+        self.assertEqual(scoped_ids, {("APT", "54321"), ("VL", "54321")})
+        self.assertEqual(len(results), 2)
+        vl_entry = next(entry for entry in results if _entry_asset(entry) == "VL")
+        self.assertEqual(vl_entry.get("article_id", ""), "111")
 
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
@@ -160,6 +179,18 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(first, "테스트단지")
         self.assertEqual(second, "테스트단지")
         self.assertEqual(mock_fetch.call_count, 1)
+
+    def test_fetch_complex_name_separates_cache_by_asset_type(self):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_name_impl",
+            side_effect=["아파트단지", "빌라단지"],
+        ) as mock_fetch:
+            apt_name = NaverURLParser.fetch_complex_name("77777", asset_type="APT")
+            vl_name = NaverURLParser.fetch_complex_name("77777", asset_type="VL")
+
+        self.assertEqual(apt_name, "아파트단지")
+        self.assertEqual(vl_name, "빌라단지")
+        self.assertEqual(mock_fetch.call_count, 2)
 
 
 if __name__ == "__main__":

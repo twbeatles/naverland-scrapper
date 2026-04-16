@@ -154,6 +154,7 @@ _rebind_inherited_methods(
     "mark_disappeared_articles_for_targets",
     "get_disappeared_articles",
     "count_disappeared_articles",
+    "count_disappeared_articles_for_targets",
     "close",
     ],
 )

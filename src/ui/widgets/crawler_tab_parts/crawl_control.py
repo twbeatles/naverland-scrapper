@@ -10,6 +10,11 @@ class CrawlerTabCrawlControlMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
+    @staticmethod
+    def _normalize_task_asset_type(asset_type) -> str:
+        token = str(asset_type or "APT").strip().upper()
+        return token if token in {"APT", "VL"} else "APT"
+
     def _add_complex(self: Any):
         name = self.input_name.text().strip()
         cid = self.input_id.text().strip()
@@ -20,7 +25,7 @@ class CrawlerTabCrawlControlMixin:
             self.input_id.setFocus()
             self.input_id.selectAll()
             return
-        self._add_row(name, cid)
+        self._add_row(name, cid, "APT")
         self.input_name.clear()
         self.input_id.clear()
 
@@ -29,61 +34,79 @@ class CrawlerTabCrawlControlMixin:
         name_text = str(name or "").strip()
         return name_text or f"단지_{cid_text}"
 
-    def _find_task_row_by_cid(self: Any, cid):
+    def _find_task_row_by_cid(self: Any, cid, asset_type="APT"):
         cid_text = str(cid or "").strip()
+        asset_token = self._normalize_task_asset_type(asset_type)
         if not cid_text:
             return -1
         for row in range(self.table_list.rowCount()):
             item = self.table_list.item(row, 1)
-            if item and item.text().strip() == cid_text:
+            asset_item = self.table_list.item(row, 2)
+            row_asset = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
+            if item and item.text().strip() == cid_text and row_asset == asset_token:
                 return row
         return -1
 
-    def _append_task_row(self: Any, name, cid):
+    def _append_task_row(self: Any, name, cid, asset_type="APT"):
         row = self.table_list.rowCount()
         self.table_list.insertRow(row)
         self.table_list.setItem(row, 0, QTableWidgetItem(str(name)))
         self.table_list.setItem(row, 1, QTableWidgetItem(str(cid)))
+        self.table_list.setItem(row, 2, QTableWidgetItem(self._normalize_task_asset_type(asset_type)))
 
-    def _emit_task_duplicate_skip(self: Any, name, cid):
-        existing_row = self._find_task_row_by_cid(cid)
+    def _emit_task_duplicate_skip(self: Any, name, cid, asset_type="APT"):
+        asset_token = self._normalize_task_asset_type(asset_type)
+        existing_row = self._find_task_row_by_cid(cid, asset_token)
         kept_name = ""
         if existing_row >= 0:
             kept_item = self.table_list.item(existing_row, 0)
             kept_name = kept_item.text().strip() if kept_item else ""
         display_name = kept_name or self._normalize_task_name(name, cid)
-        message = f"중복 스킵: {display_name} ({cid})"
+        message = f"중복 스킵: {display_name} ({asset_token}:{cid})"
         self.append_log(message, 10)
         self.status_message.emit(message)
 
-    def add_task(self: Any, name, cid, *, log_duplicate=True):
+    def add_task(self: Any, name, cid, asset_type="APT", *, log_duplicate=True):
         cid_text = str(cid or "").strip()
+        asset_token = self._normalize_task_asset_type(asset_type)
         if not cid_text:
             return False
         name_text = self._normalize_task_name(name, cid_text)
-        if self._find_task_row_by_cid(cid_text) >= 0:
+        if self._find_task_row_by_cid(cid_text, asset_token) >= 0:
             if log_duplicate:
-                self._emit_task_duplicate_skip(name_text, cid_text)
+                self._emit_task_duplicate_skip(name_text, cid_text, asset_token)
             return False
-        self._append_task_row(name_text, cid_text)
+        self._append_task_row(name_text, cid_text, asset_token)
         return True
 
-    def _add_row(self: Any, name, cid):
-        return self.add_task(name, cid)
+    def _add_row(self: Any, name, cid, asset_type="APT"):
+        return self.add_task(name, cid, asset_type)
 
     def _dedupe_target_entries(self: Any, rows):
         deduped = []
         seen = set()
         removed = 0
-        for name, cid in rows:
+        for row in rows:
+            if isinstance(row, dict):
+                name = row.get("name", "")
+                cid = row.get("cid", row.get("complex_id", ""))
+                asset_type = row.get("asset_type", "APT")
+            elif isinstance(row, (list, tuple)):
+                name = row[0] if len(row) >= 1 else ""
+                cid = row[1] if len(row) >= 2 else ""
+                asset_type = row[2] if len(row) >= 3 else "APT"
+            else:
+                continue
             cid_text = str(cid or "").strip()
+            asset_token = self._normalize_task_asset_type(asset_type)
             if not cid_text:
                 continue
-            if cid_text in seen:
+            dedupe_key = (asset_token, cid_text)
+            if dedupe_key in seen:
                 removed += 1
                 continue
-            seen.add(cid_text)
-            deduped.append((self._normalize_task_name(name, cid_text), cid_text))
+            seen.add(dedupe_key)
+            deduped.append((self._normalize_task_name(name, cid_text), cid_text, asset_token))
         return deduped, removed
 
     def _normalize_task_table(self: Any):
@@ -91,17 +114,19 @@ class CrawlerTabCrawlControlMixin:
         for row in range(self.table_list.rowCount()):
             name_item = self.table_list.item(row, 0)
             cid_item = self.table_list.item(row, 1)
+            asset_item = self.table_list.item(row, 2)
             rows.append(
                 (
                     name_item.text().strip() if name_item else "",
                     cid_item.text().strip() if cid_item else "",
+                    self._normalize_task_asset_type(asset_item.text() if asset_item else "APT"),
                 )
             )
         deduped, removed = self._dedupe_target_entries(rows)
         if removed > 0 or len(deduped) != self.table_list.rowCount():
             self.table_list.setRowCount(0)
-            for name, cid in deduped:
-                self._append_task_row(name, cid)
+            for name, cid, asset_type in deduped:
+                self._append_task_row(name, cid, asset_type)
         if removed > 0:
             message = f"중복 스킵: {removed}개 작업을 정리했습니다."
             self.append_log(message, 20)
@@ -127,7 +152,9 @@ class CrawlerTabCrawlControlMixin:
         for r in range(total):
             name = self.table_list.item(r, 0).text()
             cid = self.table_list.item(r, 1).text()
-            status = self.db.add_complex(name, cid, return_status=True)
+            asset_item = self.table_list.item(r, 2)
+            asset_type = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
+            status = self.db.add_complex(name, cid, asset_type=asset_type, return_status=True)
             if status == "inserted":
                 inserted_count += 1
             elif status == "existing":
@@ -145,28 +172,21 @@ class CrawlerTabCrawlControlMixin:
         if not complexes:
             QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
             return
-        apt_complexes = []
-        excluded_vl = 0
+        db_complexes = []
         for _, name, asset_type, cid, _ in complexes:
-            asset_token = str(asset_type or "APT").strip().upper() or "APT"
-            if asset_token != "APT":
-                excluded_vl += 1
-                continue
-            apt_complexes.append((name, cid))
-        if not apt_complexes:
-            QMessageBox.information(self, "알림", "complex 모드에서 불러올 수 있는 APT 단지가 없습니다.")
-            if excluded_vl > 0:
-                self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
-                self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
-            return
-        if excluded_vl > 0:
-            self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
-            self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
-        items = [(f"{name} (APT:{cid})", (name, cid)) for name, cid in apt_complexes]
+            asset_token = self._normalize_task_asset_type(asset_type)
+            db_complexes.append((str(name or ""), str(cid or ""), asset_token))
+        items = [(f"{name} ({asset_type}:{cid})", (name, cid, asset_type)) for name, cid, asset_type in db_complexes]
         dlg = MultiSelectDialog("DB에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            for name, cid in dlg.selected_items():
-                self._add_row(name, cid)
+            for item in dlg.selected_items():
+                if isinstance(item, (list, tuple)) and len(item) >= 3:
+                    name, cid, asset_type = item[0], item[1], item[2]
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    name, cid, asset_type = item[0], item[1], "APT"
+                else:
+                    continue
+                self._add_row(name, cid, asset_type)
 
     def _show_group_load_dialog(self: Any):
         groups = self.db.get_all_groups()
@@ -176,17 +196,9 @@ class CrawlerTabCrawlControlMixin:
         items = [(name, gid) for gid, name, _ in groups]
         dlg = MultiSelectDialog("그룹에서 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            excluded_vl = 0
             for gid in dlg.selected_items():
                 for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
-                    asset_token = str(asset_type or "APT").strip().upper() or "APT"
-                    if asset_token != "APT":
-                        excluded_vl += 1
-                        continue
-                    self.add_task(name, cid)
-            if excluded_vl > 0:
-                self.append_log(f"ℹ️ complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다.", 20)
-                self.status_message.emit("complex 모드는 APT만 지원하며 VL은 geo_sweep에서만 사용 가능합니다.")
+                    self.add_task(name, cid, asset_type)
 
     def _show_recent_search_dialog(self: Any):
         if not self.history_manager:
@@ -200,12 +212,18 @@ class CrawlerTabCrawlControlMixin:
                 
                 complexes = search.get('complexes', [])
                 for item in complexes:
-                    # Handle both [name, cid] list and dictionary just in case
-                    if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    if isinstance(item, (list, tuple)) and len(item) >= 3:
+                        name, cid, asset_type = item[0], item[1], item[2]
+                        self.add_task(name, cid, asset_type)
+                    elif isinstance(item, (list, tuple)) and len(item) >= 2:
                         name, cid = item[0], item[1]
-                        self.add_task(name, cid)
+                        self.add_task(name, cid, "APT")
                     elif isinstance(item, dict):
-                        self.add_task(item.get('name', ''), item.get('cid', ''))
+                        self.add_task(
+                            item.get('name', ''),
+                            item.get('cid', ''),
+                            item.get('asset_type', 'APT'),
+                        )
                         
                 # 거래유형 복원
                 types = search.get('trade_types', [])
@@ -249,8 +267,18 @@ class CrawlerTabCrawlControlMixin:
             selected = dlg.get_selected_complexes()
             if selected:
                 added = 0
-                for name, cid in selected:
-                    if self._add_row(name, cid):
+                for item in selected:
+                    if isinstance(item, dict):
+                        name = item.get("name", "")
+                        cid = item.get("cid", item.get("complex_id", ""))
+                        asset_type = item.get("asset_type", "APT")
+                    elif isinstance(item, (list, tuple)) and len(item) >= 3:
+                        name, cid, asset_type = item[0], item[1], item[2]
+                    elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                        name, cid, asset_type = item[0], item[1], "APT"
+                    else:
+                        continue
+                    if self._add_row(name, cid, asset_type):
                         added += 1
                 self.status_message.emit(f"{added}개 URL 등록 완료")
                 return
@@ -262,15 +290,22 @@ class CrawlerTabCrawlControlMixin:
 
         count = 0
         for url in urls:
-            cid = NaverURLParser.extract_complex_id(str(url or ""))
-            if cid and self._add_row(f"단지_{cid}", cid):
+            parsed = NaverURLParser.parse_url_info(str(url or ""))
+            cid = str(parsed.get("complex_id", "") or "").strip()
+            asset_type = self._normalize_task_asset_type(parsed.get("asset_type", "APT"))
+            if cid and self._add_row(f"단지_{cid}", cid, asset_type):
                 count += 1
         self.status_message.emit(f"{count}개 URL 등록 완료")
 
     def _open_complex_url(self: Any):
-        item = self.table_list.item(self.table_list.currentRow(), 1)
-        if item:
-            url = get_complex_url(item.text())
+        row = self.table_list.currentRow()
+        if row < 0:
+            return
+        cid_item = self.table_list.item(row, 1)
+        asset_item = self.table_list.item(row, 2)
+        if cid_item:
+            asset_type = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
+            url = get_complex_url(cid_item.text(), asset_type=asset_type)
             webbrowser.open(url)
 
     def start_crawling(self: Any) -> bool:
@@ -311,6 +346,22 @@ class CrawlerTabCrawlControlMixin:
             QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
             return False
 
+        engine_name = str(settings.get("crawl_engine", "playwright") or "playwright").strip().lower() or "playwright"
+        unsupported_selenium_targets = [
+            (name, cid, asset_type)
+            for name, cid, asset_type in target_list
+            if self._normalize_task_asset_type(asset_type) != "APT"
+        ]
+        if engine_name == "selenium" and unsupported_selenium_targets:
+            QMessageBox.warning(
+                self,
+                "경고",
+                "Selenium complex 모드는 현재 APT만 지원합니다. VL 대상은 Playwright 엔진으로 실행해주세요.",
+            )
+            self.append_log("⚠️ Selenium complex 모드는 VL 대상을 지원하지 않아 시작을 중단했습니다.", 30)
+            self.status_message.emit("VL 대상은 Playwright complex 모드로 실행해주세요.")
+            return False
+
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.btn_save.setEnabled(False)
@@ -344,7 +395,10 @@ class CrawlerTabCrawlControlMixin:
             try:
                 self.history_manager.add(
                     {
-                        "complexes": [{"name": name, "cid": cid} for name, cid in target_list],
+                        "complexes": [
+                            {"name": name, "cid": cid, "asset_type": asset_type}
+                            for name, cid, asset_type in target_list
+                        ],
                         "trade_types": list(trade_types),
                         "area_filter": area_filter,
                         "price_filter": price_filter,
@@ -383,7 +437,7 @@ class CrawlerTabCrawlControlMixin:
             track_disappeared=settings.get("track_disappeared", True),
             history_batch_size=settings.get("history_batch_size", 200),
             negative_cache_ttl_minutes=settings.get("cache_negative_ttl_minutes", 5),
-            engine_name=settings.get("crawl_engine", "playwright"),
+            engine_name=engine_name,
             crawl_mode="complex",
             fallback_engine_enabled=settings.get("fallback_engine_enabled", True),
             playwright_headless=settings.get("playwright_headless", False),

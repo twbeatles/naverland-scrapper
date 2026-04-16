@@ -252,13 +252,15 @@ class SearchHistoryManager:
             if isinstance(item, dict):
                 name = str(item.get("name", "") or "")
                 cid = str(item.get("cid", "") or "")
+                asset_type = str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
             elif isinstance(item, (list, tuple)) and len(item) >= 2:
                 name = str(item[0] or "")
                 cid = str(item[1] or "")
+                asset_type = str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper() or "APT"
             else:
                 continue
-            normalized.append({"name": name, "cid": cid})
-        normalized.sort(key=lambda x: (x["cid"], x["name"]))
+            normalized.append({"name": name, "cid": cid, "asset_type": asset_type})
+        normalized.sort(key=lambda x: (x["asset_type"], x["cid"], x["name"]))
         return normalized
 
     @staticmethod

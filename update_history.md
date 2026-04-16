@@ -1,3 +1,38 @@
+## **v15.0.21 (2026-04-16)**
+
+**VL complex 자산 보존 + 월세 이력 기준 보정 + 대시보드/문서/CI 정합화**
+
+### 주요 반영
+
+* complex target 자산 스코프 보존
+  - `NaverURLParser.extract_from_text()`가 `APT/VL` 자산유형을 보존하며 `houses` URL은 `VL`로 유지
+  - `URLBatchDialog`, `CrawlerTab` 작업 목록, DB/그룹/최근 검색 복원이 모두 `(asset_type, complex_id)` 기준으로 동작
+  - 같은 숫자 `cid`라도 `APT`와 `VL`은 동시에 complex task 목록에 존재 가능
+* 엔진별 complex 정책 명확화
+  - Playwright `complex` 모드는 target `asset_type`을 유지한 채 `APT/VL` 모두 지원
+  - Selenium `complex` 모드는 `APT`만 지원하고 `VL` 대상은 직접 시작 및 fallback에서 모두 차단/skip
+  - complex cache context는 `mode=complex`, `asset_type=<target asset_type>`, `marker_id=""` 기준으로 정렬
+* 월세 이력/알림 기준 보정
+  - 월세 이력은 `price_text="보증금/월세"`를 유지하면서 비교 기준값은 `월세 금액` 우선 사용
+  - 기존 이력 조회 시에는 저장된 `price_text`를 우선 해석해 월세 change 계산을 보정
+* 대시보드 / UI 정합화
+  - 대시보드 소멸 count는 DB 전체가 아니라 현재 visible `(asset_type, complex_id, trade_type)` 범위만 집계
+  - 즐겨찾기 탭의 비어 있던 `링크` 컬럼 제거
+  - DB 탭/complex task table URL 열기 경로도 asset-aware helper를 사용
+* 문서 / CI / packaging 점검
+  - `README.md`, `claude.md`, `gemini.md`에 최신 asset scope / engine / CI 정책 반영
+  - GitHub Actions는 `compileall + pytest + pyright + preflight`를 실행하도록 조정
+  - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
+  - `.gitignore`는 현 build/log/data/Playwright/runtime artifact 규칙으로 충분함을 재확인
+
+### 검증
+
+* `python -m pytest tests/test_parser_module.py tests/test_item_parser.py tests/test_crawler_regressions.py tests/test_database_module.py -q`
+  - 결과: `63 passed`
+* 대표 UI 회귀
+  - `python -m pytest tests/test_ui_runtime_smoke.py::TestUIRuntimeSmoke::test_dashboard_clears_stale_state_when_data_becomes_empty tests/test_ui_wiring.py::TestUIWiring::test_crawler_tab_db_load_preserves_asset_type_targets tests/test_ui_wiring.py::TestUIWiring::test_crawler_tab_group_load_preserves_asset_type_targets tests/test_ui_wiring.py::TestUIWiring::test_crawler_tab_dedupes_same_cid_on_add_and_start tests/test_ui_wiring.py::TestUIWiring::test_crawler_tab_rejects_selenium_start_for_vl_complex_targets -q`
+  - 결과: `5 passed`
+
 ## **v15.0.20 (2026-04-11)**
 
 **예약 실행/자산 스코프 신뢰성 보강 + CI pytest 확대 + .spec/.md 정합성 동기화**

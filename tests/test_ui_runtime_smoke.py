@@ -152,7 +152,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                     }
                 ]
 
-                with patch.object(db, "count_disappeared_articles", return_value=2):
+                with patch.object(db, "count_disappeared_articles_for_targets", return_value=2):
                     widget.set_data(sample_data)
 
                 total_label = getattr(widget.total_card, "_value_label", None)
@@ -237,15 +237,21 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         placeholder = dlg.input_text.placeholderText()
         self.assertIn("https://new.land.naver.com/complexes/102378", placeholder)
         self.assertIn("https://fin.land.naver.com/articles/2539123450", placeholder)
-        dlg._selected_complexes = [("테스트단지", "102378")]
-        self.assertEqual(dlg.get_urls(), ["https://new.land.naver.com/complexes/102378"])
+        dlg._selected_complexes = [("테스트단지", "102378"), ("빌라단지", "202020", "VL")]
+        self.assertEqual(
+            dlg.get_urls(),
+            [
+                "https://new.land.naver.com/complexes/102378",
+                "https://new.land.naver.com/houses/202020",
+            ],
+        )
         dlg.deleteLater()
         self._qt_app.processEvents()
 
     def test_url_batch_dialog_cancel_restores_button_state(self):
         from src.ui.dialogs.batch import URLBatchDialog
 
-        def _slow_fetch(cid, cancel_checker=None):
+        def _slow_fetch(cid, asset_type="APT", cancel_checker=None):
             # give event loop time to click cancel
             for _ in range(20):
                 if callable(cancel_checker) and cancel_checker():

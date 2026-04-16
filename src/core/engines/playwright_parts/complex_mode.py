@@ -51,7 +51,8 @@ class PlaywrightComplexModeMixin:
 
     async def _run_complex_mode(self):
         await self._ensure_started()
-        total = len(self.thread.targets) * len(self.thread.trade_types)
+        targets = list(self.thread._iter_targets())
+        total = len(targets) * len(self.thread.trade_types)
         current = 0
         processed_pairs = set()
         for pair in set(getattr(self.thread, "_fallback_prefill_processed_target_pairs", set()) or set()):
@@ -61,7 +62,7 @@ class PlaywrightComplexModeMixin:
                 processed_pairs.add((str(pair[0]), str(pair[1]), str(pair[2])))
             else:
                 processed_pairs.add(("APT", str(pair[0]), str(pair[1])))
-        for name, cid in self.thread.targets:
+        for name, cid, asset_type in targets:
             if self.thread._should_stop():
                 break
             complex_count = 0
@@ -73,7 +74,7 @@ class PlaywrightComplexModeMixin:
                 if trade_type not in attempted_trade_types:
                     attempted_trade_types.append(trade_type)
                 await self._check_memory_and_recycle_if_needed("complex_loop")
-                self.thread._current_pair = self.thread._pair_key(name, cid, trade_type)
+                self.thread._current_pair = self.thread._pair_key(name, cid, trade_type, asset_type=asset_type)
                 current += 1
                 self.thread.progress_signal.emit(
                     int(current / total * 100) if total else 0,
@@ -82,7 +83,7 @@ class PlaywrightComplexModeMixin:
                 )
                 self.thread.log(f"\n[{current}/{total}] {name} - {trade_type}")
                 try:
-                    result = await self._crawl_target_with_cache(name, cid, trade_type)
+                    result = await self._crawl_target_with_cache(name, cid, trade_type, asset_type=asset_type)
                     if bool(result.get("block_like_redirect", False)):
                         raise RuntimeError(str(result.get("block_reason", "") or "block-like redirect"))
                     if bool(result.get("capture_failed", False)):
@@ -91,13 +92,13 @@ class PlaywrightComplexModeMixin:
                     complex_count += count
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
-                    processed_pair = ("APT", str(cid), str(trade_type))
+                    processed_pair = (str(asset_type), str(cid), str(trade_type))
                     processed_pairs.add(processed_pair)
                     self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
-                    self.thread._mark_pair_processed(name, cid, trade_type)
+                    self.thread._mark_pair_processed(name, cid, trade_type, asset_type=asset_type)
                     self.thread._reset_block_detection_streak()
                     self.thread.log(f"   {count}건 수집")
                 except Exception as exc:
@@ -116,26 +117,33 @@ class PlaywrightComplexModeMixin:
                     else:
                         self.thread._reset_block_detection_streak()
                     if self.thread.fallback_engine_enabled and not self._fallback_used:
-                        self._fallback_used = True
-                        self.thread.log("   Selenium fallback으로 전환합니다.", 30)
-                        prefill_payload = None
-                        if complex_trade_types:
-                            prefill_payload = {
-                                "name": name,
-                                "cid": cid,
-                                "count": int(complex_count),
-                                "trade_types": list(complex_trade_types),
-                            }
-                        self.thread._run_fallback_selenium(
-                            start_name=name,
-                            start_cid=cid,
-                            start_trade=trade_type,
-                            prefill_complex=prefill_payload,
-                            prefill_processed_target_pairs=set(processed_pairs),
-                            reason=str(exc),
-                        )
-                        self.thread._current_pair = None
-                        return
+                        if str(asset_type or "APT").strip().upper() != "APT":
+                            self.thread.log(
+                                "   ℹ️ VL complex 대상은 Selenium fallback을 지원하지 않아 Playwright 오류로 건너뜁니다.",
+                                30,
+                            )
+                        else:
+                            self._fallback_used = True
+                            self.thread.log("   Selenium fallback으로 전환합니다.", 30)
+                            prefill_payload = None
+                            if complex_trade_types:
+                                prefill_payload = {
+                                    "name": name,
+                                    "cid": cid,
+                                    "asset_type": asset_type,
+                                    "count": int(complex_count),
+                                    "trade_types": list(complex_trade_types),
+                                }
+                            self.thread._run_fallback_selenium(
+                                start_name=name,
+                                start_cid=cid,
+                                start_trade=trade_type,
+                                prefill_complex=prefill_payload,
+                                prefill_processed_target_pairs=set(processed_pairs),
+                                reason=str(exc),
+                            )
+                            self.thread._current_pair = None
+                            return
                 if not self.thread._sleep_interruptible(self.thread._get_speed_delay()):
                     break
             self.thread._flush_history_updates(force=True)
@@ -154,7 +162,7 @@ class PlaywrightComplexModeMixin:
                 int(complex_count),
                 engine=self.engine_name,
                 mode=self.thread.crawl_mode,
-                asset_type="APT",
+                asset_type=asset_type,
                 run_status=run_status,
             )
             if complex_trade_types:
@@ -178,7 +186,8 @@ class PlaywrightComplexModeMixin:
         cache = self.thread.cache
         mode_token = str(mode or "complex").strip().lower()
         is_complex_mode = mode_token == "complex"
-        cache_asset_type = "APT" if is_complex_mode else str(asset_type or "")
+        normalized_asset_type = str(asset_type or "APT").strip().upper() or "APT"
+        cache_asset_type = normalized_asset_type if is_complex_mode else str(asset_type or "")
         cache_marker_id = "" if is_complex_mode else str(marker_id or cid or "")
         cache_ctx = {
             "mode": mode_token,
@@ -190,7 +199,7 @@ class PlaywrightComplexModeMixin:
         }
         if cache:
             cached = cache.get(cid, trade_type, **cache_ctx)
-            if cached is None and is_complex_mode:
+            if cached is None and is_complex_mode and cache_asset_type == "APT":
                 legacy_candidates = [
                     {"mode": "complex", "asset_type": "", "marker_id": str(cid or "")},
                     {"mode": "complex", "asset_type": "APT", "marker_id": str(cid or "")},

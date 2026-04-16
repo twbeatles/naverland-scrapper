@@ -91,10 +91,11 @@ class ItemParser:
         return soup.find_all(['div', 'li'], class_=lambda x: x and ('item' in x.lower() or 'article' in x.lower()))
 
     @staticmethod
-    def parse_element(item, name, cid, ttype):
+    def parse_element(item, name, cid, ttype, *, captured_at=None):
         """개별 아이템 요소 파싱"""
         full_text = item.get_text(separator=" ", strip=True)
         detected_type = ttype
+        captured_at_text = DateTimeHelper.now_string() if captured_at is None else str(captured_at)
         
         # 거래유형 감지
         type_text = ItemParser._first_text(item, ItemParser.TYPE_SELECTORS, strip=True)
@@ -250,5 +251,5 @@ class ItemParser:
             "평당가_표시": PricePerPyeongCalculator.format(price_per_pyeong),
             "층/방향": floor_text,
             "타입/특징": feature_text, "매물ID": article_id,
-            "수집시각": DateTimeHelper.now_string()
+            "수집시각": captured_at_text
         }

@@ -267,8 +267,27 @@ class DashboardWidget(QWidget):
         ):
             return self._disappeared_cache_value
 
+        scoped_targets = []
+        seen_targets = set()
+        for item in self._data or []:
+            if not isinstance(item, dict):
+                continue
+            asset_type = str(item.get("자산유형", item.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
+            if asset_type not in {"APT", "VL"}:
+                asset_type = "APT"
+            complex_id = str(item.get("단지ID", item.get("complex_id", "")) or "").strip()
+            trade_type = str(item.get("거래유형", item.get("trade_type", "")) or "").strip()
+            key = (asset_type, complex_id, trade_type)
+            if not complex_id or not trade_type or key in seen_targets:
+                continue
+            seen_targets.add(key)
+            scoped_targets.append(key)
+
         try:
-            disappeared = int(self.db.count_disappeared_articles() or 0)
+            if scoped_targets and hasattr(self.db, "count_disappeared_articles_for_targets"):
+                disappeared = int(self.db.count_disappeared_articles_for_targets(scoped_targets) or 0)
+            else:
+                disappeared = 0
         except Exception as e:
             logger.debug(f"소멸 매물 개수 조회 실패 (무시): {e}")
             disappeared = 0

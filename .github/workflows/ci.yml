@@ -43,6 +43,9 @@ jobs:
       - name: Syntax check
         run: python -m compileall src
 
+      - name: Run tests
+        run: python -m pytest -q
+
       - name: Run Pyright
         run: npx --yes pyright
 
