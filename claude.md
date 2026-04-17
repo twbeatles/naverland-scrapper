@@ -111,7 +111,7 @@
   - 대시보드 소멸 count는 DB 전체가 아니라 현재 visible `(asset_type, complex_id, trade_type)` 범위로 계산합니다.
   - `FavoritesTab`의 비어 있던 `링크` 컬럼은 제거되었습니다.
 - CI / packaging:
-  - GitHub Actions는 현재 `compileall + pytest + pyright + preflight`를 실행합니다.
+  - GitHub Actions는 현재 `compileall + pyright + preflight`를 실행합니다.
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않습니다.
 
 ## 2. Technical Stack
