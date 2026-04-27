@@ -6,8 +6,11 @@
 # build/log/data/Playwright/runtime-artifact rules otherwise remain sufficient
 # for the live-site reliability/doc/spec consistency pass.
 # Rechecked 2026-04-16:
-# asset-scope/runtime-history/dashboard/doc-sync changes and CI pytest restoration
-# do not introduce additional generated artifacts; current ignore rules remain sufficient.
+# asset-scope/runtime-history/dashboard/doc-sync changes keep CI on static checks
+# only and do not introduce additional generated artifacts; current ignore rules remain sufficient.
+# Rechecked 2026-04-27:
+# schedule VL policy, article URL reverse lookup, monthly UI price metric, rebind
+# meta-tests, and local PyInstaller builds do not require new ignore patterns.
 # Python
 __pycache__/
 *.py[cod]

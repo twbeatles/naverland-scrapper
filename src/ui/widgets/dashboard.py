@@ -242,11 +242,9 @@ class DashboardWidget(QWidget):
             elif change < 0:
                 price_down += 1
 
-            price_text = item.get("매매가", "") or item.get("보증금", "")
-            if price_text:
-                price = PriceConverter.to_int(price_text)
-                if price > 0:
-                    prices.append(price / 10000)
+            price = PriceConverter.representative_price_int(item)
+            if price > 0:
+                prices.append(price / 10000)
 
         self._stats_cache = {
             "total": len(self._data),

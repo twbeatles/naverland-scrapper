@@ -87,8 +87,7 @@ class CrawlerTabFiltersSearchMixin:
 
         price_int = d.get("price_int")
         if price_int is None:
-            price_text = d.get("매매가") or d.get("보증금") or ""
-            price_int = PriceConverter.to_int(price_text)
+            price_int = PriceConverter.representative_price_int(d)
         if price_int < f.get("price_min", 0) or price_int > f.get("price_max", 9999999):
             return False
 

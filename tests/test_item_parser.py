@@ -50,6 +50,38 @@ class TestItemParser(unittest.TestCase):
         items = ItemParser.find_items(soup)
         self.assertEqual(len(items), 2)
 
+    def test_parse_monthly_item_from_price_selector(self):
+        html = """
+        <div class="item_inner">
+            <div class="item_type">월세</div>
+            <div class="item_price"><strong>월세 1억/120</strong></div>
+            <div class="item_area">공급/전용 110/84㎡</div>
+            <div class="item_floor">10/20층</div>
+        </div>
+        """
+        item = BeautifulSoup(html, "html.parser").select_one(".item_inner")
+
+        data = ItemParser.parse_element(item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00")
+
+        self.assertEqual(data["거래유형"], "월세")
+        self.assertEqual(data["보증금"], "1억")
+        self.assertEqual(data["월세"], "120")
+
+    def test_parse_monthly_item_from_full_text_fallback(self):
+        html = """
+        <div class="item_inner">
+            <div class="item_type">월세</div>
+            <div class="desc">월세 1억/120 공급/전용 110/84㎡ 10/20층</div>
+        </div>
+        """
+        item = BeautifulSoup(html, "html.parser").select_one(".item_inner")
+
+        data = ItemParser.parse_element(item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00")
+
+        self.assertEqual(data["거래유형"], "월세")
+        self.assertEqual(data["보증금"], "1억")
+        self.assertEqual(data["월세"], "120")
+
     def test_parse_throughput_smoke(self):
         html = """
         <div class="item_inner">

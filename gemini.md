@@ -85,6 +85,23 @@
   - GitHub Actions는 현재 `compileall + pyright + preflight`를 실행합니다.
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않습니다.
 
+## 0-4. v15.0.22 Implementation Gap Closure (2026-04-27)
+- Schedule / asset scope:
+  - Playwright scheduled `complex` runs now load both `APT` and `VL` group targets into the task table.
+  - Selenium scheduled `complex` runs keep the APT-only policy and skip `VL` with Selenium-specific messaging.
+  - Scheduled task snapshot/restore preserves `(name, cid, asset_type)` so manual `VL` tasks do not come back as `APT`.
+- URL batch:
+  - `fin.land` / `m.land` article-only URLs are returned as unresolved article entries and resolved in the existing worker thread.
+  - Article lookup tries detail page families and extracts `complexNo`/`hscpNo` or `bildNo`/`houseNo` style IDs plus asset type.
+  - Failed article reverse lookups stay unchecked with "단지 역조회 실패".
+- Monthly price metric:
+  - `PriceConverter.representative_price_int()` is the shared UI comparable-price helper.
+  - Result-table sort payloads, compact/card advanced filtering, and dashboard price distribution use rent first for `월세`.
+- Tests / packaging / ignore:
+  - Regression coverage now includes scheduled APT/VL policy, article URL reverse lookup, monthly UI metric, Selenium monthly DOM fallback, and mixin rebind meta-tests.
+  - GitHub CI remains static-check only (`compileall + pyright + preflight`); pytest is local validation only.
+  - `naverland-scrapper.spec` and `.gitignore` were rechecked and need no functional hidden-import/data/hook or ignore-pattern changes.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)

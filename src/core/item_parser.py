@@ -54,7 +54,7 @@ class ItemParser:
     AD_STRIP_RE = re.compile("|".join(re.escape(k) for k in sorted(AD_KEYWORDS, key=len, reverse=True)))
     SPACE_RE = re.compile(r"\s+")
     PRICE_TEXT_RE = re.compile(r'(\d+억\s*\d*,?\d*만?|\d+,?\d*만)')
-    MONTHLY_RE = re.compile(r'\d+[억만]?\s*/\s*\d+')
+    MONTHLY_RE = re.compile(r'\d+(?:억|만)?(?:\s*\d+,?\d*만?)?\s*/\s*\d+(?:,?\d+)?(?:만)?(?!\s*㎡)')
     SQM_RE = re.compile(r'(\d+(?:\.\d+)?)\s*(?:㎡|m²)')
     PYEONG_RE = re.compile(r'(\d+(?:\.\d+)?)\s*평')
     SUPPLY_RE = re.compile(r'(\d+(?:\.\d+)?)[㎡m²]?\s*/\s*(\d+(?:\.\d+)?)')
@@ -112,9 +112,11 @@ class ItemParser:
             price_text = ""
         
         if not price_text:
-            price_match = ItemParser.PRICE_TEXT_RE.search(full_text)
+            price_match = ItemParser.MONTHLY_RE.search(full_text) if "월세" in full_text else None
+            if not price_match:
+                price_match = ItemParser.PRICE_TEXT_RE.search(full_text)
             if price_match:
-                price_text = price_match.group(1)
+                price_text = price_match.group(1) if price_match.lastindex else price_match.group(0)
         
         # 유형 재확인
         short_text = full_text[:50]

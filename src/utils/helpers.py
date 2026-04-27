@@ -93,6 +93,20 @@ class PriceConverter:
             return f"-{PriceConverter.to_string(abs(value))}"
         return zero_text
 
+    @staticmethod
+    def representative_price_int(item, trade_type=None) -> int:
+        """Return the comparable price in 만원 for a listing-like payload."""
+        if not isinstance(item, dict):
+            return 0
+        trade = str(trade_type or item.get("거래유형", item.get("trade_type", "")) or "").strip()
+        if trade == "매매":
+            return PriceConverter.to_int(item.get("매매가", item.get("price", "")))
+        if trade == "월세":
+            rent_value = PriceConverter.to_int(item.get("월세", item.get("monthly", item.get("rent", ""))))
+            if rent_value > 0:
+                return rent_value
+        return PriceConverter.to_int(item.get("보증금", item.get("deposit", "")))
+
 class AreaConverter:
     PYEONG_RATIO = 0.3025
     @classmethod

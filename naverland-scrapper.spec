@@ -23,15 +23,20 @@ from PyInstaller.utils.hooks import collect_submodules
 # imports, or hooks.
 # Rechecked on 2026-04-11 (schedule/asset-scope/CI reliability pass):
 # actual-start-gated schedule slot consumption, scheduled task snapshot/restore,
-# asset-scoped runtime item dedupe, and targeted pytest CI expansion remain
+# asset-scoped runtime item dedupe, and static-check-only CI policy remain
 # runtime/test/documentation-level changes and do not require extra PyInstaller
 # datas, hidden imports, or hooks.
 # Rechecked on 2026-04-16 (asset-scope/monthly-history/dashboard/doc-sync pass):
 # VL houses URL asset preservation, complex task `(asset_type, complex_id)` dedupe,
 # scoped disappeared-count dashboard stats, 월세 rent-priority history comparison,
-# 즐겨찾기 column cleanup, and GitHub Actions pytest restoration remain
+# 즐겨찾기 column cleanup, and GitHub Actions static-check-only policy remain
 # runtime/test/documentation-level changes and do not require extra PyInstaller
 # datas, hidden imports, or hooks.
+# Rechecked on 2026-04-27 (implementation gap closure/doc/spec/gitignore pass):
+# scheduled complex Playwright APT/VL loading, Selenium VL exclusion, article-only
+# URL reverse lookup, monthly UI rent-priority price metrics, Selenium monthly DOM
+# parser fallback, and mixin rebind meta-tests are Python/runtime/test/doc changes
+# and do not require extra PyInstaller datas, hidden imports, or hooks.
 # Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
 # UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
 # lightweight startup preflight)

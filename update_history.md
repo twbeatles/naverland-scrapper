@@ -1,3 +1,39 @@
+## **v15.0.22 (2026-04-27)**
+
+**구현 갭 클로저 + 문서/.spec/.gitignore 정합성 재점검**
+
+### 주요 반영
+
+* 예약 complex 자산 정책 정합화
+  - Playwright 예약 complex는 그룹의 `APT/VL` 대상 모두를 task에 등록
+  - Selenium complex는 기존 제약대로 `VL`을 제외하고 사용자 로그/상태 메시지에 Selenium 제한으로 안내
+  - 예약 실패/대상 없음 복원 시 수동 task snapshot을 `(name, cid, asset_type)` 기준으로 보존
+* URL 일괄 등록 article-only 역조회
+  - `fin.land`/`m.land` article-only URL을 `article_id`로 먼저 추출
+  - 백그라운드 worker에서 단지 ID와 자산유형을 역조회한 뒤 단지명 조회로 이어감
+  - 역조회 실패 row는 미선택 상태와 "단지 역조회 실패" 상태로 남김
+* 월세 UI 가격 기준 통일
+  - `PriceConverter.representative_price_int()`를 추가
+  - 결과 table hidden sort, compact sort, advanced/card filter, dashboard price distribution이 월세 매물에서 `월세 금액`을 우선 사용
+* Selenium/parser 및 rebind 안정화
+  - Selenium DOM parser fallback이 `월세 1억/120` 형태를 처리하도록 보정
+  - wrapper rebind 목록에 누락 helper를 추가하고 stale `_is_confirmed_empty_state` 항목 제거
+  - rebind drift 방지 meta-test 추가
+* 문서 / CI / packaging / ignore 점검
+  - GitHub Actions는 `compileall + pyright + preflight`만 실행하며 pytest는 CI에서 실행하지 않음
+  - `README.md`, `claude.md`, `gemini.md`, `implementation_gap_review_2026-04-27.md`에 최신 정책 반영
+  - `naverland-scrapper.spec`는 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 현재 build/log/data/Playwright/runtime artifact 규칙으로 충분하며 추가 패턴 불필요
+
+### 검증
+
+* `python -m pytest -q`
+  - 결과: `227 passed`
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m src.utils.preflight`
+  - 결과: pass
+
 ## **v15.0.21 (2026-04-16)**
 
 **VL complex 자산 보존 + 월세 이력 기준 보정 + 대시보드/문서/CI 정합화**
@@ -21,7 +57,7 @@
   - DB 탭/complex task table URL 열기 경로도 asset-aware helper를 사용
 * 문서 / CI / packaging 점검
   - `README.md`, `claude.md`, `gemini.md`에 최신 asset scope / engine / CI 정책 반영
-  - GitHub Actions는 `compileall + pytest + pyright + preflight`를 실행하도록 조정
+  - GitHub Actions는 현재 `compileall + pyright + preflight`만 실행하며 pytest는 CI에서 실행하지 않음
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
   - `.gitignore`는 현 build/log/data/Playwright/runtime artifact 규칙으로 충분함을 재확인
 
@@ -35,7 +71,7 @@
 
 ## **v15.0.20 (2026-04-11)**
 
-**예약 실행/자산 스코프 신뢰성 보강 + CI pytest 확대 + .spec/.md 정합성 동기화**
+**예약 실행/자산 스코프 신뢰성 보강 + CI 정적 검사 기준 + .spec/.md 정합성 동기화**
 
 ### 주요 반영
 

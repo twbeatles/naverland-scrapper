@@ -15,7 +15,7 @@ import re
 from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url, get_complex_url
 from src.core.managers import SettingsManager
 from src.ui.widgets.components import (
-    SearchBar, SpeedSlider, ProgressWidget, SummaryCard
+    SearchBar, SpeedSlider, ProgressWidget, SummaryCard, SortableTableWidgetItem
 )
 from src.ui.widgets.cards import CardViewWidget
 from src.ui.dialogs import (
@@ -162,6 +162,7 @@ _rebind_inherited_methods(
     "_toggle_area_filter",
     "_toggle_price_filter",
     "_add_complex",
+    "_normalize_task_asset_type",
     "_normalize_task_name",
     "_find_task_row_by_cid",
     "_append_task_row",
@@ -203,6 +204,7 @@ _rebind_inherited_methods(
     "append_log",
     "_on_items_batch",
     "_sync_row_search_cache",
+    "_build_row_searchable_text",
     "_format_won_value",
     "_format_gap_ratio",
     "_build_row_payload_from_data",

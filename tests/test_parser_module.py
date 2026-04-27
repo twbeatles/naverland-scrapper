@@ -134,6 +134,42 @@ class TestNaverURLParser(unittest.TestCase):
         vl_entry = next(entry for entry in results if _entry_asset(entry) == "VL")
         self.assertEqual(vl_entry.get("article_id", ""), "111")
 
+    def test_extract_from_text_returns_article_only_url_for_later_resolution(self):
+        text = "\n".join(
+            [
+                "https://fin.land.naver.com/articles/2513105556",
+                "https://m.land.naver.com/article/info/2513105557",
+            ]
+        )
+        results = NaverURLParser.extract_from_text(text)
+
+        self.assertEqual([entry.get("article_id") for entry in results], ["2513105556", "2513105557"])
+        self.assertTrue(all(entry.get("needs_article_lookup") for entry in results))
+        self.assertTrue(all(entry.get("complex_id") == "" for entry in results))
+
+    def test_resolve_article_complex_from_article_payload(self):
+        payload = '{"articleNo":"2513105556","complexNo":"102378","realEstateTypeCode":"APT"}'
+
+        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+            resolved = NaverURLParser.resolve_article_complex("2513105556")
+
+        self.assertEqual(resolved["complex_id"], "102378")
+        self.assertEqual(resolved["asset_type"], "APT")
+        self.assertEqual(resolved["article_id"], "2513105556")
+
+    def test_resolve_article_complex_detects_vl_building_payload(self):
+        payload = '{"articleNo":"2513105556","bildNo":"654321","realEstateTypeName":"빌라"}'
+
+        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+            resolved = NaverURLParser.resolve_article_complex("2513105556")
+
+        self.assertEqual(resolved["complex_id"], "654321")
+        self.assertEqual(resolved["asset_type"], "VL")
+
+    def test_resolve_article_complex_returns_empty_on_lookup_failure(self):
+        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")):
+            self.assertEqual(NaverURLParser.resolve_article_complex("2513105556"), {})
+
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
         side_effect=Exception("network fail"),

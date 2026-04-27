@@ -97,7 +97,7 @@ class CrawlerTabResultRenderMixin:
             deposit = str(data.get("보증금", "") or "")
             monthly = str(data.get("월세", "") or "")
             price_text = f"{deposit}/{monthly}" if monthly else deposit
-            price_int = PriceConverter.to_int(deposit)
+            price_int = PriceConverter.representative_price_int(data, trade_type)
         return trade_type, price_text, int(price_int or 0)
 
     def _get_compact_key(self: Any, data):
@@ -573,7 +573,7 @@ class CrawlerTabResultRenderMixin:
         )
         self.result_table.setItem(row, self.COL_URL, QTableWidgetItem(article_url))
         price_sort_text = str(price_int)
-        sort_item = QTableWidgetItem(price_sort_text)
+        sort_item = SortableTableWidgetItem(price_sort_text)
         sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
         self.result_table.setItem(row, self.COL_PRICE_SORT, sort_item)
         payload = self._build_row_payload_from_data(

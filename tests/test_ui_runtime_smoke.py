@@ -194,6 +194,38 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             widget.deleteLater()
             self._qt_app.processEvents()
 
+    def test_dashboard_monthly_price_distribution_uses_rent_metric(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.dashboard import DashboardWidget
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "dashboard_monthly_metric.db"))
+            widget = DashboardWidget(db)
+            try:
+                widget.set_data(
+                    [
+                        {
+                            "단지명": "월세단지",
+                            "단지ID": "50101",
+                            "매물ID": "M1",
+                            "거래유형": "월세",
+                            "매매가": "",
+                            "보증금": "1억",
+                            "월세": "80",
+                            "면적(평)": 20.0,
+                            "층/방향": "10층",
+                            "타입/특징": "테스트",
+                            "수집시각": "2026-03-18 09:00:00",
+                        }
+                    ]
+                )
+                snapshot = widget._build_stats_snapshot()
+                self.assertEqual(snapshot["prices"], [0.008])
+            finally:
+                db.close()
+                widget.deleteLater()
+                self._qt_app.processEvents()
+
     def test_dialogs_instantiation(self):
         from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog
 
@@ -278,6 +310,100 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             self.assertFalse(dlg._parsing)
             self.assertTrue(dlg.btn_parse.isEnabled())
             self.assertFalse(dlg.btn_cancel.isEnabled())
+
+            dlg.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_url_batch_dialog_resolves_article_only_url(self):
+        from PyQt6.QtWidgets import QCheckBox
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        article_entry = {
+            "source": "매물 URL에서 추출",
+            "complex_id": "",
+            "asset_type": "APT",
+            "article_id": "2513105556",
+            "url": "https://fin.land.naver.com/articles/2513105556",
+            "needs_article_lookup": True,
+        }
+
+        with (
+            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[article_entry]),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.resolve_article_complex",
+                return_value={
+                    "source": "fin_article",
+                    "complex_id": "102378",
+                    "asset_type": "APT",
+                    "article_id": "2513105556",
+                    "url": "https://fin.land.naver.com/articles/2513105556",
+                },
+            ),
+            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", return_value="검증단지"),
+        ):
+            dlg = URLBatchDialog()
+            dlg.input_text.setPlainText("https://fin.land.naver.com/articles/2513105556")
+            dlg._parse_urls()
+            for _ in range(80):
+                self._qt_app.processEvents()
+                if not dlg._parsing:
+                    break
+                time.sleep(0.01)
+
+            chk = dlg.result_table.cellWidget(0, 0)
+            assert isinstance(chk, QCheckBox)
+            self.assertTrue(chk.isChecked())
+            cid_item = dlg.result_table.item(0, 1)
+            name_item = dlg.result_table.item(0, 2)
+            status_item = dlg.result_table.item(0, 3)
+            self.assertIsNotNone(cid_item)
+            self.assertIsNotNone(name_item)
+            self.assertIsNotNone(status_item)
+            assert cid_item is not None
+            assert name_item is not None
+            assert status_item is not None
+            self.assertEqual(cid_item.text(), "102378")
+            self.assertEqual(name_item.text(), "검증단지")
+            self.assertIn("APT", status_item.text())
+
+            dlg.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_url_batch_dialog_leaves_failed_article_lookup_unchecked(self):
+        from PyQt6.QtWidgets import QCheckBox
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        article_entry = {
+            "source": "매물 URL에서 추출",
+            "complex_id": "",
+            "asset_type": "APT",
+            "article_id": "2513105556",
+            "url": "https://fin.land.naver.com/articles/2513105556",
+            "needs_article_lookup": True,
+        }
+
+        with (
+            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[article_entry]),
+            patch("src.ui.dialogs.batch.NaverURLParser.resolve_article_complex", return_value={}),
+            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name") as mock_fetch_name,
+        ):
+            dlg = URLBatchDialog()
+            dlg.input_text.setPlainText("https://fin.land.naver.com/articles/2513105556")
+            dlg._parse_urls()
+            for _ in range(80):
+                self._qt_app.processEvents()
+                if not dlg._parsing:
+                    break
+                time.sleep(0.01)
+
+            chk = dlg.result_table.cellWidget(0, 0)
+            assert isinstance(chk, QCheckBox)
+            self.assertFalse(chk.isChecked())
+            status_item = dlg.result_table.item(0, 3)
+            self.assertIsNotNone(status_item)
+            assert status_item is not None
+            self.assertIn("역조회 실패", status_item.text())
+            mock_fetch_name.assert_not_called()
 
             dlg.deleteLater()
             self._qt_app.processEvents()

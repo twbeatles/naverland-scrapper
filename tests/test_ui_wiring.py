@@ -549,7 +549,7 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
-    def test_scheduled_run_filters_vl_targets_in_complex_mode(self):
+    def test_scheduled_run_includes_vl_targets_in_playwright_complex_mode(self):
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -557,6 +557,11 @@ class TestUIWiring(unittest.TestCase):
 
         app.schedule_group_combo.clear()
         app.schedule_group_combo.addItem("테스트그룹", 10)
+
+        def _get_setting(key, default=None):
+            if key == "crawl_engine":
+                return "playwright"
+            return default
 
         with (
             patch.object(
@@ -567,13 +572,17 @@ class TestUIWiring(unittest.TestCase):
                     (2, "VL단지", "VL", "22222", ""),
                 ],
             ),
+            patch("src.ui.app.settings.get", side_effect=_get_setting),
             patch.object(app.crawler_tab, "start_crawling") as mock_start,
         ):
             app._run_scheduled()
 
-        self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
+        self.assertEqual(app.crawler_tab.table_list.rowCount(), 2)
         self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "11111")
-        self.assertIn("APT만 지원", app.crawler_tab.log_browser.toPlainText())
+        self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 2), "APT")
+        self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 1), "22222")
+        self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 2), "VL")
+        self.assertNotIn("APT만 지원", app.crawler_tab.log_browser.toPlainText())
         mock_start.assert_called_once()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -583,7 +592,7 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
-    def test_scheduled_run_skips_when_group_has_only_vl_targets(self):
+    def test_scheduled_run_skips_when_selenium_group_has_only_vl_targets(self):
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -592,17 +601,24 @@ class TestUIWiring(unittest.TestCase):
         app.schedule_group_combo.clear()
         app.schedule_group_combo.addItem("테스트그룹", 11)
 
+        def _get_setting(key, default=None):
+            if key == "crawl_engine":
+                return "selenium"
+            return default
+
         with (
             patch.object(
                 app.db,
                 "get_complexes_in_group",
                 return_value=[(1, "VL단지", "VL", "22222", "")],
             ),
+            patch("src.ui.app.settings.get", side_effect=_get_setting),
             patch.object(app.crawler_tab, "start_crawling") as mock_start,
         ):
             app._run_scheduled()
 
         self.assertEqual(app.crawler_tab.table_list.rowCount(), 0)
+        self.assertIn("Selenium complex 모드는 APT만 지원", app.crawler_tab.log_browser.toPlainText())
         mock_start.assert_not_called()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -700,6 +716,7 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"] = copy.deepcopy(
                     app_settings._settings.get("schedule_config", {})
                 )
+                app_settings._settings["crawl_engine"] = "selenium"
                 app_settings._settings["schedule_config"]["last_run_slot"] = ""
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
@@ -757,6 +774,7 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"] = copy.deepcopy(
                     app_settings._settings.get("schedule_config", {})
                 )
+                app_settings._settings["crawl_engine"] = "selenium"
                 app_settings._settings["schedule_config"]["last_run_slot"] = ""
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
@@ -816,6 +834,7 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"] = copy.deepcopy(
                     app_settings._settings.get("schedule_config", {})
                 )
+                app_settings._settings["crawl_engine"] = "selenium"
                 app_settings._settings["schedule_config"]["last_run_slot"] = ""
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
@@ -872,8 +891,9 @@ class TestUIWiring(unittest.TestCase):
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 10)
                 app.crawler_tab.clear_tasks()
-                app.crawler_tab.add_task("기존단지", "99999")
-                app.crawler_tab.table_list.selectRow(0)
+                app.crawler_tab.add_task("기존APT", "99999", "APT")
+                app.crawler_tab.add_task("기존VL", "99999", "VL")
+                app.crawler_tab.table_list.selectRow(1)
 
                 with (
                     patch.object(
@@ -886,10 +906,14 @@ class TestUIWiring(unittest.TestCase):
                     self.assertFalse(app._run_scheduled())
 
                 mock_start.assert_called_once()
-                self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존단지")
+                self.assertEqual(app.crawler_tab.table_list.rowCount(), 2)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존APT")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
-                self.assertEqual(app.crawler_tab.table_list.currentRow(), 0)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 2), "APT")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 0), "기존VL")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 1), "99999")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 2), "VL")
+                self.assertEqual(app.crawler_tab.table_list.currentRow(), 1)
                 self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
         finally:
             app_settings._settings = original_settings
@@ -913,13 +937,15 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"] = copy.deepcopy(
                     app_settings._settings.get("schedule_config", {})
                 )
+                app_settings._settings["crawl_engine"] = "selenium"
                 app_settings._settings["schedule_config"]["last_run_slot"] = ""
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 11)
                 app.crawler_tab.clear_tasks()
-                app.crawler_tab.add_task("기존단지", "99999")
-                app.crawler_tab.table_list.selectRow(0)
+                app.crawler_tab.add_task("기존APT", "99999", "APT")
+                app.crawler_tab.add_task("기존VL", "99999", "VL")
+                app.crawler_tab.table_list.selectRow(1)
 
                 with (
                     patch.object(
@@ -932,10 +958,14 @@ class TestUIWiring(unittest.TestCase):
                     self.assertFalse(app._run_scheduled())
 
                 mock_start.assert_not_called()
-                self.assertEqual(app.crawler_tab.table_list.rowCount(), 1)
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존단지")
+                self.assertEqual(app.crawler_tab.table_list.rowCount(), 2)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존APT")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
-                self.assertEqual(app.crawler_tab.table_list.currentRow(), 0)
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 2), "APT")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 0), "기존VL")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 1), "99999")
+                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 2), "VL")
+                self.assertEqual(app.crawler_tab.table_list.currentRow(), 1)
                 self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
         finally:
             app_settings._settings = original_settings
@@ -1917,6 +1947,83 @@ class TestUIWiring(unittest.TestCase):
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()
+
+    def test_crawler_tab_monthly_price_uses_rent_for_sort_and_filters(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "monthly_price_metric.db"))
+            tab = CrawlerTab(db)
+            try:
+                tab.check_compact_duplicates.setChecked(False)
+
+                sample = [
+                    {
+                        "단지명": "보증금높은단지",
+                        "단지ID": "11111",
+                        "거래유형": "월세",
+                        "매매가": "",
+                        "보증금": "1억",
+                        "월세": "80",
+                        "면적(㎡)": 84.0,
+                        "면적(평)": 25.4,
+                        "층/방향": "10층 남향",
+                        "타입/특징": "테스트",
+                        "매물ID": "M1",
+                        "수집시각": "2026-02-20 10:00:00",
+                    },
+                    {
+                        "단지명": "월세높은단지",
+                        "단지ID": "22222",
+                        "거래유형": "월세",
+                        "매매가": "",
+                        "보증금": "5,000",
+                        "월세": "150",
+                        "면적(㎡)": 84.0,
+                        "면적(평)": 25.4,
+                        "층/방향": "12층 남향",
+                        "타입/특징": "테스트",
+                        "매물ID": "M2",
+                        "수집시각": "2026-02-20 10:00:01",
+                    },
+                ]
+                tab._on_items_batch(sample)
+
+                self.assertEqual(tab._extract_price_values(sample[0])[2], 80)
+                self.assertEqual(tab._extract_price_values(sample[1])[2], 150)
+
+                tab.combo_sort.setCurrentText("가격 ↑")
+                tab._sort_results("가격 ↑")
+                self.assertEqual(_table_text(tab.result_table, 0, tab.COL_COMPLEX), "보증금높은단지")
+                self.assertEqual(_table_text(tab.result_table, 1, tab.COL_COMPLEX), "월세높은단지")
+
+                filters = {
+                    "price_min": 100,
+                    "price_max": 200,
+                    "area_min": 0,
+                    "area_max": 500,
+                    "floor_low": True,
+                    "floor_mid": True,
+                    "floor_high": True,
+                    "only_new": False,
+                    "only_price_down": False,
+                    "only_price_change": False,
+                    "include_keywords": [],
+                    "exclude_keywords": [],
+                }
+                tab.set_advanced_filters(filters)
+                self.assertEqual(tab.result_table.rowCount(), 1)
+                self.assertEqual(_table_text(tab.result_table, 0, tab.COL_COMPLEX), "월세높은단지")
+
+                tab.btn_view_mode.setChecked(True)
+                tab._toggle_view_mode()
+                self.assertEqual(len(tab.card_view._all_data), 1)
+                self.assertEqual(tab.card_view._all_data[0]["단지명"], "월세높은단지")
+            finally:
+                db.close()
+                tab.deleteLater()
+                self._qt_app.processEvents()
 
     def test_crawler_tab_export_scope_preserves_visible_order_and_raw_data(self):
         from PyQt6.QtCore import Qt

@@ -116,6 +116,7 @@ _rebind_inherited_methods(
     "_classify_page_state",
     "_spawn_response_task",
     "_drain_pending_response_tasks",
+    "_process_raw_items_with_filtered_details",
     "_run_complex_mode",
     "_run_geo",
     "_build_marker_handler",
