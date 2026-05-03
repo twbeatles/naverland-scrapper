@@ -564,6 +564,19 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
     if not isinstance(item, dict):
         return {}
     if isinstance(detail, dict):
+        meta = dict(detail.get("_detail_meta", {}) or {})
         applied = {key: value for key, value in detail.items() if key != "_detail_meta"}
         item.update(applied)
+        if meta:
+            source = str(meta.get("detail_source", "") or "")
+            parse_state = str(meta.get("detail_parse_state", "") or "")
+            missing_count = int(meta.get("missing_field_count", 0) or 0)
+            item["detail_source"] = source
+            item["detail_parse_state"] = parse_state
+            item["missing_field_count"] = missing_count
+            item["detail_network_response_count"] = int(meta.get("network_response_count", 0) or 0)
+            item["detail_hydration_hit"] = int(meta.get("hydration_hit", 0) or 0)
+            item["상세소스"] = source
+            item["상세수집상태"] = parse_state
+            item["상세누락필드수"] = missing_count
     return enrich_gap_fields(item)

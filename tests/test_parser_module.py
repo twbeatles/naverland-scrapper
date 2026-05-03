@@ -167,8 +167,32 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(resolved["asset_type"], "VL")
 
     def test_resolve_article_complex_returns_empty_on_lookup_failure(self):
-        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")):
+        with (
+            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
+            patch("src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback", return_value={}),
+        ):
             self.assertEqual(NaverURLParser.resolve_article_complex("2513105556"), {})
+
+    def test_resolve_article_complex_uses_browser_fallback_after_urllib_failure(self):
+        with (
+            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
+            patch(
+                "src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback",
+                return_value={
+                    "source": "fin_article:browser_fallback",
+                    "complex_id": "654321",
+                    "asset_type": "VL",
+                    "article_id": "2513105556",
+                    "url": "https://fin.land.naver.com/articles/2513105556",
+                },
+            ) as mock_fallback,
+        ):
+            resolved = NaverURLParser.resolve_article_complex("2513105556")
+
+        self.assertEqual(resolved["complex_id"], "654321")
+        self.assertEqual(resolved["asset_type"], "VL")
+        self.assertIn("browser_fallback", resolved["source"])
+        mock_fallback.assert_called_once()
 
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",

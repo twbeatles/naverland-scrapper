@@ -133,6 +133,12 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(enriched["부동산상호"], "테스트부동산")
         self.assertNotIn("_detail_meta", enriched)
+        self.assertEqual(enriched["detail_source"], "fin_article")
+        self.assertEqual(enriched["detail_parse_state"], "failed")
+        self.assertEqual(enriched["missing_field_count"], 8)
+        self.assertEqual(enriched["상세소스"], "fin_article")
+        self.assertEqual(enriched["상세수집상태"], "failed")
+        self.assertEqual(enriched["상세누락필드수"], 8)
 
     async def test_fetch_mobile_article_detail_uses_hydration_and_network_corpus(self):
         article_no = "2529610450"

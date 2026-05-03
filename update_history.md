@@ -1,3 +1,48 @@
+## **v15.0.23 (2026-05-03)**
+
+**기능 구현 하드닝 + 문서 삭제 반영 + .spec/.gitignore/CI 정합성 재점검**
+
+### 주요 반영
+
+* DB / 이력 자산 스코프 보강
+  - `check_article_history`, `get_article_history_stats`, `cleanup_old_articles`, `mark_disappeared_articles`에 선택적 `asset_type` 스코프를 추가
+  - 같은 `complex_id`와 `article_id`를 공유하는 `APT/VL` row가 통계/정리/소멸/가격변동 확인에서 섞이지 않도록 정리
+* 가격 스냅샷 최신값 정책
+  - 같은 `(snapshot_date, asset_type, complex_id, trade_type, pyeong, price_metric)` 조건은 중복 insert 대신 최신 수집값으로 갱신
+  - 과거 중복 row가 남아 있어도 조회 시 최신 row만 대표값으로 반환
+* 스케줄 저장 안정화
+  - 초기 로드와 그룹 refresh 중 `_schedule_hydrating` guard로 저장을 차단
+  - 저장된 그룹이 사라진 경우 임의로 첫 그룹으로 대체하지 않고 미선택 상태 유지
+* 필터 제외 매물 정책 고정
+  - 가격/면적 필터 밖 매물은 수집 결과, `article_history`, 알림 로그, 가격변경 카운트에서 제외
+  - Playwright, Selenium raw-item, DOM parse 경로 모두 `filtered_out`만 증가시키는 정책으로 통일
+* 실사이트 fallback / Geo 관측성
+  - article-only URL 역조회는 `urllib` 실패 후 browser/detail artifact fallback을 시도 가능
+  - Geo marker 전환은 text/role/aria/class 후보를 함께 시도하고 attempt/success/failure stats를 기록
+  - live smoke에 article-only 역조회, geo marker switch/API 관측, `--smoke-json-log` JSON 저장 옵션 추가
+* 상세 메타 / export
+  - `detail_source`, `detail_parse_state`, `missing_field_count`를 결과 payload와 export 선택 컬럼으로 보존
+* 문서 / CI / packaging / ignore 점검
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 최신 정책 반영
+  - `implementation_gap_review_2026-04-27.md` 삭제 상태를 의도된 문서 정리로 반영
+  - GitHub Actions는 `compileall -q app_entry.py src tests + core pytest subset + pyright + preflight` 실행
+  - `.gitattributes`를 추가해 UTF-8 텍스트 정책 명시
+  - `naverland-scrapper.spec`는 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 `logs/`가 smoke JSON 산출물을 이미 포괄하므로 새 ignore 패턴 불필요
+
+### 검증
+
+* `python -m compileall -q app_entry.py src tests`
+  - 결과: pass
+* `python -m pytest -q`
+  - 결과: `232 passed`
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m src.utils.preflight`
+  - 결과: pass
+* `python app_entry.py --live-smoke --smoke-headless --smoke-timeout-ms 5000 --smoke-json-log logs\live-smoke-2026-05-03.json`
+  - 결과: home/complex/geo-marker ok, detail/article-lookup은 현재 샘플 article redirect/500 응답으로 fail
+
 ## **v15.0.22 (2026-04-27)**
 
 **구현 갭 클로저 + 문서/.spec/.gitignore 정합성 재점검**
@@ -20,8 +65,8 @@
   - wrapper rebind 목록에 누락 helper를 추가하고 stale `_is_confirmed_empty_state` 항목 제거
   - rebind drift 방지 meta-test 추가
 * 문서 / CI / packaging / ignore 점검
-  - GitHub Actions는 `compileall + pyright + preflight`만 실행하며 pytest는 CI에서 실행하지 않음
-  - `README.md`, `claude.md`, `gemini.md`, `implementation_gap_review_2026-04-27.md`에 최신 정책 반영
+  - 당시 GitHub Actions는 `compileall + pyright + preflight` 중심이었고, 현재는 v15.0.23 기준 core pytest subset도 함께 실행
+  - `README.md`, `claude.md`, `gemini.md`에 최신 정책 반영. `implementation_gap_review_2026-04-27.md`는 v15.0.23에서 삭제 상태로 정리
   - `naverland-scrapper.spec`는 추가 hidden import/runtime hook/data bundle 수정 불필요
   - `.gitignore`는 현재 build/log/data/Playwright/runtime artifact 규칙으로 충분하며 추가 패턴 불필요
 
@@ -57,7 +102,7 @@
   - DB 탭/complex task table URL 열기 경로도 asset-aware helper를 사용
 * 문서 / CI / packaging 점검
   - `README.md`, `claude.md`, `gemini.md`에 최신 asset scope / engine / CI 정책 반영
-  - GitHub Actions는 현재 `compileall + pyright + preflight`만 실행하며 pytest는 CI에서 실행하지 않음
+  - 당시 GitHub Actions는 `compileall + pyright + preflight` 중심이었고, 현재는 v15.0.23 기준 core pytest subset도 함께 실행
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
   - `.gitignore`는 현 build/log/data/Playwright/runtime artifact 규칙으로 충분함을 재확인
 
@@ -91,8 +136,7 @@
   - `tests/test_ui_wiring.py`: 예약 시작 실패/무효 타깃 시 slot 미소비 + 수동 task 복원
   - `tests/test_geo_tab_wiring.py`: scheduled geo start failure 시 slot 미소비
   - `tests/test_crawler_regressions.py`: asset-scoped runtime dedupe + blank asset_type legacy 호환
-  - GitHub Actions는 `compileall + pyright + preflight`를 실행
-  - pytest는 CI에서 실행하지 않도록 되돌렸습니다
+  - 당시 GitHub Actions는 `compileall + pyright + preflight` 중심으로 되돌렸고, 현재는 v15.0.23 기준 core pytest subset도 함께 실행
 * `.spec` / 문서 정합성 재점검
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않음
   - `README.md`, `claude.md`, `gemini.md`에 schedule actual-start 계약, asset-scoped runtime dedupe, CI 정책 기준을 동기화
@@ -259,7 +303,7 @@
   - `naverland-scrapper.spec` 재점검 결과, hidden import/runtime hook/data bundle 규칙 추가 변경은 필요하지 않음
 * Playwright complex 수집 최적화:
   - cache는 base raw item 기준으로 유지하고, 가격/면적 필터 통과 매물만 모바일 상세 fetch worker pool로 전달
-  - 필터 탈락 매물도 base 정보 기준 history/change tracking은 유지하되 detail-only 필드는 채우지 않음
+  - 당시에는 필터 제외 매물도 base 정보 기준 이력 추적을 유지했으나, v15.0.23부터는 필터 밖 매물을 히스토리/알림/가격변경 카운트에서도 제외
   - crawler stats payload에 `detail_fetch_skipped_count` 추가, Geo 상태바에 상세 skip 수 노출
 * `.gitignore` 점검:
   - 현재 build/log/data/backup/Playwright 산출물 무시 규칙으로 충분하며 이번 패스에서 추가 패턴은 필요하지 않음

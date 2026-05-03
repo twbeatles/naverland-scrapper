@@ -1,0 +1,21 @@
+# Repository text files are expected to be UTF-8.
+* text=auto
+*.py text working-tree-encoding=UTF-8
+*.md text working-tree-encoding=UTF-8
+*.txt text working-tree-encoding=UTF-8
+*.json text working-tree-encoding=UTF-8
+*.yml text working-tree-encoding=UTF-8
+*.yaml text working-tree-encoding=UTF-8
+*.spec text working-tree-encoding=UTF-8
+*.toml text working-tree-encoding=UTF-8
+*.cfg text working-tree-encoding=UTF-8
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.db binary
+*.sqlite binary
+*.xlsx binary
+*.zip binary

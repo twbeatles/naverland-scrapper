@@ -111,7 +111,7 @@
   - 대시보드 소멸 count는 DB 전체가 아니라 현재 visible `(asset_type, complex_id, trade_type)` 범위로 계산합니다.
   - `FavoritesTab`의 비어 있던 `링크` 컬럼은 제거되었습니다.
 - CI / packaging:
-  - GitHub Actions는 현재 `compileall + pyright + preflight`를 실행합니다.
+  - GitHub Actions는 현재 `compileall + core pytest subset + pyright + preflight`를 실행합니다.
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않습니다.
 
 ## 0-6. v15.0.22 Implementation Gap Closure (2026-04-27)
@@ -128,8 +128,30 @@
   - Result-table sort payloads, compact/card advanced filtering, and dashboard price distribution use rent first for `월세`.
 - Tests / packaging / ignore:
   - Regression coverage now includes scheduled APT/VL policy, article URL reverse lookup, monthly UI metric, Selenium monthly DOM fallback, and mixin rebind meta-tests.
-  - GitHub CI remains static-check only (`compileall + pyright + preflight`); pytest is local validation only.
+  - GitHub CI runs `compileall + core pytest subset + pyright + preflight`; full pytest remains local validation.
   - `naverland-scrapper.spec` and `.gitignore` were rechecked and need no functional hidden-import/data/hook or ignore-pattern changes.
+
+## 0-7. v15.0.23 Functional Implementation Hardening (2026-05-03)
+- DB / history scope:
+  - Legacy article-history helpers now accept optional `asset_type` so `APT/VL` rows with the same `complex_id` or `article_id` do not mix in stats, cleanup, disappeared marking, or price-change checks.
+  - `price_snapshots` now use a same-day latest-value policy for `(snapshot_date, asset_type, complex_id, trade_type, pyeong, price_metric)` and hide legacy duplicate rows behind the newest row in reads.
+- Crawler policy:
+  - Price/area filtered-out listings are excluded from history, alert dedupe/logging, and price-change counters. They only increment `filtered_out`.
+  - Playwright, Selenium raw-item, and DOM parse paths follow the same filtered-out policy.
+- Schedule / live-site hardening:
+  - Schedule config load and group refresh use a hydration guard so passive UI restoration does not overwrite `schedule_config`.
+  - Missing saved schedule groups are left unselected instead of being silently replaced.
+  - Article-only reverse lookup can fall back to a browser/detail artifact path after `urllib` failures.
+  - Geo marker switching now records attempt/success/failure stats and tries text, aria/role, and class-based candidates.
+- Detail/export/ops:
+  - Detail metadata (`detail_source`, `detail_parse_state`, `missing_field_count`) is preserved in result payloads and optional export columns.
+  - Live smoke now covers `home + complex + detail + article-only lookup + geo marker switch/API` and supports `--smoke-json-log`.
+  - `.gitattributes` declares the repo UTF-8 text policy; `.gitignore` was rechecked and remains sufficient because generated smoke JSON lives under ignored `logs/`.
+  - `implementation_gap_review_2026-04-27.md` deletion is intentional and is part of the pushed state.
+- CI / packaging:
+  - GitHub Actions runs `compileall -q app_entry.py src tests`, the core pytest subset, `npx --yes pyright`, and `python -m src.utils.preflight`.
+  - `naverland-scrapper.spec` was rechecked on 2026-05-03 and needs no additional datas, hidden imports, or runtime hooks.
+  - Validation baseline: `python -m pytest -q` => `232 passed`; `npx --yes pyright` => `0 errors`; preflight pass.
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+
@@ -633,7 +655,7 @@ COLORS["light"] = {
   - direct API `429` 발생 시 5분 cooldown을 활성화하고 즉시 `단지_{id}` fallback을 반환합니다.
   - `URLBatchDialog`는 `new.land complex`, `land.naver.com complexNo`, `m.land`, `fin.land article` 예시를 표시하고, URL family는 시점에 따라 달라질 수 있음을 전제로 helper 기반 URL 생성만 사용합니다.
 - Smoke / packaging contract:
-  - 기본 live smoke는 `home + complex + detail` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.
+  - 기본 live smoke는 `home + complex + detail + article-only lookup + geo marker switch/API` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.
   - 2026-04-10 headless smoke 결과는 `home/complex/detail` 모두 성공이며, detail probe는 `front-api/v1/article/agent` 응답 확보까지 확인했습니다.
   - `naverland-scrapper.spec`는 이번 패스에서도 추가 hidden import/runtime hook/data bundle 수정이 필요하지 않았고, `.gitignore`에는 `.playwright-mcp/`만 예방적으로 추가했습니다.
 
@@ -650,8 +672,8 @@ COLORS["light"] = {
   - legacy blank asset scope is normalized to `APT` before runtime dedupe comparison.
   - this supersedes the older non-asset-scoped runtime dedupe note from the 2026-03-07 pass.
 - CI / packaging contract:
-  - GitHub CI runs `compileall`, `npx --yes pyright`, and `python -m src.utils.preflight`.
-  - pytest is not executed in CI.
+  - GitHub CI runs `compileall`, the core pytest subset, `npx --yes pyright`, and `python -m src.utils.preflight`.
+  - Full pytest remains local validation.
   - `naverland-scrapper.spec` was rechecked on 2026-04-11 and still needs no extra hidden import/runtime hook/data bundle changes.
 - Validation:
   - `python -m pytest -q` => `210 passed`

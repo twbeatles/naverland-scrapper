@@ -134,13 +134,17 @@ class CrawlerHistoryAlertsMixin:
         for raw_item in raw_items or []:
             if not isinstance(raw_item, dict):
                 continue
-            processed_item = self._enrich_item_with_history_and_alerts(dict(raw_item))
-            trade_type = str(processed_item.get("거래유형", requested_trade_type) or requested_trade_type)
-            if self._check_filters(processed_item, trade_type):
-                if self._push_item(processed_item):
-                    matched_count += 1
-            else:
+            item = dict(raw_item)
+            trade_type = str(item.get("거래유형", requested_trade_type) or requested_trade_type)
+            if not self._check_filters(item, trade_type):
                 self.stats["filtered_out"] += 1
+                continue
+            processed_item = self._enrich_item_with_history_and_alerts(item)
+            if not self._check_filters(processed_item, trade_type):
+                self.stats["filtered_out"] += 1
+                continue
+            if self._push_item(processed_item):
+                matched_count += 1
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
         return matched_count

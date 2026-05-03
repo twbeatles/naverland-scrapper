@@ -939,7 +939,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         finally:
             engine._loop.close()
 
-    async def test_filter_miss_skips_detail_fetch_but_preserves_history_tracking(self):
+    async def test_filter_miss_skips_detail_fetch_and_history_tracking(self):
         thread = _ThreadStub()
         thread.filtered_ids = {"MISS-1"}
         trade_type = thread.trade_types[0]
@@ -964,7 +964,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._enrich_items_with_mobile_details.assert_not_awaited()
         self.assertEqual(int(thread.stats.get("filtered_out", 0)), 1)
         self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 1)
-        self.assertEqual(len(thread.enriched_items), 1)
+        self.assertEqual(len(thread.enriched_items), 0)
         self.assertEqual(len(thread.pushed_items), 0)
 
     async def test_filter_hit_fetches_detail_and_pushes_detailed_item(self):
@@ -1038,7 +1038,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["count"], 1)
         engine._enrich_items_with_mobile_details.assert_awaited_once()
         self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 1)
-        self.assertEqual(len(thread.enriched_items), 2)
+        self.assertEqual(len(thread.enriched_items), 1)
         self.assertEqual(len(thread.pushed_items), 1)
         self.assertEqual(str(thread.pushed_items[0].get("부동산상호", "")), "캐시상세")
 

@@ -49,6 +49,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="2539123450",
         help="Sample article id used by the built-in detail probe in --live-smoke mode.",
     )
+    parser.add_argument(
+        "--smoke-json-log",
+        default="",
+        help="Optional path for a JSON copy of --live-smoke probe results.",
+    )
+    parser.add_argument(
+        "--smoke-skip-article-lookup",
+        action="store_true",
+        help="Skip article-only reverse lookup probe in --live-smoke mode.",
+    )
+    parser.add_argument(
+        "--smoke-skip-geo-marker",
+        action="store_true",
+        help="Skip geo marker switch/API probe in --live-smoke mode.",
+    )
     return parser.parse_args(argv)
 
 
@@ -76,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
             timeout_ms=max(1000, int(args.smoke_timeout_ms or 12000)),
             complex_id=str(args.smoke_complex_id or "102378"),
             article_id=str(args.smoke_article_id or "2539123450"),
+            json_log_path=str(args.smoke_json_log or "") or None,
+            include_article_lookup=not bool(args.smoke_skip_article_lookup),
+            include_geo_marker=not bool(args.smoke_skip_geo_marker),
         )
         for msg in messages:
             print(msg)

@@ -103,6 +103,8 @@ class AppStatsScheduleMixin:
         }
 
     def _save_schedule_config(self: Any, *_args):
+        if bool(getattr(self, "_schedule_hydrating", False)):
+            return settings.get("schedule_config", {}) or {}
         config = self._collect_schedule_config()
         settings.update(
             {
@@ -197,6 +199,8 @@ class AppStatsScheduleMixin:
         time_text = str(config.get("time", "09:00") or "09:00")
         geo_config = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
 
+        previous_hydrating = bool(getattr(self, "_schedule_hydrating", False))
+        self._schedule_hydrating = True
         self.check_schedule.blockSignals(True)
         self.time_edit.blockSignals(True)
         self.schedule_mode_combo.blockSignals(True)
@@ -270,11 +274,13 @@ class AppStatsScheduleMixin:
             self.schedule_geo_asset_vl.blockSignals(False)
 
         self._on_schedule_mode_changed()
-        self._save_schedule_config()
+        self._schedule_hydrating = previous_hydrating
 
     def _load_schedule_groups(self: Any):
         current_gid = self.schedule_group_combo.currentData()
         selected = False
+        previous_hydrating = bool(getattr(self, "_schedule_hydrating", False))
+        self._schedule_hydrating = True
         self.schedule_group_combo.blockSignals(True)
         try:
             self.schedule_group_combo.clear()
@@ -291,10 +297,16 @@ class AppStatsScheduleMixin:
                     idx = self.schedule_group_combo.findData(saved_gid)
                     if idx >= 0:
                         self.schedule_group_combo.setCurrentIndex(idx)
+                        selected = True
+            if not selected:
+                try:
+                    self.schedule_group_combo.setCurrentIndex(-1)
+                except Exception:
+                    pass
         finally:
             self.schedule_group_combo.blockSignals(False)
         self._update_schedule_state()
-        self._save_schedule_config()
+        self._schedule_hydrating = previous_hydrating
 
     def _on_schedule_mode_changed(self: Any, *_args):
         mode = str(self.schedule_mode_combo.currentData() or "complex")

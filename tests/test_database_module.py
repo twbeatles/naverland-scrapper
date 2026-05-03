@@ -1159,6 +1159,122 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             self.db._pool.return_connection(conn)
 
+    def test_legacy_article_history_methods_accept_asset_scope(self):
+        self.assertTrue(
+            self.db.update_article_history(
+                "SAME-1",
+                "88001",
+                "아파트",
+                "매매",
+                10000,
+                "1억",
+                24.0,
+                "5/10",
+                "",
+                extra={"asset_type": "APT"},
+            )
+        )
+        self.assertTrue(
+            self.db.update_article_history(
+                "SAME-1",
+                "88001",
+                "빌라",
+                "매매",
+                20000,
+                "2억",
+                24.0,
+                "2/4",
+                "",
+                extra={"asset_type": "VL"},
+            )
+        )
+
+        self.assertEqual(self.db.check_article_history("SAME-1", "88001", 12000, asset_type="APT"), (False, 2000, 10000))
+        self.assertEqual(self.db.check_article_history("SAME-1", "88001", 12000, asset_type="VL"), (False, -8000, 20000))
+        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="APT")["total"], 1)
+        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1)
+        self.assertEqual(self.db.get_article_history_stats("88001")["total"], 2)
+
+        conn = self.db._pool.get_connection()
+        try:
+            conn.execute(
+                "UPDATE article_history SET last_seen = '2026-01-01' WHERE complex_id = ?",
+                ("88001",),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(self.db.cleanup_old_articles(days=30, asset_type="APT"), 1)
+        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="APT")["total"], 0)
+        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1)
+
+        self.db.update_article_history(
+            "SAME-2",
+            "88001",
+            "아파트2",
+            "매매",
+            15000,
+            "1억5천",
+            24.0,
+            "",
+            "",
+            extra={"asset_type": "APT"},
+        )
+        conn = self.db._pool.get_connection()
+        try:
+            conn.execute(
+                "UPDATE article_history SET last_seen = '2026-01-01', status = 'active' WHERE complex_id = ?",
+                ("88001",),
+            )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        self.assertEqual(self.db.mark_disappeared_articles(asset_type="VL"), 1)
+        disappeared = self.db.get_disappeared_articles(limit=10)
+        self.assertTrue(any(row["asset_type"] == "VL" and row["article_id"] == "SAME-1" for row in disappeared))
+        self.assertFalse(any(row["asset_type"] == "APT" and row["article_id"] == "SAME-2" for row in disappeared))
+
+    def test_price_snapshot_same_day_key_updates_latest_value(self):
+        saved = self.db.add_price_snapshots_bulk(
+            [
+                ("APT", "88002", "매매", 34.0, 10000, 12000, 11000, 2, "price", 0),
+                ("APT", "88002", "매매", 34.0, 13000, 15000, 14000, 3, "price", 0),
+            ]
+        )
+        self.assertEqual(saved, 2)
+
+        rows = self.db.get_price_snapshots("88002", "매매", asset_type="APT")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(int(rows[0][3]), 13000)
+        self.assertEqual(int(rows[0][5]), 14000)
+        self.assertEqual(int(rows[0][6]), 3)
+
+        conn = self.db._pool.get_connection()
+        try:
+            c = conn.cursor()
+            for values in [
+                ("88002", "매매", 34.0, 9000, 9500, 9250, 1, "APT", "price", 0),
+                ("88002", "매매", 34.0, 16000, 17000, 16500, 4, "APT", "price", 0),
+            ]:
+                c.execute(
+                    """
+                    INSERT INTO price_snapshots (
+                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                        asset_type, price_metric, legacy_monthly, snapshot_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE)
+                    """,
+                    values,
+                )
+            conn.commit()
+        finally:
+            self.db._pool.return_connection(conn)
+
+        deduped_rows = self.db.get_price_snapshots("88002", "매매", asset_type="APT")
+        self.assertEqual(len(deduped_rows), 1)
+        self.assertEqual(int(deduped_rows[0][5]), 16500)
+
 
 if __name__ == "__main__":
     unittest.main()

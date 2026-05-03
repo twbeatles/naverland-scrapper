@@ -253,14 +253,17 @@ class ComplexDatabaseArticleOpsMixin:
                 pass
             self._pool.return_connection(conn)
 
-    def check_article_history(self, article_id, complex_id, current_price):
+    def check_article_history(self, article_id, complex_id, current_price, asset_type=None):
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            c.execute(
-                "SELECT price, status FROM article_history WHERE article_id = ? AND complex_id = ?",
-                (article_id, complex_id),
-            )
+            sql = "SELECT price, status FROM article_history WHERE article_id = ? AND complex_id = ?"
+            params: list[Any] = [article_id, complex_id]
+            if asset_type:
+                asset_where, asset_params = self._asset_scope_where(asset_type)
+                sql += f" AND {asset_where}"
+                params.extend(asset_params)
+            c.execute(sql, params)
             row = c.fetchone()
             if not row:
                 return True, 0, 0
@@ -406,34 +409,30 @@ class ComplexDatabaseArticleOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def get_article_history_stats(self, complex_id=None):
+    def get_article_history_stats(self, complex_id=None, asset_type=None):
         conn = self._pool.get_connection()
         try:
             today = DateTimeHelper.now_string("%Y-%m-%d")
-            if complex_id:
-                result = conn.cursor().execute(
-                    """
-                    SELECT
-                        COUNT(*) as total,
-                        SUM(CASE WHEN first_seen = ? THEN 1 ELSE 0 END) as new_today,
-                        SUM(CASE WHEN price_change > 0 THEN 1 ELSE 0 END) as price_up,
-                        SUM(CASE WHEN price_change < 0 THEN 1 ELSE 0 END) as price_down
-                    FROM article_history WHERE complex_id = ?
-                    """,
-                    (today, complex_id),
-                ).fetchone()
-            else:
-                result = conn.cursor().execute(
-                    """
+            sql_parts = [
+                """
                     SELECT
                         COUNT(*) as total,
                         SUM(CASE WHEN first_seen = ? THEN 1 ELSE 0 END) as new_today,
                         SUM(CASE WHEN price_change > 0 THEN 1 ELSE 0 END) as price_up,
                         SUM(CASE WHEN price_change < 0 THEN 1 ELSE 0 END) as price_down
                     FROM article_history
-                    """,
-                    (today,),
-                ).fetchone()
+                    WHERE 1=1
+                """
+            ]
+            params: list[Any] = [today]
+            if complex_id:
+                sql_parts.append("AND complex_id = ?")
+                params.append(complex_id)
+            if asset_type:
+                asset_where, asset_params = self._asset_scope_where(asset_type)
+                sql_parts.append(f"AND {asset_where}")
+                params.extend(asset_params)
+            result = conn.cursor().execute(" ".join(sql_parts), params).fetchone()
 
             return {
                 "total": result[0] or 0,
@@ -447,17 +446,20 @@ class ComplexDatabaseArticleOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def cleanup_old_articles(self, days=30):
+    def cleanup_old_articles(self, days=30, asset_type=None):
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            c.execute(
-                """
+            sql = """
                 DELETE FROM article_history
                 WHERE julianday('now') - julianday(last_seen) > ?
-                """,
-                (days,),
-            )
+            """
+            params: list[Any] = [days]
+            if asset_type:
+                asset_where, asset_params = self._asset_scope_where(asset_type)
+                sql += f" AND {asset_where}"
+                params.extend(asset_params)
+            c.execute(sql, params)
             deleted = c.rowcount
             conn.commit()
             logger.info(f"cleanup old article history: {deleted} rows, days>{days}")
@@ -593,7 +595,7 @@ class ComplexDatabaseArticleOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def mark_disappeared_articles(self):
+    def mark_disappeared_articles(self, asset_type=None):
         if self.is_write_disabled():
             return 0
         conn = self._pool.get_connection()
@@ -604,13 +606,17 @@ class ComplexDatabaseArticleOpsMixin:
                 except Exception:
                     pass
                 c = conn.cursor()
-                c.execute(
-                    """
+                sql = """
                     UPDATE article_history
                     SET status='disappeared'
                     WHERE last_seen < CURRENT_DATE AND status='active'
-                    """
-                )
+                """
+                params: list[Any] = []
+                if asset_type:
+                    asset_where, asset_params = self._asset_scope_where(asset_type)
+                    sql += f" AND {asset_where}"
+                    params.extend(asset_params)
+                c.execute(sql, params)
                 updated = c.rowcount if c.rowcount != -1 else 0
                 conn.commit()
                 if updated > 0:

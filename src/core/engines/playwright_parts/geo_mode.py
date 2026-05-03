@@ -374,10 +374,32 @@ class PlaywrightGeoModeMixin:
     async def _switch_to_listing_markers(self):
         if not self._desktop_page:
             return False
+        self.thread.stats["geo_marker_switch_attempt_count"] = (
+            int(self.thread.stats.get("geo_marker_switch_attempt_count", 0)) + 1
+        )
+        attempts: list[tuple[str, Any]] = []
         for text in ["상세매물검색", "매물", "매물검색", "매물 보기"]:
+            attempts.append((f"text:{text}", self._desktop_page.locator(f"text={text}").first))
+        for selector in [
+            'button[aria-label*="매물"]',
+            '[role="button"][aria-label*="매물"]',
+            'button:has-text("매물")',
+            '[class*="marker"] button',
+            '[class*="map"] button:has-text("매물")',
+            '[class*="filter"] button:has-text("매물")',
+            '[class*="type"] button:has-text("매물")',
+        ]:
+            attempts.append((f"selector:{selector}", self._desktop_page.locator(selector).first))
+
+        for label, locator in attempts:
             try:
-                await self._desktop_page.locator(f"text={text}").first.click(timeout=1200)
+                await locator.click(timeout=1200)
                 await self._desktop_page.wait_for_timeout(500)
+                self.thread.stats["geo_marker_switch_success_count"] = (
+                    int(self.thread.stats.get("geo_marker_switch_success_count", 0)) + 1
+                )
+                self.thread.stats["geo_marker_switch_last_method"] = label
+                self.thread.emit_stats()
                 return True
             except Exception:
                 continue
@@ -386,8 +408,17 @@ class PlaywrightGeoModeMixin:
             await self._desktop_page.wait_for_timeout(300)
             await self._desktop_page.locator("text=매물").first.click(timeout=1200)
             await self._desktop_page.wait_for_timeout(500)
+            self.thread.stats["geo_marker_switch_success_count"] = (
+                int(self.thread.stats.get("geo_marker_switch_success_count", 0)) + 1
+            )
+            self.thread.stats["geo_marker_switch_last_method"] = "type_menu:text:매물"
+            self.thread.emit_stats()
             return True
         except Exception:
+            self.thread.stats["geo_marker_switch_fail_count"] = (
+                int(self.thread.stats.get("geo_marker_switch_fail_count", 0)) + 1
+            )
+            self.thread.emit_stats()
             return False
 
 

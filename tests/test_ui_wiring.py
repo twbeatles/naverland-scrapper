@@ -514,6 +514,84 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_schedule_group_refresh_does_not_overwrite_missing_saved_group(self):
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                app_settings._settings["schedule_config"] = {
+                    "enabled": True,
+                    "mode": "complex",
+                    "time": "09:00",
+                    "group_id": 999,
+                    "last_run_slot": "keep-slot",
+                    "last_run_at": "keep-at",
+                    "geo": app._schedule_geo_defaults(),
+                }
+                app.schedule_group_combo.clear()
+                with patch.object(app.db, "get_all_groups", return_value=[(1, "다른그룹", "")]):
+                    app._load_schedule_groups()
+
+                saved = app_settings.get("schedule_config", {})
+                self.assertEqual(saved["group_id"], 999)
+                self.assertEqual(saved["last_run_slot"], "keep-slot")
+                self.assertEqual(app.schedule_group_combo.currentIndex(), -1)
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_schedule_config_load_is_hydration_only(self):
+        from src.ui.app import RealEstateApp, settings as app_settings
+
+        original_settings = copy.deepcopy(app_settings._settings)
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+        try:
+            with patch.object(app_settings, "_save", return_value=None):
+                app_settings._settings = copy.deepcopy(original_settings)
+                expected = {
+                    "enabled": True,
+                    "mode": "geo_sweep",
+                    "time": "10:30",
+                    "group_id": 123,
+                    "last_run_slot": "slot-before",
+                    "last_run_at": "at-before",
+                    "geo": {
+                        "lat": 37.5,
+                        "lon": 127.0,
+                        "zoom": 14,
+                        "rings": 2,
+                        "step_px": 360,
+                        "dwell_ms": 900,
+                        "asset_types": ["VL"],
+                    },
+                }
+                app_settings._settings["schedule_config"] = copy.deepcopy(expected)
+                app.schedule_group_combo.clear()
+
+                app._load_schedule_config()
+
+                self.assertEqual(app_settings.get("schedule_config", {}), expected)
+                self.assertTrue(app.check_schedule.isChecked())
+                self.assertEqual(app.schedule_mode_combo.currentData(), "geo_sweep")
+        finally:
+            app_settings._settings = original_settings
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_scheduled_run_skips_when_crawler_already_running(self):
         from src.ui.app import RealEstateApp
 

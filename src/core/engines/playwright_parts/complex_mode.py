@@ -28,7 +28,6 @@ class PlaywrightComplexModeMixin:
             if self.thread._check_filters(item, trade_type):
                 detail_candidates.append(item)
                 continue
-            self.thread._enrich_item_with_history_and_alerts(item)
             self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1
             self.thread.stats["detail_fetch_skipped_count"] = (
                 int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + 1

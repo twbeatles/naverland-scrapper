@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Iterable
 
 from src.utils.helpers import ChromeParamHelper
@@ -228,6 +229,75 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
     )
 
 
+async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
+    cid = str(complex_id or "").strip()
+    if not cid:
+        return False, "[fail] [geo-marker] missing complex id"
+    target_url = f"https://new.land.naver.com/complexes/{cid}?ms=37.5608,126.9888,15&a=APT"
+    capture_task = asyncio.create_task(
+        _capture_response_status(
+            page,
+            lambda url: "complexes/single-markers" in str(url or "") or "houses/single-markers" in str(url or ""),
+            timeout_ms,
+        )
+    )
+    result = await _navigate_probe(page, target_url, timeout_ms)
+    clicked = False
+    for selector in [
+        "text=상세매물검색",
+        "text=매물",
+        'button[aria-label*="매물"]',
+        '[role="button"][aria-label*="매물"]',
+        'button:has-text("매물")',
+    ]:
+        try:
+            await page.locator(selector).first.click(timeout=1000)
+            clicked = True
+            await page.wait_for_timeout(500)
+            break
+        except Exception:
+            continue
+    marker_seen, marker_status = await capture_task
+    reason = str(result["reason"] or "")
+    if not clicked:
+        reason = _append_reason(reason, "marker_switch_click_missing")
+    if not marker_seen:
+        reason = _append_reason(reason, "marker_api_capture_missing")
+    elif marker_status is not None and int(marker_status) >= 400:
+        reason = _append_reason(reason, f"marker_api_http_{int(marker_status)}")
+    ok = bool(result["ok"]) and clicked and marker_seen and (marker_status is None or int(marker_status) < 400)
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="geo-marker",
+        target=target_url,
+        final_url=str(result["final_url"] or ""),
+        status=result["status"],
+        title=str(result["title"] or ""),
+        reason=reason,
+        extra=f"marker_api={marker_status if marker_status is not None else '-'} clicked={1 if clicked else 0}",
+    )
+
+
+def _run_article_lookup_probe(article_id: str) -> tuple[bool, str]:
+    aid = str(article_id or "").strip()
+    if not aid:
+        return False, "[fail] [article-lookup] missing article id"
+    try:
+        from src.core.parser import NaverURLParser
+
+        resolved = NaverURLParser.resolve_article_complex(aid)
+    except Exception as exc:
+        return False, f"[fail] [article-lookup] {aid} -> exception={exc}"
+    cid = str(resolved.get("complex_id", "") or "") if isinstance(resolved, dict) else ""
+    asset_type = str(resolved.get("asset_type", "") or "") if isinstance(resolved, dict) else ""
+    source = str(resolved.get("source", "") or "") if isinstance(resolved, dict) else ""
+    ok = bool(cid)
+    return ok, (
+        f"{'[ok]' if ok else '[fail]'} [article-lookup] {aid} -> "
+        f"complex_id={cid or '-'} asset_type={asset_type or '-'} source={source or '-'}"
+    )
+
+
 def _classify_probe(final_url: str, title: str, status: int | None) -> tuple[bool, str]:
     lower_url = str(final_url or "").lower()
     lower_title = str(title or "").lower()
@@ -251,6 +321,8 @@ async def _run_live_smoke_async(
     timeout_ms: int = 12000,
     complex_id: str = DEFAULT_SMOKE_COMPLEX_ID,
     article_id: str = DEFAULT_SMOKE_ARTICLE_ID,
+    include_article_lookup: bool = True,
+    include_geo_marker: bool = True,
 ) -> tuple[bool, list[str]]:
     if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
         return False, ["Playwright is not installed."]
@@ -309,6 +381,15 @@ async def _run_live_smoke_async(
             overall_ok = overall_ok and detail_ok
         finally:
             await detail_page.close()
+
+        if include_geo_marker:
+            geo_page = await _new_smoke_page(context)
+            try:
+                geo_ok, geo_line = await _run_geo_marker_probe(geo_page, complex_id, timeout_ms)
+                messages.append(geo_line)
+                overall_ok = overall_ok and geo_ok
+            finally:
+                await geo_page.close()
         await context.close()
     finally:
         if browser is not None:
@@ -320,6 +401,10 @@ async def _run_live_smoke_async(
             await controller.stop()
         except Exception:
             pass
+    if include_article_lookup:
+        lookup_ok, lookup_line = _run_article_lookup_probe(article_id)
+        messages.append(lookup_line)
+        overall_ok = overall_ok and lookup_ok
     return overall_ok, messages
 
 
@@ -330,14 +415,33 @@ def run_live_smoke(
     timeout_ms: int = 12000,
     complex_id: str = DEFAULT_SMOKE_COMPLEX_ID,
     article_id: str = DEFAULT_SMOKE_ARTICLE_ID,
+    json_log_path: str | None = None,
+    include_article_lookup: bool = True,
+    include_geo_marker: bool = True,
 ) -> tuple[bool, list[str]]:
     probe_urls = list(urls or default_live_smoke_urls())
-    return asyncio.run(
+    ok, messages = asyncio.run(
         _run_live_smoke_async(
             probe_urls,
             headless=headless,
             timeout_ms=timeout_ms,
             complex_id=str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
             article_id=str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
+            include_article_lookup=include_article_lookup,
+            include_geo_marker=include_geo_marker,
         )
     )
+    if json_log_path:
+        with open(str(json_log_path), "w", encoding="utf-8") as fp:
+            json.dump(
+                {
+                    "ok": bool(ok),
+                    "complex_id": str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
+                    "article_id": str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
+                    "messages": messages,
+                },
+                fp,
+                ensure_ascii=False,
+                indent=2,
+            )
+    return ok, messages

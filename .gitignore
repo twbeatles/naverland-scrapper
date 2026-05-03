@@ -11,6 +11,10 @@
 # Rechecked 2026-04-27:
 # schedule VL policy, article URL reverse lookup, monthly UI price metric, rebind
 # meta-tests, and local PyInstaller builds do not require new ignore patterns.
+# Rechecked 2026-05-03:
+# functional hardening, live-smoke JSON logging, `.gitattributes`, core pytest CI subset,
+# and deleted implementation-gap review state need no new ignore patterns. `logs/`
+# already covers generated smoke JSON output, while `.gitattributes` remains tracked.
 # Python
 __pycache__/
 *.py[cod]

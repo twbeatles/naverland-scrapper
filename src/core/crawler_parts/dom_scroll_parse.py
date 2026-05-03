@@ -206,12 +206,15 @@ class CrawlerDomScrollParseMixin:
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:
                         raw_items.append(dict(data))
-                        enriched = self._enrich_item_with_history_and_alerts(data)
-                        if self._check_filters(enriched, ttype):
-                            if self._push_item(enriched):
-                                matched_count += 1
-                        else:
+                        if not self._check_filters(data, ttype):
                             self.stats["filtered_out"] += 1
+                            continue
+                        enriched = self._enrich_item_with_history_and_alerts(data)
+                        if not self._check_filters(enriched, ttype):
+                            self.stats["filtered_out"] += 1
+                            continue
+                        if self._push_item(enriched):
+                            matched_count += 1
                     else:
                         skipped_type += 1
             except Exception as e:

@@ -45,6 +45,13 @@ from PyInstaller.utils.hooks import collect_submodules
 # atomic JSON runtime state storage/quarantine, VL houses URL parsing, DB restore crawler
 # shutdown hardening) are also Python/runtime-level only and do not require extra
 # PyInstaller datas/hooks.
+# Rechecked on 2026-05-03 (functional implementation hardening/doc/gitignore/CI pass):
+# asset-scoped legacy DB methods, daily-latest price snapshot upserts, schedule hydration
+# save guard, filtered-out history/alert exclusion, article-only browser fallback,
+# detail metadata preservation/export columns, expanded live smoke JSON logging, and
+# core pytest CI subset are Python/runtime/test/documentation changes. Existing
+# Playwright hidden imports, runtime hook, and optional Chromium bundle rules remain
+# sufficient; no extra PyInstaller datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not

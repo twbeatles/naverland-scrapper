@@ -41,7 +41,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m compileall src
+        run: python -m compileall -q app_entry.py src tests
+
+      - name: Run core pytest subset
+        run: python -m pytest -q tests/test_parser_module.py tests/test_database_module.py tests/test_ui_wiring.py tests/test_ui_runtime_smoke.py
 
       - name: Run Pyright
         run: npx --yes pyright

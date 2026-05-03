@@ -21,6 +21,24 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             sql_parts.append("AND asset_type = ?")
             params.append(asset_token)
 
+    def _append_latest_snapshot_filter(self, sql_parts: list[str]) -> None:
+        sql_parts.append(
+            """
+            AND id IN (
+                SELECT MAX(id)
+                FROM price_snapshots
+                GROUP BY
+                    snapshot_date,
+                    COALESCE(NULLIF(asset_type, ''), 'APT'),
+                    complex_id,
+                    trade_type,
+                    pyeong,
+                    COALESCE(price_metric, 'price'),
+                    COALESCE(legacy_monthly, 0)
+            )
+            """
+        )
+
     def _append_snapshot_metric_filter(
         self,
         sql_parts: list[str],
@@ -177,6 +195,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 include_legacy_monthly=include_legacy_monthly,
             )
             self._append_snapshot_asset_filter(sql_parts, params, asset_type)
+            self._append_latest_snapshot_filter(sql_parts)
 
             sql_parts.append("ORDER BY snapshot_date DESC, pyeong")
 
@@ -258,21 +277,20 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
         try:
             asset_token = self._normalize_asset_type(asset_type)
             metric_token = self._normalize_price_metric(price_metric, trade_type=trade_type)
-            conn.cursor().execute(
-                'INSERT INTO price_snapshots (complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_type, price_metric, legacy_monthly) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            self._upsert_price_snapshot_row(
+                conn.cursor(),
                 (
-                    complex_id,
-                    trade_type,
-                    pyeong,
-                    min_price,
-                    max_price,
-                    avg_price,
-                    item_count,
+                    str(complex_id or ""),
+                    str(trade_type or ""),
+                    self._coerce_float(pyeong, default=0.0),
+                    self._coerce_price(min_price, default=0),
+                    self._coerce_price(max_price, default=0),
+                    self._coerce_price(avg_price, default=0),
+                    max(0, self._coerce_int(item_count, default=0)),
                     asset_token,
                     metric_token,
                     max(0, self._coerce_int(legacy_monthly, default=0)),
-                )
+                ),
             )
             conn.commit()
             return True
@@ -363,15 +381,9 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 )
             if not normalized_rows:
                 return 0
-            conn.cursor().executemany(
-                '''
-                INSERT INTO price_snapshots (
-                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
-                    asset_type, price_metric, legacy_monthly
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''',
-                normalized_rows
-            )
+            cursor = conn.cursor()
+            for row in normalized_rows:
+                self._upsert_price_snapshot_row(cursor, row)
             conn.commit()
             if skipped:
                 logger.debug(f"price snapshot bulk skipped malformed rows: {skipped}")
@@ -381,6 +393,66 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
             return 0
         finally:
             self._pool.return_connection(conn)
+
+    def _upsert_price_snapshot_row(self, cursor, row) -> None:
+        (
+            complex_id,
+            trade_type,
+            pyeong,
+            min_price,
+            max_price,
+            avg_price,
+            item_count,
+            asset_type,
+            price_metric,
+            legacy_monthly,
+        ) = row
+        legacy_value = max(0, self._coerce_int(legacy_monthly, default=0))
+        cursor.execute(
+            """
+            SELECT id
+            FROM price_snapshots
+            WHERE snapshot_date = CURRENT_DATE
+              AND COALESCE(NULLIF(asset_type, ''), 'APT') = ?
+              AND complex_id = ?
+              AND trade_type = ?
+              AND pyeong = ?
+              AND COALESCE(price_metric, 'price') = ?
+              AND COALESCE(legacy_monthly, 0) = ?
+            ORDER BY id DESC
+            """,
+            (asset_type, complex_id, trade_type, pyeong, price_metric, legacy_value),
+        )
+        ids = [int(row_id[0]) for row_id in cursor.fetchall()]
+        if ids:
+            latest_id = ids[0]
+            cursor.execute(
+                """
+                UPDATE price_snapshots
+                SET min_price = ?,
+                    max_price = ?,
+                    avg_price = ?,
+                    item_count = ?,
+                    asset_type = ?,
+                    price_metric = ?,
+                    legacy_monthly = ?
+                WHERE id = ?
+                """,
+                (min_price, max_price, avg_price, item_count, asset_type, price_metric, legacy_value, latest_id),
+            )
+            if len(ids) > 1:
+                placeholders = ",".join("?" for _ in ids[1:])
+                cursor.execute(f"DELETE FROM price_snapshots WHERE id IN ({placeholders})", ids[1:])
+            return
+        cursor.execute(
+            """
+            INSERT INTO price_snapshots (
+                complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                asset_type, price_metric, legacy_monthly
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            row,
+        )
     
     def get_price_snapshot_pyeongs(
         self,
@@ -402,6 +474,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 include_legacy_monthly=include_legacy_monthly,
             )
             self._append_snapshot_asset_filter(sql_parts, params, asset_type)
+            self._append_latest_snapshot_filter(sql_parts)
             sql_parts.append("ORDER BY pyeong")
             rows = self._fetchall_safe(
                 conn,
@@ -460,6 +533,7 @@ class ComplexDatabaseCrawlSnapshotOpsMixin:
                 if parsed_pyeong is not None:
                     sql_parts.append("AND pyeong = ?")
                     params.append(parsed_pyeong)
+            self._append_latest_snapshot_filter(sql_parts)
             
             sql_parts.append('ORDER BY snapshot_date DESC, trade_type, pyeong')
             

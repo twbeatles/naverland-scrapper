@@ -20,6 +20,10 @@ class TestAppEntry(unittest.TestCase):
                 "77777",
                 "--smoke-article-id",
                 "88888",
+                "--smoke-json-log",
+                "smoke.json",
+                "--smoke-skip-article-lookup",
+                "--smoke-skip-geo-marker",
             ]
         )
 
@@ -29,6 +33,9 @@ class TestAppEntry(unittest.TestCase):
         self.assertTrue(args.smoke_headless)
         self.assertEqual(args.smoke_complex_id, "77777")
         self.assertEqual(args.smoke_article_id, "88888")
+        self.assertEqual(args.smoke_json_log, "smoke.json")
+        self.assertTrue(args.smoke_skip_article_lookup)
+        self.assertTrue(args.smoke_skip_geo_marker)
 
     def test_main_dispatches_live_smoke_runner(self):
         with patch("src.utils.live_smoke.run_live_smoke", return_value=(True, ["[ok] smoke"])) as mock_runner:
@@ -54,6 +61,9 @@ class TestAppEntry(unittest.TestCase):
             timeout_ms=7000,
             complex_id="77777",
             article_id="88888",
+            json_log_path=None,
+            include_article_lookup=True,
+            include_geo_marker=True,
         )
 
 
