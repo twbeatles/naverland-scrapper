@@ -346,7 +346,14 @@ class NaverURLParser:
         return "", cls._normalize_asset_type(detected_asset or fallback_asset_type)
 
     @classmethod
-    def resolve_article_complex(cls, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+    def resolve_article_complex(
+        cls,
+        article_id,
+        *,
+        cancel_checker=None,
+        fallback_asset_type="APT",
+        browser_fallback=None,
+    ) -> dict:
         """Resolve an article-only URL/id to a complex id and asset type."""
         aid = str(article_id or "").strip()
         if not aid:
@@ -375,14 +382,40 @@ class NaverURLParser:
                 }
         if cls._is_cancelled(cancel_checker):
             raise RetryCancelledError("article lookup cancelled before browser fallback")
-        fallback = cls._resolve_article_complex_browser_fallback(
-            aid,
-            cancel_checker=cancel_checker,
-            fallback_asset_type=fallback_asset_type,
-        )
-        if fallback:
+        if browser_fallback is not None:
+            try:
+                if hasattr(browser_fallback, "resolve"):
+                    fallback = browser_fallback.resolve(
+                        aid,
+                        cancel_checker=cancel_checker,
+                        fallback_asset_type=fallback_asset_type,
+                    )
+                elif callable(browser_fallback):
+                    fallback = browser_fallback(
+                        aid,
+                        cancel_checker=cancel_checker,
+                        fallback_asset_type=fallback_asset_type,
+                    )
+                else:
+                    fallback = {}
+            except RetryCancelledError:
+                raise
+            except Exception as e:
+                logger.debug(f"매물 단지 injected browser fallback 실패 ({aid}): {e}")
+                fallback = {}
+        else:
+            fallback = cls._resolve_article_complex_browser_fallback(
+                aid,
+                cancel_checker=cancel_checker,
+                fallback_asset_type=fallback_asset_type,
+            )
+        if isinstance(fallback, dict) and fallback:
             return fallback
         return {}
+
+    @classmethod
+    def create_article_browser_fallback(cls):
+        return ArticleLookupBrowserFallbackSession(cls)
 
     @classmethod
     def _resolve_article_complex_browser_fallback(
@@ -391,70 +424,21 @@ class NaverURLParser:
         *,
         cancel_checker=None,
         fallback_asset_type="APT",
-    ):
-        aid = str(article_id or "").strip()
-        if not aid:
-            return {}
-        logger = get_logger("NaverURLParser")
+    ) -> dict:
+        session = cls.create_article_browser_fallback()
         try:
-            from playwright.sync_api import sync_playwright
-        except Exception as e:
-            logger.debug(f"매물 단지 browser fallback 사용 불가 ({aid}): {e}")
-            return {}
-
-        try:
-            with sync_playwright() as controller:
-                browser = controller.chromium.launch(headless=True)
-                try:
-                    page = browser.new_page(
-                        locale="ko-KR",
-                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    )
-                    for source, url in cls._article_lookup_urls(aid):
-                        if cls._is_cancelled(cancel_checker):
-                            raise RetryCancelledError("article lookup cancelled during browser fallback")
-                        try:
-                            page.goto(url, wait_until="domcontentloaded", timeout=8000)
-                            try:
-                                page.wait_for_load_state("networkidle", timeout=2000)
-                            except Exception:
-                                pass
-                            body = ""
-                            try:
-                                body = page.inner_text("body", timeout=1000)
-                            except Exception:
-                                pass
-                            try:
-                                content = page.content()
-                            except Exception:
-                                content = ""
-                            cid, asset_type = cls._extract_article_complex_info(
-                                f"{body}\n{content}",
-                                fallback_asset_type=fallback_asset_type,
-                            )
-                            if cid:
-                                return {
-                                    "source": f"{source}:browser_fallback",
-                                    "complex_id": cid,
-                                    "asset_type": asset_type,
-                                    "article_id": aid,
-                                    "url": url,
-                                }
-                        except RetryCancelledError:
-                            raise
-                        except Exception as e:
-                            logger.debug(f"매물 단지 browser fallback 실패 ({source}:{aid}): {e}")
-                            continue
-                finally:
-                    try:
-                        browser.close()
-                    except Exception:
-                        pass
+            return session.resolve(
+                article_id,
+                cancel_checker=cancel_checker,
+                fallback_asset_type=fallback_asset_type,
+            )
         except RetryCancelledError:
             raise
         except Exception as e:
-            logger.debug(f"매물 단지 browser fallback 전체 실패 ({aid}): {e}")
-        return {}
+            get_logger("NaverURLParser").debug(f"매물 단지 browser fallback 전체 실패 ({article_id}): {e}")
+            return {}
+        finally:
+            session.close()
 
     @classmethod
     def _fetch_name_impl(cls, complex_id, asset_type="APT"):
@@ -554,3 +538,94 @@ class NaverURLParser:
             else:
                 logger.debug(f"단지명 조회 실패 ({asset_token}:{cid}): {e}")
             return fallback_name
+
+
+class ArticleLookupBrowserFallbackSession:
+    """Reusable Playwright browser fallback for article-only URL resolution."""
+
+    def __init__(self, parser_cls=NaverURLParser):
+        self._parser_cls = parser_cls
+        self._playwright = None
+        self._browser = None
+        self._page = None
+        self._logger = get_logger("NaverURLParser")
+
+    def _ensure_page(self):
+        if self._page is not None:
+            return self._page
+        try:
+            from playwright.sync_api import sync_playwright
+        except Exception as e:
+            self._logger.debug(f"매물 단지 browser fallback 사용 불가: {e}")
+            return None
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(headless=True)
+        self._page = self._browser.new_page(
+            locale="ko-KR",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        )
+        return self._page
+
+    def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+        aid = str(article_id or "").strip()
+        if not aid:
+            return {}
+        page = self._ensure_page()
+        if page is None:
+            return {}
+        for source, url in self._parser_cls._article_lookup_urls(aid):
+            if self._parser_cls._is_cancelled(cancel_checker):
+                raise RetryCancelledError("article lookup cancelled during browser fallback")
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=8000)
+                try:
+                    page.wait_for_load_state("networkidle", timeout=2000)
+                except Exception:
+                    pass
+                body = ""
+                try:
+                    body = page.inner_text("body", timeout=1000)
+                except Exception:
+                    pass
+                try:
+                    content = page.content()
+                except Exception:
+                    content = ""
+                cid, asset_type = self._parser_cls._extract_article_complex_info(
+                    f"{body}\n{content}",
+                    fallback_asset_type=fallback_asset_type,
+                )
+                if cid:
+                    return {
+                        "source": f"{source}:browser_fallback",
+                        "complex_id": cid,
+                        "asset_type": asset_type,
+                        "article_id": aid,
+                        "url": url,
+                    }
+            except RetryCancelledError:
+                raise
+            except Exception as e:
+                self._logger.debug(f"매물 단지 browser fallback 실패 ({source}:{aid}): {e}")
+                continue
+        return {}
+
+    def close(self):
+        try:
+            if self._page is not None:
+                self._page.close()
+        except Exception:
+            pass
+        try:
+            if self._browser is not None:
+                self._browser.close()
+        except Exception:
+            pass
+        try:
+            if self._playwright is not None:
+                self._playwright.stop()
+        except Exception:
+            pass
+        self._page = None
+        self._browser = None
+        self._playwright = None

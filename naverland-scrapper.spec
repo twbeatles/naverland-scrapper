@@ -52,6 +52,12 @@ from PyInstaller.utils.hooks import collect_submodules
 # core pytest CI subset are Python/runtime/test/documentation changes. Existing
 # Playwright hidden imports, runtime hook, and optional Chromium bundle rules remain
 # sufficient; no extra PyInstaller datas, hidden imports, or hooks are required.
+# Rechecked on 2026-05-04 (implementation review closure/doc deletion/gitignore/build pass):
+# Geo marker switch stats exposure, DEFAULT_COLUMNS-based export defaults, expanded
+# fast CI subset, confirmed-empty cache refinement, trade-type-scoped history cache,
+# and batch article browser fallback session reuse are all Python/runtime/test/doc
+# changes. The existing Playwright hidden imports, runtime hook, and Chromium bundle
+# collection remain sufficient; no additional datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not

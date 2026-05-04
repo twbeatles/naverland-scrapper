@@ -408,6 +408,62 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             dlg.deleteLater()
             self._qt_app.processEvents()
 
+    def test_name_lookup_worker_reuses_article_browser_fallback_session(self):
+        from src.ui.dialogs.batch import _NameLookupWorker
+
+        class _Fallback:
+            def __init__(self):
+                self.calls = []
+                self.closed = False
+
+            def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+                self.calls.append((article_id, fallback_asset_type))
+                return {
+                    "source": "injected:browser_fallback",
+                    "complex_id": f"10{len(self.calls)}",
+                    "asset_type": fallback_asset_type,
+                    "article_id": article_id,
+                    "url": f"https://fin.land.naver.com/articles/{article_id}",
+                }
+
+            def close(self):
+                self.closed = True
+
+        fallback = _Fallback()
+        entries = [
+            {
+                "source": "매물 URL에서 추출",
+                "complex_id": "",
+                "asset_type": "APT",
+                "article_id": "2513105556",
+                "needs_article_lookup": True,
+            },
+            {
+                "source": "매물 URL에서 추출",
+                "complex_id": "",
+                "asset_type": "VL",
+                "article_id": "2513105557",
+                "needs_article_lookup": True,
+            },
+        ]
+        worker = _NameLookupWorker(entries)
+        progress = []
+        worker.progress.connect(lambda *args: progress.append(args))
+
+        with (
+            patch("src.ui.dialogs.batch.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
+            patch("src.ui.dialogs.batch.NaverURLParser.create_article_browser_fallback", return_value=fallback) as mock_create,
+            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=lambda cid, **_kwargs: f"단지_{cid}"),
+        ):
+            worker.run()
+
+        mock_create.assert_called_once()
+        self.assertEqual(fallback.calls, [("2513105556", "APT"), ("2513105557", "VL")])
+        self.assertTrue(fallback.closed)
+        self.assertEqual(len(progress), 2)
+        self.assertEqual(progress[0][2], "101")
+        self.assertEqual(progress[1][2], "102")
+
     def test_crawler_tab_batch_render_smoke(self):
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab

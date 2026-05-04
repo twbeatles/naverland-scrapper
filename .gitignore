@@ -15,6 +15,10 @@
 # functional hardening, live-smoke JSON logging, `.gitattributes`, core pytest CI subset,
 # and deleted implementation-gap review state need no new ignore patterns. `logs/`
 # already covers generated smoke JSON output, while `.gitattributes` remains tracked.
+# Rechecked 2026-05-04:
+# implementation-review closure, temporary review-document deletion, PyInstaller build
+# output, and expanded fast CI tests are still covered by current build/dist/log/data
+# rules. No new ignore patterns are required.
 # Python
 __pycache__/
 *.py[cod]

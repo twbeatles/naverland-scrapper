@@ -66,7 +66,7 @@ class ExcelTemplate:
     
     @staticmethod
     def get_default_template():
-        return {col: True for col in ExcelTemplate.get_column_order()}
+        return {col: bool(enabled) for col, enabled in ExcelTemplate.DEFAULT_COLUMNS}
 
 class DataExporter:
     # v12.0: 확장된 컬럼 (평당가, 신규, 가격변동 포함)
@@ -109,6 +109,33 @@ class DataExporter:
         except (TypeError, ValueError):
             ratio = 0.0
         return f"{ratio:.4f}" if ratio else ""
+
+    @staticmethod
+    def _columns_from_template(template=None):
+        default_columns = ExcelTemplate.get_default_template()
+        default_order = list(ExcelTemplate.get_column_order())
+        raw_columns = default_columns
+        raw_order = default_order
+
+        if isinstance(template, dict):
+            if isinstance(template.get("columns"), dict):
+                raw_columns = dict(default_columns)
+                raw_columns.update({str(k): bool(v) for k, v in template.get("columns", {}).items()})
+                if isinstance(template.get("order"), list):
+                    raw_order = [str(c) for c in template.get("order", []) if str(c)]
+            else:
+                raw_columns = dict(default_columns)
+                raw_columns.update({str(k): bool(v) for k, v in template.items()})
+
+        order = []
+        seen = set()
+        for col in list(raw_order) + default_order:
+            token = str(col or "")
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            order.append(token)
+        return [col for col in order if bool(raw_columns.get(col, False))]
     
     def to_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
@@ -128,12 +155,7 @@ class DataExporter:
                 return None
             ws.title = "매물 데이터"
             
-            # 템플릿에서 컬럼 결정
-            if template and 'order' in template and 'columns' in template:
-                columns = [c for c in template['order'] if template['columns'].get(c, False)]
-            else:
-                columns = ["단지명", "거래유형", "매매가", "보증금", "월세", 
-                          "면적(㎡)", "면적(평)", "층/방향", "타입/특징", "수집시각"]
+            columns = self._columns_from_template(template)
             
             # 헤더 스타일
             header_font = Font(bold=True, color="FFFFFF")
@@ -206,12 +228,7 @@ class DataExporter:
     def to_csv(self, path, template=None):
         """CSV로 내보내기 - 템플릿 지원"""
         try:
-            # 템플릿에서 컬럼 결정
-            if template and 'order' in template and 'columns' in template:
-                columns = [c for c in template['order'] if template['columns'].get(c, False)]
-            else:
-                columns = ["단지명", "거래유형", "매매가", "보증금", "월세", 
-                          "면적(㎡)", "면적(평)", "층/방향", "타입/특징", "수집시각"]
+            columns = self._columns_from_template(template)
             
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')

@@ -111,6 +111,76 @@ class TestCrawlerRegressions(unittest.TestCase):
 
         self.assertEqual(second_out["price_change"], -20)
 
+    def test_history_state_cache_is_scoped_by_trade_type(self):
+        class _TradeScopedDB(_DBStub):
+            def __init__(self):
+                self.calls = []
+
+            def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
+                self.calls.append((trade_type, asset_type))
+                if trade_type == "매매":
+                    return {"A1": {"price": 10000, "price_text": "10000", "status": "active"}}
+                if trade_type == "전세":
+                    return {"A1": {"price": 5000, "price_text": "5000", "status": "active"}}
+                return {"A1": {"price": 10000, "price_text": "10000", "status": "active"}}
+
+        db = _TradeScopedDB()
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매", "전세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=db,
+            cache=None,
+            max_retry_count=0,
+        )
+        sale = {
+            "단지명": "테스트",
+            "단지ID": "91001",
+            "매물ID": "A1",
+            "거래유형": "매매",
+            "매매가": "11000",
+            "면적(평)": 24.0,
+        }
+        jeonse = {
+            "단지명": "테스트",
+            "단지ID": "91001",
+            "매물ID": "A1",
+            "거래유형": "전세",
+            "보증금": "6000",
+            "면적(평)": 24.0,
+        }
+
+        sale_out = thread._enrich_item_with_history_and_alerts(dict(sale))
+        jeonse_out = thread._enrich_item_with_history_and_alerts(dict(jeonse))
+
+        self.assertEqual(sale_out["price_change"], 1000)
+        self.assertEqual(jeonse_out["price_change"], 1000)
+        self.assertIn(("매매", "APT"), db.calls)
+        self.assertIn(("전세", "APT"), db.calls)
+
+    def test_stats_payload_includes_geo_marker_switch_counts(self):
+        thread = CrawlerThread(
+            targets=[],
+            trade_types=["매매"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        thread.stats["geo_marker_switch_attempt_count"] = 3
+        thread.stats["geo_marker_switch_success_count"] = 2
+        thread.stats["geo_marker_switch_fail_count"] = 1
+        thread.stats["geo_marker_switch_last_method"] = "text:매물"
+
+        payload = thread._build_stats_payload()
+
+        self.assertEqual(payload["geo_marker_switch_attempt_count"], 3)
+        self.assertEqual(payload["geo_marker_switch_success_count"], 2)
+        self.assertEqual(payload["geo_marker_switch_fail_count"], 1)
+        self.assertEqual(payload["geo_marker_switch_last_method"], "text:매물")
+
     def test_cache_hit_reapplies_current_filters_using_raw_items(self):
         raw_items = [
             {

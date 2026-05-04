@@ -73,59 +73,67 @@ class _NameLookupWorker(QObject):
     def run(self):
         total = len(self._results)
         processed = 0
-        for idx, entry in enumerate(self._results):
-            normalized = self._normalize_result_entry(entry)
-            cid = str(normalized.get("complex_id", "") or "").strip()
-            asset_type = str(normalized.get("asset_type", "APT") or "APT").strip().upper() or "APT"
-            article_id = str(normalized.get("article_id", "") or "").strip()
-            if self._cancelled:
-                break
+        browser_fallback = NaverURLParser.create_article_browser_fallback()
+        try:
+            for idx, entry in enumerate(self._results):
+                normalized = self._normalize_result_entry(entry)
+                cid = str(normalized.get("complex_id", "") or "").strip()
+                asset_type = str(normalized.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                article_id = str(normalized.get("article_id", "") or "").strip()
+                if self._cancelled:
+                    break
 
-            if not cid and article_id and normalized.get("needs_article_lookup"):
+                if not cid and article_id and normalized.get("needs_article_lookup"):
+                    try:
+                        resolved = NaverURLParser.resolve_article_complex(
+                            article_id,
+                            cancel_checker=lambda: self._cancelled,
+                            fallback_asset_type=asset_type,
+                            browser_fallback=browser_fallback,
+                        )
+                    except RetryCancelledError:
+                        break
+                    except Exception:
+                        resolved = {}
+                    cid = str(resolved.get("complex_id", "") if isinstance(resolved, dict) else "").strip()
+                    asset_type = str(
+                        resolved.get("asset_type", asset_type) if isinstance(resolved, dict) else asset_type
+                    ).strip().upper() or "APT"
+                    if asset_type not in {"APT", "VL"}:
+                        asset_type = "APT"
+                    if not cid:
+                        self.progress.emit(
+                            idx,
+                            total,
+                            "",
+                            f"매물_{article_id}",
+                            False,
+                            asset_type,
+                            "⚠️ 단지 역조회 실패",
+                        )
+                        processed += 1
+                        continue
+
                 try:
-                    resolved = NaverURLParser.resolve_article_complex(
-                        article_id,
+                    name = NaverURLParser.fetch_complex_name(
+                        cid,
+                        asset_type=asset_type,
                         cancel_checker=lambda: self._cancelled,
-                        fallback_asset_type=asset_type,
                     )
                 except RetryCancelledError:
                     break
                 except Exception:
-                    resolved = {}
-                cid = str(resolved.get("complex_id", "") if isinstance(resolved, dict) else "").strip()
-                asset_type = str(
-                    resolved.get("asset_type", asset_type) if isinstance(resolved, dict) else asset_type
-                ).strip().upper() or "APT"
-                if asset_type not in {"APT", "VL"}:
-                    asset_type = "APT"
-                if not cid:
-                    self.progress.emit(
-                        idx,
-                        total,
-                        "",
-                        f"매물_{article_id}",
-                        False,
-                        asset_type,
-                        "⚠️ 단지 역조회 실패",
-                    )
-                    processed += 1
-                    continue
+                    name = f"단지_{cid}"
 
+                is_verified = not str(name).startswith("단지_")
+                status = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
+                self.progress.emit(idx, total, str(cid), str(name), bool(is_verified), asset_type, status)
+                processed += 1
+        finally:
             try:
-                name = NaverURLParser.fetch_complex_name(
-                    cid,
-                    asset_type=asset_type,
-                    cancel_checker=lambda: self._cancelled,
-                )
-            except RetryCancelledError:
-                break
+                browser_fallback.close()
             except Exception:
-                name = f"단지_{cid}"
-
-            is_verified = not str(name).startswith("단지_")
-            status = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
-            self.progress.emit(idx, total, str(cid), str(name), bool(is_verified), asset_type, status)
-            processed += 1
+                pass
 
         self.finished.emit(processed, self._cancelled)
 

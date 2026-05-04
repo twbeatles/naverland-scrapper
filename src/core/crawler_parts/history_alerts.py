@@ -243,7 +243,8 @@ class CrawlerHistoryAlertsMixin:
             self.engine_name = original_engine
 
     def _get_history_state_map(self, complex_id, trade_type, asset_type="APT"):
-        key = (str(asset_type or "APT"), str(complex_id or ""), "*")
+        trade_token = str(trade_type or "").strip()
+        key = (str(asset_type or "APT"), str(complex_id or ""), trade_token or "*")
         if key in self._history_state_cache:
             return self._history_state_cache[key]
         history_map = {}
@@ -251,7 +252,7 @@ class CrawlerHistoryAlertsMixin:
             try:
                 history_map = self.db.get_article_history_state_bulk(
                     complex_id,
-                    trade_type=None,
+                    trade_type=trade_token or None,
                     asset_type=asset_type,
                 )
             except Exception as e:

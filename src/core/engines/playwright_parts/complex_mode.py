@@ -350,6 +350,7 @@ class PlaywrightComplexModeMixin:
         block_like_redirect = False
         block_reason = ""
         confirmed_capture = False
+        confirmed_parse_success = False
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
             page = self._desktop_page
@@ -473,6 +474,7 @@ class PlaywrightComplexModeMixin:
                     block_reason = plan_block_reason
                 if plan_response_seen and plan_parse_success:
                     confirmed_capture = True
+                    confirmed_parse_success = True
                 if raw_items:
                     break
                 if plan_response_seen and plan_parse_success and not plan_parse_failed and not plan_block_like_redirect:
@@ -486,13 +488,13 @@ class PlaywrightComplexModeMixin:
             failure_reason = f"block-like redirect: {block_reason or final_url or 'unknown'}"
         elif not response_seen:
             failure_reason = f"response capture missing: {final_url or 'no_final_url'}"
-        elif parse_failed:
+        elif parse_failed and not confirmed_capture:
             failure_reason = f"response parse failed: {final_url or 'no_final_url'}"
 
         return {
             "raw_items": raw_items,
             "response_seen": response_seen,
-            "parse_success": bool(parse_success and not parse_failed),
+            "parse_success": bool(confirmed_parse_success or (parse_success and not parse_failed)),
             "drain_timed_out": drain_timed_out,
             "response_match_count": response_match_count,
             "final_url": final_url,

@@ -124,6 +124,23 @@
   - `naverland-scrapper.spec` was rechecked on 2026-05-03 and needs no additional datas, hidden imports, or runtime hooks.
   - Validation baseline: `python -m pytest -q` => `232 passed`; `npx --yes pyright` => `0 errors`; preflight pass.
 
+## 0-6. v15.0.24 Implementation Review Closure (2026-05-04)
+- Geo / stats:
+  - Geo marker switch attempt/success/fail/last method stats are initialized, emitted in stats payloads, and included in Geo status/final summary messages.
+- Export:
+  - Template-less CSV/Excel export now follows `ExcelTemplate.DEFAULT_COLUMNS` true/false defaults instead of the legacy minimal column list.
+  - Detail metadata, IDs, and price-change columns remain optional export columns.
+- Runtime consistency:
+  - Confirmed-empty Playwright cache can be written when a later entry plan confirms empty after an earlier parse failure.
+  - Already-consumed schedule slots do not set `is_scheduled_run=True`.
+  - Article history runtime cache is scoped by `(asset_type, complex_id, trade_type)` without DB schema migration.
+  - URL batch article-only browser fallback reuses one worker-scoped browser session and closes it on finish.
+- CI / docs / packaging:
+  - GitHub Actions core pytest subset now includes export/detail/gap/cache/mojibake/preflight fast tests.
+  - `functional_implementation_review_2026-05-04.md` was a temporary review artifact and is not retained as a root project document.
+  - `naverland-scrapper.spec` and `.gitignore` were rechecked on 2026-05-04 and need no extra hidden imports, datas, hooks, or ignore patterns.
+  - Validation baseline: `python -m pytest -q` => `242 passed`; `npx --yes pyright` => `0 errors`; preflight pass.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
@@ -286,7 +303,6 @@ Root/
 │   └── recently_viewed.json # 최근 본 매물
 ├── logs/                   # 로그 파일
 ├── naverland-scrapper.spec # PyInstaller 빌드 스펙
-├── ANTI_BOT_UPGRADE_PLAN.md # Anti-Bot / Geo 확장 계획 및 상태
 ├── pytest.ini              # 테스트/플러그인 설정
 ├── README.md               # 사용자 문서
 ├── claude.md               # AI 컨텍스트 (Claude)
@@ -362,7 +378,7 @@ COLORS["light"] = {
   - Selenium fallback은 `complex` 모드 전용.
   - `geo_sweep`는 Playwright 전용.
 - 감사 문서 정합:
-  - `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 감사 문서로 유지하고, 문서 내 추적 섹션으로 상태를 명시.
+  - 당시에는 `crawling_scraping_risk_audit_2026-03-07.md`를 저장소 기준 감사 문서로 유지했으나, 현재는 독립 문서 삭제 상태를 반영하고 필요한 추적 내용은 `update_history.md`에 남김.
 - 무시 규칙 정합:
   - `.gitignore`의 `build/`, `dist/`, `logs/`, `backup/`, `backups/`, `playwright-report/`, `test-results/`, `.playwright/`, `ms-playwright/` 규칙은 현 작업 기준으로 충분.
 
@@ -545,7 +561,7 @@ COLORS["light"] = {
 - Packaging / ignore / CI review:
   - `naverland-scrapper.spec` still needs no extra hidden imports/runtime hooks/data bundles for this batch
   - `.gitignore` current rules remain sufficient for PyInstaller/build/log/runtime artifacts; no new ignore patterns were needed
-  - GitHub CI currently runs static checks and preflight only; tests are not executed there
+  - At that time GitHub CI focused on static checks/preflight; the current workflow also runs the core pytest subset.
 - Validation:
   - `python -m pytest -q` => `182 passed`
 

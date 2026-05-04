@@ -212,12 +212,18 @@ class TestGeoTabWiring(unittest.TestCase):
                     "by_trade_type": {"매매": 0, "전세": 0, "월세": 0},
                     "geo_discovered_count": 4,
                     "geo_dedup_count": 2,
+                    "geo_marker_switch_attempt_count": 3,
+                    "geo_marker_switch_success_count": 2,
+                    "geo_marker_switch_fail_count": 1,
+                    "geo_marker_switch_last_method": "text:매물",
                     "response_drain_wait_count": 7,
                     "response_drain_timeout_count": 1,
                 }
             )
 
             self.assertTrue(any("Geo 발견 4 / 중복제거 2 / drain대기 7 / drain타임아웃 1" in m for m in messages))
+            self.assertTrue(any("marker전환 2/3 실패 1" in m for m in messages))
+            self.assertTrue(any("marker방법 text:매물" in m for m in messages))
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()
@@ -435,6 +441,10 @@ class TestGeoTabWiring(unittest.TestCase):
                         "geo_dedup_count": 3,
                         "response_drain_wait_count": 19,
                         "response_drain_timeout_count": 2,
+                        "geo_marker_switch_attempt_count": 5,
+                        "geo_marker_switch_success_count": 4,
+                        "geo_marker_switch_fail_count": 1,
+                        "geo_marker_switch_last_method": "selector:button",
                     }
 
             tab.crawler_thread = _ThreadStub()
@@ -445,7 +455,9 @@ class TestGeoTabWiring(unittest.TestCase):
 
             text = tab.log_browser.toPlainText()
             self.assertIn("Geo 요약: 발견 11, 중복제거 3, drain대기 19, drain timeout 2", text)
+            self.assertIn("marker전환 4/5, marker실패 1, marker방법 selector:button", text)
             self.assertTrue(any("Geo 완료: 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2" in m for m in messages))
+            self.assertTrue(any("marker전환 4/5, marker실패 1, marker방법 selector:button" in m for m in messages))
 
             db.close()
             tab.deleteLater()

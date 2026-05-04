@@ -345,7 +345,7 @@ class AppStatsScheduleMixin:
 
         slot = self._schedule_slot_for(config, current_dt)
         if str(config.get("last_run_slot", "") or "") == slot:
-            self.is_scheduled_run = True
+            self.is_scheduled_run = False
             self._schedule_skip_notice_key = None
             return
 

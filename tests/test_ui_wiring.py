@@ -820,6 +820,7 @@ class TestUIWiring(unittest.TestCase):
                     app_settings.get("schedule_config", {}).get("last_run_slot"),
                     "2026-03-19|09:00|complex|10",
                 )
+                self.assertFalse(app.is_scheduled_run)
         finally:
             app_settings._settings = original_settings
             if hasattr(app, "schedule_timer") and app.schedule_timer:

@@ -1,3 +1,41 @@
+## **v15.0.24 (2026-05-04)**
+
+**구현 리뷰 클로저 + 문서 삭제 반영 + .spec/.gitignore/빌드 재점검**
+
+### 주요 반영
+
+* Geo marker 전환 통계 노출
+  - marker switch attempt/success/fail/last method를 runtime stats 기본값과 stats payload에 포함
+  - Geo 상태 메시지와 완료 요약 로그에서 marker 전환 성공률, 실패 수, 마지막 method를 확인 가능
+* 기본 export 정책 정리
+  - CSV/Excel template이 없을 때 legacy 최소 컬럼 대신 `ExcelTemplate.DEFAULT_COLUMNS`의 true/false 기준 사용
+  - `자산유형`, 가격/면적, 평당가, 갭 분석 필드는 기본 포함
+  - 상세 메타, 내부 ID, 신규/가격변동 컬럼은 템플릿에서 선택 가능
+* Playwright / schedule / history 정합성
+  - 앞선 entry plan parse 실패 후 다음 plan이 정상 empty capture를 확인하면 `confirmed_empty` negative cache 기록 가능
+  - 이미 소비된 schedule slot은 실제 실행으로 표시하지 않도록 `is_scheduled_run=False` 유지
+  - article history runtime cache를 `(asset_type, complex_id, trade_type)` 기준으로 분리하고 DB bulk 조회에도 `trade_type` 전달
+* article-only URL batch fallback 개선
+  - URL 일괄 등록 worker가 browser fallback session을 batch 단위로 재사용하고 종료 시 close
+  - 기존 단건 `resolve_article_complex()` 호출 호환 유지
+* 문서 / CI / packaging / ignore 점검
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 최신 구현 결과와 문서 삭제 상태 반영
+  - `functional_implementation_review_2026-05-04.md`는 임시 구현 점검 문서로 저장소 루트 문서에 유지하지 않음
+  - GitHub Actions core pytest subset에 export/detail/gap/cache/mojibake/preflight 빠른 테스트 추가
+  - `naverland-scrapper.spec`는 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 현재 build/dist/log/data/Playwright/runtime artifact 규칙으로 충분하며 신규 패턴 불필요
+
+### 검증
+
+* `python -m pytest -q`
+  - 결과: `242 passed`
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m src.utils.preflight`
+  - 결과: pass
+* `pyinstaller -y naverland-scrapper.spec`
+  - 결과: pass, 기본 onedir 산출물 `dist/naverland`
+
 ## **v15.0.23 (2026-05-03)**
 
 **기능 구현 하드닝 + 문서 삭제 반영 + .spec/.gitignore/CI 정합성 재점검**

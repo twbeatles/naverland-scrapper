@@ -104,6 +104,10 @@ class _ThreadStub:
             "geo_incomplete": False,
             "geo_incomplete_count": 0,
             "geo_incomplete_reasons": [],
+            "geo_marker_switch_attempt_count": 0,
+            "geo_marker_switch_success_count": 0,
+            "geo_marker_switch_fail_count": 0,
+            "geo_marker_switch_last_method": "",
         }
         self.logged = []
         self.registered = []
@@ -672,6 +676,51 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["cache_hit"])
         self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
 
+    async def test_negative_cache_written_when_later_plan_confirms_empty_after_parse_failure(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        cache = _CacheStub()
+        thread.cache = cache
+        thread.negative_cache_ttl_minutes = 7
+        engine = PlaywrightCrawlerEngine(thread)
+        page = _FakePage(responses=[])
+        engine._desktop_page = page
+        attempted_plans = []
+
+        async def _noop_started():
+            return None
+
+        async def _run_entry_plan(_page, plan, *, label):
+            attempted_plans.append(str(plan.get("name", "")))
+            payload = {"articleList": "not-a-list"} if len(attempted_plans) == 1 else {"articleList": []}
+            for handler in list(_page._handlers.get("response", [])):
+                handler(
+                    _FakeResponse(
+                        url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                        payload=payload,
+                    )
+                )
+
+        engine._ensure_started = _noop_started
+        typed_engine = cast(Any, engine)
+        typed_engine._run_entry_plan = _run_entry_plan
+        typed_engine._build_entry_plans = lambda _url: [
+            {"name": "direct", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+            {"name": "fin_then_new_target", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+        ]
+
+        try:
+            result = await engine._crawl_target_with_cache("테스트", "12345", trade_type, mode="complex")
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(attempted_plans[:2], ["direct", "fin_then_new_target"])
+        self.assertEqual(result["count"], 0)
+        self.assertFalse(result["capture_failed"])
+        self.assertTrue(result["parse_success"])
+        self.assertEqual(result["failure_reason"], "")
+        self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
+
     async def test_negative_cache_skipped_on_drain_timeout(self):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
@@ -1234,6 +1283,51 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result)
         self.assertTrue(thread.geo_incomplete)
         self.assertIn("marker_switch_fail", thread.geo_incomplete_reasons)
+
+    async def test_geo_marker_switch_success_records_stats(self):
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FakePage(responses=[])
+
+        try:
+            result = await engine._switch_to_listing_markers()
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(result)
+        self.assertEqual(thread.stats["geo_marker_switch_attempt_count"], 1)
+        self.assertEqual(thread.stats["geo_marker_switch_success_count"], 1)
+        self.assertEqual(thread.stats["geo_marker_switch_fail_count"], 0)
+        self.assertEqual(thread.stats["geo_marker_switch_last_method"], "text:상세매물검색")
+        self.assertEqual(thread.stats_emitted, 1)
+
+    async def test_geo_marker_switch_failure_records_stats(self):
+        class _FailingLocatorFirst(_FakeLocatorFirst):
+            async def click(self, timeout=0):
+                raise RuntimeError("no marker control")
+
+        class _FailingLocator(_FakeLocator):
+            def __init__(self):
+                self.first = _FailingLocatorFirst()
+
+        class _FailingPage(_FakePage):
+            def locator(self, query):
+                return _FailingLocator()
+
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._desktop_page = _FailingPage(responses=[])
+
+        try:
+            result = await engine._switch_to_listing_markers()
+        finally:
+            engine._loop.close()
+
+        self.assertFalse(result)
+        self.assertEqual(thread.stats["geo_marker_switch_attempt_count"], 1)
+        self.assertEqual(thread.stats["geo_marker_switch_success_count"], 0)
+        self.assertEqual(thread.stats["geo_marker_switch_fail_count"], 1)
+        self.assertEqual(thread.stats_emitted, 1)
 
     async def test_geo_incomplete_safety_mode_skips_history_and_disappeared_finalize(self):
         thread = _ThreadStub()

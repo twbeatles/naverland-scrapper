@@ -372,6 +372,10 @@ class GeoCrawlerTab(CrawlerTab):
         blocked_count = int(stats.get("blocked_page_count", 0) or 0)
         capture_failed = int(stats.get("capture_failed_count", 0) or 0)
         block_like = int(stats.get("block_like_redirect_count", 0) or 0)
+        marker_attempt = int(stats.get("geo_marker_switch_attempt_count", 0) or 0)
+        marker_success = int(stats.get("geo_marker_switch_success_count", 0) or 0)
+        marker_fail = int(stats.get("geo_marker_switch_fail_count", 0) or 0)
+        marker_method = str(stats.get("geo_marker_switch_last_method", "") or "")
         browser_source = str(stats.get("playwright_browser_source", "") or "")
         entry_plan = str(stats.get("playwright_last_entry_plan", "") or "")
         block_reason = str(stats.get("playwright_last_block_reason", "") or "")
@@ -393,6 +397,10 @@ class GeoCrawlerTab(CrawlerTab):
             blocked_count,
             capture_failed,
             block_like,
+            marker_attempt,
+            marker_success,
+            marker_fail,
+            marker_method,
             browser_source,
             entry_plan,
             block_reason,
@@ -408,8 +416,11 @@ class GeoCrawlerTab(CrawlerTab):
             f" / 브라우저 {browser_source or '-'} / 응답 {response_seen} / 매칭 {response_match}"
             f" / 파싱실패 {parse_fail} / 상세부분 {detail_partial} / 상세실패 {detail_fail}"
             f" / 상세스킵 {detail_skip} / capture실패 {capture_failed} / block-like {block_like}"
+            f" / marker전환 {marker_success}/{marker_attempt} 실패 {marker_fail}"
             f" / 차단 {blocked_count}"
         )
+        if marker_method:
+            message += f" / marker방법 {marker_method}"
         if entry_plan:
             message += f" / plan {entry_plan}"
         if block_reason:
@@ -439,6 +450,10 @@ class GeoCrawlerTab(CrawlerTab):
         blocked_count = int(final_stats.get("blocked_page_count", 0) or 0)
         capture_failed = int(final_stats.get("capture_failed_count", 0) or 0)
         block_like = int(final_stats.get("block_like_redirect_count", 0) or 0)
+        marker_attempt = int(final_stats.get("geo_marker_switch_attempt_count", 0) or 0)
+        marker_success = int(final_stats.get("geo_marker_switch_success_count", 0) or 0)
+        marker_fail = int(final_stats.get("geo_marker_switch_fail_count", 0) or 0)
+        marker_method = str(final_stats.get("geo_marker_switch_last_method", "") or "")
         browser_source = str(final_stats.get("playwright_browser_source", "") or "")
         entry_plan = str(final_stats.get("playwright_last_entry_plan", "") or "")
         block_reason = str(final_stats.get("playwright_last_block_reason", "") or "")
@@ -452,7 +467,9 @@ class GeoCrawlerTab(CrawlerTab):
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain timeout {drain_timeout}, "
             f"브라우저 {browser_source or '-'}, 응답 {response_seen}, 매칭 {response_match}, "
             f"파싱실패 {parse_fail}, 상세부분 {detail_partial}, 상세실패 {detail_fail}, "
-            f"capture실패 {capture_failed}, block-like {block_like}, 차단 {blocked_count}",
+            f"capture실패 {capture_failed}, block-like {block_like}, "
+            f"marker전환 {marker_success}/{marker_attempt}, marker실패 {marker_fail}, "
+            f"marker방법 {marker_method or '-'}, 차단 {blocked_count}",
             10,
         )
         summary_message = (
@@ -460,7 +477,9 @@ class GeoCrawlerTab(CrawlerTab):
             f"발견 {discovered}, 중복제거 {dedup}, drain대기 {drain_wait}, drain타임아웃 {drain_timeout}, "
             f"브라우저 {browser_source or '-'}, 응답 {response_seen}, 매칭 {response_match}, "
             f"파싱실패 {parse_fail}, 상세부분 {detail_partial}, 상세실패 {detail_fail}, "
-            f"capture실패 {capture_failed}, block-like {block_like}, 차단 {blocked_count}"
+            f"capture실패 {capture_failed}, block-like {block_like}, "
+            f"marker전환 {marker_success}/{marker_attempt}, marker실패 {marker_fail}, "
+            f"marker방법 {marker_method or '-'}, 차단 {blocked_count}"
         )
         if entry_plan:
             summary_message += f", plan {entry_plan}"

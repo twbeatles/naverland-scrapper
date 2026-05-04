@@ -194,6 +194,37 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertIn("browser_fallback", resolved["source"])
         mock_fallback.assert_called_once()
 
+    def test_resolve_article_complex_uses_injected_browser_fallback(self):
+        class _Fallback:
+            def __init__(self):
+                self.calls = []
+
+            def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+                self.calls.append((article_id, fallback_asset_type))
+                return {
+                    "source": "injected:browser_fallback",
+                    "complex_id": "654321",
+                    "asset_type": "VL",
+                    "article_id": article_id,
+                    "url": "https://fin.land.naver.com/articles/2513105556",
+                }
+
+        fallback = _Fallback()
+        with (
+            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
+            patch("src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback") as mock_default_fallback,
+        ):
+            resolved = NaverURLParser.resolve_article_complex(
+                "2513105556",
+                fallback_asset_type="APT",
+                browser_fallback=fallback,
+            )
+
+        self.assertEqual(resolved["complex_id"], "654321")
+        self.assertEqual(resolved["asset_type"], "VL")
+        self.assertEqual(fallback.calls, [("2513105556", "APT")])
+        mock_default_fallback.assert_not_called()
+
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
         side_effect=Exception("network fail"),
