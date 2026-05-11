@@ -2,8 +2,9 @@ import csv
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from src.core.export import DataExporter, ExcelTemplate, OPENPYXL_AVAILABLE
+from src.core.export import DataExporter, ExcelTemplate, ExportResult, OPENPYXL_AVAILABLE
 from src.utils.helpers import PriceConverter
 
 
@@ -33,6 +34,31 @@ class TestExportModule(unittest.TestCase):
         self.assertEqual(rows[0]["가격변동"], "+1,500만")
         self.assertEqual(rows[1]["가격변동"], "-2,500만")
         self.assertEqual(rows[2]["가격변동"], "")
+
+    def test_export_result_bool_and_last_error_on_csv_failure(self):
+        exporter = DataExporter([{"단지명": "A"}])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "missing", "export.csv")
+            result = exporter.export_csv(path)
+
+        self.assertIsInstance(result, ExportResult)
+        self.assertFalse(result)
+        self.assertFalse(result.ok)
+        self.assertIsNone(result.path)
+        self.assertIn("CSV 저장 실패", result.error)
+        self.assertEqual(exporter.last_error, result.error)
+        self.assertIsNone(exporter.to_csv(path))
+
+    def test_excel_export_result_reports_missing_openpyxl(self):
+        exporter = DataExporter([{"단지명": "A"}])
+        with patch("src.core.export.OPENPYXL_AVAILABLE", False):
+            result = exporter.export_excel("export.xlsx")
+
+        self.assertFalse(result.ok)
+        self.assertIn("openpyxl", result.error)
+        self.assertEqual(exporter.last_error, result.error)
+        with patch("src.core.export.OPENPYXL_AVAILABLE", False):
+            self.assertIsNone(exporter.to_excel("export.xlsx"))
 
     def test_csv_default_columns_use_default_template(self):
         data = [

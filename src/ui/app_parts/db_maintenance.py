@@ -141,8 +141,12 @@ class AppDatabaseMaintenanceMixin:
 
             if not self.db.restore_database(Path(path)):
                 self.status_bar.showMessage("❌ DB 복원 실패")
-                QMessageBox.critical(self, "복원 실패", "DB 복원에 실패했습니다.\n콘솔 로그를 확인하세요.")
-                ui_logger.error("DB 복원 실패")
+                detail = str(getattr(self.db, "_last_restore_error", "") or "").strip()
+                message = "DB 복원에 실패했습니다.\n콘솔 로그를 확인하세요."
+                if detail:
+                    message = f"{message}\n\n{detail}"
+                QMessageBox.critical(self, "복원 실패", message)
+                ui_logger.error(f"DB 복원 실패: {detail or 'unknown'}")
                 return
 
             ui_logger.info("DB 복원 성공, 데이터 다시 로드 중...")

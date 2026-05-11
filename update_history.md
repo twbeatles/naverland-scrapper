@@ -1,3 +1,43 @@
+## **v15.0.25 (2026-05-11)**
+
+**실사이트 샘플 갱신 + 기능 리스크 하드닝 + 문서/.spec/.gitignore/빌드 재점검**
+
+### 주요 반영
+
+* Export 실패 전달 강화
+  - `DataExporter`에 `ExportResult(ok, path, error)`와 `last_error`를 추가
+  - 기존 `to_excel/to_csv/to_json -> path | None` 반환 계약은 유지
+  - UI 저장 경로가 구조화 실패와 legacy `None` 실패를 `QMessageBox.critical`로 표시
+* Live smoke 실사이트 정합화
+  - 기본 샘플을 현재 매물 목록이 확인되는 `complex_id=3833`, `article_id=2625154515`로 갱신
+  - complex probe가 `api_articles`, `article_count`, `sample_article`를 출력하고 0건 샘플은 실패 처리
+  - navigation timeout/예외는 traceback 대신 `[fail]` probe 메시지와 JSON 로그로 수집
+  - article lookup은 async Playwright loop 밖에서 실행해 sync browser fallback을 실제로 검증
+* 네이버 URL parser / 단지명 조회 보강
+  - `fin.land` 상세 payload의 현재 부모 단지 키 `complexNumber`를 article-only 역조회 후보로 추가
+  - direct `new.land` 단지명 API가 `429`를 반환하면 browser fallback으로 단지명을 재확인
+  - browser fallback도 실패할 때만 `단지_{id}`를 반환하며, 성공명은 `(asset_type, complex_id)` 캐시에 저장
+* 분석 / DB / mixin 하드닝
+  - `ComplexComparator.compare(..., asset_type=None)`가 기존 문자열 입력을 유지하면서 tuple/dict target과 `APT:12345` / `VL:12345` scoped key를 지원
+  - `ConnectionPool.close_all()`이 close 결과 객체를 반환하고, DB 복원은 close timeout 시 파일 교체 전에 중단
+  - mixin public callable 전체 rebind meta-test를 추가하고 누락 rebind 목록을 보강
+* 문서 / packaging / ignore 점검
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 현재 실사이트 샘플, smoke 계약, 429 fallback 정책 반영
+  - GitHub Actions core pytest subset에 `test_app_entry`, `test_live_smoke`, `test_analysis`, `test_rebind_methods` 추가
+  - `naverland-scrapper.spec`는 이번 변경이 Python/runtime/test/doc 수준이라 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 `logs/`, `build/`, `dist/`, `data/`, cache/pycache 산출물을 이미 포괄하므로 신규 패턴 불필요
+
+### 검증
+
+* `python -m pytest -q`
+  - 결과: `261 passed`
+* `pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python app_entry.py --preflight`
+  - 결과: pass
+* `python app_entry.py --live-smoke --smoke-headless --smoke-json-log logs/live-smoke-default-timeout-2026-05-11.json`
+  - 결과: exit code 0, `home/complex/detail/geo-marker/article-lookup` 모두 `[ok]`
+
 ## **v15.0.24 (2026-05-04)**
 
 **구현 리뷰 클로저 + 문서 삭제 반영 + .spec/.gitignore/빌드 재점검**

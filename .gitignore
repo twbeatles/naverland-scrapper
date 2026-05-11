@@ -19,6 +19,10 @@
 # implementation-review closure, temporary review-document deletion, PyInstaller build
 # output, and expanded fast CI tests are still covered by current build/dist/log/data
 # rules. No new ignore patterns are required.
+# Rechecked 2026-05-11:
+# live-site smoke JSON logs, PyInstaller build/dist output, SQLite/data files, pytest
+# cache, and Python bytecode from the live-site sample refresh are all covered by
+# existing rules. No new ignore patterns are required.
 # Python
 __pycache__/
 *.py[cod]

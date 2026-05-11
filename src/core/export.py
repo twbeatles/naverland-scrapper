@@ -1,5 +1,6 @@
 import csv
 import json
+from dataclasses import dataclass
 from src.utils.helpers import PriceConverter, DateTimeHelper
 from src.utils.logger import get_logger
 
@@ -16,6 +17,16 @@ except ImportError:
     get_column_letter = None
     OPENPYXL_AVAILABLE = False
 logger = get_logger("Export")
+
+
+@dataclass(frozen=True)
+class ExportResult:
+    ok: bool
+    path: object = None
+    error: str = ""
+
+    def __bool__(self):
+        return bool(self.ok)
 
 class ExcelTemplate:
     """엑셀 내보내기 템플릿 (v7.3)"""
@@ -81,6 +92,15 @@ class DataExporter:
     
     def __init__(self, data): 
         self.data = data
+        self.last_error = ""
+
+    def _success(self, path):
+        self.last_error = ""
+        return ExportResult(True, path, "")
+
+    def _failure(self, error):
+        self.last_error = str(error or "알 수 없는 저장 오류")
+        return ExportResult(False, None, self.last_error)
 
     @staticmethod
     def _change_to_int(value):
@@ -137,7 +157,7 @@ class DataExporter:
             order.append(token)
         return [col for col in order if bool(raw_columns.get(col, False))]
     
-    def to_excel(self, path, template=None):
+    def export_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
         if (
             not OPENPYXL_AVAILABLE
@@ -147,12 +167,12 @@ class DataExporter:
             or Alignment is None
             or get_column_letter is None
         ):
-            return None
+            return self._failure("openpyxl 라이브러리를 사용할 수 없어 Excel 저장을 수행할 수 없습니다.")
         try:
             wb = Workbook()
             ws = wb.active
             if ws is None:
-                return None
+                return self._failure("Excel 워크시트를 생성할 수 없습니다.")
             ws.title = "매물 데이터"
             
             columns = self._columns_from_template(template)
@@ -220,12 +240,16 @@ class DataExporter:
             
             ws.freeze_panes = "A2"
             wb.save(path)
-            return path
+            return self._success(path)
         except Exception as e:
             logger.error(f"Excel 저장 실패: {e}")
-            return None
+            return self._failure(f"Excel 저장 실패: {e}")
+
+    def to_excel(self, path, template=None):
+        result = self.export_excel(path, template)
+        return result.path if result.ok else None
     
-    def to_csv(self, path, template=None):
+    def export_csv(self, path, template=None):
         """CSV로 내보내기 - 템플릿 지원"""
         try:
             columns = self._columns_from_template(template)
@@ -241,12 +265,16 @@ class DataExporter:
                     row['가격변동'] = self._format_price_change(item.get('price_change', 0))
                     row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
                     writer.writerow(row)
-            return path
+            return self._success(path)
         except Exception as e:
             logger.error(f"CSV 저장 실패: {e}")
-            return None
+            return self._failure(f"CSV 저장 실패: {e}")
+
+    def to_csv(self, path, template=None):
+        result = self.export_csv(path, template)
+        return result.path if result.ok else None
     
-    def to_json(self, path):
+    def export_json(self, path):
         """JSON으로 내보내기"""
         try:
             with open(path, 'w', encoding='utf-8') as f:
@@ -257,7 +285,11 @@ class DataExporter:
                     "price_change_count": sum(1 for d in self.data if d.get('price_change', 0) != 0),
                     "data": self.data
                 }, f, ensure_ascii=False, indent=2)
-            return path
+            return self._success(path)
         except Exception as e:
             logger.error(f"JSON 저장 실패: {e}")
-            return None
+            return self._failure(f"JSON 저장 실패: {e}")
+
+    def to_json(self, path):
+        result = self.export_json(path)
+        return result.path if result.ok else None

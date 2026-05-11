@@ -107,10 +107,10 @@ class NaverURLParser:
     )
     _COMPLEX_QUERY_RE = re.compile(r"complexNo=(\d+)", re.IGNORECASE)
     _ARTICLE_COMPLEX_PATTERNS = (
-        ("VL", re.compile(r'"(?:bildNo|buildingNo|houseNo|houseId)"\s*:\s*"?(\d+)"?', re.IGNORECASE)),
-        ("APT", re.compile(r'"(?:complexNo|complexId|hscpNo|hscpId)"\s*:\s*"?(\d+)"?', re.IGNORECASE)),
+        ("VL", re.compile(r'\\?"(?:bildNo|buildingNo|houseNo|houseId)\\?"\s*:\s*\\?"?(\d+)\\?"?', re.IGNORECASE)),
+        ("APT", re.compile(r'\\?"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\\?"\s*:\s*\\?"?(\d+)\\?"?', re.IGNORECASE)),
         ("VL", re.compile(r"(?:bildNo|buildingNo|houseNo|houseId)\s*[=:]\s*['\"]?(\d+)", re.IGNORECASE)),
-        ("APT", re.compile(r"(?:complexNo|complexId|hscpNo|hscpId)\s*[=:]\s*['\"]?(\d+)", re.IGNORECASE)),
+        ("APT", re.compile(r"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\s*[=:]\s*['\"]?(\d+)", re.IGNORECASE)),
         ("VL", re.compile(r"new\.land\.naver\.com/houses/(\d+)", re.IGNORECASE)),
         ("APT", re.compile(r"new\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE)),
     )
@@ -464,6 +464,100 @@ class NaverURLParser:
             return f"단지_{complex_id}"
 
     @classmethod
+    def _fetch_name_browser_fallback(cls, complex_id, asset_type="APT", cancel_checker=None):
+        cid = str(complex_id or "").strip()
+        if not cid or cls._is_cancelled(cancel_checker):
+            return ""
+        try:
+            from playwright.sync_api import sync_playwright
+
+            from src.utils.helpers import build_complex_url, ChromeParamHelper
+        except Exception as e:
+            get_logger("NaverURLParser").debug(f"단지명 browser fallback 사용 불가: {e}")
+            return ""
+
+        asset_token = cls._normalize_asset_type(asset_type)
+        expected_entity = "houses" if asset_token == "VL" else "complexes"
+        expected_detail = f"/api/{expected_entity}/{cid}"
+        expected_articles = f"/api/articles/{'house' if asset_token == 'VL' else 'complex'}/{cid}"
+        captured_name = ""
+
+        def _extract_name_from_payload(payload) -> str:
+            if not isinstance(payload, dict):
+                return ""
+            detail = payload.get("complexDetail", {}) if isinstance(payload, dict) else {}
+            candidates = (
+                detail.get("complexName") if isinstance(detail, dict) else "",
+                detail.get("name") if isinstance(detail, dict) else "",
+                payload.get("complexName"),
+                payload.get("name"),
+            )
+            for candidate in candidates:
+                token = str(candidate or "").strip()
+                if token:
+                    return token
+            article_list = payload.get("articleList") or payload.get("articles") or []
+            if isinstance(article_list, list):
+                for article in article_list:
+                    if not isinstance(article, dict):
+                        continue
+                    token = str(article.get("articleName") or article.get("atclNm") or "").strip()
+                    if token:
+                        return token
+            return ""
+
+        try:
+            chrome_path = ChromeParamHelper.get_chrome_executable_path()
+            with sync_playwright() as playwright:
+                if chrome_path:
+                    browser = playwright.chromium.launch(executable_path=chrome_path, headless=True)
+                else:
+                    browser = playwright.chromium.launch(headless=True)
+                try:
+                    page = browser.new_page(
+                        locale="ko-KR",
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    )
+                    page.add_init_script(
+                        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                    )
+
+                    def _handle(response):
+                        nonlocal captured_name
+                        if captured_name:
+                            return
+                        url = str(getattr(response, "url", "") or "")
+                        if expected_detail not in url and expected_articles not in url:
+                            return
+                        try:
+                            name = _extract_name_from_payload(response.json())
+                        except Exception:
+                            name = ""
+                        if name:
+                            captured_name = name
+
+                    page.on("response", _handle)
+                    page.goto(
+                        build_complex_url(cid, asset_type=asset_token),
+                        wait_until="domcontentloaded",
+                        timeout=12000,
+                    )
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=3000)
+                    except Exception:
+                        pass
+                    if not captured_name:
+                        page.wait_for_timeout(3000)
+                    return str(captured_name or "").strip()
+                finally:
+                    browser.close()
+        except RetryCancelledError:
+            raise
+        except Exception as e:
+            get_logger("NaverURLParser").debug(f"단지명 browser fallback 실패 ({asset_token}:{cid}): {e}")
+            return ""
+
+    @classmethod
     def _fallback_name(cls, complex_id):
         return f"단지_{complex_id}"
 
@@ -531,6 +625,17 @@ class NaverURLParser:
                 if status == 429 or "TOO_MANY_REQUESTS" in response_body:
                     cls._activate_name_lookup_cooldown()
                     logger.warning(f"단지명 조회 rate limit ({asset_token}:{cid}): status={status}")
+                    browser_name = str(
+                        cls._fetch_name_browser_fallback(
+                            cid,
+                            asset_type=asset_token,
+                            cancel_checker=cancel_checker,
+                        )
+                        or ""
+                    ).strip()
+                    if browser_name:
+                        cls._name_cache[cache_key] = browser_name
+                        return browser_name
                 else:
                     logger.debug(
                         f"단지명 조회 HTTP 실패 ({asset_token}:{cid}): status={status}, body={response_body[:160]}"

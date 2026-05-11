@@ -48,10 +48,14 @@ jobs:
         run: >
           python -m pytest -q
           tests/test_parser_module.py
+          tests/test_app_entry.py
+          tests/test_live_smoke.py
+          tests/test_analysis.py
           tests/test_database_module.py
           tests/test_ui_wiring.py
           tests/test_ui_runtime_smoke.py
           tests/test_export_module.py
+          tests/test_rebind_methods.py
           tests/test_detail_fetcher.py
           tests/test_gap_analysis.py
           tests/test_managers_cache.py

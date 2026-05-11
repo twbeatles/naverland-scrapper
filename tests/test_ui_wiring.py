@@ -1131,6 +1131,36 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_restore_db_failure_dialog_includes_restore_detail(self):
+        from PyQt6.QtWidgets import QMessageBox
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.db._last_restore_error = "복원 중단: 활성 DB 연결 종료 실패 (leased=1, close_errors=0)"
+        with (
+            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
+            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(app.crawler_tab, "shutdown_crawl", return_value=True),
+            patch.object(app.geo_tab, "shutdown_crawl", return_value=True),
+            patch.object(app.db, "restore_database", return_value=False),
+            patch("src.ui.app.QMessageBox.critical") as mock_critical,
+            patch("src.ui.app.QApplication.processEvents", return_value=None),
+        ):
+            app._restore_db()
+
+        self.assertTrue(mock_critical.called)
+        self.assertIn("활성 DB 연결 종료 실패", mock_critical.call_args[0][2])
+        self.assertFalse(app._maintenance_mode)
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
     def test_restore_db_aborts_when_crawler_shutdown_fails(self):
         from PyQt6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
@@ -2155,6 +2185,78 @@ class TestUIWiring(unittest.TestCase):
             self.assertEqual([item["매물ID"] for item in visible], ["A2", "A1"])
             self.assertEqual([item["매물ID"] for item in raw], ["A1", "A2"])
 
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_save_reports_structured_export_failure(self):
+        from src.core.database import ComplexDatabase
+        from src.core.export import ExportResult
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        class _FailingExporter:
+            def __init__(self, data):
+                self.data = data
+                self.last_error = ""
+
+            def export_csv(self, path, template=None):
+                self.last_error = "disk full"
+                return ExportResult(False, None, self.last_error)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_export_failure.db"))
+            tab = CrawlerTab(db)
+            tab.collected_data = [{"단지명": "A", "매물ID": "A1"}]
+
+            with (
+                patch("src.ui.widgets.crawler_tab.DataExporter", _FailingExporter),
+                patch(
+                    "src.ui.widgets.crawler_tab.QFileDialog.getSaveFileName",
+                    return_value=(os.path.join(tmp, "export.csv"), "CSV (*.csv)"),
+                ),
+                patch("src.ui.widgets.crawler_tab.QMessageBox.critical") as mock_critical,
+                patch("src.ui.widgets.crawler_tab.QMessageBox.information") as mock_information,
+            ):
+                tab.save_csv("raw")
+
+            self.assertTrue(mock_critical.called)
+            self.assertIn("disk full", mock_critical.call_args[0][2])
+            mock_information.assert_not_called()
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_crawler_tab_save_reports_legacy_none_export_failure(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        class _LegacyFailingExporter:
+            def __init__(self, data):
+                self.data = data
+                self.last_error = "legacy failure"
+
+            def to_json(self, path):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "ui_export_legacy_failure.db"))
+            tab = CrawlerTab(db)
+            tab.collected_data = [{"단지명": "A", "매물ID": "A1"}]
+
+            with (
+                patch("src.ui.widgets.crawler_tab.DataExporter", _LegacyFailingExporter),
+                patch(
+                    "src.ui.widgets.crawler_tab.QFileDialog.getSaveFileName",
+                    return_value=(os.path.join(tmp, "export.json"), "JSON (*.json)"),
+                ),
+                patch("src.ui.widgets.crawler_tab.QMessageBox.critical") as mock_critical,
+                patch("src.ui.widgets.crawler_tab.QMessageBox.information") as mock_information,
+            ):
+                tab.save_json("raw")
+
+            self.assertTrue(mock_critical.called)
+            self.assertIn("legacy failure", mock_critical.call_args[0][2])
+            mock_information.assert_not_called()
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()

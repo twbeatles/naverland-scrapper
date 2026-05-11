@@ -170,6 +170,21 @@
   - `naverland-scrapper.spec` and `.gitignore` were rechecked on 2026-05-04 and need no extra hidden imports, datas, hooks, or ignore patterns.
   - Validation baseline: `python -m pytest -q` => `242 passed`; `npx --yes pyright` => `0 errors`; preflight pass.
 
+## 0-9. v15.0.25 Live-Site Sample Refresh (2026-05-11)
+- Current Naver live-site sample:
+  - Default live smoke sample is now `complex_id=3833`, `article_id=2625154515`.
+  - 2026-05-11 headless smoke passed `home`, `complex`, `detail`, `geo-marker`, and `article-lookup`.
+- Live smoke contract:
+  - Complex probe records `api_articles`, `article_count`, and `sample_article`.
+  - A complex API response with HTTP 200 but `article_count=0` is treated as a failed sample, not a healthy smoke.
+  - Article lookup runs after the async Playwright smoke loop so `NaverURLParser` browser fallback can use the sync Playwright path.
+- Parser / URL registration contract:
+  - `NaverURLParser` recognizes current `fin.land` detail payloads that expose the parent complex as `complexNumber`.
+  - Direct `new.land` name lookup `429` now tries browser fallback before returning `단지_{id}`; successful fallback names are cached by `(asset_type, complex_id)`.
+- CI / packaging / ignore:
+  - GitHub Actions core pytest subset now includes `test_app_entry`, `test_live_smoke`, `test_analysis`, and `test_rebind_methods`.
+  - `naverland-scrapper.spec` and `.gitignore` were rechecked on 2026-05-11 and need no extra hidden imports, datas, hooks, or ignore patterns.
+
 ## 2. Technical Stack
 - **Language**: Python 3.9+
 - **GUI Framework**: `PyQt6` (Widgets, Core, Gui)
@@ -668,7 +683,7 @@ COLORS["light"] = {
   - meta 필드 `detail_source`, `detail_parse_state`, `missing_field_count`, `network_response_count`, `hydration_hit`은 유지됩니다.
 - Name lookup / URL registration contract:
   - `NaverURLParser.fetch_complex_name()`는 성공 조회명을 process cache에 저장합니다.
-  - direct API `429` 발생 시 5분 cooldown을 활성화하고 즉시 `단지_{id}` fallback을 반환합니다.
+  - direct API `429` 발생 시 5분 cooldown을 활성화하고 browser fallback을 시도합니다. fallback도 실패할 때만 `단지_{id}`를 반환합니다.
   - `URLBatchDialog`는 `new.land complex`, `land.naver.com complexNo`, `m.land`, `fin.land article` 예시를 표시하고, URL family는 시점에 따라 달라질 수 있음을 전제로 helper 기반 URL 생성만 사용합니다.
 - Smoke / packaging contract:
   - 기본 live smoke는 `home + complex + detail + article-only lookup + geo marker switch/API` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.

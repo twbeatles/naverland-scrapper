@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 import sqlite3
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Condition, Lock
@@ -14,6 +15,19 @@ from threading import Condition, Lock
 from src.utils.logger import get_logger
 
 logger = get_logger("DB")
+
+
+@dataclass(frozen=True)
+class ConnectionPoolCloseResult:
+    closed_count: int
+    error_count: int
+    timed_out: bool = False
+    still_leased: int = 0
+
+    @property
+    def ok(self) -> bool:
+        return not self.timed_out and self.error_count == 0
+
 
 class ConnectionPool:
     if TYPE_CHECKING:
@@ -119,11 +133,13 @@ class ConnectionPool:
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
     
-    def close_all(self, timeout_ms=8000):
+    def close_all(self, timeout_ms=8000, force_after_timeout=True):
         """Close all tracked pool/leased connections."""
         logger.info("ConnectionPool shutdown started...")
         closed_count = 0
         error_count = 0
+        timed_out = False
+        still_leased = 0
 
         try:
             wait_seconds = max(0.0, float(timeout_ms) / 1000.0)
@@ -136,11 +152,26 @@ class ConnectionPool:
             while self._leased_ids:
                 remain = deadline - time.monotonic()
                 if remain <= 0:
+                    timed_out = True
+                    still_leased = len(self._leased_ids)
                     logger.warning(
-                        f"ConnectionPool close timeout; still leased: {len(self._leased_ids)}"
+                        f"ConnectionPool close timeout; still leased: {still_leased}"
                     )
                     break
                 self._lease_cond.wait(timeout=remain)
+
+            if timed_out and not force_after_timeout:
+                self._closing = False
+                self._lease_cond.notify_all()
+                logger.warning(
+                    f"ConnectionPool shutdown aborted: still_leased={still_leased}"
+                )
+                return ConnectionPoolCloseResult(
+                    closed_count=0,
+                    error_count=0,
+                    timed_out=True,
+                    still_leased=still_leased,
+                )
 
             tracked = list(self._all_connections.values())
             self._all_connections.clear()
@@ -166,5 +197,13 @@ class ConnectionPool:
                 logger.warning(f"Connection close failed: {e}")
                 error_count += 1
 
-        logger.info(f"ConnectionPool shutdown complete: closed={closed_count}, errors={error_count}")
-
+        logger.info(
+            f"ConnectionPool shutdown complete: closed={closed_count}, "
+            f"errors={error_count}, timed_out={timed_out}, still_leased={still_leased}"
+        )
+        return ConnectionPoolCloseResult(
+            closed_count=closed_count,
+            error_count=error_count,
+            timed_out=timed_out,
+            still_leased=still_leased,
+        )

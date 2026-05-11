@@ -147,13 +147,31 @@ class CrawlerTabIOActionsMixin:
             exporter = exporter_cls(items)
             template = settings.get("excel_template")
             if kind == "excel":
-                result = exporter.to_excel(Path(path), template)
+                if hasattr(exporter, "export_excel"):
+                    result = exporter.export_excel(Path(path), template)
+                else:
+                    result = exporter.to_excel(Path(path), template)
             elif kind == "csv":
-                result = exporter.to_csv(Path(path), template)
+                if hasattr(exporter, "export_csv"):
+                    result = exporter.export_csv(Path(path), template)
+                else:
+                    result = exporter.to_csv(Path(path), template)
             else:
-                result = exporter.to_json(Path(path))
-            if result:
+                if hasattr(exporter, "export_json"):
+                    result = exporter.export_json(Path(path))
+                else:
+                    result = exporter.to_json(Path(path))
+
+            ok = bool(getattr(result, "ok", result))
+            error = str(getattr(result, "error", "") or getattr(exporter, "last_error", "") or "")
+            if ok:
                 QMessageBox.information(self, "저장 완료", f"{scope_label} {kind.upper()} 저장 완료\n{path}")
+                return
+
+            if not error:
+                error = f"{kind.upper()} 저장 결과가 실패로 반환되었습니다."
+            QMessageBox.critical(self, "저장 실패", f"{kind.upper()} 저장에 실패했습니다.\n{error}")
+            logger.error(f"{kind.upper()} save failed ({scope_key}): {error}")
         except Exception as exc:
             QMessageBox.critical(self, "저장 실패", f"{kind.upper()} 저장 중 오류가 발생했습니다.\n{exc}")
             logger.error(f"{kind.upper()} save error ({scope_key}): {exc}")

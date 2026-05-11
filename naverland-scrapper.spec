@@ -58,6 +58,12 @@ from PyInstaller.utils.hooks import collect_submodules
 # and batch article browser fallback session reuse are all Python/runtime/test/doc
 # changes. The existing Playwright hidden imports, runtime hook, and Chromium bundle
 # collection remain sufficient; no additional datas, hidden imports, or hooks are required.
+# Rechecked on 2026-05-11 (live-site sample refresh and functional hardening pass):
+# ExportResult, live-smoke sample/article-count checks, `complexNumber` parser support,
+# browser-backed name lookup fallback, ConnectionPoolCloseResult, analysis asset scope,
+# and mixin rebind meta-tests are all Python/runtime/test/doc changes. Existing
+# Playwright hidden imports, runtime hook, and Chromium bundle collection remain
+# sufficient; no additional datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not

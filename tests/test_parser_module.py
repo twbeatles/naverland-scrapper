@@ -157,6 +157,28 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(resolved["asset_type"], "APT")
         self.assertEqual(resolved["article_id"], "2513105556")
 
+    def test_resolve_article_complex_from_fin_complex_number_payload(self):
+        payload = (
+            '<a href="https://loan.pay.naver.com/n/mortgage?complexNumber=3833&amp;'
+            'pyeongTypeNumber=4">대출</a>'
+        )
+
+        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+            resolved = NaverURLParser.resolve_article_complex("2625154515")
+
+        self.assertEqual(resolved["complex_id"], "3833")
+        self.assertEqual(resolved["asset_type"], "APT")
+        self.assertEqual(resolved["article_id"], "2625154515")
+
+    def test_resolve_article_complex_from_escaped_complex_number_state(self):
+        payload = r'{\"params\":{\"articleNumber\":\"2625154515\",\"complexNumber\":\"3833\"}}'
+
+        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+            resolved = NaverURLParser.resolve_article_complex("2625154515")
+
+        self.assertEqual(resolved["complex_id"], "3833")
+        self.assertEqual(resolved["asset_type"], "APT")
+
     def test_resolve_article_complex_detects_vl_building_payload(self):
         payload = '{"articleNo":"2513105556","bildNo":"654321","realEstateTypeName":"빌라"}'
 
@@ -247,17 +269,45 @@ class TestNaverURLParser(unittest.TestCase):
             def read(self, n=None):
                 return b'{"success":false,"code":"TOO_MANY_REQUESTS"}'
 
-        with patch(
-            "src.core.parser.NaverURLParser._fetch_name_impl",
-            side_effect=[_RateLimitHTTPError(), AssertionError("should not requery during cooldown")],
-        ) as mock_fetch:
+        with (
+            patch(
+                "src.core.parser.NaverURLParser._fetch_name_impl",
+                side_effect=[_RateLimitHTTPError(), AssertionError("should not requery during cooldown")],
+            ) as mock_fetch,
+            patch("src.core.parser.NaverURLParser._fetch_name_browser_fallback", return_value="") as mock_browser,
+        ):
             name1 = NaverURLParser.fetch_complex_name("102378")
             name2 = NaverURLParser.fetch_complex_name("102378")
 
         self.assertEqual(name1, "단지_102378")
         self.assertEqual(name2, "단지_102378")
         self.assertEqual(mock_fetch.call_count, 1)
+        mock_browser.assert_called_once()
         self.assertGreater(NaverURLParser._name_lookup_cooldown_until, time.monotonic())
+
+    def test_fetch_complex_name_uses_browser_fallback_on_429(self):
+        class _RateLimitHTTPError(HTTPError):
+            def __init__(self):
+                super().__init__(
+                    "https://new.land.naver.com/api/complexes/3833?sameAddressGroup=false",
+                    429,
+                    "Too Many Requests",
+                    hdrs=Message(),
+                    fp=None,
+                )
+
+            def read(self, n=None):
+                return b'{"success":false,"code":"TOO_MANY_REQUESTS"}'
+
+        with (
+            patch("src.core.parser.NaverURLParser._fetch_name_impl", side_effect=_RateLimitHTTPError()),
+            patch("src.core.parser.NaverURLParser._fetch_name_browser_fallback", return_value="남산타운") as mock_browser,
+        ):
+            name = NaverURLParser.fetch_complex_name("3833")
+
+        self.assertEqual(name, "남산타운")
+        mock_browser.assert_called_once()
+        self.assertEqual(NaverURLParser._name_cache.get("APT:3833"), "남산타운")
 
     def test_fetch_complex_name_uses_process_cache_after_success(self):
         with patch(

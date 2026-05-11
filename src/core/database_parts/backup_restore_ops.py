@@ -108,6 +108,7 @@ class ComplexDatabaseBackupRestoreOpsMixin:
         """DB 복원 - 유지보수와 롤백을 포함한 안전한 복원 로직."""
         restore_path = Path(path)
         logger.info(f"복원 시작: {restore_path}")
+        self._last_restore_error = ""
 
         if not restore_path.exists():
             logger.error(f"복원 파일이 존재하지 않음: {restore_path}")
@@ -134,7 +135,15 @@ class ComplexDatabaseBackupRestoreOpsMixin:
                     return False
 
             if self._pool:
-                self._pool.close_all(timeout_ms=8000)
+                close_result = self._pool.close_all(timeout_ms=8000, force_after_timeout=False)
+                if not getattr(close_result, "ok", False):
+                    self._last_restore_error = (
+                        "복원 중단: 활성 DB 연결 종료 실패 "
+                        f"(leased={getattr(close_result, 'still_leased', 0)}, "
+                        f"close_errors={getattr(close_result, 'error_count', 0)})"
+                    )
+                    logger.error(self._last_restore_error)
+                    return False
 
             shutil.copy2(restore_path, temp_restore_path)
             os.replace(temp_restore_path, self.db_path)

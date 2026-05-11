@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.core.database import ComplexDatabase
+from src.core.database_parts.pool import ConnectionPool, ConnectionPoolCloseResult
 
 
 class TestComplexDatabase(unittest.TestCase):
@@ -317,6 +318,53 @@ class TestComplexDatabase(unittest.TestCase):
             ]
         )
         self.assertEqual(saved, 0)
+
+    def test_connection_pool_close_all_can_abort_on_leased_timeout(self):
+        pool_path = os.path.join(self.tmp.name, "pool_timeout.db")
+        pool = ConnectionPool(pool_path, pool_size=1)
+        conn = pool.get_connection()
+        try:
+            result = pool.close_all(timeout_ms=1, force_after_timeout=False)
+
+            self.assertIsInstance(result, ConnectionPoolCloseResult)
+            self.assertFalse(result.ok)
+            self.assertTrue(result.timed_out)
+            self.assertEqual(result.still_leased, 1)
+
+            pool.return_connection(conn)
+            conn = None
+            final_result = pool.close_all(timeout_ms=1000)
+            self.assertTrue(final_result.ok)
+        finally:
+            if conn is not None:
+                try:
+                    pool.return_connection(conn)
+                except Exception:
+                    pass
+            pool.close_all(timeout_ms=1000)
+
+    def test_restore_database_aborts_before_replace_when_pool_close_times_out(self):
+        restore_path = Path(self.tmp.name) / "restore_source.db"
+        conn = sqlite3.connect(str(restore_path))
+        try:
+            conn.execute("CREATE TABLE sample (id INTEGER)")
+            conn.commit()
+        finally:
+            conn.close()
+
+        close_result = ConnectionPoolCloseResult(
+            closed_count=0,
+            error_count=0,
+            timed_out=True,
+            still_leased=1,
+        )
+        with patch.object(self.db._pool, "close_all", return_value=close_result) as mock_close:
+            restored = self.db.restore_database(restore_path)
+
+        self.assertFalse(restored)
+        mock_close.assert_called_once_with(timeout_ms=8000, force_after_timeout=False)
+        self.assertIn("활성 DB 연결 종료 실패", self.db._last_restore_error)
+        self.assertTrue(self.db.add_complex("StillUsable", "77001", asset_type="APT"))
 
     def test_malformed_schema_startup_quarantines_db_and_recreates_clean_database(self):
         self.db.close()
