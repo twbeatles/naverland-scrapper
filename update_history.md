@@ -14,7 +14,7 @@
   - navigation timeout/예외는 traceback 대신 `[fail]` probe 메시지와 JSON 로그로 수집
   - article lookup은 async Playwright loop 밖에서 실행해 sync browser fallback을 실제로 검증
 * 네이버 URL parser / 단지명 조회 보강
-  - `fin.land` 상세 payload의 현재 부모 단지 키 `complexNumber`를 article-only 역조회 후보로 추가
+  - `fin.land` 상세 payload와 browser response URL의 현재 부모 단지 키 `complexNumber`를 article-only 역조회 후보로 추가
   - direct `new.land` 단지명 API가 `429`를 반환하면 browser fallback으로 단지명을 재확인
   - browser fallback도 실패할 때만 `단지_{id}`를 반환하며, 성공명은 `(asset_type, complex_id)` 캐시에 저장
 * 분석 / DB / mixin 하드닝

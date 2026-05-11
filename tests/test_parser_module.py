@@ -179,6 +179,14 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(resolved["complex_id"], "3833")
         self.assertEqual(resolved["asset_type"], "APT")
 
+    def test_extract_article_complex_info_from_browser_response_url(self):
+        corpus = "https://fin.land.naver.com/front-api/v1/complex/photo?complexNumber=3833"
+
+        cid, asset_type = NaverURLParser._extract_article_complex_info(corpus)
+
+        self.assertEqual(cid, "3833")
+        self.assertEqual(asset_type, "APT")
+
     def test_resolve_article_complex_detects_vl_building_payload(self):
         payload = '{"articleNo":"2513105556","bildNo":"654321","realEstateTypeName":"빌라"}'
 

@@ -669,6 +669,12 @@ class ArticleLookupBrowserFallbackSession:
             locale="ko-KR",
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         )
+        try:
+            self._page.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            )
+        except Exception:
+            pass
         return self._page
 
     def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
@@ -681,6 +687,22 @@ class ArticleLookupBrowserFallbackSession:
         for source, url in self._parser_cls._article_lookup_urls(aid):
             if self._parser_cls._is_cancelled(cancel_checker):
                 raise RetryCancelledError("article lookup cancelled during browser fallback")
+            captured_artifacts: list[str] = []
+
+            def _capture_response(response):
+                try:
+                    response_url = str(getattr(response, "url", "") or "")
+                    if response_url:
+                        captured_artifacts.append(response_url)
+                except Exception:
+                    pass
+
+            can_listen = hasattr(page, "on") and hasattr(page, "remove_listener")
+            if can_listen:
+                try:
+                    page.on("response", _capture_response)
+                except Exception:
+                    can_listen = False
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=8000)
                 try:
@@ -697,7 +719,7 @@ class ArticleLookupBrowserFallbackSession:
                 except Exception:
                     content = ""
                 cid, asset_type = self._parser_cls._extract_article_complex_info(
-                    f"{body}\n{content}",
+                    f"{body}\n{content}\n" + "\n".join(captured_artifacts),
                     fallback_asset_type=fallback_asset_type,
                 )
                 if cid:
@@ -713,6 +735,12 @@ class ArticleLookupBrowserFallbackSession:
             except Exception as e:
                 self._logger.debug(f"매물 단지 browser fallback 실패 ({source}:{aid}): {e}")
                 continue
+            finally:
+                if can_listen:
+                    try:
+                        page.remove_listener("response", _capture_response)
+                    except Exception:
+                        pass
         return {}
 
     def close(self):
