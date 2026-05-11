@@ -151,6 +151,7 @@
   - Article lookup runs after the async Playwright smoke loop so `NaverURLParser` browser fallback can use the sync Playwright path.
 - Parser / URL registration contract:
   - `NaverURLParser` recognizes current `fin.land` detail payloads and browser response URLs that expose the parent complex as `complexNumber`.
+  - Packaged article-only browser fallback prefers installed Chrome before falling back to bundled Playwright Chromium.
   - Direct `new.land` name lookup `429` now tries browser fallback before returning `단지_{id}`; successful fallback names are cached by `(asset_type, complex_id)`.
 - CI / packaging / ignore:
   - GitHub Actions core pytest subset now includes `test_app_entry`, `test_live_smoke`, `test_analysis`, and `test_rebind_methods`.

@@ -15,6 +15,7 @@
   - article lookup은 async Playwright loop 밖에서 실행해 sync browser fallback을 실제로 검증
 * 네이버 URL parser / 단지명 조회 보강
   - `fin.land` 상세 payload와 browser response URL의 현재 부모 단지 키 `complexNumber`를 article-only 역조회 후보로 추가
+  - packaged article-only browser fallback은 설치된 Chrome을 우선 사용하고 실패 시 Playwright Chromium으로 fallback
   - direct `new.land` 단지명 API가 `429`를 반환하면 browser fallback으로 단지명을 재확인
   - browser fallback도 실패할 때만 `단지_{id}`를 반환하며, 성공명은 `(asset_type, complex_id)` 캐시에 저장
 * 분석 / DB / mixin 하드닝
@@ -30,7 +31,7 @@
 ### 검증
 
 * `python -m pytest -q`
-  - 결과: `261 passed`
+  - 결과: `263 passed`
 * `pyright`
   - 결과: `0 errors, 0 warnings, 0 informations`
 * `python app_entry.py --preflight`

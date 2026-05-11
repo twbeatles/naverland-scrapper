@@ -664,7 +664,24 @@ class ArticleLookupBrowserFallbackSession:
             self._logger.debug(f"매물 단지 browser fallback 사용 불가: {e}")
             return None
         self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(headless=True)
+        chrome_path = ""
+        try:
+            from src.utils.helpers import ChromeParamHelper
+
+            chrome_path = ChromeParamHelper.get_chrome_executable_path()
+        except Exception as e:
+            self._logger.debug(f"매물 단지 browser fallback Chrome 경로 확인 실패: {e}")
+        if chrome_path:
+            try:
+                self._browser = self._playwright.chromium.launch(
+                    executable_path=chrome_path,
+                    headless=True,
+                )
+            except Exception as e:
+                self._logger.debug(f"매물 단지 browser fallback local Chrome 실행 실패: {e}")
+                self._browser = self._playwright.chromium.launch(headless=True)
+        else:
+            self._browser = self._playwright.chromium.launch(headless=True)
         self._page = self._browser.new_page(
             locale="ko-KR",
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

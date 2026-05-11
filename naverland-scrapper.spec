@@ -60,8 +60,8 @@ from PyInstaller.utils.hooks import collect_submodules
 # collection remain sufficient; no additional datas, hidden imports, or hooks are required.
 # Rechecked on 2026-05-11 (live-site sample refresh and functional hardening pass):
 # ExportResult, live-smoke sample/article-count checks, `complexNumber` parser support,
-# browser-backed name lookup fallback, ConnectionPoolCloseResult, analysis asset scope,
-# and mixin rebind meta-tests are all Python/runtime/test/doc changes. Existing
+# browser-backed name lookup fallback, packaged article fallback local Chrome preference,
+# ConnectionPoolCloseResult, analysis asset scope, and mixin rebind meta-tests are all Python/runtime/test/doc changes. Existing
 # Playwright hidden imports, runtime hook, and Chromium bundle collection remain
 # sufficient; no additional datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,

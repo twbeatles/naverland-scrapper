@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.core.parser import NaverURLParser
+from src.core.parser import ArticleLookupBrowserFallbackSession, NaverURLParser
 
 
 def _entry_cid(entry):
@@ -254,6 +254,54 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(resolved["asset_type"], "VL")
         self.assertEqual(fallback.calls, [("2513105556", "APT")])
         mock_default_fallback.assert_not_called()
+
+    def test_article_browser_fallback_prefers_local_chrome(self):
+        class _FakePage:
+            def add_init_script(self, *_args, **_kwargs):
+                return None
+
+        class _FakeBrowser:
+            def new_page(self, **_kwargs):
+                return _FakePage()
+
+        class _FakeChromium:
+            def __init__(self):
+                self.launches = []
+
+            def launch(self, **kwargs):
+                self.launches.append(kwargs)
+                return _FakeBrowser()
+
+        class _FakeController:
+            def __init__(self):
+                self.chromium = _FakeChromium()
+
+            def stop(self):
+                return None
+
+        class _FakeStarter:
+            def __init__(self, controller):
+                self.controller = controller
+
+            def start(self):
+                return self.controller
+
+        controller = _FakeController()
+        with (
+            patch("playwright.sync_api.sync_playwright", return_value=_FakeStarter(controller)),
+            patch(
+                "src.utils.helpers.ChromeParamHelper.get_chrome_executable_path",
+                return_value="C:/Program Files/Google/Chrome/Application/chrome.exe",
+            ),
+        ):
+            session = ArticleLookupBrowserFallbackSession()
+            self.assertIsNotNone(session._ensure_page())
+
+        self.assertEqual(
+            controller.chromium.launches[0].get("executable_path"),
+            "C:/Program Files/Google/Chrome/Application/chrome.exe",
+        )
+        self.assertTrue(controller.chromium.launches[0].get("headless"))
 
     @patch(
         "src.core.parser.NaverURLParser._fetch_name_impl",
