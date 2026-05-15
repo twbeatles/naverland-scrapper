@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from src.utils import live_smoke
 
@@ -64,6 +64,16 @@ class _ArticleListPage:
         return "네이버페이 부동산"
 
 
+class _DetailFieldPage:
+    url = "https://m.land.naver.com/article/info/2625154515"
+
+    def set_default_timeout(self, *_args, **_kwargs):
+        return None
+
+    async def title(self):
+        return "매물 상세"
+
+
 class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_navigate_probe_converts_navigation_exception_to_failure(self):
         result = await live_smoke._navigate_probe(_NavigationFailPage(), "https://example.com", 5)
@@ -113,6 +123,30 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
         self.assertIn("article_count=0", line)
         self.assertIn("articles_empty", line)
 
+    async def test_detail_field_probe_reports_parse_metadata(self):
+        with patch(
+            "src.utils.live_smoke.fetch_mobile_article_detail",
+            new=AsyncMock(
+                return_value={
+                    "부동산상호": "행복부동산",
+                    "전화1": "02-123-4567",
+                    "_detail_meta": {
+                        "detail_source": "m_info",
+                        "detail_parse_state": "partial",
+                        "missing_field_count": 6,
+                        "network_response_count": 1,
+                        "hydration_hit": 0,
+                    },
+                }
+            ),
+        ):
+            ok, line = await live_smoke._run_detail_field_probe(_DetailFieldPage(), "2625154515", 1000)
+
+        self.assertTrue(ok)
+        self.assertIn("[ok] [detail-fields]", line)
+        self.assertIn("parse_state=partial", line)
+        self.assertIn("core_field_count=2", line)
+
 
 class TestRunLiveSmoke(unittest.TestCase):
     def test_run_live_smoke_writes_json_log_for_unexpected_failure(self):
@@ -126,11 +160,17 @@ class TestRunLiveSmoke(unittest.TestCase):
 
             self.assertFalse(ok)
             self.assertTrue(messages)
-            self.assertIn("unexpected_exception=RuntimeError", messages[0])
+            self.assertTrue(any("unexpected_exception=RuntimeError" in message for message in messages))
             with open(log_path, "r", encoding="utf-8") as fp:
                 payload = json.load(fp)
 
         self.assertFalse(payload["ok"])
+        self.assertEqual(payload["requested_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID)
+        self.assertEqual(payload["effective_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID)
+        self.assertIn(payload["runtime_source"], {"source", "frozen"})
+        self.assertIn("executable", payload)
+        self.assertIn("data_dir", payload)
+        self.assertFalse(payload["include_detail_fields"])
         self.assertEqual(payload["messages"], messages)
 
 

@@ -1960,6 +1960,30 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_crawler_tab_manual_complex_can_select_vl_asset_type(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.crawler_tab import CrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "manual_vl_asset.db"))
+            tab = CrawlerTab(db)
+            tab.input_name.setText("빌라단지")
+            tab.input_id.setText("34567")
+            tab.combo_manual_asset.setCurrentText("VL")
+
+            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+                tab._add_complex()
+
+            self.assertEqual(tab.table_list.rowCount(), 1)
+            self.assertEqual(_table_text(tab.table_list, 0, 0), "빌라단지")
+            self.assertEqual(_table_text(tab.table_list, 0, 1), "34567")
+            self.assertEqual(_table_text(tab.table_list, 0, 2), "VL")
+            mock_warning.assert_not_called()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_crawler_tab_rejects_non_numeric_manual_complex_id(self):
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -2189,6 +2213,26 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_geo_tab_blocks_start_when_no_asset_type_is_selected(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "geo_no_asset.db"))
+            tab = GeoCrawlerTab(db)
+            tab.check_asset_apt.setChecked(False)
+            tab.check_asset_vl.setChecked(False)
+
+            with patch("src.ui.widgets.geo_crawler_tab.QMessageBox.warning") as mock_warning:
+                started = tab.start_crawling()
+
+            self.assertFalse(started)
+            mock_warning.assert_called_once()
+
+            db.close()
+            tab.deleteLater()
+            self._qt_app.processEvents()
+
     def test_crawler_tab_save_reports_structured_export_failure(self):
         from src.core.database import ComplexDatabase
         from src.core.export import ExportResult
@@ -2350,6 +2394,43 @@ class TestUIWiring(unittest.TestCase):
         mock_save_last.assert_not_called()
         mock_geo_start.assert_called_once()
         mock_complex_start.assert_not_called()
+
+        if hasattr(app, "schedule_timer") and app.schedule_timer:
+            app.schedule_timer.stop()
+        if hasattr(app, "db") and app.db:
+            app.db.close()
+        app.deleteLater()
+        self._qt_app.processEvents()
+
+    def test_schedule_geo_config_blocks_save_and_run_when_no_asset_type_is_selected(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        app.schedule_mode_combo.blockSignals(True)
+        app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+        app.schedule_mode_combo.blockSignals(False)
+        app.schedule_geo_asset_apt.blockSignals(True)
+        app.schedule_geo_asset_vl.blockSignals(True)
+        app.schedule_geo_asset_apt.setChecked(False)
+        app.schedule_geo_asset_vl.setChecked(False)
+        app.schedule_geo_asset_apt.blockSignals(False)
+        app.schedule_geo_asset_vl.blockSignals(False)
+
+        with (
+            patch("src.ui.app.QMessageBox.warning") as mock_warning,
+            patch("src.ui.app.settings.update") as mock_update,
+        ):
+            config = app._save_schedule_config()
+
+        self.assertIsInstance(config, dict)
+        mock_warning.assert_called_once()
+        mock_update.assert_not_called()
+
+        with patch.object(app.geo_tab, "start_crawling") as mock_geo_start:
+            self.assertFalse(app._run_scheduled(slot="test-slot"))
+        mock_geo_start.assert_not_called()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
             app.schedule_timer.stop()

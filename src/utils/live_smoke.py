@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Any, Iterable
 
 from src.utils.helpers import ChromeParamHelper
+from src.utils.paths import BASE_DIR, DATA_DIR, is_frozen_runtime
+from src.core.services.detail_fetcher import fetch_mobile_article_detail
 
 try:
     from playwright.async_api import async_playwright
@@ -34,6 +37,30 @@ _BLOCK_PATTERNS = (
 
 DEFAULT_SMOKE_COMPLEX_ID = "3833"
 DEFAULT_SMOKE_ARTICLE_ID = "2625154515"
+
+
+def _runtime_metadata() -> dict[str, str]:
+    runtime_source = "frozen" if is_frozen_runtime() else "source"
+    try:
+        executable = str(Path(sys.executable).resolve())
+    except Exception:
+        executable = str(sys.executable or "")
+    return {
+        "runtime_source": runtime_source,
+        "executable": executable,
+        "base_dir": str(BASE_DIR),
+        "data_dir": str(DATA_DIR),
+    }
+
+
+def _runtime_info_line(meta: dict[str, str] | None = None) -> str:
+    item = dict(meta or _runtime_metadata())
+    return (
+        "[info] "
+        f"runtime_source={item.get('runtime_source', '-') or '-'} "
+        f"executable={item.get('executable', '-') or '-'} "
+        f"data_dir={item.get('data_dir', '-') or '-'}"
+    )
 
 
 def default_live_smoke_urls() -> list[str]:
@@ -345,6 +372,70 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
     )
 
 
+def _detail_field_presence(detail: dict[str, Any]) -> dict[str, int | str]:
+    meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
+    office = bool(str(detail.get("부동산상호", "") or "").strip()) if isinstance(detail, dict) else False
+    agent = bool(str(detail.get("중개사이름", "") or "").strip()) if isinstance(detail, dict) else False
+    phone = False
+    prev_jeonse = False
+    if isinstance(detail, dict):
+        phone = bool(str(detail.get("전화1", "") or "").strip() or str(detail.get("전화2", "") or "").strip())
+        try:
+            prev_jeonse = int(detail.get("기전세금(원)", 0) or 0) > 0
+        except (TypeError, ValueError):
+            prev_jeonse = False
+    found_count = sum(1 for flag in (office, agent, phone, prev_jeonse) if flag)
+    return {
+        "parse_state": str(meta.get("detail_parse_state", "") or "missing"),
+        "source": str(meta.get("detail_source", "") or "-"),
+        "missing_field_count": int(meta.get("missing_field_count", 0) or 0),
+        "network_response_count": int(meta.get("network_response_count", 0) or 0),
+        "hydration_hit": int(meta.get("hydration_hit", 0) or 0),
+        "core_field_count": found_count,
+    }
+
+
+async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tuple[bool, str]:
+    aid = str(article_id or "").strip()
+    if not aid:
+        return False, "[fail] [detail-fields] missing article id"
+
+    try:
+        if hasattr(page, "set_default_timeout"):
+            page.set_default_timeout(max(1000, int(timeout_ms or 12000)))
+        detail = await fetch_mobile_article_detail(page, aid)
+        title = await page.title()
+    except Exception as exc:
+        return False, (
+            f"[fail] [detail-fields] https://fin.land.naver.com/articles/{aid} -> "
+            f"{getattr(page, 'url', '') or '-'} status=- reason=detail_exception:{type(exc).__name__}: {exc}"
+        )
+
+    presence = _detail_field_presence(detail if isinstance(detail, dict) else {})
+    parse_state = str(presence["parse_state"] or "")
+    core_field_count = int(presence["core_field_count"] or 0)
+    ok = parse_state in {"partial", "success"} and core_field_count > 0
+    reason = "" if ok else f"parse_state={parse_state},core_field_count={core_field_count}"
+    extra = (
+        f"parse_state={parse_state} "
+        f"source={presence['source']} "
+        f"core_field_count={core_field_count} "
+        f"missing_field_count={presence['missing_field_count']} "
+        f"network_response_count={presence['network_response_count']} "
+        f"hydration_hit={presence['hydration_hit']}"
+    )
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="detail-fields",
+        target=f"https://fin.land.naver.com/articles/{aid}",
+        final_url=str(getattr(page, "url", "") or ""),
+        status=None,
+        title=str(title or ""),
+        reason=reason,
+        extra=extra,
+    )
+
+
 async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
     cid = str(complex_id or "").strip()
     if not cid:
@@ -439,6 +530,7 @@ async def _run_live_smoke_async(
     article_id: str = DEFAULT_SMOKE_ARTICLE_ID,
     include_article_lookup: bool = True,
     include_geo_marker: bool = True,
+    include_detail_fields: bool = False,
 ) -> tuple[bool, list[str], str]:
     if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
         return False, ["Playwright is not installed."], str(article_id or DEFAULT_SMOKE_ARTICLE_ID)
@@ -506,6 +598,19 @@ async def _run_live_smoke_async(
         finally:
             await detail_page.close()
 
+        if include_detail_fields:
+            detail_fields_page = await _new_smoke_page(context)
+            try:
+                fields_ok, fields_line = await _run_detail_field_probe(
+                    detail_fields_page,
+                    effective_article_id,
+                    timeout_ms,
+                )
+                messages.append(fields_line)
+                overall_ok = overall_ok and fields_ok
+            finally:
+                await detail_fields_page.close()
+
         if include_geo_marker:
             geo_page = await _new_smoke_page(context)
             try:
@@ -538,8 +643,11 @@ def run_live_smoke(
     json_log_path: str | None = None,
     include_article_lookup: bool = True,
     include_geo_marker: bool = True,
+    include_detail_fields: bool = False,
 ) -> tuple[bool, list[str]]:
     probe_urls = list(urls or default_live_smoke_urls())
+    runtime_meta = _runtime_metadata()
+    requested_article_id = str(article_id or DEFAULT_SMOKE_ARTICLE_ID).strip()
     effective_article_id = str(article_id or DEFAULT_SMOKE_ARTICLE_ID)
     try:
         async_result: Any = asyncio.run(
@@ -551,6 +659,7 @@ def run_live_smoke(
                 article_id=str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
                 include_article_lookup=include_article_lookup,
                 include_geo_marker=include_geo_marker,
+                include_detail_fields=include_detail_fields,
             )
         )
         if isinstance(async_result, tuple) and len(async_result) >= 3:
@@ -566,6 +675,11 @@ def run_live_smoke(
     except Exception as exc:
         ok = False
         messages = [f"[fail] [live-smoke] unexpected_exception={type(exc).__name__}: {exc}"]
+    messages.insert(0, _runtime_info_line(runtime_meta))
+    messages.append(
+        f"[info] requested_article_id={requested_article_id or '-'} "
+        f"effective_article_id={effective_article_id or '-'}"
+    )
     if include_article_lookup:
         lookup_ok, lookup_line = _run_article_lookup_probe(effective_article_id)
         messages.append(lookup_line)
@@ -579,7 +693,13 @@ def run_live_smoke(
                     "ok": bool(ok),
                     "complex_id": str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
                     "article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
+                    "effective_article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
                     "requested_article_id": str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
+                    "runtime_source": runtime_meta["runtime_source"],
+                    "executable": runtime_meta["executable"],
+                    "base_dir": runtime_meta["base_dir"],
+                    "data_dir": runtime_meta["data_dir"],
+                    "include_detail_fields": bool(include_detail_fields),
                     "messages": messages,
                 },
                 fp,

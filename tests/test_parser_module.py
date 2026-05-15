@@ -311,7 +311,7 @@ class TestNaverURLParser(unittest.TestCase):
         name = NaverURLParser.fetch_complex_name("99999")
         self.assertEqual(name, "단지_99999")
 
-    def test_fetch_complex_name_activates_cooldown_on_429_and_skips_requery(self):
+    def test_fetch_complex_name_uses_browser_fallback_during_direct_lookup_cooldown(self):
         class _RateLimitHTTPError(HTTPError):
             def __init__(self):
                 super().__init__(
@@ -330,15 +330,19 @@ class TestNaverURLParser(unittest.TestCase):
                 "src.core.parser.NaverURLParser._fetch_name_impl",
                 side_effect=[_RateLimitHTTPError(), AssertionError("should not requery during cooldown")],
             ) as mock_fetch,
-            patch("src.core.parser.NaverURLParser._fetch_name_browser_fallback", return_value="") as mock_browser,
+            patch(
+                "src.core.parser.NaverURLParser._fetch_name_browser_fallback",
+                side_effect=["", "쿨다운단지"],
+            ) as mock_browser,
         ):
             name1 = NaverURLParser.fetch_complex_name("102378")
             name2 = NaverURLParser.fetch_complex_name("102378")
 
         self.assertEqual(name1, "단지_102378")
-        self.assertEqual(name2, "단지_102378")
+        self.assertEqual(name2, "쿨다운단지")
         self.assertEqual(mock_fetch.call_count, 1)
-        mock_browser.assert_called_once()
+        self.assertEqual(mock_browser.call_count, 2)
+        self.assertEqual(NaverURLParser._name_cache.get("APT:102378"), "쿨다운단지")
         self.assertGreater(NaverURLParser._name_lookup_cooldown_until, time.monotonic())
 
     def test_fetch_complex_name_uses_browser_fallback_on_429(self):

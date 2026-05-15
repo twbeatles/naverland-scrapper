@@ -1,3 +1,54 @@
+## **v15.0.26 (2026-05-15)**
+
+**기능 리스크 클로저 + source/frozen smoke 확장 + 문서/.spec/.gitignore/빌드 재점검**
+
+### 주요 반영
+
+* 단지명 조회 429 cooldown 보정
+  - `_name_lookup_cooldown_until`은 direct API 조회 cooldown으로만 적용
+  - direct API cooldown 중인 미캐시 단지도 browser fallback을 시도
+  - browser fallback 성공명은 `(asset_type, complex_id)` 캐시에 저장
+  - browser fallback도 실패한 경우에만 `단지_{id}` 반환
+* Live smoke seed/effective 및 상세 필드 검증
+  - 기본 `--smoke-article-id=2625154515`는 고정 검증 대상이 아니라 seed로 명확화
+  - 기본 seed 사용 시 complex probe의 현재 `sample_article`이 effective article ID가 될 수 있음
+  - JSON 로그에 `requested_article_id`, `effective_article_id`, `runtime_source`, 실행 파일 경로, base/data dir, `include_detail_fields` 기록
+  - `--live-smoke-detail-fields` 옵션으로 모바일 상세 파서의 `detail_parse_state`, 핵심 필드 수, 누락 필드 수, network/hydration 메타를 smoke 기준에 포함
+* Geo / 수동 단지 UI 안전장치
+  - 지도 탐색 탭에서 APT/VL을 모두 해제하면 전체 수집으로 확장하지 않고 경고 후 시작 차단
+  - 예약 Geo 설정도 APT/VL 모두 미선택 상태에서는 저장/실행 차단
+  - 수동 단지 ID 직접 추가 줄에 `APT/VL` 선택 컨트롤 추가, 기본값은 `APT` 유지
+* 문서 / packaging / ignore 점검
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`에 seed/effective live-smoke, detail-field smoke, Geo 자산 선택 정책, 릴리스 검증 게이트 반영
+  - `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-05-15.md`를 repo-local 감사/후속 처리 기록으로 유지
+  - `naverland-scrapper.spec`는 새 변경이 Python/runtime/test/doc 수준이라 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 `logs/`, `build/`, `dist/`, `data/`, pytest/cache/pycache 산출물을 이미 포괄하므로 신규 패턴 불필요
+
+### 검증
+
+* `python -m pytest tests/test_parser_module.py tests/test_app_entry.py tests/test_live_smoke.py tests/test_ui_wiring.py tests/test_ui_runtime_smoke.py -q`
+  - 결과: `107 passed`
+* `python -m pytest -q`
+  - 결과: `267 passed`
+* `python -m compileall -q app_entry.py src tests`
+  - 결과: pass
+* `python -m src.utils.preflight`
+  - 결과: pass
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python app_entry.py --live-smoke --smoke-headless --smoke-timeout-ms 12000 --smoke-json-log logs/live-smoke-source-2026-05-15.json`
+  - 결과: exit code 0, `runtime_source=source`, effective article `2626368166`
+* `python app_entry.py --live-smoke --live-smoke-detail-fields --smoke-headless --smoke-timeout-ms 12000 --smoke-json-log logs/live-smoke-detail-fields-2026-05-15.json`
+  - 결과: exit code 0, `detail-fields` probe `[ok]`
+* `pyinstaller -y naverland-scrapper.spec`
+  - 결과: pass, 기본 onedir 산출물 `dist/naverland/naverland.exe`
+* `dist\naverland\naverland.exe --preflight`
+  - 결과: exit code 0, 선택 라이브러리 `plyer` 누락 warning-only
+* `dist\naverland\naverland.exe --live-smoke --smoke-headless --smoke-timeout-ms 12000 --smoke-json-log logs/live-smoke-frozen-2026-05-15.json`
+  - 결과: JSON 기준 `ok=true`, `runtime_source=frozen`
+* `dist\naverland\naverland.exe --live-smoke --live-smoke-detail-fields --smoke-headless --smoke-timeout-ms 12000 --smoke-json-log logs/live-smoke-frozen-detail-fields-2026-05-15.json`
+  - 결과: JSON 기준 `ok=true`, `detail-fields` probe `[ok]`
+
 ## **v15.0.25 (2026-05-11)**
 
 **실사이트 샘플 갱신 + 기능 리스크 하드닝 + 문서/.spec/.gitignore/빌드 재점검**

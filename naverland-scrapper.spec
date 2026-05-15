@@ -64,6 +64,12 @@ from PyInstaller.utils.hooks import collect_submodules
 # ConnectionPoolCloseResult, analysis asset scope, and mixin rebind meta-tests are all Python/runtime/test/doc changes. Existing
 # Playwright hidden imports, runtime hook, and Chromium bundle collection remain
 # sufficient; no additional datas, hidden imports, or hooks are required.
+# Rechecked on 2026-05-15 (functional risk closure/doc/spec/gitignore/publish pass):
+# direct-lookup-only name cooldown, optional `--live-smoke-detail-fields`, smoke
+# runtime metadata logging, Geo empty-asset start/save blocking, and manual APT/VL
+# selector are Python/runtime/UI/test/doc changes. Existing Playwright hidden
+# imports, runtime hook, and Chromium bundle collection remain sufficient; no
+# additional datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not

@@ -24,6 +24,7 @@ class TestAppEntry(unittest.TestCase):
                 "smoke.json",
                 "--smoke-skip-article-lookup",
                 "--smoke-skip-geo-marker",
+                "--live-smoke-detail-fields",
             ]
         )
 
@@ -36,6 +37,7 @@ class TestAppEntry(unittest.TestCase):
         self.assertEqual(args.smoke_json_log, "smoke.json")
         self.assertTrue(args.smoke_skip_article_lookup)
         self.assertTrue(args.smoke_skip_geo_marker)
+        self.assertTrue(args.live_smoke_detail_fields)
 
     def test_main_dispatches_live_smoke_runner(self):
         with patch("src.utils.live_smoke.run_live_smoke", return_value=(True, ["[ok] smoke"])) as mock_runner:
@@ -64,6 +66,7 @@ class TestAppEntry(unittest.TestCase):
             json_log_path=None,
             include_article_lookup=True,
             include_geo_marker=True,
+            include_detail_fields=False,
         )
 
 

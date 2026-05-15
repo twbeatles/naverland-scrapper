@@ -172,11 +172,12 @@
 
 ## 0-9. v15.0.25 Live-Site Sample Refresh (2026-05-11)
 - Current Naver live-site sample:
-  - Default live smoke sample is now `complex_id=3833`, `article_id=2625154515`.
+  - Default live smoke seed is now `complex_id=3833`, `article_id=2625154515`.
   - 2026-05-11 headless smoke passed `home`, `complex`, `detail`, `geo-marker`, and `article-lookup`.
 - Live smoke contract:
   - Complex probe records `api_articles`, `article_count`, and `sample_article`.
   - A complex API response with HTTP 200 but `article_count=0` is treated as a failed sample, not a healthy smoke.
+  - The default article ID is a seed, not a fixed live assertion target; when the default seed is used, the current complex `sample_article` may become the effective article ID.
   - Article lookup runs after the async Playwright smoke loop so `NaverURLParser` browser fallback can use the sync Playwright path.
 - Parser / URL registration contract:
   - `NaverURLParser` recognizes current `fin.land` detail payloads and browser response URLs that expose the parent complex as `complexNumber`.
@@ -185,6 +186,21 @@
 - CI / packaging / ignore:
   - GitHub Actions core pytest subset now includes `test_app_entry`, `test_live_smoke`, `test_analysis`, and `test_rebind_methods`.
   - `naverland-scrapper.spec` and `.gitignore` were rechecked on 2026-05-11 and need no extra hidden imports, datas, hooks, or ignore patterns.
+
+## 0-10. v15.0.26 Functional Risk Closure (2026-05-15)
+- Parser / URL registration:
+  - `fetch_complex_name()` treats `_name_lookup_cooldown_until` as a direct API cooldown only.
+  - During direct lookup cooldown, uncached `(asset_type, complex_id)` names still try browser fallback and cache successful names.
+- Live smoke:
+  - `--live-smoke-detail-fields` adds an optional mobile detail parser probe that checks `detail_parse_state`, core field count, `missing_field_count`, network response count, and hydration hit.
+  - JSON smoke logs now include `requested_article_id`, `effective_article_id`, `runtime_source`, executable path, base dir, data dir, and `include_detail_fields`.
+  - Source and frozen live-smoke results must be compared separately for release verification.
+- UI / schedule:
+  - Geo sweep no longer expands an empty APT/VL selection to all assets; it warns and refuses to start.
+  - Scheduled Geo config also refuses to save or run with an empty APT/VL selection.
+  - Manual complex entry has an `APT/VL` selector and keeps `APT` as the default.
+- Release gate:
+  - Preferred release proof is source tests/static checks, source live-smoke, `pyinstaller naverland-scrapper.spec`, frozen `--preflight`, and frozen `--live-smoke`.
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+
@@ -668,7 +684,7 @@ COLORS["light"] = {
   - 2026-03-25 스캔 기준 실제 UTF-8 손상은 발견되지 않았습니다.
 - Workspace / smoke baseline:
   - `.vscode/settings.json`은 `include/exclude/extraPaths/files.encoding`을 명시해 Pylance 범위를 `app_entry.py + src + tests`로 고정합니다.
-  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...] [--smoke-complex-id ...] [--smoke-article-id ...]`로 GUI 없이 Playwright 실사이트 경로를 점검할 수 있습니다.
+  - `app_entry.py --live-smoke [--smoke-headless] [--smoke-url ...] [--smoke-complex-id ...] [--smoke-article-id ...] [--live-smoke-detail-fields]`로 GUI 없이 Playwright 실사이트 경로와 선택형 상세 필드 파싱 경로를 점검할 수 있습니다.
   - 2026-03-25 headless smoke 결과:
     - `fin.land` 200
     - `new.land` 200
@@ -684,7 +700,7 @@ COLORS["light"] = {
   - meta 필드 `detail_source`, `detail_parse_state`, `missing_field_count`, `network_response_count`, `hydration_hit`은 유지됩니다.
 - Name lookup / URL registration contract:
   - `NaverURLParser.fetch_complex_name()`는 성공 조회명을 process cache에 저장합니다.
-  - direct API `429` 발생 시 5분 cooldown을 활성화하고 browser fallback을 시도합니다. fallback도 실패할 때만 `단지_{id}`를 반환합니다.
+  - direct API `429` 발생 시 5분 direct-lookup cooldown을 활성화하고 browser fallback을 시도합니다. cooldown 중인 미캐시 단지도 direct API 재호출 없이 browser fallback을 시도하며, fallback도 실패할 때만 `단지_{id}`를 반환합니다.
   - `URLBatchDialog`는 `new.land complex`, `land.naver.com complexNo`, `m.land`, `fin.land article` 예시를 표시하고, URL family는 시점에 따라 달라질 수 있음을 전제로 helper 기반 URL 생성만 사용합니다.
 - Smoke / packaging contract:
   - 기본 live smoke는 `home + complex + detail + article-only lookup + geo marker switch/API` probe를 실행하고, 샘플 ID는 `--smoke-complex-id`, `--smoke-article-id`로 override할 수 있습니다.

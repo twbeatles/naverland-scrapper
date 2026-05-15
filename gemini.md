@@ -143,11 +143,12 @@
 
 ## 0-7. v15.0.25 Live-Site Sample Refresh (2026-05-11)
 - Current Naver live-site sample:
-  - Default live smoke sample is now `complex_id=3833`, `article_id=2625154515`.
+  - Default live smoke seed is now `complex_id=3833`, `article_id=2625154515`.
   - 2026-05-11 headless smoke passed `home`, `complex`, `detail`, `geo-marker`, and `article-lookup`.
 - Live smoke contract:
   - Complex probe records `api_articles`, `article_count`, and `sample_article`.
   - A complex API response with HTTP 200 but `article_count=0` is treated as a failed sample, not a healthy smoke.
+  - The default article ID is a seed, not a fixed assertion target; when the default seed is used, the current complex `sample_article` may become the effective article ID.
   - Article lookup runs after the async Playwright smoke loop so `NaverURLParser` browser fallback can use the sync Playwright path.
 - Parser / URL registration contract:
   - `NaverURLParser` recognizes current `fin.land` detail payloads and browser response URLs that expose the parent complex as `complexNumber`.
@@ -156,6 +157,23 @@
 - CI / packaging / ignore:
   - GitHub Actions core pytest subset now includes `test_app_entry`, `test_live_smoke`, `test_analysis`, and `test_rebind_methods`.
   - `naverland-scrapper.spec` and `.gitignore` were rechecked on 2026-05-11 and need no extra hidden imports, datas, hooks, or ignore patterns.
+
+## 0-8. v15.0.26 Functional Risk Closure (2026-05-15)
+- Parser / URL registration:
+  - `fetch_complex_name()` treats `_name_lookup_cooldown_until` as a direct API cooldown only.
+  - During direct lookup cooldown, uncached `(asset_type, complex_id)` names still try browser fallback and cache successful names.
+- Live smoke:
+  - `--live-smoke-detail-fields` adds an optional mobile detail parser probe that checks `detail_parse_state`, core field count, `missing_field_count`, network response count, and hydration hit.
+  - JSON smoke logs include `requested_article_id`, `effective_article_id`, `runtime_source`, executable path, base dir, data dir, and `include_detail_fields`.
+  - Source and frozen live-smoke results are verified separately for release confidence.
+- UI / schedule:
+  - Geo sweep no longer expands an empty APT/VL selection to all assets; it warns and refuses to start.
+  - Scheduled Geo config also refuses to save or run with an empty APT/VL selection.
+  - Manual complex entry has an `APT/VL` selector and keeps `APT` as the default.
+- Docs / packaging / ignore:
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `naverland-scrapper.spec`, and `.gitignore` were rechecked against the implementation.
+  - Existing Playwright hidden imports/runtime hook/Chromium bundle collection remain sufficient.
+  - Existing `logs/`, `build/`, `dist/`, `data/`, cache, and bytecode ignore rules cover the new source/frozen smoke and build artifacts.
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+

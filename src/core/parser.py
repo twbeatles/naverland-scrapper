@@ -605,10 +605,23 @@ class NaverURLParser:
         if cached:
             return cached
 
-        if time.monotonic() < float(cls._name_lookup_cooldown_until or 0.0):
+        logger = get_logger("NaverURLParser")
+        direct_lookup_cooling_down = time.monotonic() < float(cls._name_lookup_cooldown_until or 0.0)
+        if direct_lookup_cooling_down:
+            logger.debug(f"단지명 direct 조회 cooldown 중, browser fallback 시도 ({asset_token}:{cid})")
+            browser_name = str(
+                cls._fetch_name_browser_fallback(
+                    cid,
+                    asset_type=asset_token,
+                    cancel_checker=cancel_checker,
+                )
+                or ""
+            ).strip()
+            if browser_name:
+                cls._name_cache[cache_key] = browser_name
+                return browser_name
             return fallback_name
 
-        logger = get_logger("NaverURLParser")
         try:
             name = str(cls._fetch_name_impl(cid, asset_type=asset_token) or "").strip() or fallback_name
             if name and not name.startswith("단지_"):

@@ -25,7 +25,10 @@ class CrawlerTabCrawlControlMixin:
             self.input_id.setFocus()
             self.input_id.selectAll()
             return
-        self._add_row(name, cid, "APT")
+        asset_type = self._normalize_task_asset_type(
+            self.combo_manual_asset.currentText() if hasattr(self, "combo_manual_asset") else "APT"
+        )
+        self._add_row(name, cid, asset_type)
         self.input_name.clear()
         self.input_id.clear()
 

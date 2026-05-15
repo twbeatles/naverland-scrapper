@@ -400,6 +400,10 @@ class CrawlerTabUISetupMixin:
         )
         self._complex_id_regex = QRegularExpression(r"^\d+$")
         self.input_id.setValidator(QRegularExpressionValidator(self._complex_id_regex, self))
+        self.combo_manual_asset = QComboBox()
+        self.combo_manual_asset.addItems(["APT", "VL"])
+        self.combo_manual_asset.setToolTip("직접 추가할 대상의 자산 유형을 선택합니다.")
+        self.combo_manual_asset.setFixedWidth(72)
         btn_add = QPushButton("➕")
         btn_add.setObjectName("iconButton")
         btn_add.setToolTip("단지를 목록에 추가합니다. (Enter 키도 동작)")
@@ -409,6 +413,7 @@ class CrawlerTabUISetupMixin:
         self.input_id.returnPressed.connect(self._add_complex)
         input_layout.addWidget(self.input_name, 2)
         input_layout.addWidget(self.input_id, 1)
+        input_layout.addWidget(self.combo_manual_asset)
         input_layout.addWidget(btn_add)
         cl.addLayout(input_layout)
         

@@ -130,7 +130,8 @@ class GeoCrawlerTab(CrawlerTab):
         if self.check_asset_vl.isChecked():
             asset_types.append("VL")
         if not asset_types:
-            asset_types = ["APT", "VL"]
+            QMessageBox.warning(self, "경고", "최소 하나의 자산 유형(APT 또는 VL)을 선택해주세요.")
+            return False
         settings.update(
             {
                 "geo_default_zoom": self.spin_zoom.value(),
@@ -140,6 +141,7 @@ class GeoCrawlerTab(CrawlerTab):
                 "geo_asset_types": asset_types,
             }
         )
+        return True
 
     def _save_last_geo_coordinates(self):
         settings.update(
@@ -213,7 +215,8 @@ class GeoCrawlerTab(CrawlerTab):
         if self.check_asset_vl.isChecked():
             asset_types.append("VL")
         if not asset_types:
-            asset_types = ["APT", "VL"]
+            QMessageBox.warning(self, "경고", "최소 하나의 자산 유형(APT 또는 VL)을 선택해주세요.")
+            return False
         skip_last_geo_save_once = bool(getattr(self, "_skip_last_geo_save_once", False))
         self._skip_last_geo_save_once = False
         if not skip_last_geo_save_once:

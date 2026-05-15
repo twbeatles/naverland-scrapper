@@ -24,6 +24,10 @@
 # SQLite/data files, pytest cache, and Python bytecode from the live-site sample
 # refresh and packaged smoke pass are all covered by existing rules. No new
 # ignore patterns are required.
+# Rechecked 2026-05-15:
+# source/frozen live-smoke JSON logs, detail-field smoke logs, PyInstaller
+# build/dist output, runtime data, pytest cache, and Python bytecode from the
+# functional risk closure pass are already covered. No new ignore patterns are required.
 # Python
 __pycache__/
 *.py[cod]
