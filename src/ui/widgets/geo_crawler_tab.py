@@ -97,7 +97,9 @@ class GeoCrawlerTab(CrawlerTab):
         asset_layout = QHBoxLayout()
         self.check_asset_apt = QCheckBox("APT")
         self.check_asset_vl = QCheckBox("VL")
-        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        asset_types = settings.get("geo_asset_types", ["APT", "VL"])
+        if asset_types is None:
+            asset_types = ["APT", "VL"]
         self.check_asset_apt.setChecked("APT" in asset_types)
         self.check_asset_vl.setChecked("VL" in asset_types)
         asset_layout.addWidget(self.check_asset_apt)
@@ -163,15 +165,18 @@ class GeoCrawlerTab(CrawlerTab):
         asset_types,
         persist_last: bool = True,
     ):
-        asset_tokens = {str(asset or "").strip().upper() for asset in (asset_types or [])}
+        if asset_types is None:
+            asset_tokens = {"APT", "VL"}
+        else:
+            asset_tokens = {str(asset or "").strip().upper() for asset in (asset_types or [])}
         self.spin_lat.setValue(float(lat))
         self.spin_lon.setValue(float(lon))
         self.spin_zoom.setValue(int(zoom))
         self.spin_rings.setValue(max(0, int(rings)))
         self.spin_step.setValue(int(step_px))
         self.spin_dwell.setValue(int(dwell_ms))
-        self.check_asset_apt.setChecked("APT" in asset_tokens or not asset_tokens)
-        self.check_asset_vl.setChecked("VL" in asset_tokens or not asset_tokens)
+        self.check_asset_apt.setChecked("APT" in asset_tokens)
+        self.check_asset_vl.setChecked("VL" in asset_tokens)
         if persist_last:
             self._skip_last_geo_save_once = False
             self._save_last_geo_coordinates()
@@ -184,7 +189,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_rings.setValue(max(0, self._int_setting("geo_grid_rings", 1)))
         self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
         self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
-        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        asset_types = settings.get("geo_asset_types", ["APT", "VL"])
+        if asset_types is None:
+            asset_types = ["APT", "VL"]
         self.check_asset_apt.setChecked("APT" in asset_types)
         self.check_asset_vl.setChecked("VL" in asset_types)
 
@@ -313,6 +320,7 @@ class GeoCrawlerTab(CrawlerTab):
             playwright_detail_workers=settings.get("playwright_detail_workers", 12),
             block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
             playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
+            playwright_navigation_timeout_ms=settings.get("playwright_navigation_timeout_ms", 15000),
             geo_incomplete_safety_mode=settings.get("geo_incomplete_safety_mode", True),
         )
         self.crawler_thread.log_signal.connect(self.append_log)

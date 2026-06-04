@@ -50,6 +50,7 @@ DEFAULT_SETTINGS = {
     "playwright_detail_workers": 12,
     "playwright_block_heavy_resources": True,
     "playwright_response_drain_timeout_ms": 3000,
+    "playwright_navigation_timeout_ms": 15000,
     "geo_incomplete_safety_mode": True,
     "geo_default_zoom": 15,
     "geo_grid_rings": 1,
@@ -83,12 +84,18 @@ DEPRECATED_SETTINGS_KEYS = {"result_tab_mode"}
 
 
 def _normalize_schedule_asset_types(asset_types: Any) -> list[str]:
+    if asset_types is None:
+        return ["APT", "VL"]
+    if isinstance(asset_types, str):
+        candidates = [asset_types]
+    else:
+        candidates = list(asset_types or [])
     normalized: list[str] = []
-    for asset in asset_types or []:
+    for asset in candidates:
         token = str(asset or "").strip().upper()
         if token in {"APT", "VL"} and token not in normalized:
             normalized.append(token)
-    return normalized or ["APT", "VL"]
+    return normalized
 
 
 def _normalize_schedule_config(value: Any) -> dict[str, Any]:

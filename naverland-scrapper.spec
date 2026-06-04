@@ -70,6 +70,13 @@ from PyInstaller.utils.hooks import collect_submodules
 # selector are Python/runtime/UI/test/doc changes. Existing Playwright hidden
 # imports, runtime hook, and Chromium bundle collection remain sufficient; no
 # additional datas, hidden imports, or hooks are required.
+# Rechecked on 2026-06-04 (functional audit hardening/doc/spec/gitignore/publish pass):
+# Selenium fallback prefill finalization, DB rollback guards, CSV/XLSX formula
+# escaping, URL batch generation guards, Playwright navigation timeout settings,
+# bounded detail enrichment tasks, and Geo empty-asset policy normalization are
+# Python/runtime/UI/test/doc changes. Existing Playwright/Selenium hidden imports,
+# runtime hook, Chromium bundle collection, and lxml/html5lib exclusions remain
+# sufficient; no additional datas, hidden imports, or hooks are required.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not

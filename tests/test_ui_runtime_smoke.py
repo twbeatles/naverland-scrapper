@@ -314,6 +314,53 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             dlg.deleteLater()
             self._qt_app.processEvents()
 
+    def test_url_batch_dialog_ignores_stale_lookup_generation_progress(self):
+        from src.ui.dialogs.batch import URLBatchDialog
+
+        dlg = URLBatchDialog()
+        try:
+            dlg._prepare_rows([("URL", "22222", "APT")])
+            dlg._lookup_generation = 2
+
+            dlg._on_lookup_progress_for_generation(
+                1,
+                0,
+                1,
+                "11111",
+                "이전단지",
+                True,
+                "APT",
+                "stale",
+            )
+
+            cid_item = dlg.result_table.item(0, 1)
+            name_item = dlg.result_table.item(0, 2)
+            assert cid_item is not None
+            assert name_item is not None
+            self.assertEqual(cid_item.text(), "22222")
+            self.assertEqual(name_item.text(), "단지_22222")
+
+            dlg._on_lookup_progress_for_generation(
+                2,
+                0,
+                1,
+                "22222",
+                "현재단지",
+                True,
+                "APT",
+                "current",
+            )
+
+            cid_item = dlg.result_table.item(0, 1)
+            name_item = dlg.result_table.item(0, 2)
+            assert cid_item is not None
+            assert name_item is not None
+            self.assertEqual(cid_item.text(), "22222")
+            self.assertEqual(name_item.text(), "현재단지")
+        finally:
+            dlg.deleteLater()
+            self._qt_app.processEvents()
+
     def test_url_batch_dialog_resolves_article_only_url(self):
         from PyQt6.QtWidgets import QCheckBox
         from src.ui.dialogs.batch import URLBatchDialog

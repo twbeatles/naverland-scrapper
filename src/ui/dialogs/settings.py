@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -129,6 +130,12 @@ class SettingsDialog(QDialog):
         self.spin_playwright_drain_timeout.setRange(100, 20000)
         self.spin_playwright_drain_timeout.setSingleStep(100)
         perf_layout.addWidget(self.spin_playwright_drain_timeout, 7, 1)
+
+        perf_layout.addWidget(QLabel("페이지 이동 timeout(ms):"), 8, 0)
+        self.spin_playwright_navigation_timeout = QSpinBox()
+        self.spin_playwright_navigation_timeout.setRange(1000, 60000)
+        self.spin_playwright_navigation_timeout.setSingleStep(1000)
+        perf_layout.addWidget(self.spin_playwright_navigation_timeout, 8, 1)
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
 
@@ -240,11 +247,16 @@ class SettingsDialog(QDialog):
         self.spin_playwright_drain_timeout.setValue(
             int(settings.get("playwright_response_drain_timeout_ms", 3000) or 3000)
         )
+        self.spin_playwright_navigation_timeout.setValue(
+            int(settings.get("playwright_navigation_timeout_ms", 15000) or 15000)
+        )
         self.spin_geo_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
         self.spin_geo_rings.setValue(max(0, _int_setting("geo_grid_rings", 1)))
         self.spin_geo_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
         self.spin_geo_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
-        asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        asset_types = settings.get("geo_asset_types", ["APT", "VL"])
+        if asset_types is None:
+            asset_types = ["APT", "VL"]
         self.check_geo_asset_apt.setChecked("APT" in asset_types)
         self.check_geo_asset_vl.setChecked("VL" in asset_types)
         self.check_geo_incomplete_safety_mode.setChecked(
@@ -258,7 +270,8 @@ class SettingsDialog(QDialog):
         if self.check_geo_asset_vl.isChecked():
             asset_types.append("VL")
         if not asset_types:
-            asset_types = ["APT", "VL"]
+            QMessageBox.warning(self, "경고", "최소 하나의 자산 유형(APT 또는 VL)을 선택해주세요.")
+            return
 
         new = {
             "theme": self.combo_theme.currentText(),
@@ -284,6 +297,7 @@ class SettingsDialog(QDialog):
             "playwright_headless": self.check_playwright_headless.isChecked(),
             "playwright_block_heavy_resources": self.check_block_heavy_resources.isChecked(),
             "playwright_response_drain_timeout_ms": self.spin_playwright_drain_timeout.value(),
+            "playwright_navigation_timeout_ms": self.spin_playwright_navigation_timeout.value(),
             "geo_default_zoom": self.spin_geo_zoom.value(),
             "geo_grid_rings": self.spin_geo_rings.value(),
             "geo_grid_step_px": self.spin_geo_step.value(),

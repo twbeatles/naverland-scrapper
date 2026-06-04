@@ -120,6 +120,12 @@ class PlaywrightRuntimeMixin:
         self.thread.log(f"   ⚠️ retry exhausted: {label} ({last_exc})", 30)
         raise last_exc if last_exc is not None else RuntimeError(f"{label} failed")
 
+    def _navigation_timeout_ms(self) -> int:
+        try:
+            return min(60000, max(1000, int(getattr(self.thread, "playwright_navigation_timeout_ms", 15000))))
+        except (TypeError, ValueError):
+            return 15000
+
     async def _check_memory_and_recycle_if_needed(self, reason: str):
         self._ensure_runtime_stats()
         if not PSUTIL_AVAILABLE:
@@ -329,7 +335,7 @@ class PlaywrightRuntimeMixin:
 
     async def _warmup_page(self, page, url: str, *, label: str) -> bool:
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            await page.goto(url, wait_until="domcontentloaded", timeout=self._navigation_timeout_ms())
             try:
                 await page.wait_for_load_state("networkidle", timeout=2500)
             except Exception:
@@ -369,7 +375,11 @@ class PlaywrightRuntimeMixin:
         for idx, warmup in enumerate(warmups, 1):
             await self._async_retry(
                 f"{label} warmup {plan_name} {idx}/{len(warmups)}",
-                lambda warmup_url=warmup: page.goto(warmup_url, wait_until="domcontentloaded"),
+                lambda warmup_url=warmup: page.goto(
+                    warmup_url,
+                    wait_until="domcontentloaded",
+                    timeout=self._navigation_timeout_ms(),
+                ),
             )
             try:
                 await page.wait_for_load_state("networkidle", timeout=2500)
@@ -378,7 +388,11 @@ class PlaywrightRuntimeMixin:
             await page.wait_for_timeout(350)
         await self._async_retry(
             f"{label} target {plan_name}",
-            lambda: page.goto(target, wait_until="domcontentloaded"),
+            lambda: page.goto(
+                target,
+                wait_until="domcontentloaded",
+                timeout=self._navigation_timeout_ms(),
+            ),
         )
 
     async def _maybe_enable_headed_fallback(self, reason: str = "") -> bool:

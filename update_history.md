@@ -1,3 +1,37 @@
+## **v15.0.27 (2026-06-04)**
+
+**기능 감사 하드닝 + 문서 삭제 반영 + .spec/.gitignore/푸쉬/빌드 재점검**
+
+### 주요 반영
+
+* fallback / 이력 정합성
+  - Playwright 부분 성공 후 Selenium fallback으로 전환해도 `_fallback_prefill_processed_target_pairs`와 `_fallback_prefill_complexes`를 소비
+  - 이미 성공한 pair를 crawl history, `complex_finished_signal`, disappeared finalization에 합산
+* DB / export 안정성
+  - 단지/그룹 write 실패 경로에서 pooled SQLite connection에 partial transaction이 남지 않도록 rollback 보장
+  - CSV/XLSX export에서 외부 수집 문자열의 spreadsheet formula prefix(`=`, `+`, `-`, `@`, tab, CR)를 escape
+* runtime / UI race 방지
+  - `playwright_navigation_timeout_ms` 설정 추가(default `15000`) 및 warmup/entry/detail navigation에 명시 timeout 적용
+  - 모바일 상세 enrichment task fanout을 detail worker 수로 제한
+  - URL 일괄 등록 worker progress/finished handler에 generation guard 적용
+  - Settings/Geo/schedule 경로의 APT/VL 빈 선택 정책을 명시적 차단으로 통일
+* 문서 / packaging / ignore 점검
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `SCRAPLING_ADOPTION_ANALYSIS_2026-06-02.md`에 현재 구현/검증 기준 반영
+  - `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-05-15.md` 삭제 상태를 의도된 문서 정리로 포함
+  - `naverland-scrapper.spec`는 이번 변경이 Python/runtime/UI/test/doc 수준이라 추가 hidden import/runtime hook/data bundle 수정 불필요
+  - `.gitignore`는 `.codegraph/` 로컬 CodeGraph 인덱스를 명시적으로 무시하도록 보강
+
+### 검증
+
+* `python -m pytest tests/test_crawler_regressions.py tests/test_database_module.py tests/test_export_module.py tests/test_ui_runtime_smoke.py tests/test_playwright_engine_stabilization.py tests/test_detail_fetcher.py tests/test_ui_wiring.py tests/test_managers_cache.py tests/test_mojibake_scan.py -q`
+  - 결과: `193 passed`
+* `python -m compileall -q app_entry.py src tests`
+  - 결과: pass
+* `python -m src.utils.preflight`
+  - 결과: pass
+* `npx --yes pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+
 ## **v15.0.26 (2026-05-15)**
 
 **기능 리스크 클로저 + source/frozen smoke 확장 + 문서/.spec/.gitignore/빌드 재점검**

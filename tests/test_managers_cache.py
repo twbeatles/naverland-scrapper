@@ -11,10 +11,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.core.cache import CrawlCache
 from src.core.managers import (
+    DEFAULT_SETTINGS,
     SettingsManager,
     FilterPresetManager,
     SearchHistoryManager,
     RecentlyViewedManager,
+    _sanitize_settings_payload,
 )
 
 
@@ -95,6 +97,7 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertEqual(settings.get("result_filter_debounce_ms"), 220)
             self.assertEqual(settings.get("max_log_lines"), 1500)
             self.assertEqual(settings.get("playwright_response_drain_timeout_ms"), 3000)
+            self.assertEqual(settings.get("playwright_navigation_timeout_ms"), 15000)
             self.assertTrue(settings.get("geo_incomplete_safety_mode"))
             self.assertFalse(settings.get("startup_lazy_noncritical_tabs"))
             self.assertTrue(settings.get("compact_duplicate_listings"))
@@ -130,6 +133,26 @@ class TestCacheAndManagers(unittest.TestCase):
             self.assertEqual(len(history.get_recent()), 3)
             self.assertAlmostEqual(settings.get("geo_last_lat"), 37.5608, places=4)
             self.assertAlmostEqual(settings.get("geo_last_lon"), 126.9888, places=4)
+
+    def test_settings_sanitizer_preserves_explicit_empty_geo_assets(self):
+        sanitized = _sanitize_settings_payload(
+            {
+                "geo_asset_types": [],
+                "schedule_config": {
+                    "mode": "geo_sweep",
+                    "geo": {"asset_types": []},
+                },
+            }
+        )
+
+        self.assertEqual(sanitized["geo_asset_types"], [])
+        self.assertEqual(sanitized["schedule_config"]["geo"]["asset_types"], [])
+
+        missing = _sanitize_settings_payload({"schedule_config": {"mode": "geo_sweep", "geo": {}}})
+        self.assertEqual(
+            missing["schedule_config"]["geo"]["asset_types"],
+            DEFAULT_SETTINGS["schedule_config"]["geo"]["asset_types"],
+        )
 
     def test_crawl_cache_empty_result_with_custom_ttl(self):
         cache_path = self.tmp_path / "crawl_cache.json"

@@ -92,6 +92,81 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(conn_stub.commits, 1)
         self.assertGreaterEqual(conn_stub.rollbacks, 1)
 
+    def test_delete_complex_rolls_back_when_purge_fails(self):
+        class _CursorStub:
+            rowcount = 1
+
+            def execute(self, sql, params=()):
+                return self
+
+            def fetchall(self):
+                return [{"asset_type": "APT", "complex_id": "R-100"}]
+
+        class _ConnStub:
+            def __init__(self):
+                self.cursor_stub = _CursorStub()
+                self.commits = 0
+                self.rollbacks = 0
+
+            def cursor(self):
+                return self.cursor_stub
+
+            def commit(self):
+                self.commits += 1
+
+            def rollback(self):
+                self.rollbacks += 1
+
+        conn_stub = _ConnStub()
+        with (
+            patch.object(self.db._pool, "get_connection", return_value=conn_stub),
+            patch.object(self.db._pool, "return_connection", return_value=None),
+            patch.object(self.db, "_purge_related_for_complex_refs", side_effect=RuntimeError("purge failed")),
+        ):
+            self.assertFalse(self.db.delete_complex(1, purge_related=True))
+
+        self.assertEqual(conn_stub.commits, 0)
+        self.assertEqual(conn_stub.rollbacks, 1)
+
+    def test_delete_complexes_bulk_rolls_back_when_purge_fails(self):
+        class _CursorStub:
+            rowcount = 2
+
+            def execute(self, sql, params=()):
+                return self
+
+            def fetchall(self):
+                return [
+                    {"asset_type": "APT", "complex_id": "R-100"},
+                    {"asset_type": "APT", "complex_id": "R-200"},
+                ]
+
+        class _ConnStub:
+            def __init__(self):
+                self.cursor_stub = _CursorStub()
+                self.commits = 0
+                self.rollbacks = 0
+
+            def cursor(self):
+                return self.cursor_stub
+
+            def commit(self):
+                self.commits += 1
+
+            def rollback(self):
+                self.rollbacks += 1
+
+        conn_stub = _ConnStub()
+        with (
+            patch.object(self.db._pool, "get_connection", return_value=conn_stub),
+            patch.object(self.db._pool, "return_connection", return_value=None),
+            patch.object(self.db, "_purge_related_for_complex_refs", side_effect=RuntimeError("purge failed")),
+        ):
+            self.assertEqual(self.db.delete_complexes_bulk([1, 2], purge_related=True), 0)
+
+        self.assertEqual(conn_stub.commits, 0)
+        self.assertEqual(conn_stub.rollbacks, 1)
+
     def test_group_lifecycle(self):
         self.db.add_complex("ComplexA", "11111", asset_type="APT")
         all_complexes = self.db.get_all_complexes()

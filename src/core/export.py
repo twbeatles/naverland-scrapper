@@ -18,6 +18,14 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 logger = get_logger("Export")
 
+_SPREADSHEET_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_spreadsheet_value(value):
+    if isinstance(value, str) and value.startswith(_SPREADSHEET_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
+
 
 @dataclass(frozen=True)
 class ExportResult:
@@ -214,7 +222,7 @@ class DataExporter:
                     elif cn == "갭비율":
                         value = self._format_gap_ratio(item.get("갭비율", 0))
                     else:
-                        value = item.get(cn, "")
+                        value = _sanitize_spreadsheet_value(item.get(cn, ""))
                     
                     cell = ws.cell(row=ri, column=ci, value=value)
                     
@@ -264,6 +272,14 @@ class DataExporter:
                     row['신규여부'] = "신규" if item.get('is_new', False) else ""
                     row['가격변동'] = self._format_price_change(item.get('price_change', 0))
                     row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
+                    row = {
+                        column: (
+                            row.get(column, "")
+                            if column in {"신규여부", "가격변동", "갭비율"}
+                            else _sanitize_spreadsheet_value(row.get(column, ""))
+                        )
+                        for column in columns
+                    }
                     writer.writerow(row)
             return self._success(path)
         except Exception as e:

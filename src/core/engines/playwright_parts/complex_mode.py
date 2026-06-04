@@ -516,7 +516,11 @@ class PlaywrightComplexModeMixin:
                 self.thread.stats["detail_fetch_total"] = int(self.thread.stats.get("detail_fetch_total", 0)) + 1
                 detail = await self._async_retry(
                     f"mobile detail {article_no}",
-                    lambda: fetch_mobile_article_detail(page, article_no),
+                    lambda: fetch_mobile_article_detail(
+                        page,
+                        article_no,
+                        navigation_timeout_ms=self._navigation_timeout_ms(),
+                    ),
                 )
                 detail_meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
                 missing_field_count = int(detail_meta.get("missing_field_count", 0) or 0)
@@ -554,9 +558,25 @@ class PlaywrightComplexModeMixin:
                 self.thread.stats["detail_fail_count"] = int(self.thread.stats.get("detail_fail_count", 0)) + 1
             return apply_mobile_detail(dict(item), detail)
 
-        tasks = [asyncio.create_task(_fetch_one(item)) for item in items]
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+        for item in items:
+            queue.put_nowait(item)
         result = []
         interrupted = False
+
+        async def _worker() -> None:
+            while not self.thread._should_stop():
+                try:
+                    item = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    result.append(await _fetch_one(item))
+                finally:
+                    queue.task_done()
+
+        worker_count = min(len(items), max(1, int(getattr(self.thread, "playwright_detail_workers", 1) or 1)))
+        tasks = [asyncio.create_task(_worker()) for _ in range(worker_count)]
         try:
             pending_tasks = set(tasks)
             while pending_tasks:
@@ -569,7 +589,7 @@ class PlaywrightComplexModeMixin:
                 )
                 for task in done:
                     try:
-                        result.append(await task)
+                        await task
                     except Exception:
                         continue
         finally:

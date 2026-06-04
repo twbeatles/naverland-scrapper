@@ -151,6 +151,7 @@ class URLBatchDialog(QDialog):
         self._worker_thread = None
         self._worker = None
         self._parsing = False
+        self._lookup_generation = 0
         self._parsed_entries = []
         self._setup_ui()
 
@@ -252,14 +253,26 @@ class URLBatchDialog(QDialog):
 
     def _start_lookup_worker(self, results):
         self._cleanup_worker(wait=False)
+        self._lookup_generation += 1
+        generation = self._lookup_generation
 
         self._worker_thread = QThread(self)
         self._worker = _NameLookupWorker(results)
         self._worker.moveToThread(self._worker_thread)
 
         self._worker_thread.started.connect(self._worker.run)
-        self._worker.progress.connect(self._on_lookup_progress)
-        self._worker.finished.connect(self._on_lookup_finished)
+        self._worker.progress.connect(
+            lambda *args, lookup_generation=generation: self._on_lookup_progress_for_generation(
+                lookup_generation,
+                *args,
+            )
+        )
+        self._worker.finished.connect(
+            lambda *args, lookup_generation=generation: self._on_lookup_finished_for_generation(
+                lookup_generation,
+                *args,
+            )
+        )
         self._worker.finished.connect(self._worker_thread.quit)
         self._worker_thread.finished.connect(self._worker.deleteLater)
         self._worker_thread.finished.connect(self._worker_thread.deleteLater)
@@ -291,6 +304,11 @@ class URLBatchDialog(QDialog):
         self.btn_cancel.setEnabled(False)
         self.status_label.setText("⏹ 취소 요청됨... 현재 조회를 마무리하는 중")
 
+    def _on_lookup_progress_for_generation(self, generation, *args):
+        if generation != self._lookup_generation:
+            return
+        self._on_lookup_progress(*args)
+
     @pyqtSlot(int, int, str, str, bool, str, str)
     def _on_lookup_progress(self, row, total, cid, name, is_verified, asset_type, status):
         if row < 0 or row >= self.result_table.rowCount():
@@ -311,6 +329,11 @@ class URLBatchDialog(QDialog):
         self.result_table.setItem(row, 3, QTableWidgetItem(f"{status_text} ({asset_token})"))
         self.status_label.setText(f"🔍 이름 조회 중... ({row + 1}/{total})")
         QApplication.processEvents()
+
+    def _on_lookup_finished_for_generation(self, generation, *args):
+        if generation != self._lookup_generation:
+            return
+        self._on_lookup_finished(*args)
 
     @pyqtSlot(int, bool)
     def _on_lookup_finished(self, processed, cancelled):

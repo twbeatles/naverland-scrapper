@@ -37,6 +37,7 @@ class CrawlerStateRuntimeMixin:
         playwright_detail_workers=12,
         block_heavy_resources=True,
         playwright_response_drain_timeout_ms=3000,
+        playwright_navigation_timeout_ms=15000,
         geo_incomplete_safety_mode=True,
     ):
         super().__init__()
@@ -150,6 +151,10 @@ class CrawlerStateRuntimeMixin:
             self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
         except (TypeError, ValueError):
             self.playwright_response_drain_timeout_ms = 3000
+        try:
+            self.playwright_navigation_timeout_ms = min(60000, max(1000, int(playwright_navigation_timeout_ms)))
+        except (TypeError, ValueError):
+            self.playwright_navigation_timeout_ms = 15000
         self.geo_incomplete_safety_mode = bool(geo_incomplete_safety_mode)
         self.geo_incomplete = False
         self.geo_incomplete_reasons = []

@@ -32,7 +32,12 @@ class AppStatsScheduleMixin:
         return selected
 
     def _set_schedule_geo_assets(self: Any, asset_types) -> None:
-        asset_tokens = set(self._normalize_geo_asset_types(asset_types))
+        asset_tokens = set(
+            self._normalize_geo_asset_types(
+                asset_types,
+                default_to_all=asset_types is None,
+            )
+        )
         if hasattr(self, "schedule_geo_asset_apt"):
             self.schedule_geo_asset_apt.setChecked("APT" in asset_tokens)
         if hasattr(self, "schedule_geo_asset_vl"):
@@ -70,8 +75,10 @@ class AppStatsScheduleMixin:
         self._on_stats_complex_changed(self.stats_complex_combo.currentIndex())
 
     def _schedule_geo_defaults(self: Any):
+        raw_assets = settings.get("geo_asset_types", ["APT", "VL"])
         normalized_assets = self._normalize_geo_asset_types(
-            settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+            raw_assets,
+            default_to_all=raw_assets is None,
         )
         return {
             "lat": float(settings.get("schedule_geo_lat", 37.5608) or 37.5608),
@@ -128,7 +135,11 @@ class AppStatsScheduleMixin:
         mode = str(config.get("mode", "complex") or "complex")
         if mode == "geo_sweep":
             geo = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
-            asset_types = self._normalize_geo_asset_types(geo.get("asset_types", ["APT", "VL"]))
+            raw_asset_types = geo.get("asset_types", ["APT", "VL"])
+            asset_types = self._normalize_geo_asset_types(
+                raw_asset_types,
+                default_to_all=raw_asset_types is None,
+            )
             return (
                 f"{float(geo.get('lat', 37.5608)):.6f}/"
                 f"{float(geo.get('lon', 126.9888)):.6f}/"
@@ -242,7 +253,8 @@ class AppStatsScheduleMixin:
             rings = geo_config.get("rings", settings.get("geo_grid_rings", 1))
             step_px = geo_config.get("step_px", settings.get("geo_grid_step_px", 480))
             dwell_ms = geo_config.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600))
-            asset_types = geo_config.get("asset_types", settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"])
+            default_asset_types = settings.get("geo_asset_types", ["APT", "VL"])
+            asset_types = geo_config.get("asset_types", default_asset_types)
             try:
                 self.schedule_geo_lat.setValue(float(lat))
             except (TypeError, ValueError):

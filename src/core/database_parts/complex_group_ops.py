@@ -15,6 +15,13 @@ class ComplexDatabaseComplexGroupOpsMixin:
         token = str(asset_type or "APT").strip().upper()
         return token if token in {"APT", "VL"} else "APT"
 
+    @staticmethod
+    def _rollback_write_transaction(conn, context: str) -> None:
+        try:
+            conn.rollback()
+        except Exception as rollback_error:
+            logger.warning(f"{context} rollback 실패: {rollback_error}")
+
     def add_complex(
         self,
         name,
@@ -83,6 +90,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
                         logger.error(f"단지 추가 실패(database): {name} ({complex_id}) - {e}")
                         return "error" if return_status else False
         except Exception as e:
+            self._rollback_write_transaction(conn, "단지 추가")
             logger.exception(f"단지 추가 실패: {name} ({complex_id}) - {e}")
             return "error" if return_status else False
         finally:
@@ -293,6 +301,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"단지 삭제: ID={db_id}")
             return True
         except Exception as e:
+            self._rollback_write_transaction(conn, "단지 삭제")
             logger.error(f"단지 삭제 실패: {e}")
             return False
         finally:
@@ -316,6 +325,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}")
             return deleted_count
         except Exception as e:
+            self._rollback_write_transaction(conn, "단지 일괄 삭제")
             logger.error(f"단지 일괄 삭제 실패: {e}")
             return 0
         finally:
@@ -328,6 +338,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
+            self._rollback_write_transaction(conn, "메모 업데이트")
             logger.error(f"메모 업데이트 실패: {e}")
             return False
         finally:
@@ -341,6 +352,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"그룹 생성: {name}")
             return True
         except Exception as e:
+            self._rollback_write_transaction(conn, "그룹 생성")
             logger.error(f"그룹 생성 실패: {e}")
             return False
         finally:
@@ -373,6 +385,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"그룹 삭제: ID={group_id}")
             return True
         except Exception as e:
+            self._rollback_write_transaction(conn, "그룹 삭제")
             logger.error(f"그룹 삭제 실패: {e}")
             return False
         finally:
@@ -393,6 +406,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             logger.info(f"group complexes added: {count}")
             return count
         except Exception as e:
+            self._rollback_write_transaction(conn, "그룹 단지 추가")
             logger.error(f"그룹 단지 추가 실패: {e}")
             return 0
         finally:
@@ -405,6 +419,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             conn.commit()
             return True
         except Exception as e:
+            self._rollback_write_transaction(conn, "그룹에서 단지 제거")
             logger.error(f"그룹에서 단지 제거 실패: {e}")
             return False
         finally:

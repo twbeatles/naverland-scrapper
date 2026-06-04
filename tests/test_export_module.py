@@ -1,4 +1,5 @@
 import csv
+import csv
 import os
 import tempfile
 import unittest
@@ -108,6 +109,42 @@ class TestExportModule(unittest.TestCase):
         self.assertEqual(rows[0]["매물ID"], "A1")
         self.assertEqual(rows[0]["가격변동"], "-1,500만")
 
+    def test_csv_escapes_spreadsheet_formula_prefixes(self):
+        data = [
+            {
+                "단지명": "=cmd",
+                "부동산상호": "+office",
+                "중개사이름": "-agent",
+                "전화1": "@phone",
+                "타입/특징": "\tfeature",
+                "price_change": -1500,
+            }
+        ]
+        template = {
+            "order": ["단지명", "부동산상호", "중개사이름", "전화1", "타입/특징", "가격변동"],
+            "columns": {
+                "단지명": True,
+                "부동산상호": True,
+                "중개사이름": True,
+                "전화1": True,
+                "타입/특징": True,
+                "가격변동": True,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "export.csv")
+            out = DataExporter(data).to_csv(path, template=template)
+            self.assertEqual(out, path)
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                rows = list(csv.DictReader(f))
+
+        self.assertEqual(rows[0]["단지명"], "'=cmd")
+        self.assertEqual(rows[0]["부동산상호"], "'+office")
+        self.assertEqual(rows[0]["중개사이름"], "'-agent")
+        self.assertEqual(rows[0]["전화1"], "'@phone")
+        self.assertEqual(rows[0]["타입/특징"], "'\tfeature")
+        self.assertEqual(rows[0]["가격변동"], "-1,500만")
+
     @unittest.skipUnless(OPENPYXL_AVAILABLE, "openpyxl not installed")
     def test_excel_exports_price_change_with_sign(self):
         from openpyxl import load_workbook
@@ -146,6 +183,27 @@ class TestExportModule(unittest.TestCase):
             wb.close()
 
         self.assertEqual(headers, expected)
+
+    @unittest.skipUnless(OPENPYXL_AVAILABLE, "openpyxl not installed")
+    def test_excel_escapes_spreadsheet_formula_prefixes(self):
+        from openpyxl import load_workbook
+
+        data = [{"단지명": "=cmd", "부동산상호": "+office"}]
+        template = {
+            "order": ["단지명", "부동산상호"],
+            "columns": {"단지명": True, "부동산상호": True},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "export.xlsx")
+            out = DataExporter(data).to_excel(path, template=template)
+            self.assertEqual(out, path)
+            wb = load_workbook(path, data_only=False)
+            ws = wb.active
+            assert ws is not None
+            values = [ws.cell(row=2, column=1).value, ws.cell(row=2, column=2).value]
+            wb.close()
+
+        self.assertEqual(values, ["'=cmd", "'+office"])
 
 
 if __name__ == "__main__":

@@ -94,16 +94,18 @@ class CrawlerSeleniumFlowMixin:
             
             allowed_pairs = self._fallback_allowed_pairs
             targets = list(self._iter_targets())
+            prefill_pairs = set(getattr(self, "_fallback_prefill_processed_target_pairs", set()) or set())
+            prefill_complexes = dict(getattr(self, "_fallback_prefill_complexes", {}) or {})
             if allowed_pairs is not None:
                 total = len(allowed_pairs)
             else:
                 total = sum(1 for _name, _cid, asset_type in targets if asset_type == "APT" for _ in self.trade_types)
-            if total <= 0:
+            if total <= 0 and not prefill_pairs:
                 self.log("ℹ️ Selenium fallback 대상 pair가 없어 종료합니다.", 10)
                 return
             current = 0
             processed_complexes = 0  # 처리한 단지 수
-            processed_target_pairs = set()
+            processed_target_pairs = set(prefill_pairs)
             
             for name, cid, asset_type in targets:
                 if self._should_stop():
@@ -139,9 +141,15 @@ class CrawlerSeleniumFlowMixin:
                     if not driver:
                         raise Exception("드라이버 재시작 실패")
                 
-                complex_count = 0
-                attempted_trade_types = []
-                complex_trade_types = []
+                prefill_payload = prefill_complexes.get((str(name), str(cid)), {}) or {}
+                prefill_trade_types = [
+                    str(x)
+                    for x in (prefill_payload.get("trade_types", []) or [])
+                    if str(x)
+                ]
+                complex_count = int(prefill_payload.get("count", 0) or 0)
+                attempted_trade_types = list(prefill_trade_types)
+                complex_trade_types = list(prefill_trade_types)
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
@@ -176,7 +184,8 @@ class CrawlerSeleniumFlowMixin:
                         batch_result = self._crawl(driver, name, cid, ttype, asset_type=asset_type)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
-                        complex_trade_types.append(ttype)
+                        if ttype not in complex_trade_types:
+                            complex_trade_types.append(ttype)
                         if cid and ttype:
                             processed_target_pairs.add((str(asset_type), str(cid), str(ttype)))
                         self.stats["by_trade_type"][ttype] = self.stats["by_trade_type"].get(ttype, 0) + count

@@ -25,6 +25,7 @@
     - 월세 필터 분리(보증금/월세 동시 조건)
     - 원본(raw) 캐시 저장 후 조회 시 재필터링
     - 차단 페이지 감지 시 즉시 실패 처리
+    - CSV/XLSX formula prefix escape 및 Playwright navigation timeout 설정
 
 ## 0. v15.0 Delta Notes (UI/UX Refactoring)
 - `styles.py`: 하드코딩된 색상을 `COLORS` 딕셔너리로 추출하고 `_generate_stylesheet` 함수를 도입하여 QSS 기반 동적 테마를 생성합니다.
@@ -174,6 +175,24 @@
   - `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `naverland-scrapper.spec`, and `.gitignore` were rechecked against the implementation.
   - Existing Playwright hidden imports/runtime hook/Chromium bundle collection remain sufficient.
   - Existing `logs/`, `build/`, `dist/`, `data/`, cache, and bytecode ignore rules cover the new source/frozen smoke and build artifacts.
+
+## 0-9. v15.0.27 Functional Audit Hardening (2026-06-04)
+- Crawler / fallback:
+  - Selenium fallback consumes `_fallback_prefill_processed_target_pairs` and `_fallback_prefill_complexes`.
+  - Playwright partial successes are included in crawl history, `complex_finished_signal`, and disappeared finalization when fallback takes over.
+- DB / export:
+  - Complex/group write failure paths rollback before returning the existing `False`/`0` API contract.
+  - CSV/XLSX export escapes item-sourced spreadsheet formula prefixes while preserving internally formatted columns.
+- Runtime / UI:
+  - New setting `playwright_navigation_timeout_ms` defaults to `15000` and applies to warmup/entry/detail navigation.
+  - Mobile detail enrichment creates only detail-worker-count tasks instead of one task per item.
+  - URL batch lookup progress/finished handlers use a generation guard to ignore stale worker signals.
+  - Explicit empty Geo asset selections are blocked; missing/legacy config still defaults to `APT/VL`.
+- Docs / packaging / ignore:
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `SCRAPLING_ADOPTION_ANALYSIS_2026-06-02.md`, `naverland-scrapper.spec`, and `.gitignore` were rechecked against the implementation.
+  - `FUNCTIONAL_IMPLEMENTATION_AUDIT_2026-05-15.md` deletion is intentional and included in the publish state.
+  - `.codegraph/` is ignored as a local CodeGraph artifact.
+  - `naverland-scrapper.spec` still needs no extra hidden imports, datas, runtime hooks, or dependency changes.
 
 ## 2. Technical Stack
 - **Language**: Python 3.9+

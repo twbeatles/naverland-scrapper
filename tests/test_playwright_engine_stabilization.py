@@ -67,6 +67,7 @@ class _ThreadStub:
         self.playwright_headless = True
         self.playwright_detail_workers = 1
         self.playwright_response_drain_timeout_ms = 3000
+        self.playwright_navigation_timeout_ms = 15000
         self.block_heavy_resources = False
         self.engine_name = "playwright"
         self.crawl_mode = "complex"
@@ -292,6 +293,7 @@ class _FakePage:
         self.url = "https://new.land.naver.com/"
         self.mouse = _FakeMouse()
         self.visited = []
+        self.goto_calls = []
 
     def on(self, event, handler):
         self._handlers.setdefault(event, []).append(handler)
@@ -300,9 +302,10 @@ class _FakePage:
         listeners = self._handlers.get(event, [])
         self._handlers[event] = [h for h in listeners if h is not handler]
 
-    async def goto(self, url, wait_until="domcontentloaded"):
+    async def goto(self, url, wait_until="domcontentloaded", timeout=None):
         self.url = url
         self.visited.append(url)
+        self.goto_calls.append({"url": url, "wait_until": wait_until, "timeout": timeout})
         for response in list(self._responses):
             for handler in list(self._handlers.get("response", [])):
                 handler(response)
@@ -537,6 +540,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
     async def test_detail_enrich_cancels_pending_tasks_on_stop(self):
         thread = _ThreadStub()
+        thread.playwright_detail_workers = 2
         engine = PlaywrightCrawlerEngine(thread)
         engine._page_pool = asyncio.Queue()
         await engine._page_pool.put(object())
@@ -545,7 +549,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         cancelled = {"value": False}
         call_count = {"value": 0}
 
-        async def _fake_fetch(_page, _article_id):
+        async def _fake_fetch(_page, _article_id, **_kwargs):
             call_count["value"] += 1
             if call_count["value"] == 1:
                 await asyncio.sleep(0.01)
@@ -575,6 +579,59 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             self.assertGreaterEqual(call_count["value"], 1)
         finally:
             engine._loop.close()
+
+    async def test_detail_enrich_limits_task_fanout_to_worker_count(self):
+        thread = _ThreadStub()
+        thread.playwright_detail_workers = 2
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._page_pool = asyncio.Queue()
+        await engine._page_pool.put(object())
+        await engine._page_pool.put(object())
+
+        active = {"value": 0, "max": 0, "calls": 0}
+
+        async def _fake_fetch(_page, _article_id, **_kwargs):
+            active["calls"] += 1
+            active["value"] += 1
+            active["max"] = max(active["max"], active["value"])
+            try:
+                await asyncio.sleep(0.01)
+                return {}
+            finally:
+                active["value"] -= 1
+
+        with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
+            result = await engine._enrich_items_with_mobile_details(
+                [{"매물ID": str(i), _LEGACY_ARTICLE_ID_KEY: str(i)} for i in range(5)]
+            )
+
+        try:
+            self.assertEqual(len(result), 5)
+            self.assertEqual(active["calls"], 5)
+            self.assertLessEqual(active["max"], 2)
+        finally:
+            engine._loop.close()
+
+    async def test_entry_plan_passes_navigation_timeout_to_page_goto(self):
+        thread = _ThreadStub()
+        thread.playwright_navigation_timeout_ms = 12345
+        engine = PlaywrightCrawlerEngine(thread)
+        page = _FakePage(responses=[])
+
+        try:
+            await engine._run_entry_plan(
+                page,
+                {
+                    "name": "with_warmup",
+                    "warmups": ["https://fin.land.naver.com/"],
+                    "target": "https://new.land.naver.com/complexes/12345",
+                },
+                label="test",
+            )
+        finally:
+            engine._loop.close()
+
+        self.assertEqual([call["timeout"] for call in page.goto_calls], [12345, 12345])
 
     async def test_drain_timeout_increments_timeout_counter(self):
         thread = _ThreadStub()

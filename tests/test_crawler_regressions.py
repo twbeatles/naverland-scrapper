@@ -512,6 +512,67 @@ class TestCrawlerRegressions(unittest.TestCase):
         self.assertEqual(captured.get("allowed_pairs"), expected)
         self.assertIsNone(thread._fallback_allowed_pairs)
 
+    def test_selenium_fallback_finalizes_prefilled_playwright_success(self):
+        thread = CrawlerThread(
+            targets=[("단지A", "10001")],
+            trade_types=["매매", "전세"],
+            area_filter={"enabled": False},
+            price_filter={"enabled": False},
+            db=_DBStub(),
+            cache=None,
+            max_retry_count=0,
+        )
+        setattr(thread, "_fallback_allowed_pairs", {thread._pair_key("단지A", "10001", "전세")})
+        thread._fallback_prefill_processed_target_pairs = {("APT", "10001", "매매")}
+        thread._fallback_prefill_complexes = {
+            ("단지A", "10001"): {
+                "name": "단지A",
+                "cid": "10001",
+                "count": 2,
+                "trade_types": {"매매"},
+            }
+        }
+
+        class _Driver:
+            def quit(self):
+                return None
+
+        history_calls = []
+        finalized = {}
+        finished = []
+
+        def _record_history(*args, **kwargs):
+            history_calls.append((args, kwargs))
+
+        def _finalize(processed_target_pairs):
+            finalized["pairs"] = set(processed_target_pairs)
+
+        def _crawl(driver, name, cid, ttype, asset_type="APT"):
+            self.assertIsNotNone(driver)
+            self.assertEqual((name, cid, ttype, asset_type), ("단지A", "10001", "전세", "APT"))
+            return {"count": 3}
+
+        thread.record_crawl_history = _record_history
+        setattr(thread, "_finalize_disappeared_articles", _finalize)
+        setattr(thread, "_init_driver", lambda: _Driver())
+        setattr(thread, "_crawl", _crawl)
+        thread.complex_finished_signal.connect(lambda *args: finished.append(args))
+
+        with (
+            patch("src.core.crawler.UC_AVAILABLE", True),
+            patch("src.core.crawler.BS4_AVAILABLE", True),
+            patch("src.core.crawler.PSUTIL_AVAILABLE", False),
+        ):
+            thread._run_selenium_loop()
+
+        self.assertEqual(len(history_calls), 1)
+        args, kwargs = history_calls[0]
+        self.assertEqual(args[:4], ("단지A", "10001", "매매,전세", 5))
+        self.assertEqual(kwargs["engine"], "selenium")
+        self.assertEqual(kwargs["run_status"], "success")
+        self.assertEqual(finalized["pairs"], {("APT", "10001", "매매"), ("APT", "10001", "전세")})
+        self.assertEqual(finished, [("단지A", "10001", "매매,전세", 5)])
+
     def test_push_item_dedupes_only_when_article_id_exists(self):
         thread = self._build_thread(price_filter={"enabled": False})
 

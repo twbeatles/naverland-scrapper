@@ -61,8 +61,11 @@ def _is_meaningful_body(text: str) -> bool:
     return True
 
 
-async def _goto_detail_url(detail_page, url: str):
-    await detail_page.goto(url, wait_until="domcontentloaded")
+async def _goto_detail_url(detail_page, url: str, *, navigation_timeout_ms: int | None = None):
+    goto_kwargs: dict[str, object] = {"wait_until": "domcontentloaded"}
+    if navigation_timeout_ms is not None:
+        goto_kwargs["timeout"] = max(1000, int(navigation_timeout_ms))
+    await detail_page.goto(url, **goto_kwargs)
     try:
         await detail_page.wait_for_load_state("networkidle", timeout=2000)
     except Exception:
@@ -286,7 +289,7 @@ def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dic
     return fields
 
 
-async def _collect_detail_artifacts(detail_page, url: str) -> dict:
+async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout_ms: int | None = None) -> dict:
     responses: list[dict] = []
     pending_tasks: set[asyncio.Task] = set()
 
@@ -316,7 +319,7 @@ async def _collect_detail_artifacts(detail_page, url: str) -> dict:
         except Exception:
             can_listen = False
     try:
-        await _goto_detail_url(detail_page, url)
+        await _goto_detail_url(detail_page, url, navigation_timeout_ms=navigation_timeout_ms)
         body_text = await _read_body_text(detail_page)
         try:
             html_text = await detail_page.content()
@@ -505,7 +508,7 @@ def _build_detail_meta(source: str, body_text: str, fields: dict, artifacts: dic
     }
 
 
-async def fetch_mobile_article_detail(detail_page, article_no: str) -> dict:
+async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigation_timeout_ms: int | None = None) -> dict:
     if not article_no:
         return {}
 
@@ -520,7 +523,11 @@ async def fetch_mobile_article_detail(detail_page, article_no: str) -> dict:
         ("m_info", f"https://m.land.naver.com/article/info/{article_no}"),
         ("m_view", f"https://m.land.naver.com/article/view/{article_no}"),
     ):
-        artifacts = await _collect_detail_artifacts(detail_page, url)
+        artifacts = await _collect_detail_artifacts(
+            detail_page,
+            url,
+            navigation_timeout_ms=navigation_timeout_ms,
+        )
         candidate_body = str(artifacts.get("body_text", "") or "")
         candidate_corpus = str(artifacts.get("corpus_text", "") or "")
         if _is_not_found_body(candidate_body) and not candidate_corpus:

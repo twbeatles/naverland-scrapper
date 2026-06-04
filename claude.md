@@ -25,6 +25,7 @@
     - 월세 필터 분리(보증금/월세 동시 조건)
     - 원본(raw) 캐시 저장 후 조회 시 재필터링
     - 차단 페이지 감지 시 즉시 실패 처리
+    - CSV/XLSX formula prefix escape 및 Playwright navigation timeout 설정
 
 ## 0. v15.0 Delta Notes (UI/UX Refactoring)
 - `styles.py`: 하드코딩된 색상을 `COLORS` 딕셔너리로 추출하고 `_generate_stylesheet` 함수를 도입하여 QSS 기반 동적 테마를 생성합니다.
@@ -417,10 +418,20 @@ COLORS["light"] = {
 
 ## 0-5. v15.0 Stabilization Addendum (2026-03-06)
 - 신규 설정: `playwright_response_drain_timeout_ms` (default: `3000`)
+- 신규 설정: `playwright_navigation_timeout_ms` (default: `15000`)
 - 캐시 정책(복합 모드): 현재는 `mode=complex`, `asset_type=<target asset_type>`, `marker_id=""`로 정규화
 - 레거시 complex 캐시 키는 읽기 호환만 유지하고, 적중 시 정규 키로 승격 저장
 - `geo_sweep`는 Playwright 전용 유지, Selenium fallback 미지원
 - Geo 운영 통계 키: `geo_discovered_count`, `geo_dedup_count`, `response_drain_wait_count`, `response_drain_timeout_count`
+
+## 0-5-1. v15.0 Functional Audit Hardening (2026-06-04)
+- Selenium fallback은 `_fallback_prefill_processed_target_pairs` / `_fallback_prefill_complexes`를 소비해 Playwright 부분 성공분을 history, 완료 signal, disappeared finalization에 합산합니다.
+- DB 단지/그룹 write 실패 경로는 rollback 후 기존 반환 contract(`False`/`0`)를 유지합니다.
+- `DataExporter`는 item-sourced 문자열이 spreadsheet formula prefix(`=`, `+`, `-`, `@`, tab, CR)로 시작하면 CSV/XLSX 모두에서 `'` prefix로 escape합니다.
+- `URLBatchDialog`는 lookup generation guard로 이전 worker의 늦은 progress/finished signal을 무시합니다.
+- Playwright warmup/entry/detail navigation은 `playwright_navigation_timeout_ms`를 사용하고, 모바일 상세 enrichment는 detail worker 수만큼만 task를 생성합니다.
+- Geo asset 선택은 missing/legacy 설정에만 `APT/VL` 기본값을 적용하고, 명시적 빈 선택은 경고 또는 실행 차단으로 처리합니다.
+- `.codegraph/`는 로컬 CodeGraph 개발 산출물로 추적하지 않습니다.
 
 ## 0-6. Packaging/Docs Consistency (2026-03-06)
 - `naverland-scrapper.spec` 점검 결과: 현 시점 코드 기준 추가 hidden import/runtime hook 변경 불필요

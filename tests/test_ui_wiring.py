@@ -1405,9 +1405,30 @@ class TestUIWiring(unittest.TestCase):
 
         self.assertEqual(dialog.spin_max_retry_count.value(), 0)
         self.assertEqual(dialog.spin_geo_rings.value(), 0)
+        self.assertEqual(dialog.spin_playwright_navigation_timeout.value(), 15000)
 
         dialog.deleteLater()
         self._qt_app.processEvents()
+
+    def test_settings_dialog_blocks_empty_geo_asset_selection(self):
+        from src.ui.dialogs.settings import SettingsDialog
+
+        dialog = SettingsDialog()
+        try:
+            dialog.check_geo_asset_apt.setChecked(False)
+            dialog.check_geo_asset_vl.setChecked(False)
+
+            with (
+                patch("src.ui.dialogs.settings.QMessageBox.warning") as mock_warning,
+                patch("src.ui.dialogs.settings.settings.update") as mock_update,
+            ):
+                dialog._save()
+
+            mock_warning.assert_called_once()
+            mock_update.assert_not_called()
+        finally:
+            dialog.deleteLater()
+            self._qt_app.processEvents()
 
     def test_alert_setting_dialog_supports_asset_scope_and_common_rules(self):
         from src.core.database import ComplexDatabase

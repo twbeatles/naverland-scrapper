@@ -27,6 +27,7 @@ class _FakePage:
         self._handlers = {"response": []}
         self.url = ""
         self.visited = []
+        self.goto_calls = []
 
     def on(self, event, handler):
         self._handlers.setdefault(event, []).append(handler)
@@ -35,9 +36,10 @@ class _FakePage:
         listeners = self._handlers.get(event, [])
         self._handlers[event] = [item for item in listeners if item is not handler]
 
-    async def goto(self, url, wait_until="domcontentloaded"):
+    async def goto(self, url, wait_until="domcontentloaded", timeout=None):
         self.url = url
         self.visited.append(url)
+        self.goto_calls.append({"url": url, "wait_until": wait_until, "timeout": timeout})
         for response in list(self._responses.get(url, []) or []):
             for handler in list(self._handlers.get("response", [])):
                 handler(response)
@@ -180,6 +182,28 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(detail["기전세금(원)"]), 110_000_000)
         self.assertEqual(int(detail["_detail_meta"]["network_response_count"]), 1)
         self.assertEqual(int(detail["_detail_meta"]["hydration_hit"]), 1)
+
+    async def test_fetch_mobile_article_detail_passes_navigation_timeout(self):
+        article_no = "2513105556"
+        url = f"https://fin.land.naver.com/articles/{article_no}"
+        page = _FakePage(
+            {
+                url: "\n".join(
+                    [
+                        "실거래가",
+                        "중개소",
+                        "행복부동산",
+                        "김중개",
+                        "전화 02-987-6543",
+                    ]
+                )
+            }
+        )
+
+        await fetch_mobile_article_detail(page, article_no, navigation_timeout_ms=4321)
+
+        self.assertTrue(page.goto_calls)
+        self.assertEqual(page.goto_calls[0]["timeout"], 4321)
 
 
 if __name__ == "__main__":
