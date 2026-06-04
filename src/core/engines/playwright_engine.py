@@ -96,6 +96,7 @@ _rebind_inherited_methods(
     "close",
     "_run",
     "_ensure_runtime_stats",
+    "_navigation_timeout_ms",
     "_sleep_async_interruptible",
     "_async_retry",
     "_check_memory_and_recycle_if_needed",

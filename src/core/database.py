@@ -122,6 +122,7 @@ _rebind_inherited_methods(
     "_asset_scoped_predicate",
     "_purge_related_for_complex_refs",
     "_fetch_complex_refs_by_db_ids",
+    "_rollback_write_transaction",
     "delete_complex",
     "delete_complexes_bulk",
     "update_complex_memo",
