@@ -8,6 +8,7 @@ from unittest.mock import patch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.utils.preflight import (
+    _find_browser_executable_under,
     find_conflict_markers,
     find_missing_dependencies,
     get_effective_crawl_engine,
@@ -37,6 +38,15 @@ class TestPreflight(unittest.TestCase):
         missing = find_missing_dependencies(["json", "package_that_does_not_exist_123"])
         self.assertIn("package_that_does_not_exist_123", missing)
         self.assertNotIn("json", missing)
+
+    def test_find_browser_executable_accepts_headless_shell_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            exe = root / "chromium_headless_shell-1223" / "chrome-headless-shell-win64" / "chrome-headless-shell.exe"
+            exe.parent.mkdir(parents=True, exist_ok=True)
+            exe.write_text("", encoding="utf-8")
+
+            self.assertEqual(_find_browser_executable_under(root), str(exe))
 
     def test_run_preflight_checks_failure_on_conflict(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,10 +1,12 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.utils.helpers import (
+    ChromeParamHelper,
     build_article_url,
     build_complex_url,
     get_article_url,
@@ -42,6 +44,11 @@ class TestURLHelpers(unittest.TestCase):
             get_article_url("12345", "2513105556", "APT"),
             "https://fin.land.naver.com/articles/2513105556",
         )
+
+    def test_skip_local_chrome_env_disables_chrome_detection(self):
+        with patch.dict(os.environ, {"NAVERLAND_SKIP_LOCAL_CHROME": "1"}, clear=False):
+            self.assertEqual(ChromeParamHelper.get_chrome_executable_path(), "")
+            self.assertIsNone(ChromeParamHelper.get_chrome_major_version())
 
 
 if __name__ == "__main__":

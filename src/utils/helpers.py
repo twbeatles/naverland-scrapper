@@ -157,6 +157,15 @@ def get_article_url(complex_id, article_id, asset_type="APT", preferred_family="
 
 class ChromeParamHelper:
     @staticmethod
+    def _skip_local_chrome():
+        return str(os.environ.get("NAVERLAND_SKIP_LOCAL_CHROME", "") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+    @staticmethod
     def _iter_registry_app_paths():
         key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"
         for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
@@ -216,6 +225,8 @@ class ChromeParamHelper:
     @staticmethod
     def get_chrome_executable_path():
         """설치된 Chrome 실행 파일 경로를 반환합니다."""
+        if ChromeParamHelper._skip_local_chrome():
+            return ""
         for candidate in ChromeParamHelper._iter_candidate_paths():
             try:
                 if Path(candidate).exists():
@@ -227,6 +238,8 @@ class ChromeParamHelper:
     @staticmethod
     def get_chrome_major_version():
         """레지스트리에서 설치된 Chrome의 메이저 버전을 가져옵니다."""
+        if ChromeParamHelper._skip_local_chrome():
+            return None
         try:
             # 윈도우 레지스트리 경로
             key_path = r"SOFTWARE\Google\Chrome\BLBeacon"

@@ -137,6 +137,7 @@ def _find_browser_executable_under(root: Path) -> str:
 
     direct_candidates = [
         root / "chrome-win64" / "chrome.exe",
+        root / "chrome-headless-shell-win64" / "chrome-headless-shell.exe",
         root / "chrome-linux" / "chrome",
         root / "chrome-mac" / "Chromium.app" / "Contents" / "MacOS" / "Chromium",
     ]
@@ -145,7 +146,12 @@ def _find_browser_executable_under(root: Path) -> str:
             return str(candidate)
 
     try:
-        for pattern in ("*/chrome-win64/chrome.exe", "*/chrome-linux/chrome", "*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"):
+        for pattern in (
+            "*/chrome-win64/chrome.exe",
+            "*/chrome-headless-shell-win64/chrome-headless-shell.exe",
+            "*/chrome-linux/chrome",
+            "*/chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+        ):
             match = next(root.glob(pattern), None)
             if match is not None and match.exists():
                 return str(match)

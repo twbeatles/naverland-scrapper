@@ -77,6 +77,10 @@ from PyInstaller.utils.hooks import collect_submodules
 # Python/runtime/UI/test/doc changes. Existing Playwright/Selenium hidden imports,
 # runtime hook, Chromium bundle collection, and lxml/html5lib exclusions remain
 # sufficient; no additional datas, hidden imports, or hooks are required.
+# Rechecked on 2026-06-08 (deployment packaging verification pass):
+# `plyer` is dynamically imported for system notifications. Keep only the
+# Windows notification backend in hidden imports to avoid collecting mobile
+# backends that require platform-only dependencies such as `jnius`.
 # 2026-03-19 functional consistency batch (recently-viewed article-open routing,
 # schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
 # deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not
@@ -93,7 +97,7 @@ build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
 # Chromium-bundled build is the default so frozen apps work on machines without
 # a preinstalled Playwright browser. Set NAVERLAND_BUNDLE_CHROMIUM=0 for slim builds.
 # Runtime preflight still blocks startup when the effective crawl_engine is `playwright`
-# and Playwright Chromium is neither installed locally nor bundled.
+# and Playwright Chromium/headless shell is neither installed locally nor bundled.
 bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "1") == "1"
 windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
 # Keep windowed mode by default. Enable console explicitly when debugging startup failures.
@@ -108,6 +112,11 @@ hiddenimports: list[str] = [
     # Matplotlib Qt backend is imported conditionally in `src/ui/widgets/chart.py`
     # and `src/ui/widgets/dashboard.py`.
     "matplotlib.backends.backend_qtagg",
+    # `src.ui.app` imports plyer dynamically, and plyer imports the Windows
+    # notification backend through a runtime proxy.
+    "plyer",
+    "plyer.platforms.win.notification",
+    "plyer.platforms.win.libs.balloontip",
 ]
 hiddenimports += collect_submodules("undetected_chromedriver")
 hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
@@ -123,14 +132,30 @@ if bundle_chromium:
             browser_path = Path(p.chromium.executable_path)
         browser_root = browser_path.parent.parent if browser_path.exists() else None
         if browser_root and browser_root.exists():
-            # Preserve the browser revision directory so Playwright can still
-            # resolve `<PLAYWRIGHT_BROWSERS_PATH>/<revision>/...` at runtime.
-            datas.append(
-                (
-                    str(browser_root),
-                    str(Path("ms-playwright") / browser_root.name),
+            browser_roots: list[Path] = []
+            revision = browser_root.name.rsplit("-", 1)[-1] if "-" in browser_root.name else ""
+            candidate_names = [browser_root.name]
+            if revision:
+                # Playwright 1.60 uses a separate headless-shell revision for
+                # `chromium.launch(headless=True)` when no executable_path is
+                # supplied. Bundle the matching revision so headless smoke works
+                # on machines without local Chrome.
+                candidate_names.append(f"chromium_headless_shell-{revision}")
+            for candidate_name in candidate_names:
+                candidate_root = browser_root.parent / candidate_name
+                if candidate_root.exists() and candidate_root not in browser_roots:
+                    browser_roots.append(candidate_root)
+                elif candidate_name != browser_root.name:
+                    print(f"[spec] Chromium companion browser root was not found: {candidate_root}")
+            for root in browser_roots:
+                # Preserve browser revision directories so Playwright can still
+                # resolve `<PLAYWRIGHT_BROWSERS_PATH>/<revision>/...` at runtime.
+                datas.append(
+                    (
+                        str(root),
+                        str(Path("ms-playwright") / root.name),
+                    )
                 )
-            )
         else:
             print("[spec] NAVERLAND_BUNDLE_CHROMIUM=1 but Chromium executable was not found.")
     except Exception as exc:

@@ -1,3 +1,41 @@
+## **v15.0.28 (2026-06-08)**
+
+**배포 패키징 검증 + frozen optional dependency 경고 해소**
+
+### 주요 반영
+
+* PyInstaller packaging
+  - 시스템 알림 기능은 `importlib.import_module("plyer")` 동적 import를 사용하므로 `naverland-scrapper.spec`에 `plyer`, `plyer.platforms.win.notification`, `plyer.platforms.win.libs.balloontip` hidden import를 추가
+  - 기본 배포 프로필은 기존과 같이 `onedir + Chromium bundle` 유지
+  - 배포 폴더에 Python DLL, Playwright Chromium/headless shell, Windows Selenium Manager가 포함되는지 확인하는 기준 명시
+* Bundled Chromium 검증
+  - `NAVERLAND_SKIP_LOCAL_CHROME=1` 설정 시 설치된 Chrome 탐지를 우회해 packaged Playwright Chromium 경로를 강제로 검증할 수 있도록 보강
+* 문서 / release 기준
+  - `README.md`, `claude.md`, `gemini.md`, `update_history.md`, `naverland-scrapper.spec`에 2026-06-08 배포 검증 기준 반영
+  - Python 미설치 PC 배포 기준은 source checks, PyInstaller build, frozen `--preflight`, frozen `--live-smoke` 순서로 유지
+
+### 검증
+
+* `python -m pytest -q`
+  - 결과: `280 passed`
+* `python -m compileall -q app_entry.py src tests`
+  - 결과: pass
+* `python -m src.utils.preflight`
+  - 결과: pass
+* `pyright`
+  - 결과: `0 errors, 0 warnings, 0 informations`
+* `python -m PyInstaller --clean --noconfirm naverland-scrapper.spec`
+  - 결과: pass, 기본 onedir 산출물 `dist/naverland/naverland.exe`
+* `dist\naverland\naverland.exe --preflight`
+  - 결과: exit code 0, 선택 라이브러리 누락 경고 없음
+* `$env:NAVERLAND_SKIP_LOCAL_CHROME='1'; dist\naverland\naverland.exe --live-smoke --smoke-headless --smoke-timeout-ms 12000 --smoke-json-log logs/live-smoke-frozen-bundled-2026-06-08.json`
+  - 결과: exit code 0, `runtime_source=frozen`, `browser=playwright_chromium`, effective article `2630347670`
+* 배포 폴더 포함 파일
+  - `dist\naverland\_internal\python314.dll`
+  - `dist\naverland\_internal\ms-playwright\chromium-1223\chrome-win64\chrome.exe`
+  - `dist\naverland\_internal\ms-playwright\chromium_headless_shell-1223\chrome-headless-shell-win64\chrome-headless-shell.exe`
+  - `dist\naverland\_internal\selenium\webdriver\common\windows\selenium-manager.exe`
+
 ## **v15.0.27 (2026-06-04)**
 
 **기능 감사 하드닝 + 문서 삭제 반영 + .spec/.gitignore/푸쉬/빌드 재점검**

@@ -27,6 +27,15 @@
     - 차단 페이지 감지 시 즉시 실패 처리
     - CSV/XLSX formula prefix escape 및 Playwright navigation timeout 설정
 
+## 0-0. v15.0.28 Deployment Packaging Verification (2026-06-08)
+- Packaging:
+  - `plyer` is imported dynamically for system notifications, so `naverland-scrapper.spec` now lists `plyer`, `plyer.platforms.win.notification`, and `plyer.platforms.win.libs.balloontip` as hidden imports.
+  - Default distribution remains `onedir + Chromium bundle`; the frozen folder should include Python DLLs, Playwright Chromium/headless shell, and Windows Selenium Manager.
+  - `NAVERLAND_SKIP_LOCAL_CHROME=1` disables local Chrome detection so frozen live smoke can verify the packaged Playwright Chromium path.
+  - Frozen `dist\naverland\naverland.exe --preflight` should exit 0 without the previous `plyer` optional dependency warning.
+- Validation baseline:
+  - Use source checks, `python -m PyInstaller --clean --noconfirm naverland-scrapper.spec`, frozen `--preflight`, and frozen `--live-smoke` for release confidence on PCs without Python.
+
 ## 0. v15.0 Delta Notes (UI/UX Refactoring)
 - `styles.py`: 하드코딩된 색상을 `COLORS` 딕셔너리로 추출하고 `_generate_stylesheet` 함수를 도입하여 QSS 기반 동적 테마를 생성합니다.
 - `components.py`: 반복적으로 사용되는 '결과 없음' 상태 처리를 위한 `EmptyStateWidget` 컴포넌트가 추가되었습니다. `SummaryCard`와 `SpeedSlider` 등의 인라인 스타일링이 객체 이름 및 QSS 기반으로 리팩토링되었습니다.
