@@ -10,6 +10,7 @@ from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
 logger = get_logger("Parser")
+from src.core.parser_parts.contracts import runtime_contract
 
 
 class NaverURLExtractMixin:
@@ -31,6 +32,7 @@ class NaverURLExtractMixin:
     @classmethod
     def parse_url_info(cls, url_or_text):
         """URL 문자열을 구조화해 반환한다."""
+        runtime_cls = runtime_contract(cls)
         raw = str(url_or_text or "").strip()
         if not raw:
             return {
@@ -42,9 +44,9 @@ class NaverURLExtractMixin:
                 "article_id": "",
             }
 
-        url = cls._URL_RE.search(raw)
+        url = runtime_cls._URL_RE.search(raw)
         token = url.group(0) if url else raw
-        for entry in cls._PARSE_PATTERNS:
+        for entry in runtime_cls._PARSE_PATTERNS:
             match = entry["pattern"].search(token)
             if not match:
                 continue
@@ -80,15 +82,16 @@ class NaverURLExtractMixin:
     @classmethod
     def extract_from_text(cls, text):
         """텍스트에서 모든 단지 URL/ID를 추출한다."""
+        runtime_cls = runtime_contract(cls)
         raw_text = str(text or "")
         results = []
         seen = set()
 
-        urls = cls._URL_RE.findall(raw_text)
+        urls = runtime_cls._URL_RE.findall(raw_text)
         for url in urls:
             parsed = cls.parse_url_info(url)
             cid = str(parsed.get("complex_id", "") or "").strip()
-            asset_type = cls._normalize_asset_type(parsed.get("asset_type", "APT"))
+            asset_type = runtime_cls._normalize_asset_type(parsed.get("asset_type", "APT"))
             dedupe_key = (asset_type, cid)
             if cid and dedupe_key not in seen:
                 results.append(
@@ -137,6 +140,7 @@ class NaverURLExtractMixin:
 
     @classmethod
     def _extract_id_from_line(cls, line):
+        runtime_cls = runtime_contract(cls)
         if not line:
             return None
         raw_line = str(line).strip()
@@ -147,15 +151,15 @@ class NaverURLExtractMixin:
         if "articleid" in lower and "complexno" not in lower:
             return None
 
-        q_match = cls._COMPLEX_QUERY_RE.search(raw_line)
+        q_match = runtime_cls._COMPLEX_QUERY_RE.search(raw_line)
         if q_match:
             return q_match.group(1)
 
-        context_match = cls._CONTEXT_ID_LINE_RE.search(raw_line)
+        context_match = runtime_cls._CONTEXT_ID_LINE_RE.search(raw_line)
         if context_match:
             return context_match.group(1)
 
-        standalone_match = cls._STANDALONE_ID_LINE_RE.match(raw_line)
+        standalone_match = runtime_cls._STANDALONE_ID_LINE_RE.match(raw_line)
         if standalone_match:
             return standalone_match.group(1)
 

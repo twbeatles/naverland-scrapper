@@ -10,6 +10,7 @@ from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
 logger = get_logger("Parser")
+from src.core.parser_parts.contracts import runtime_contract
 from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession
 
 
@@ -45,12 +46,13 @@ class NaverArticleLookupMixin:
 
     @classmethod
     def _detect_article_asset_type(cls, text: str, fallback: str = "APT") -> str:
+        runtime_cls = runtime_contract(cls)
         corpus = str(text or "")
-        for match in cls._ARTICLE_TYPE_CODE_RE.finditer(corpus):
+        for match in runtime_cls._ARTICLE_TYPE_CODE_RE.finditer(corpus):
             detected = cls._normalize_article_asset_type_token(match.group(1))
             if detected:
                 return detected
-        for match in cls._ARTICLE_TYPE_NAME_RE.finditer(corpus):
+        for match in runtime_cls._ARTICLE_TYPE_NAME_RE.finditer(corpus):
             name = match.group(1)
             if any(token in name for token in ("빌라", "연립", "다세대", "주택")):
                 return "VL"
@@ -60,13 +62,14 @@ class NaverArticleLookupMixin:
             return "VL"
         if any(token in corpus for token in ("빌라", "연립", "다세대")):
             return "VL"
-        return cls._normalize_asset_type(fallback)
+        return runtime_cls._normalize_asset_type(fallback)
 
     @classmethod
     def _extract_article_complex_info(cls, body_text: str, fallback_asset_type: str = "APT") -> tuple[str, str]:
+        runtime_cls = runtime_contract(cls)
         corpus = unescape(str(body_text or "")).replace("\\/", "/")
         detected_asset = cls._detect_article_asset_type(corpus, fallback=fallback_asset_type)
-        for pattern_asset, pattern in cls._ARTICLE_COMPLEX_PATTERNS:
+        for pattern_asset, pattern in runtime_cls._ARTICLE_COMPLEX_PATTERNS:
             match = pattern.search(corpus)
             if match:
                 cid = str(match.group(1) or "").strip()
@@ -74,8 +77,8 @@ class NaverArticleLookupMixin:
                     asset = detected_asset or pattern_asset or fallback_asset_type
                     if pattern_asset == "VL" and detected_asset == "APT":
                         asset = "VL"
-                    return cid, cls._normalize_asset_type(asset)
-        return "", cls._normalize_asset_type(detected_asset or fallback_asset_type)
+                    return cid, runtime_cls._normalize_asset_type(asset)
+        return "", runtime_cls._normalize_asset_type(detected_asset or fallback_asset_type)
 
     @classmethod
     def resolve_article_complex(
@@ -91,8 +94,9 @@ class NaverArticleLookupMixin:
         if not aid:
             return {}
         logger = get_logger("NaverURLParser")
+        runtime_cls = runtime_contract(cls)
         for source, url in cls._article_lookup_urls(aid):
-            if cls._is_cancelled(cancel_checker):
+            if runtime_cls._is_cancelled(cancel_checker):
                 raise RetryCancelledError("article lookup cancelled before attempt")
             try:
                 body = cls._fetch_article_lookup_impl(url)
@@ -101,7 +105,7 @@ class NaverArticleLookupMixin:
             except (HTTPError, URLError, SocketTimeout, TimeoutError, OSError) as e:
                 logger.debug(f"매물 단지 역조회 실패 ({source}:{aid}): {e}")
                 continue
-            if cls._is_cancelled(cancel_checker):
+            if runtime_cls._is_cancelled(cancel_checker):
                 raise RetryCancelledError("article lookup cancelled after response")
             cid, asset_type = cls._extract_article_complex_info(body, fallback_asset_type=fallback_asset_type)
             if cid:
@@ -112,7 +116,7 @@ class NaverArticleLookupMixin:
                     "article_id": aid,
                     "url": url,
                 }
-        if cls._is_cancelled(cancel_checker):
+        if runtime_cls._is_cancelled(cancel_checker):
             raise RetryCancelledError("article lookup cancelled before browser fallback")
         if browser_fallback is not None:
             try:

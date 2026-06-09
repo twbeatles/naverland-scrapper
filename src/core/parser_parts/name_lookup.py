@@ -10,18 +10,19 @@ from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
 logger = get_logger("Parser")
+from src.core.parser_parts.contracts import runtime_contract
 
 
 class NaverNameLookupMixin:
 
     @classmethod
     def _name_cache_key(cls, complex_id, asset_type="APT") -> str:
-        return f"{cls._normalize_asset_type(asset_type)}:{str(complex_id or '').strip()}"
+        return f"{runtime_contract(cls)._normalize_asset_type(asset_type)}:{str(complex_id or '').strip()}"
 
     @classmethod
     def _fetch_name_impl(cls, complex_id, asset_type="APT"):
         """네이버 API를 호출해 단지명을 조회한다."""
-        asset_token = cls._normalize_asset_type(asset_type)
+        asset_token = runtime_contract(cls)._normalize_asset_type(asset_type)
         entity_path = "houses" if asset_token == "VL" else "complexes"
         url = f"https://new.land.naver.com/api/{entity_path}/{complex_id}?sameAddressGroup=false"
         req = urllib.request.Request(url)
@@ -54,7 +55,7 @@ class NaverNameLookupMixin:
             get_logger("NaverURLParser").debug(f"단지명 browser fallback 사용 불가: {e}")
             return ""
 
-        asset_token = cls._normalize_asset_type(asset_type)
+        asset_token = runtime_contract(cls)._normalize_asset_type(asset_type)
         expected_entity = "houses" if asset_token == "VL" else "complexes"
         expected_detail = f"/api/{expected_entity}/{cid}"
         expected_articles = f"/api/articles/{'house' if asset_token == 'VL' else 'complex'}/{cid}"
@@ -150,9 +151,10 @@ class NaverNameLookupMixin:
 
     @classmethod
     def _activate_name_lookup_cooldown(cls):
-        cls._name_lookup_cooldown_until = max(
-            float(cls._name_lookup_cooldown_until or 0.0),
-            time.monotonic() + float(cls._NAME_LOOKUP_COOLDOWN_SECONDS),
+        runtime_cls = runtime_contract(cls)
+        runtime_cls._name_lookup_cooldown_until = max(
+            float(runtime_cls._name_lookup_cooldown_until or 0.0),
+            time.monotonic() + float(runtime_cls._NAME_LOOKUP_COOLDOWN_SECONDS),
         )
 
     @classmethod
@@ -164,14 +166,16 @@ class NaverNameLookupMixin:
 
     @classmethod
     def _reset_runtime_state_for_tests(cls):
-        cls._name_cache.clear()
-        cls._name_lookup_cooldown_until = 0.0
+        runtime_cls = runtime_contract(cls)
+        runtime_cls._name_cache.clear()
+        runtime_cls._name_lookup_cooldown_until = 0.0
 
     @classmethod
     def fetch_complex_name(cls, complex_id, asset_type="APT", cancel_checker=None):
         """단지 ID로 단지명을 조회한다."""
+        runtime_cls = runtime_contract(cls)
         cid = str(complex_id or "").strip()
-        asset_token = cls._normalize_asset_type(asset_type)
+        asset_token = runtime_cls._normalize_asset_type(asset_type)
         fallback_name = cls._fallback_name(cid)
         if not cid:
             return fallback_name
@@ -179,12 +183,12 @@ class NaverNameLookupMixin:
             raise RetryCancelledError("lookup cancelled before attempt")
 
         cache_key = cls._name_cache_key(cid, asset_token)
-        cached = cls._name_cache.get(cache_key, "")
+        cached = runtime_cls._name_cache.get(cache_key, "")
         if cached:
             return cached
 
         logger = get_logger("NaverURLParser")
-        direct_lookup_cooling_down = time.monotonic() < float(cls._name_lookup_cooldown_until or 0.0)
+        direct_lookup_cooling_down = time.monotonic() < float(runtime_cls._name_lookup_cooldown_until or 0.0)
         if direct_lookup_cooling_down:
             logger.debug(f"단지명 direct 조회 cooldown 중, browser fallback 시도 ({asset_token}:{cid})")
             browser_name = str(
@@ -196,14 +200,14 @@ class NaverNameLookupMixin:
                 or ""
             ).strip()
             if browser_name:
-                cls._name_cache[cache_key] = browser_name
+                runtime_cls._name_cache[cache_key] = browser_name
                 return browser_name
             return fallback_name
 
         try:
             name = str(cls._fetch_name_impl(cid, asset_type=asset_token) or "").strip() or fallback_name
             if name and not name.startswith("단지_"):
-                cls._name_cache[cache_key] = name
+                runtime_cls._name_cache[cache_key] = name
             return name
         except RetryCancelledError:
             raise
@@ -225,7 +229,7 @@ class NaverNameLookupMixin:
                         or ""
                     ).strip()
                     if browser_name:
-                        cls._name_cache[cache_key] = browser_name
+                        runtime_cls._name_cache[cache_key] = browser_name
                         return browser_name
                 else:
                     logger.debug(
