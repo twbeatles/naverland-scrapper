@@ -136,6 +136,21 @@ class SettingsDialog(QDialog):
         self.spin_playwright_navigation_timeout.setRange(1000, 60000)
         self.spin_playwright_navigation_timeout.setSingleStep(1000)
         perf_layout.addWidget(self.spin_playwright_navigation_timeout, 8, 1)
+
+        self.check_article_api_fast_path = QCheckBox("Article API fast path 사용")
+        perf_layout.addWidget(self.check_article_api_fast_path, 9, 0, 1, 2)
+
+        perf_layout.addWidget(QLabel("Article API timeout(ms):"), 10, 0)
+        self.spin_article_api_timeout = QSpinBox()
+        self.spin_article_api_timeout.setRange(300, 20000)
+        self.spin_article_api_timeout.setSingleStep(100)
+        perf_layout.addWidget(self.spin_article_api_timeout, 10, 1)
+
+        perf_layout.addWidget(QLabel("Article 응답 조기대기(ms):"), 11, 0)
+        self.spin_article_response_wait = QSpinBox()
+        self.spin_article_response_wait.setRange(100, 20000)
+        self.spin_article_response_wait.setSingleStep(100)
+        perf_layout.addWidget(self.spin_article_response_wait, 11, 1)
         perf_group.setLayout(perf_layout)
         layout.addWidget(perf_group)
 
@@ -250,6 +265,15 @@ class SettingsDialog(QDialog):
         self.spin_playwright_navigation_timeout.setValue(
             int(settings.get("playwright_navigation_timeout_ms", 15000) or 15000)
         )
+        self.check_article_api_fast_path.setChecked(
+            bool(settings.get("playwright_article_api_fast_path", True))
+        )
+        self.spin_article_api_timeout.setValue(
+            int(settings.get("playwright_article_api_timeout_ms", 2500) or 2500)
+        )
+        self.spin_article_response_wait.setValue(
+            int(settings.get("playwright_article_response_wait_ms", 1200) or 1200)
+        )
         self.spin_geo_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
         self.spin_geo_rings.setValue(max(0, _int_setting("geo_grid_rings", 1)))
         self.spin_geo_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
@@ -298,6 +322,9 @@ class SettingsDialog(QDialog):
             "playwright_block_heavy_resources": self.check_block_heavy_resources.isChecked(),
             "playwright_response_drain_timeout_ms": self.spin_playwright_drain_timeout.value(),
             "playwright_navigation_timeout_ms": self.spin_playwright_navigation_timeout.value(),
+            "playwright_article_api_fast_path": self.check_article_api_fast_path.isChecked(),
+            "playwright_article_api_timeout_ms": self.spin_article_api_timeout.value(),
+            "playwright_article_response_wait_ms": self.spin_article_response_wait.value(),
             "geo_default_zoom": self.spin_geo_zoom.value(),
             "geo_grid_rings": self.spin_geo_rings.value(),
             "geo_grid_step_px": self.spin_geo_step.value(),

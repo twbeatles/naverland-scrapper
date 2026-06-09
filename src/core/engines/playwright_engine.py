@@ -41,8 +41,7 @@ PLAYWRIGHT_RETRY_ATTEMPTS = 3
 PLAYWRIGHT_RETRY_BASE_DELAY_SEC = 0.35
 
 
-import inspect
-import types
+from src.utils.mixin_rebind import rebind_inherited_methods
 
 from src.core.engines.playwright_parts.runtime import PlaywrightRuntimeMixin
 from src.core.engines.playwright_parts.complex_mode import PlaywrightComplexModeMixin
@@ -59,77 +58,12 @@ class PlaywrightCrawlerEngine(
 
 
 
-def _clone_function_with_globals(func):
-    cloned = types.FunctionType(
-        func.__code__,
-        globals(),
-        name=func.__name__,
-        argdefs=func.__defaults__,
-        closure=func.__closure__,
-    )
-    cloned.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
-    cloned.__annotations__ = dict(getattr(func, "__annotations__", {}))
-    cloned.__doc__ = func.__doc__
-    cloned.__module__ = __name__
-    return cloned
-
-
-def _rebind_inherited_methods(cls, method_names):
-    for name in method_names:
-        raw = inspect.getattr_static(cls, name, None)
-        if raw is None:
-            continue
-        if isinstance(raw, staticmethod):
-            setattr(cls, name, staticmethod(_clone_function_with_globals(raw.__func__)))
-        elif isinstance(raw, classmethod):
-            setattr(cls, name, classmethod(_clone_function_with_globals(raw.__func__)))
-        elif inspect.isfunction(raw):
-            setattr(cls, name, _clone_function_with_globals(raw))
-    return cls
-
-
-_rebind_inherited_methods(
+rebind_inherited_methods(
     PlaywrightCrawlerEngine,
-    [
-    "__init__",
-    "run",
-    "close",
-    "_run",
-    "_ensure_runtime_stats",
-    "_navigation_timeout_ms",
-    "_sleep_async_interruptible",
-    "_async_retry",
-    "_check_memory_and_recycle_if_needed",
-    "_ensure_started",
-    "_shutdown_async",
-    "_launch_browser",
-    "_launch_browser_once",
-    "_profile_root",
-    "_storage_state_path",
-    "_create_context",
-    "_save_context_state",
-    "_warmup_runtime_pages",
-    "_warmup_page",
-    "_build_entry_plans",
-    "_run_entry_plan",
-    "_maybe_enable_headed_fallback",
-    "_setup_blocking",
-    "_classify_page_state",
-    "_spawn_response_task",
-    "_drain_pending_response_tasks",
-    "_process_raw_items_with_filtered_details",
-    "_run_complex_mode",
-    "_run_geo",
-    "_build_marker_handler",
-    "_scan_geo_asset_type",
-    "_crawl_target_with_cache",
-    "_collect_target_raw_items",
-    "_enrich_items_with_mobile_details",
-    "_candidate_paths",
-    "_get_ms",
-    "_wheel_to_zoom",
-    "_drag_to_latlon",
-    "_human_like_recenter",
-    "_switch_to_listing_markers",
+    mixin_classes=[
+        PlaywrightRuntimeMixin,
+        PlaywrightComplexModeMixin,
+        PlaywrightGeoModeMixin,
     ],
+    globals_dict=globals(),
 )

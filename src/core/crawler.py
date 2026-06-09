@@ -35,8 +35,7 @@ from src.core.models.crawl_models import GeoSweepConfig
 # 메모리 임계치 (MB) - 초과 시 드라이버 재시작
 MEMORY_THRESHOLD_MB = 500
 
-import inspect
-import types
+from src.utils.mixin_rebind import rebind_inherited_methods
 
 from src.core.crawler_parts.state_runtime import CrawlerStateRuntimeMixin
 from src.core.crawler_parts.history_alerts import CrawlerHistoryAlertsMixin
@@ -80,98 +79,13 @@ class CrawlerThread(
     
 
 
-def _clone_function_with_globals(func):
-    cloned = types.FunctionType(
-        func.__code__,
-        globals(),
-        name=func.__name__,
-        argdefs=func.__defaults__,
-        closure=func.__closure__,
-    )
-    cloned.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
-    cloned.__annotations__ = dict(getattr(func, "__annotations__", {}))
-    cloned.__doc__ = func.__doc__
-    cloned.__module__ = __name__
-    return cloned
-
-
-def _rebind_inherited_methods(cls, method_names):
-    for name in method_names:
-        raw = inspect.getattr_static(cls, name, None)
-        if raw is None:
-            continue
-        if isinstance(raw, staticmethod):
-            setattr(cls, name, staticmethod(_clone_function_with_globals(raw.__func__)))
-        elif isinstance(raw, classmethod):
-            setattr(cls, name, classmethod(_clone_function_with_globals(raw.__func__)))
-        elif inspect.isfunction(raw):
-            setattr(cls, name, _clone_function_with_globals(raw))
-    return cls
-
-
-_rebind_inherited_methods(
+rebind_inherited_methods(
     CrawlerThread,
-    [
-    "__init__",
-    "stop",
-    "set_shutdown_mode",
-    "_should_stop",
-    "_sleep_interruptible",
-    "_create_engine",
-    "_estimate_remaining_seconds",
-    "_get_speed_delay",
-    "_pair_key",
-    "_build_pair_sequence",
-    "_remaining_pairs",
-    "_mark_pair_processed",
-    "_unique_trade_types",
-    "_determine_run_status",
-    "_mark_geo_incomplete",
-    "_geo_incomplete_reason_label",
-    "_geo_incomplete_reason_summary",
-    "_should_persist_geo_results",
-    "_item_dedupe_key",
-    "_is_block_like_error",
-    "_register_block_detection",
-    "_reset_block_detection_streak",
-    "register_discovered_complex",
-    "record_crawl_history",
-    "_finalize_disappeared_articles",
-    "_process_raw_items",
-    "_run_fallback_selenium",
-    "log",
-    "_push_item",
-    "_flush_pending_items_if_needed",
-    "_build_stats_payload",
-    "emit_stats",
-    "_row_get",
-    "_cache_key",
-    "_normalize_target_asset_type",
-    "_normalize_target_entry",
-    "_iter_targets",
-    "_blocked_pair_key",
-    "_get_pair_blocked_cooldown_remaining",
-    "_record_blocked_event",
-    "_record_pair_success",
-    "_flush_discovered_complex_registrations",
-    "_get_history_state_map",
-    "_get_alert_rules",
-    "_flush_history_updates_fallback",
-    "_notify_db_write_disabled",
-    "_flush_history_updates",
-    "_enrich_item_with_history_and_alerts",
-    "_init_driver",
-    "run",
-    "_run_selenium_loop",
-    "_crawl",
-    "_crawl_once",
-    "_detect_block_signal",
-    "_assert_not_blocked_page",
-    "_get_item_state",
-    "_detect_scroll_container",
-    "_scroll_once",
-    "_scroll",
-    "_parse",
-    "_check_filters",
+    mixin_classes=[
+        CrawlerStateRuntimeMixin,
+        CrawlerHistoryAlertsMixin,
+        CrawlerSeleniumFlowMixin,
+        CrawlerDomScrollParseMixin,
     ],
+    globals_dict=globals(),
 )

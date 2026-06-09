@@ -10,85 +10,16 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-# Rechecked on 2026-03-21 (.spec/doc/gitignore/runtime-status/performance refactor pass):
-# no extra hidden imports/hooks required.
-# Rechecked on 2026-03-25 (repo-wide pyright/encoding/live-smoke consistency pass):
-# `app_entry.py --live-smoke`, `.vscode/settings.json`, `pyrightconfig.json`,
-# and repo-wide typing/encoding guardrails are runtime/editor-only changes and
-# do not require extra PyInstaller datas, hidden imports, or hooks.
-# Rechecked on 2026-04-10 (live-site reliability/doc/spec/gitignore pass):
-# detail parser front-api mapping, 429 fast-fallback name lookup cooldown,
-# expanded live smoke probes/CLI flags, and helper-based URL family cleanup
-# remain runtime/UI-only and do not require extra PyInstaller datas, hidden
-# imports, or hooks.
-# Rechecked on 2026-04-11 (schedule/asset-scope/CI reliability pass):
-# actual-start-gated schedule slot consumption, scheduled task snapshot/restore,
-# asset-scoped runtime item dedupe, and static-check-only CI policy remain
-# runtime/test/documentation-level changes and do not require extra PyInstaller
-# datas, hidden imports, or hooks.
-# Rechecked on 2026-04-16 (asset-scope/monthly-history/dashboard/doc-sync pass):
-# VL houses URL asset preservation, complex task `(asset_type, complex_id)` dedupe,
-# scoped disappeared-count dashboard stats, 월세 rent-priority history comparison,
-# 즐겨찾기 column cleanup, and GitHub Actions static-check-only policy remain
-# runtime/test/documentation-level changes and do not require extra PyInstaller
-# datas, hidden imports, or hooks.
-# Rechecked on 2026-04-27 (implementation gap closure/doc/spec/gitignore pass):
-# scheduled complex Playwright APT/VL loading, Selenium VL exclusion, article-only
-# URL reverse lookup, monthly UI rent-priority price metrics, Selenium monthly DOM
-# parser fallback, and mixin rebind meta-tests are Python/runtime/test/doc changes
-# and do not require extra PyInstaller datas, hidden imports, or hooks.
-# Workspace typing/encoding guardrails (`pyrightconfig.json`, `.editorconfig`) and
-# UI performance refactors (`src/ui/widgets/cards.py`, dashboard first-open lazy init,
-# lightweight startup preflight)
-# do not require spec changes.
-# Functional reliability changes (monthly snapshot metric split, schedule geo full profile,
-# atomic JSON runtime state storage/quarantine, VL houses URL parsing, DB restore crawler
-# shutdown hardening) are also Python/runtime-level only and do not require extra
-# PyInstaller datas/hooks.
-# Rechecked on 2026-05-03 (functional implementation hardening/doc/gitignore/CI pass):
-# asset-scoped legacy DB methods, daily-latest price snapshot upserts, schedule hydration
-# save guard, filtered-out history/alert exclusion, article-only browser fallback,
-# detail metadata preservation/export columns, expanded live smoke JSON logging, and
-# core pytest CI subset are Python/runtime/test/documentation changes. Existing
-# Playwright hidden imports, runtime hook, and optional Chromium bundle rules remain
-# sufficient; no extra PyInstaller datas, hidden imports, or hooks are required.
-# Rechecked on 2026-05-04 (implementation review closure/doc deletion/gitignore/build pass):
-# Geo marker switch stats exposure, DEFAULT_COLUMNS-based export defaults, expanded
-# fast CI subset, confirmed-empty cache refinement, trade-type-scoped history cache,
-# and batch article browser fallback session reuse are all Python/runtime/test/doc
-# changes. The existing Playwright hidden imports, runtime hook, and Chromium bundle
-# collection remain sufficient; no additional datas, hidden imports, or hooks are required.
-# Rechecked on 2026-05-11 (live-site sample refresh and functional hardening pass):
-# ExportResult, live-smoke sample/article-count checks, `complexNumber` parser support,
-# browser-backed name lookup fallback, packaged article fallback local Chrome preference,
-# ConnectionPoolCloseResult, analysis asset scope, and mixin rebind meta-tests are all Python/runtime/test/doc changes. Existing
-# Playwright hidden imports, runtime hook, and Chromium bundle collection remain
-# sufficient; no additional datas, hidden imports, or hooks are required.
-# Rechecked on 2026-05-15 (functional risk closure/doc/spec/gitignore/publish pass):
-# direct-lookup-only name cooldown, optional `--live-smoke-detail-fields`, smoke
-# runtime metadata logging, Geo empty-asset start/save blocking, and manual APT/VL
-# selector are Python/runtime/UI/test/doc changes. Existing Playwright hidden
-# imports, runtime hook, and Chromium bundle collection remain sufficient; no
-# additional datas, hidden imports, or hooks are required.
-# Rechecked on 2026-06-04 (functional audit hardening/doc/spec/gitignore/publish pass):
-# Selenium fallback prefill finalization, DB rollback guards, CSV/XLSX formula
-# escaping, URL batch generation guards, Playwright navigation timeout settings,
-# bounded detail enrichment tasks, and Geo empty-asset policy normalization are
-# Python/runtime/UI/test/doc changes. Existing Playwright/Selenium hidden imports,
-# runtime hook, Chromium bundle collection, and lxml/html5lib exclusions remain
-# sufficient; no additional datas, hidden imports, or hooks are required.
-# Rechecked on 2026-06-08 (deployment packaging verification pass):
-# `plyer` is dynamically imported for system notifications. Keep only the
-# Windows notification backend in hidden imports to avoid collecting mobile
-# backends that require platform-only dependencies such as `jnius`.
-# 2026-03-19 functional consistency batch (recently-viewed article-open routing,
-# schedule slot/catch-up persistence, dashboard stale-state clear + trend summary,
-# deprecated `result_tab_mode` cleanup) is likewise runtime/UI-only and does not
-# require additional PyInstaller datas, hidden imports, or hooks.
-# 2026-03-21 performance refactor batch (compact dirty-row live rendering,
-# lightweight favorite key hydration, hidden-tab stale refresh, perf baseline/doc sync)
-# is likewise runtime/UI-only and does not require additional PyInstaller datas,
-# hidden imports, or hooks.
+#
+# Rechecked 2026-06-09 after performance + facade structure refactor:
+# - Newly split `*_parts` packages are normal Python source modules reached through
+#   static imports from existing facade modules.
+# - Article API fast path, response-capture fallback, price snapshot worker, parser
+#   split, live-smoke split, dashboard/style split, and common mixin rebinding do not
+#   require additional PyInstaller datas, hidden imports, or runtime hooks.
+# - Keep existing dynamic hidden imports for matplotlib Qt backend, plyer Windows
+#   notifications, undetected_chromedriver, Selenium DevTools, and Playwright.
+# - Keep the Playwright runtime hook and optional Chromium/headless-shell bundle rules.
 project_dir = Path.cwd().resolve()
 # Default distribution profile is onedir with bundled Chromium.
 # This avoids onefile extraction overhead and matches the current README/doc baseline.

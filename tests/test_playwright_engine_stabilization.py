@@ -68,6 +68,9 @@ class _ThreadStub:
         self.playwright_detail_workers = 1
         self.playwright_response_drain_timeout_ms = 3000
         self.playwright_navigation_timeout_ms = 15000
+        self.playwright_article_api_fast_path = True
+        self.playwright_article_api_timeout_ms = 2500
+        self.playwright_article_response_wait_ms = 1200
         self.block_heavy_resources = False
         self.engine_name = "playwright"
         self.crawl_mode = "complex"
@@ -109,6 +112,10 @@ class _ThreadStub:
             "geo_marker_switch_success_count": 0,
             "geo_marker_switch_fail_count": 0,
             "geo_marker_switch_last_method": "",
+            "article_api_fast_path_hit_count": 0,
+            "article_api_fast_path_fail_count": 0,
+            "article_api_fast_path_fallback_count": 0,
+            "article_api_last_status": "",
         }
         self.logged = []
         self.registered = []
@@ -397,15 +404,37 @@ class _FakeAsyncPlaywright:
 
 
 class _FakeResponse:
-    def __init__(self, url, payload, delay_sec=0.0):
+    def __init__(self, url, payload, delay_sec=0.0, status=200, request_headers=None):
         self.url = url
         self._payload = payload
         self._delay_sec = float(delay_sec)
+        self.status = status
+        self.request = SimpleNamespace(headers=dict(request_headers or {}))
 
     async def json(self):
         if self._delay_sec > 0:
             await asyncio.sleep(self._delay_sec)
         return self._payload
+
+
+class _FakeRequestContext:
+    def __init__(self, responses):
+        self._responses = list(responses or [])
+        self.calls = []
+
+    async def get(self, url, **kwargs):
+        self.calls.append({"url": url, **dict(kwargs or {})})
+        if not self._responses:
+            raise RuntimeError("no fake api response")
+        response = self._responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
+
+
+class _FakeContextWithRequest:
+    def __init__(self, request):
+        self.request = request
 
 
 class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
@@ -467,6 +496,149 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         article_id = raw_items[0].get("매물ID") or raw_items[0].get(_LEGACY_ARTICLE_ID_KEY)
         self.assertEqual(article_id, "A1")
         self.assertTrue(any("article_capture:complexes/12345" in msg for msg, _ in thread.logged))
+
+    async def test_article_api_fast_path_success_skips_page_navigation(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                    payload={"articleList": [{"articleNo": "API-1", "tradeTypeCode": "A1"}]},
+                )
+            ]
+        )
+        page = _FakePage(responses=[])
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+        engine._article_api_auth_header = "Bearer unit-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    return_value={"매물ID": "API-1", _LEGACY_ARTICLE_ID_KEY: "API-1"},
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(collect_result.get("api_fast_path"))
+        self.assertTrue(collect_result.get("response_seen"))
+        self.assertEqual(len(collect_result.get("raw_items", [])), 1)
+        self.assertEqual(len(request.calls), 1)
+        self.assertEqual(page.goto_calls, [])
+        self.assertEqual(int(thread.stats.get("article_api_fast_path_hit_count", 0)), 1)
+
+    async def test_article_api_fast_path_empty_result_is_confirmed_without_navigation(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                    payload={"articleList": []},
+                )
+            ]
+        )
+        page = _FakePage(responses=[])
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+        engine._article_api_auth_header = "Bearer unit-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            collect_result = await engine._collect_target_raw_items(
+                "테스트단지",
+                "12345",
+                trade_type,
+                asset_type="APT",
+                mode="complex",
+            )
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(collect_result.get("api_fast_path"))
+        self.assertTrue(collect_result.get("response_seen"))
+        self.assertTrue(collect_result.get("parse_success"))
+        self.assertFalse(collect_result.get("capture_failed"))
+        self.assertEqual(collect_result.get("raw_items"), [])
+        self.assertEqual(page.goto_calls, [])
+
+    async def test_article_api_fast_path_failure_falls_back_to_response_capture(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                    payload={},
+                    status=429,
+                )
+            ]
+        )
+        page = _FakePage(
+            responses=[
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
+                    payload={"articleList": [{"articleNo": "FALLBACK-1", "tradeTypeCode": "A1"}]},
+                    request_headers={"authorization": "Bearer unit-token"},
+                )
+            ]
+        )
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+        engine._article_api_auth_header = "Bearer stale-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    return_value={"매물ID": "FALLBACK-1", _LEGACY_ARTICLE_ID_KEY: "FALLBACK-1"},
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertFalse(collect_result.get("api_fast_path", False))
+        self.assertEqual(len(collect_result.get("raw_items", [])), 1)
+        self.assertGreaterEqual(len(page.goto_calls), 1)
+        self.assertEqual(int(thread.stats.get("article_api_fast_path_fail_count", 0)), 1)
+        self.assertEqual(int(thread.stats.get("article_api_fast_path_fallback_count", 0)), 1)
+        self.assertEqual(getattr(engine, "_article_api_auth_header", ""), "Bearer unit-token")
 
     async def test_marker_handler_drains_and_applies_dedupe_rules(self):
         thread = _ThreadStub()

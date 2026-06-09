@@ -38,6 +38,9 @@ class CrawlerStateRuntimeMixin:
         block_heavy_resources=True,
         playwright_response_drain_timeout_ms=3000,
         playwright_navigation_timeout_ms=15000,
+        playwright_article_api_fast_path=True,
+        playwright_article_api_timeout_ms=2500,
+        playwright_article_response_wait_ms=1200,
         geo_incomplete_safety_mode=True,
     ):
         super().__init__()
@@ -95,6 +98,10 @@ class CrawlerStateRuntimeMixin:
             "response_match_count": 0,
             "capture_failed_count": 0,
             "block_like_redirect_count": 0,
+            "article_api_fast_path_hit_count": 0,
+            "article_api_fast_path_fail_count": 0,
+            "article_api_fast_path_fallback_count": 0,
+            "article_api_last_status": "",
             "detail_network_response_total": 0,
             "detail_hydration_hit_count": 0,
             "fallback_trigger_count": 0,
@@ -155,6 +162,15 @@ class CrawlerStateRuntimeMixin:
             self.playwright_navigation_timeout_ms = min(60000, max(1000, int(playwright_navigation_timeout_ms)))
         except (TypeError, ValueError):
             self.playwright_navigation_timeout_ms = 15000
+        self.playwright_article_api_fast_path = bool(playwright_article_api_fast_path)
+        try:
+            self.playwright_article_api_timeout_ms = min(20000, max(300, int(playwright_article_api_timeout_ms)))
+        except (TypeError, ValueError):
+            self.playwright_article_api_timeout_ms = 2500
+        try:
+            self.playwright_article_response_wait_ms = min(20000, max(100, int(playwright_article_response_wait_ms)))
+        except (TypeError, ValueError):
+            self.playwright_article_response_wait_ms = 1200
         self.geo_incomplete_safety_mode = bool(geo_incomplete_safety_mode)
         self.geo_incomplete = False
         self.geo_incomplete_reasons = []
@@ -421,6 +437,10 @@ class CrawlerStateRuntimeMixin:
             "response_match_count": self.stats.get("response_match_count", 0),
             "capture_failed_count": self.stats.get("capture_failed_count", 0),
             "block_like_redirect_count": self.stats.get("block_like_redirect_count", 0),
+            "article_api_fast_path_hit_count": self.stats.get("article_api_fast_path_hit_count", 0),
+            "article_api_fast_path_fail_count": self.stats.get("article_api_fast_path_fail_count", 0),
+            "article_api_fast_path_fallback_count": self.stats.get("article_api_fast_path_fallback_count", 0),
+            "article_api_last_status": self.stats.get("article_api_last_status", ""),
             "detail_network_response_total": self.stats.get("detail_network_response_total", 0),
             "detail_hydration_hit_count": self.stats.get("detail_hydration_hit_count", 0),
             "fallback_trigger_count": self.stats.get("fallback_trigger_count", 0),

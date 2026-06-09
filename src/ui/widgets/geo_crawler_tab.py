@@ -321,6 +321,9 @@ class GeoCrawlerTab(CrawlerTab):
             block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
             playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
             playwright_navigation_timeout_ms=settings.get("playwright_navigation_timeout_ms", 15000),
+            playwright_article_api_fast_path=settings.get("playwright_article_api_fast_path", True),
+            playwright_article_api_timeout_ms=settings.get("playwright_article_api_timeout_ms", 2500),
+            playwright_article_response_wait_ms=settings.get("playwright_article_response_wait_ms", 1200),
             geo_incomplete_safety_mode=settings.get("geo_incomplete_safety_mode", True),
         )
         self.crawler_thread.log_signal.connect(self.append_log)

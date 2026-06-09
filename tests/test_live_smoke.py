@@ -64,6 +64,22 @@ class _ArticleListPage:
         return "네이버페이 부동산"
 
 
+class _ArticleRequestContext:
+    def __init__(self, payload, status=200):
+        self._payload = payload
+        self._status = status
+        self.calls = []
+
+    async def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return _ArticleResponse(url, self._payload, status=self._status)
+
+
+class _ArticleApiContext:
+    def __init__(self, payload, status=200):
+        self.request = _ArticleRequestContext(payload, status=status)
+
+
 class _DetailFieldPage:
     url = "https://m.land.naver.com/article/info/2625154515"
 
@@ -107,6 +123,28 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(article_count, 2)
         self.assertIn("article_count=2", line)
         self.assertIn("sample_article=2625154515", line)
+
+    async def test_article_api_probe_records_article_count_and_sample_article(self):
+        context = _ArticleApiContext(
+            {
+                "articleList": [
+                    {"articleNo": "2625154515"},
+                    {"articleNo": "2625343720"},
+                ]
+            }
+        )
+
+        ok, line, sample_article_id, article_count = await live_smoke._run_article_api_probe(
+            context,
+            "3833",
+            1000,
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(sample_article_id, "2625154515")
+        self.assertEqual(article_count, 2)
+        self.assertIn("[ok] [article-api]", line)
+        self.assertIn("article_count=2", line)
 
     async def test_complex_probe_fails_when_article_list_is_empty(self):
         page = _ArticleListPage("102378", {"articleList": []})

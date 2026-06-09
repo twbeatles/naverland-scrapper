@@ -66,6 +66,15 @@ class ConnectionPool:
             conn.execute("PRAGMA busy_timeout=30000")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA foreign_keys=ON")
+            for pragma in (
+                "PRAGMA temp_store=MEMORY",
+                "PRAGMA cache_size=-20000",
+                "PRAGMA mmap_size=268435456",
+            ):
+                try:
+                    conn.execute(pragma)
+                except Exception:
+                    logger.debug(f"SQLite performance pragma ignored: {pragma}")
             conn.row_factory = sqlite3.Row
             return conn
         except Exception:

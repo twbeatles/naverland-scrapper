@@ -2,19 +2,14 @@ import importlib.util
 import inspect
 import unittest
 
+from src.utils.mixin_rebind import iter_mixin_callable_names
+
 
 @unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
 class TestMixinMethodRebinding(unittest.TestCase):
     @staticmethod
     def _mixin_callable_names(mixin_cls):
-        names = []
-        for name, raw in mixin_cls.__dict__.items():
-            if name.startswith("__"):
-                continue
-            obj = raw.__func__ if isinstance(raw, (staticmethod, classmethod)) else raw
-            if inspect.isfunction(obj):
-                names.append(name)
-        return names
+        return iter_mixin_callable_names(mixin_cls)
 
     def assert_all_mixin_methods_rebound(self, target_cls, mixin_classes):
         missing = []
@@ -137,3 +132,41 @@ class TestMixinMethodRebinding(unittest.TestCase):
         self.assertIsNotNone(
             inspect.getattr_static(PlaywrightCrawlerEngine, "_process_raw_items_with_filtered_details", None)
         )
+
+    def test_facade_modules_keep_public_imports(self):
+        from src.core.database_parts.article_ops import ComplexDatabaseArticleOpsMixin
+        from src.core.database_parts.crawl_snapshot_ops import ComplexDatabaseCrawlSnapshotOpsMixin
+        from src.core.database_parts.schema import ComplexDatabaseSchemaMixin
+        from src.core.engines.playwright_parts.complex_mode import PlaywrightComplexModeMixin
+        from src.core.engines.playwright_parts.geo_mode import PlaywrightGeoModeMixin
+        from src.core.engines.playwright_parts.runtime import PlaywrightRuntimeMixin
+        from src.core.parser import ArticleLookupBrowserFallbackSession, NaverURLParser
+        from src.ui.styles import COLORS, get_stylesheet
+        from src.ui.widgets.crawler_tab_parts.crawl_control import CrawlerTabCrawlControlMixin
+        from src.ui.widgets.crawler_tab_parts.result_render import CrawlerTabResultRenderMixin
+        from src.ui.widgets.crawler_tab_parts.ui_setup import CrawlerTabUISetupMixin
+        from src.ui.widgets.dashboard import ArticleCard, CardViewWidget, DashboardWidget, StatCard
+        from src.utils.live_smoke import default_live_smoke_urls, run_live_smoke
+
+        public_objects = [
+            ComplexDatabaseArticleOpsMixin,
+            ComplexDatabaseCrawlSnapshotOpsMixin,
+            ComplexDatabaseSchemaMixin,
+            PlaywrightComplexModeMixin,
+            PlaywrightGeoModeMixin,
+            PlaywrightRuntimeMixin,
+            ArticleLookupBrowserFallbackSession,
+            NaverURLParser,
+            COLORS,
+            get_stylesheet,
+            CrawlerTabCrawlControlMixin,
+            CrawlerTabResultRenderMixin,
+            CrawlerTabUISetupMixin,
+            ArticleCard,
+            CardViewWidget,
+            DashboardWidget,
+            StatCard,
+            default_live_smoke_urls,
+            run_live_smoke,
+        ]
+        self.assertTrue(all(obj is not None for obj in public_objects))

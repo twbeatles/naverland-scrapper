@@ -55,8 +55,7 @@ from src.ui.widgets.toast import ToastWidget
 settings = SettingsManager()
 ui_logger = get_logger("UI")
 
-import inspect
-import types
+from src.utils.mixin_rebind import rebind_inherited_methods
 
 from src.ui.app_parts.tab_setup import AppTabSetupMixin
 from src.ui.app_parts.stats_schedule import AppStatsScheduleMixin
@@ -76,147 +75,14 @@ class RealEstateApp(
     pass
 
 
-def _clone_function_with_globals(func):
-    cloned = types.FunctionType(
-        func.__code__,
-        globals(),
-        name=func.__name__,
-        argdefs=func.__defaults__,
-        closure=func.__closure__,
-    )
-    cloned.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
-    cloned.__annotations__ = dict(getattr(func, "__annotations__", {}))
-    cloned.__doc__ = func.__doc__
-    cloned.__module__ = __name__
-    return cloned
-
-
-def _rebind_inherited_methods(cls, method_names):
-    for name in method_names:
-        raw = inspect.getattr_static(cls, name, None)
-        if raw is None:
-            continue
-        if isinstance(raw, staticmethod):
-            setattr(cls, name, staticmethod(_clone_function_with_globals(raw.__func__)))
-        elif isinstance(raw, classmethod):
-            setattr(cls, name, classmethod(_clone_function_with_globals(raw.__func__)))
-        elif inspect.isfunction(raw):
-            setattr(cls, name, _clone_function_with_globals(raw))
-    return cls
-
-
-_rebind_inherited_methods(
+rebind_inherited_methods(
     RealEstateApp,
-    [
-    "__init__",
-    "_restore_window_geometry",
-    "_init_ui",
-    "_setup_schedule_tab",
-    "_setup_history_tab",
-    "_setup_stats_tab",
-    "_setup_dashboard_tab",
-    "_setup_favorites_tab",
-    "_setup_guide_tab",
-    "_init_menu",
-    "_init_shortcuts",
-    "_register_shortcut",
-    "_create_crawler_tab",
-    "_create_geo_tab",
-    "_create_db_tab",
-    "_create_group_tab",
-    "_ensure_db_tab",
-    "_ensure_group_tab",
-    "_ensure_favorites_tab",
-    "_start_crawling",
-    "_stop_crawling",
-    "_save_excel",
-    "_save_csv",
-    "_save_json",
-    "_init_tray",
-    "_init_timers",
-    "_mark_noncritical_stale",
-    "_mark_noncritical_loaded",
-    "_load_initial_data",
-    "_open_article_and_track",
-    "_ensure_chart_widget",
-    "_ensure_dashboard_widget",
-    "_on_crawl_data_collected",
-    "_on_alert_triggered",
-    "_on_dashboard_warning",
-    "_schedule_geo_defaults",
-    "_normalize_geo_asset_types",
-    "_selected_schedule_geo_assets",
-    "_set_schedule_geo_assets",
-    "_refresh_stats_metric_visibility",
-    "_current_stats_price_metric",
-    "_stats_metric_display_name",
-    "_update_stats_table_headers",
-    "_on_stats_type_changed",
-    "_collect_schedule_config",
-    "_save_schedule_config",
-    "_load_schedule_config",
-    "_schedule_target_descriptor",
-    "_schedule_slot_for",
-    "_remember_schedule_skip",
-    "_snapshot_crawler_tasks",
-    "_restore_crawler_tasks",
-    "_mark_schedule_run_started",
-    "_load_schedule_groups",
-    "_on_schedule_mode_changed",
-    "_check_schedule",
-    "_run_scheduled",
-    "_update_group_empty_state",
-    "_update_group_action_state",
-    "_update_group_complex_empty_state",
-    "_update_group_complex_action_state",
-    "_update_schedule_state",
-    "_load_history",
-    "_parse_pyeong_value",
-    "_format_pyeong_value",
-    "_load_stats_complexes",
-    "_load_stats",
-    "_on_stats_complex_changed",
-    "_toggle_theme",
-    "_show_settings",
-    "_apply_settings",
-    "_save_preset",
-    "_load_preset",
-    "_show_alert_settings",
-    "_show_shortcuts",
-    "_show_about",
-    "_enter_maintenance_mode",
-    "_exit_maintenance_mode",
-    "_show_advanced_filter",
-    "_apply_advanced_filter",
-    "_filter_results_advanced",
-    "_clear_advanced_filter",
-    "_render_results",
-    "_restore_summary",
-    "_is_default_advanced_filter",
-    "_refresh_favorite_keys",
-    "_decorate_items_with_favorite_state",
-    "_on_favorite_toggled",
-    "_check_advanced_filter",
-    "_show_url_batch_dialog",
-    "_add_complexes_from_url",
-    "_add_complexes_from_dialog",
-    "_show_excel_template_dialog",
-    "_save_excel_template",
-    "_shutdown_active_crawlers_for_maintenance",
-    "_backup_db",
-    "_restore_db",
-    "_refresh_tab",
-    "_focus_search",
-    "_minimize_to_tray",
-    "_show_from_tray",
-    "_tray_activated",
-    "_shutdown",
-    "_quit_app",
-    "closeEvent",
-    "show_toast",
-    "_reposition_toasts",
-    "_toggle_view_mode",
-    "show_notification",
-    "_show_recently_viewed_dialog",
+    mixin_classes=[
+        AppLifecycleMixin,
+        AppTabSetupMixin,
+        AppStatsScheduleMixin,
+        AppSettingsPresetMixin,
+        AppDatabaseMaintenanceMixin,
     ],
+    globals_dict=globals(),
 )

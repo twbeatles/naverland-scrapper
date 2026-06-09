@@ -1,35 +1,9 @@
-# Rechecked 2026-03-21:
-# current build/log/data/Playwright/runtime-artifact ignore rules remain sufficient
-# for the performance-refactor/doc/spec pass and local PyInstaller builds.
-# Rechecked 2026-04-10:
-# added `.playwright-mcp/` for local browser tooling artifacts; existing
-# build/log/data/Playwright/runtime-artifact rules otherwise remain sufficient
-# for the live-site reliability/doc/spec consistency pass.
-# Rechecked 2026-04-16:
-# asset-scope/runtime-history/dashboard/doc-sync changes keep CI on static checks
-# only and do not introduce additional generated artifacts; current ignore rules remain sufficient.
-# Rechecked 2026-04-27:
-# schedule VL policy, article URL reverse lookup, monthly UI price metric, rebind
-# meta-tests, and local PyInstaller builds do not require new ignore patterns.
-# Rechecked 2026-05-03:
-# functional hardening, live-smoke JSON logging, `.gitattributes`, core pytest CI subset,
-# and deleted implementation-gap review state need no new ignore patterns. `logs/`
-# already covers generated smoke JSON output, while `.gitattributes` remains tracked.
-# Rechecked 2026-05-04:
-# implementation-review closure, temporary review-document deletion, PyInstaller build
-# output, and expanded fast CI tests are still covered by current build/dist/log/data
-# rules. No new ignore patterns are required.
-# Rechecked 2026-05-11:
-# live-site smoke JSON/stdout/stderr logs, PyInstaller build/dist output,
-# SQLite/data files, pytest cache, and Python bytecode from the live-site sample
-# refresh and packaged smoke pass are all covered by existing rules. No new
-# ignore patterns are required.
-# Rechecked 2026-05-15:
-# source/frozen live-smoke JSON logs, detail-field smoke logs, PyInstaller
-# build/dist output, runtime data, pytest cache, and Python bytecode from the
-# functional risk closure pass are already covered. No new ignore patterns are required.
-# Rechecked 2026-06-04:
-# CodeGraph local index data is a developer artifact and should remain untracked.
+# Rechecked 2026-06-09:
+# Current performance + structure refactor adds source packages only.
+# Generated artifacts remain covered by logs/, build/, dist/, data/, cache,
+# bytecode, Playwright, and local CodeGraph ignore rules below.
+# No new ignore pattern is required.
+
 # Python
 __pycache__/
 *.py[cod]

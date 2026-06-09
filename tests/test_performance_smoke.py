@@ -152,6 +152,38 @@ class TestPerformanceSmoke(unittest.TestCase):
             compact_tab.deleteLater()
             self._qt_app.processEvents()
 
+    def test_price_snapshot_bulk_upsert_large_smoke(self):
+        from src.core.database import ComplexDatabase
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "perf_snapshot_bulk.db"))
+            try:
+                rows = []
+                for i in range(3000):
+                    rows.append(
+                        (
+                            "APT",
+                            f"C{i % 200}",
+                            "매매",
+                            float(20 + (i % 12) * 5),
+                            10000 + i,
+                            12000 + i,
+                            11000 + i,
+                            1 + (i % 5),
+                            "price",
+                            0,
+                        )
+                    )
+
+                start = time.perf_counter()
+                saved = db.add_price_snapshots_bulk(rows)
+                elapsed = time.perf_counter() - start
+
+                self.assertEqual(saved, len(rows))
+                self.assertLess(elapsed, 1.0)
+            finally:
+                db.close()
+
 
 if __name__ == "__main__":
     unittest.main()

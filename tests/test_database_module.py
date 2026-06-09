@@ -337,6 +337,60 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             migrated_db.close()
 
+    def test_price_snapshot_migration_dedupes_daily_key_and_creates_unique_index(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy_duplicate_snapshots.db")
+        conn = sqlite3.connect(legacy_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """
+                CREATE TABLE price_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    complex_id TEXT,
+                    trade_type TEXT,
+                    pyeong REAL,
+                    min_price INTEGER,
+                    max_price INTEGER,
+                    avg_price INTEGER,
+                    item_count INTEGER,
+                    asset_type TEXT DEFAULT 'APT',
+                    price_metric TEXT DEFAULT 'price',
+                    legacy_monthly INTEGER DEFAULT 0,
+                    snapshot_date DATE DEFAULT CURRENT_DATE
+                )
+                """
+            )
+            c.executemany(
+                """
+                INSERT INTO price_snapshots (
+                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
+                    asset_type, price_metric, legacy_monthly, snapshot_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    ("DUP-1", "매매", 34.0, 10000, 12000, 11000, 1, "", "", 0, "2026-03-01"),
+                    ("DUP-1", "매매", 34.0, 13000, 15000, 14000, 2, "APT", "price", 0, "2026-03-01"),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        migrated_db = ComplexDatabase(legacy_path)
+        try:
+            rows = migrated_db.get_price_snapshots("DUP-1", "매매", asset_type="APT")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(int(rows[0][5]), 14000)
+
+            conn = migrated_db._pool.get_connection()
+            try:
+                indexes = conn.cursor().execute("PRAGMA index_list(price_snapshots)").fetchall()
+            finally:
+                migrated_db._pool.return_connection(conn)
+            self.assertTrue(any(row["name"] == "idx_price_snapshots_daily_unique" for row in indexes))
+        finally:
+            migrated_db.close()
+
     def test_delete_complex_purge_related_respects_snapshot_asset_scope(self):
         self.db.add_complex("ScopeApt", "88008", asset_type="APT")
         self.db.add_complex("ScopeVl", "88008", asset_type="VL")
@@ -1374,25 +1428,12 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(int(rows[0][5]), 14000)
         self.assertEqual(int(rows[0][6]), 3)
 
-        conn = self.db._pool.get_connection()
-        try:
-            c = conn.cursor()
-            for values in [
-                ("88002", "매매", 34.0, 9000, 9500, 9250, 1, "APT", "price", 0),
-                ("88002", "매매", 34.0, 16000, 17000, 16500, 4, "APT", "price", 0),
-            ]:
-                c.execute(
-                    """
-                    INSERT INTO price_snapshots (
-                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count,
-                        asset_type, price_metric, legacy_monthly, snapshot_date
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE)
-                    """,
-                    values,
-                )
-            conn.commit()
-        finally:
-            self.db._pool.return_connection(conn)
+        updated = self.db.add_price_snapshots_bulk(
+            [
+                ("APT", "88002", "매매", 34.0, 16000, 17000, 16500, 4, "price", 0),
+            ]
+        )
+        self.assertEqual(updated, 1)
 
         deduped_rows = self.db.get_price_snapshots("88002", "매매", asset_type="APT")
         self.assertEqual(len(deduped_rows), 1)
