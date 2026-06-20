@@ -1,38 +1,35 @@
-# Naverland Scrapper Pro Plus v15.0
+# Naverland Scrapper Pro Plus
 
-네이버 부동산 매물 수집, 가격 이력 관리, 알림, 대시보드 분석을 제공하는 PyQt6 데스크톱 앱입니다. 현재 코드는 Playwright 수집 엔진과 SQLite 로컬 DB를 중심으로 구성되어 있으며, Selenium은 일반 단지 수집의 보조 fallback 경로로만 유지합니다.
+네이버 부동산 매물을 자동으로 수집하고, 가격 이력을 추적하며, 알림과 대시보드 분석을 제공하는 데스크톱 앱입니다.
 
-## 현재 핵심 구조
-
-- `app_entry.py`: GUI 실행, preflight, live smoke CLI 진입점
-- `src/core/crawler.py`: 크롤러 스레드와 엔진 오케스트레이션 facade
-- `src/core/engines/playwright_engine.py`: Playwright 엔진 facade
-- `src/core/engines/playwright_parts/*_parts/`: 런타임, 단지 수집, 지도 수집 단계별 구현
-- `src/core/database.py`: `ComplexDatabase` facade
-- `src/core/database_parts/*_parts/`: schema, article history, price snapshot, disappeared/favorite DB 로직
-- `src/ui/widgets/crawler_tab.py`: 수집 탭 facade
-- `src/ui/widgets/crawler_tab_parts/*_parts/`: UI setup, crawl control, result render 세부 구현
-- `src/utils/live_smoke.py`: live smoke facade
-- `src/utils/live_smoke_parts/`: probe, helper, runner 구현
-
-기존 import 경로는 유지하면서 내부 구현만 기능별 패키지로 나누는 facade 구조입니다.
+---
 
 ## 주요 기능
 
-- Playwright 기본 수집 엔진
-- `/api/articles/{complex|house}/...` Article API fast path
-- API 실패 시 기존 Playwright response-capture 경로로 fallback
-- APT/VL 자산 구분 수집
-- 지도 기반 geo sweep 수집
-- 모바일 상세 페이지 기반 중개사/연락처/갭 분석 필드 보강
-- SQLite connection pool, schema migration, backup/restore 안전장치
-- `price_snapshots` bulk upsert 및 daily unique key
-- 수집 완료 후 가격 스냅샷 비동기 저장
-- 결과 테이블/compact/card view 렌더링 최적화
-- dashboard lazy 초기화 및 현재 결과 범위 기반 통계
-- live smoke, preflight, perf baseline 검증 명령 제공
+### 매물 수집
+
+- **단지 수집**: 아파트(APT), 빌라/연립(VL) 등 자산 유형별 매물 수집
+- **지도 기반 수집**: 지도에서 영역을 지정해 해당 범위 내 모든 매물을 한번에 수집
+- **상세 정보 보강**: 중개사 연락처, 갭 분석 수치 등 상세 페이지 데이터 자동 수집
+
+### 가격 이력 및 알림
+
+- **가격 스냅샷**: 수집할 때마다 일별 가격 기록을 자동 저장
+- **가격 변동 알림**: 등록한 매물의 가격 변동 시 알림 제공
+- **사라진 매물 추적**: 이전에 수집됐다가 삭제된 매물을 별도로 표시
+
+### 결과 보기 및 분석
+
+- **세 가지 뷰 모드**: 테이블 / 컴팩트 / 카드 형태로 결과 표시 전환
+- **대시보드**: 수집 결과의 가격 분포, 평형별 통계 등 요약 분석
+- **즐겨찾기**: 관심 매물을 즐겨찾기로 저장해 빠르게 재확인
+- **중복 매물 정리**: 동일 매물의 중복 표시를 자동으로 통합
+
+---
 
 ## 설치
+
+Python 3.9 이상이 필요합니다.
 
 ```powershell
 python -m pip install --upgrade pip
@@ -40,7 +37,7 @@ python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
-권장 Python 버전은 3.9 이상입니다.
+---
 
 ## 실행
 
@@ -48,61 +45,43 @@ playwright install chromium
 python app_entry.py
 ```
 
-빠른 환경 점검:
+앱이 실행되면 GUI 창이 열립니다. 수집하려는 단지 ID나 지도 영역을 지정한 뒤 수집을 시작하면 됩니다.
 
-```powershell
-python app_entry.py --preflight
-```
-
-실사이트 smoke:
-
-```powershell
-python app_entry.py --live-smoke --smoke-headless --live-smoke-detail-fields --smoke-json-log logs/live-smoke.json
-```
-
-성능 기준선:
-
-```powershell
-python scripts/perf_baseline.py
-```
-
-테스트:
-
-```powershell
-python -m pytest -q
-```
+---
 
 ## 주요 설정
 
-- `crawl_engine`: 기본 `playwright`
-- `playwright_navigation_timeout_ms`: Playwright page navigation timeout
-- `playwright_article_api_fast_path`: Article API fast path 사용 여부
-- `playwright_article_api_timeout_ms`: Article API 직접 호출 timeout
-- `compact_duplicate_listings`: 중복 매물 compact 표시
-- `lazy_load_dashboard`: dashboard 최초 진입 시점 생성
+앱 내 설정 화면에서 아래 옵션을 조정할 수 있습니다.
 
-설정 UI에서도 Playwright/성능 관련 옵션을 조정할 수 있습니다.
+| 설정 항목 | 설명 |
+|---|---|
+| 수집 엔진 | 기본값: Playwright |
+| 페이지 응답 대기 시간 | 네트워크가 느린 경우 늘려주세요 |
+| 중복 매물 통합 표시 | 동일 매물 중복 항목을 묶어서 표시 |
+| 대시보드 지연 로드 | 대시보드를 처음 열 때 생성해 시작 속도 향상 |
 
-## 패키징
+---
+
+## 배포 파일 빌드 (선택)
+
+소스 없이 실행 가능한 단독 배포 파일을 만들 수 있습니다.
 
 ```powershell
 python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ```
 
-기본 배포는 `onedir + bundled Chromium`입니다.
+빌드 옵션:
 
-- `NAVERLAND_ONEFILE=1`: onefile 빌드
-- `NAVERLAND_BUNDLE_CHROMIUM=0`: Chromium 제외 slim 빌드
-- `NAVERLAND_CONSOLE=1`: 콘솔 창 활성화
+| 환경 변수 | 설명 |
+|---|---|
+| `NAVERLAND_ONEFILE=1` | 단일 실행 파일로 빌드 |
+| `NAVERLAND_BUNDLE_CHROMIUM=0` | Chromium 제외 (용량 절감, 별도 브라우저 필요) |
+| `NAVERLAND_CONSOLE=1` | 콘솔 창 함께 표시 |
 
-현재 구조 분리 작업은 Python source package 추가만 포함하며, 추가 PyInstaller hidden import나 data bundle은 필요하지 않습니다.
+기본 빌드는 Chromium이 포함된 폴더 형태(`onedir`)로 생성됩니다.
 
-## 현재 검증 기준
+---
 
-최근 구조/성능 리팩토링 후 확인한 기준:
+## 데이터 저장 위치
 
-- `python -m pytest -q` -> `287 passed`
-- `python scripts/perf_baseline.py` 통과
-- `python app_entry.py --live-smoke --smoke-headless --live-smoke-detail-fields --smoke-json-log logs/live-smoke-after-structure.json` 통과
-
-live smoke 기준 `[article-api]`, `[complex]`, `[detail]`, `[detail-fields]`, `[geo-marker]`, `[article-lookup]` probe가 모두 OK여야 합니다.
+모든 수집 데이터와 가격 이력은 앱 폴더 내 SQLite 파일(`data/`)에 로컬 저장됩니다. 외부 서버로 데이터가 전송되지 않습니다.
