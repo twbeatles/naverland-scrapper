@@ -4,6 +4,7 @@ from src.core.services.article_api import (
     DEFAULT_ARTICLE_API_PAGE_SIZE,
     MAX_ARTICLE_API_PAGES,
     article_api_has_more_pages,
+    article_api_list_count,
     article_api_path_kind,
     article_api_real_estate_type,
     build_article_api_query_params,
@@ -41,6 +42,15 @@ class TestArticleApiHelpers(unittest.TestCase):
         )
         self.assertFalse(
             article_api_has_more_pages({"articleList": [{}] * 3}, 3, page_size=DEFAULT_ARTICLE_API_PAGE_SIZE)
+        )
+
+    def test_has_more_pages_uses_pre_filter_list_count_not_normalized_count(self):
+        payload = {"articleList": [{"articleNo": str(i)} for i in range(DEFAULT_ARTICLE_API_PAGE_SIZE)]}
+        self.assertEqual(article_api_list_count(payload), DEFAULT_ARTICLE_API_PAGE_SIZE)
+        self.assertTrue(article_api_has_more_pages(payload, article_api_list_count(payload)))
+        self.assertFalse(
+            article_api_has_more_pages(payload, 1),
+            "post-filter normalized count must not drive pagination termination",
         )
 
     def test_safety_cap_constant_is_reasonable(self):

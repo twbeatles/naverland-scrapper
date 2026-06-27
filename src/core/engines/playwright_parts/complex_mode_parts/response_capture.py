@@ -44,6 +44,10 @@ class PlaywrightResponseCaptureMixin:
         block_reason = ""
         confirmed_capture = False
         confirmed_parse_success = False
+        capture_last_payload: dict | None = None
+        active_base_kind = "complexes"
+        active_path_asset = str(asset_type or "APT")
+        active_target_url = f"https://new.land.naver.com/complexes/{cid}"
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
             target_url = (
@@ -56,6 +60,9 @@ class PlaywrightResponseCaptureMixin:
                     }
                 )
             )
+            active_base_kind = base_kind
+            active_path_asset = path_asset
+            active_target_url = target_url
             api_result = await self._fetch_article_api_fast_path(
                 name=name,
                 cid=cid,
@@ -90,6 +97,7 @@ class PlaywrightResponseCaptureMixin:
                 async def _consume(response):
                     nonlocal response_seen, parse_success, parse_failed, response_match_count
                     nonlocal plan_response_seen, plan_parse_success, plan_parse_failed
+                    nonlocal capture_last_payload
                     url = response.url
                     expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
                     if expected not in url:
@@ -111,6 +119,7 @@ class PlaywrightResponseCaptureMixin:
                         plan_parse_failed = True
                         response_event.set()
                         return
+                    capture_last_payload = payload
                     parse_success = True
                     plan_parse_success = True
                     for article in article_list:
@@ -210,6 +219,24 @@ class PlaywrightResponseCaptureMixin:
                     break
             if raw_items:
                 break
+
+        if raw_items and capture_last_payload is not None:
+            raw_items = await self._supplement_article_api_pages(
+                name=name,
+                cid=cid,
+                trade_type=trade_type,
+                base_kind=active_base_kind,
+                path_asset=active_path_asset,
+                target_url=active_target_url,
+                mode=mode,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+                seen_ids=seen_ids,
+                existing_items=raw_items,
+                last_payload=capture_last_payload,
+            )
 
         capture_failed = bool(not raw_items and not confirmed_capture and (block_like_redirect or not response_seen or parse_failed))
         failure_reason = ""

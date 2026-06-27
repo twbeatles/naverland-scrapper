@@ -98,3 +98,18 @@ class TestRuntimePaths(unittest.TestCase):
                 )
 
             self._reload_paths()
+
+    def test_configure_paths_overrides_base_dir_for_sandbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "sandbox-root"
+            sandbox.mkdir(parents=True, exist_ok=True)
+            paths = self._reload_paths()
+            try:
+                configured = paths.configure_paths(sandbox)
+                self.assertEqual(configured, sandbox)
+                self.assertEqual(paths.BASE_DIR, sandbox)
+                self.assertEqual(paths.DATA_DIR, sandbox / "data")
+                self.assertEqual(paths.SETTINGS_PATH, sandbox / "data" / "settings.json")
+            finally:
+                paths.reset_configured_paths()
+            self._reload_paths()

@@ -26,8 +26,22 @@ class TestCacheAndManagers(unittest.TestCase):
         self.tmp_path = Path(self.tmp.name)
 
     def tearDown(self):
-        SettingsManager._instance = None
+        SettingsManager.reset_for_tests()
         self.tmp.cleanup()
+
+    def test_settings_manager_reset_for_tests_clears_singleton(self):
+        settings_path = self.tmp_path / "settings.json"
+        SettingsManager.reset_for_tests()
+        with patch("src.core.managers.SETTINGS_PATH", settings_path):
+            first = SettingsManager()
+            first.set("theme", "reset-test-theme")
+            SettingsManager.reset_for_tests()
+            if settings_path.exists():
+                settings_path.unlink()
+            second = SettingsManager()
+            self.assertIsNot(first, second)
+            self.assertEqual(second.get("theme"), DEFAULT_SETTINGS["theme"])
+        SettingsManager.reset_for_tests()
 
     def test_crawl_cache_set_get_clear(self):
         cache_path = self.tmp_path / "crawl_cache.json"
@@ -88,7 +102,7 @@ class TestCacheAndManagers(unittest.TestCase):
             patch("src.core.managers.PRESETS_PATH", presets_path),
             patch("src.core.managers.HISTORY_PATH", history_path),
         ):
-            SettingsManager._instance = None
+            SettingsManager.reset_for_tests()
             settings = SettingsManager()
             settings.set("theme", "light")
             self.assertEqual(settings.get("theme"), "light")
@@ -239,7 +253,7 @@ class TestCacheAndManagers(unittest.TestCase):
         settings_path.write_text("{broken", encoding="utf-8")
 
         with patch("src.core.managers.SETTINGS_PATH", settings_path):
-            SettingsManager._instance = None
+            SettingsManager.reset_for_tests()
             settings = SettingsManager()
 
         self.assertEqual(settings.get("theme"), "dark")

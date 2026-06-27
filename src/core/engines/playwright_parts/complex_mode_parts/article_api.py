@@ -6,6 +6,7 @@ from typing import Any, TYPE_CHECKING
 from src.core.services.article_api import (
     MAX_ARTICLE_API_PAGES,
     article_api_has_more_pages,
+    article_api_list_count,
     article_api_path_kind,
     article_api_real_estate_type,
     build_article_api_url,
@@ -140,6 +141,114 @@ class PlaywrightArticleApiMixin:
             raw_items.append(item)
         return raw_items, True
 
+    def _article_api_fast_path_success(
+        self,
+        *,
+        raw_items: list[dict],
+        response_match_count: int,
+        final_api_url: str,
+    ) -> dict:
+        self.thread.stats["article_api_fast_path_hit_count"] = (
+            int(self.thread.stats.get("article_api_fast_path_hit_count", 0)) + 1
+        )
+        return {
+            "raw_items": raw_items,
+            "response_seen": True,
+            "parse_success": True,
+            "drain_timed_out": False,
+            "response_match_count": response_match_count,
+            "final_url": final_api_url,
+            "block_like_redirect": False,
+            "block_reason": "",
+            "capture_failed": False,
+            "failure_reason": "",
+            "api_fast_path": True,
+        }
+
+    def _article_api_fast_path_fail_stats(self) -> None:
+        self.thread.stats["article_api_fast_path_fail_count"] = (
+            int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
+        )
+        self.thread.stats["article_api_fast_path_fallback_count"] = (
+            int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
+        )
+
+    async def _paginate_article_api_request_context(
+        self,
+        request_context,
+        *,
+        name: str,
+        cid: str,
+        trade_type: str,
+        base_kind: str,
+        path_asset: str,
+        target_url: str,
+        mode: str,
+        source_lat: float | None,
+        source_lon: float | None,
+        source_zoom: int | None,
+        marker_id: str,
+        seen_ids: set[str],
+        start_page: int = 1,
+        existing_items: list[dict] | None = None,
+    ) -> dict | None:
+        all_raw_items: list[dict] = list(existing_items or [])
+        final_api_url = ""
+        response_match_count = 0
+        first_page = max(1, int(start_page or 1))
+
+        for page in range(first_page, MAX_ARTICLE_API_PAGES + 1):
+            api_url = self._build_article_api_url(
+                base_kind, cid, trade_type, path_asset, page=page
+            )
+            final_api_url = api_url
+            response = await request_context.get(
+                api_url,
+                headers=self._article_api_headers(target_url),
+                timeout=self._article_api_timeout_ms(),
+            )
+            response_match_count += 1
+            status = getattr(response, "status", None)
+            status_label = str(status if status is not None else "")
+            self.thread.stats["article_api_last_status"] = status_label
+            if status is not None and int(status) >= 400:
+                if page == first_page and not all_raw_items:
+                    self._article_api_fast_path_fail_stats()
+                    return None
+                break
+            payload = await response.json()
+            raw_items, valid_payload = self._normalize_article_api_payload(
+                payload,
+                name=name,
+                cid=cid,
+                trade_type=trade_type,
+                path_asset=path_asset,
+                mode=mode,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+                seen_ids=seen_ids,
+            )
+            if not valid_payload:
+                if page == first_page and not all_raw_items:
+                    self._article_api_fast_path_fail_stats()
+                    self.thread.stats["article_api_last_status"] = status_label or "invalid_payload"
+                    return None
+                break
+            list_count = article_api_list_count(payload)
+            all_raw_items.extend(raw_items)
+            if not article_api_has_more_pages(payload, list_count):
+                break
+
+        if not all_raw_items and response_match_count == 0:
+            return None
+        return self._article_api_fast_path_success(
+            raw_items=all_raw_items,
+            response_match_count=response_match_count,
+            final_api_url=final_api_url,
+        )
+
     async def _fetch_article_api_fast_path(
         self,
         *,
@@ -165,82 +274,77 @@ class PlaywrightArticleApiMixin:
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return None
 
-        all_raw_items: list[dict] = []
-        final_api_url = ""
-        status_label = ""
-        response_match_count = 0
         try:
-            for page in range(1, MAX_ARTICLE_API_PAGES + 1):
-                api_url = self._build_article_api_url(
-                    base_kind, cid, trade_type, path_asset, page=page
-                )
-                final_api_url = api_url
-                response = await request_context.get(
-                    api_url,
-                    headers=self._article_api_headers(target_url),
-                    timeout=self._article_api_timeout_ms(),
-                )
-                response_match_count += 1
-                status = getattr(response, "status", None)
-                status_label = str(status if status is not None else "")
-                self.thread.stats["article_api_last_status"] = status_label
-                if status is not None and int(status) >= 400:
-                    self.thread.stats["article_api_fast_path_fail_count"] = (
-                        int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
-                    )
-                    self.thread.stats["article_api_fast_path_fallback_count"] = (
-                        int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
-                    )
-                    return None
-                payload = await response.json()
-                raw_items, valid_payload = self._normalize_article_api_payload(
-                    payload,
-                    name=name,
-                    cid=cid,
-                    trade_type=trade_type,
-                    path_asset=path_asset,
-                    mode=mode,
-                    source_lat=source_lat,
-                    source_lon=source_lon,
-                    source_zoom=source_zoom,
-                    marker_id=marker_id,
-                    seen_ids=seen_ids,
-                )
-                if not valid_payload:
-                    self.thread.stats["article_api_fast_path_fail_count"] = (
-                        int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
-                    )
-                    self.thread.stats["article_api_fast_path_fallback_count"] = (
-                        int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
-                    )
-                    self.thread.stats["article_api_last_status"] = status_label or "invalid_payload"
-                    return None
-                all_raw_items.extend(raw_items)
-                if not article_api_has_more_pages(payload, len(raw_items)):
-                    break
-            self.thread.stats["article_api_fast_path_hit_count"] = (
-                int(self.thread.stats.get("article_api_fast_path_hit_count", 0)) + 1
+            return await self._paginate_article_api_request_context(
+                request_context,
+                name=name,
+                cid=cid,
+                trade_type=trade_type,
+                base_kind=base_kind,
+                path_asset=path_asset,
+                target_url=target_url,
+                mode=mode,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+                seen_ids=seen_ids,
+                start_page=1,
             )
-            return {
-                "raw_items": all_raw_items,
-                "response_seen": True,
-                "parse_success": True,
-                "drain_timed_out": False,
-                "response_match_count": response_match_count,
-                "final_url": final_api_url,
-                "block_like_redirect": False,
-                "block_reason": "",
-                "capture_failed": False,
-                "failure_reason": "",
-                "api_fast_path": True,
-            }
         except Exception as exc:
-            self.thread.stats["article_api_fast_path_fail_count"] = (
-                int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
-            )
-            self.thread.stats["article_api_fast_path_fallback_count"] = (
-                int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
-            )
+            self._article_api_fast_path_fail_stats()
             self.thread.stats["article_api_last_status"] = f"{type(exc).__name__}"
             self.thread.log(f"   Article API fast path fallback({base_kind}/{cid}): {exc}", 10)
             return None
+
+    async def _supplement_article_api_pages(
+        self,
+        *,
+        name: str,
+        cid: str,
+        trade_type: str,
+        base_kind: str,
+        path_asset: str,
+        target_url: str,
+        mode: str,
+        source_lat: float | None,
+        source_lon: float | None,
+        source_zoom: int | None,
+        marker_id: str,
+        seen_ids: set[str],
+        existing_items: list[dict],
+        last_payload: dict | None,
+    ) -> list[dict]:
+        if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
+            return list(existing_items or [])
+        list_count = article_api_list_count(last_payload) if last_payload else len(existing_items or [])
+        payload_for_more = last_payload if last_payload else {"articleList": [None] * list_count}
+        if not article_api_has_more_pages(payload_for_more, list_count):
+            return list(existing_items or [])
+        context = self._desktop_context
+        request_context = getattr(context, "request", None) if context is not None else None
+        if request_context is None or not hasattr(request_context, "get"):
+            return list(existing_items or [])
+        try:
+            result = await self._paginate_article_api_request_context(
+                request_context,
+                name=name,
+                cid=cid,
+                trade_type=trade_type,
+                base_kind=base_kind,
+                path_asset=path_asset,
+                target_url=target_url,
+                mode=mode,
+                source_lat=source_lat,
+                source_lon=source_lon,
+                source_zoom=source_zoom,
+                marker_id=marker_id,
+                seen_ids=seen_ids,
+                start_page=2,
+                existing_items=list(existing_items or []),
+            )
+        except Exception:
+            return list(existing_items or [])
+        if result is None:
+            return list(existing_items or [])
+        return list(result.get("raw_items", []) or existing_items or [])

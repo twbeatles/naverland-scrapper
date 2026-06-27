@@ -150,6 +150,12 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
 class SettingsManager:
     _instance = None
     _lock = Lock()
+
+    @classmethod
+    def reset_for_tests(cls) -> None:
+        with cls._lock:
+            cls._instance = None
+
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:

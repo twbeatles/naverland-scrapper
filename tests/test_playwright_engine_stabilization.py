@@ -602,6 +602,103 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(request.calls), 2)
         self.assertIn("page=2", request.calls[1]["url"])
 
+    async def test_article_api_fast_path_paginates_on_full_page_despite_trade_filter(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        page_one_articles = [
+            {"articleNo": f"MIX-{i}", "tradeTypeCode": "B1" if i == 0 else "A1"}
+            for i in range(20)
+        ]
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=1",
+                    payload={"articleList": page_one_articles},
+                ),
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=2",
+                    payload={"articleList": [{"articleNo": "MIX-20", "tradeTypeCode": "A1"}]},
+                ),
+            ]
+        )
+        page = _FakePage(responses=[])
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+        engine._article_api_auth_header = "Bearer unit-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(collect_result.get("api_fast_path"))
+        self.assertEqual(len(request.calls), 2)
+        self.assertGreaterEqual(len(collect_result.get("raw_items", [])), 20)
+
+    async def test_article_api_fast_path_keeps_page_one_when_page_two_fails(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=1",
+                    payload={
+                        "isMoreData": True,
+                        "articleList": [{"articleNo": "KEEP-1", "tradeTypeCode": "A1"}],
+                    },
+                ),
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=2",
+                    payload={},
+                    status=429,
+                ),
+            ]
+        )
+        page = _FakePage(responses=[])
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+        engine._article_api_auth_header = "Bearer unit-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    return_value={"매물ID": "KEEP-1", _LEGACY_ARTICLE_ID_KEY: "KEEP-1"},
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertTrue(collect_result.get("api_fast_path"))
+        self.assertEqual(len(collect_result.get("raw_items", [])), 1)
+
     async def test_article_api_fast_path_empty_result_is_confirmed_without_navigation(self):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]

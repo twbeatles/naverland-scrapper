@@ -8,6 +8,7 @@ from src.core.services.map_geometry import build_grid_sweep_coords, clamp_korea
 from src.core.services.article_api import (
     MAX_ARTICLE_API_PAGES,
     article_api_has_more_pages,
+    article_api_list_count,
     article_api_path_kind,
     article_api_real_estate_type,
     build_article_api_url,

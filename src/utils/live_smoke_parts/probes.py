@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
+from src.core.services.article_api import build_article_api_url
 from src.utils.helpers import ChromeParamHelper
 from src.utils.paths import BASE_DIR, DATA_DIR, is_frozen_runtime
 from src.core.services.detail_fetcher import fetch_mobile_article_detail
@@ -59,15 +60,7 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
     if not cid:
         return False, "[fail] [article-api] missing complex id", "", None
 
-    query = (
-        "realEstateType=APT%3AABYG%3AJGC&tradeType=A1&tag=%3A%3A%3A%3A%3A%3A%3A%3A"
-        "&rentPriceMin=0&rentPriceMax=900000000&priceMin=0&priceMax=900000000"
-        "&areaMin=0&areaMax=900000000&oldBuildYears=&recentlyBuildYears="
-        "&minHouseHoldCount=&maxHouseHoldCount=&showArticle=false&sameAddressGroup=false"
-        "&minMaintenanceCost=&maxMaintenanceCost=&priceType=RETAIL&directions=&page=1"
-        "&buildingNos=&areaNos=&type=list&order=rank"
-    )
-    target_url = f"https://new.land.naver.com/api/articles/complex/{cid}?{query}"
+    target_url = build_article_api_url("complexes", cid, "매매", "APT", page=1)
     final_url = target_url
     status = None
     article_count = None

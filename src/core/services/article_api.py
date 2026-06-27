@@ -69,12 +69,20 @@ def build_article_api_url(
     return f"https://new.land.naver.com/api/articles/{path_kind}/{cid}?" + urlencode(params)
 
 
+def article_api_list_count(payload: Any) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    article_list = payload.get("articleList") or payload.get("articles") or []
+    return len(article_list) if isinstance(article_list, list) else 0
+
+
 def article_api_has_more_pages(
     payload: Any,
     articles_on_page: int,
     *,
     page_size: int = DEFAULT_ARTICLE_API_PAGE_SIZE,
 ) -> bool:
+    """Use pre-filter API list length (articles_on_page), not post-normalize counts."""
     if not isinstance(payload, dict):
         return False
     if "isMoreData" in payload:

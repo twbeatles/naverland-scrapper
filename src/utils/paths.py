@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import shutil
 import sqlite3
@@ -41,11 +43,44 @@ def _frozen_runtime_data_root() -> Path:
     return Path.home() / ".local" / "share" / FROZEN_APP_DIR_NAME
 
 
+_configured_base_dir: Path | None = None
+
+
 def get_base_dir():
     """실행 파일 기준의 기본 디렉토리를 반환"""
+    if _configured_base_dir is not None:
+        return _configured_base_dir
     if is_frozen_runtime():
         return _frozen_runtime_data_root()
     return Path(__file__).resolve().parent.parent.parent
+
+
+def _refresh_path_constants() -> None:
+    global BASE_DIR, DATA_DIR, LOG_DIR, DB_PATH, SETTINGS_PATH, PRESETS_PATH, CACHE_PATH, HISTORY_PATH
+    base = get_base_dir()
+    BASE_DIR = base
+    DATA_DIR = base / "data"
+    LOG_DIR = base / "logs"
+    DB_PATH = DATA_DIR / "complexes.db"
+    SETTINGS_PATH = DATA_DIR / "settings.json"
+    PRESETS_PATH = DATA_DIR / "presets.json"
+    CACHE_PATH = DATA_DIR / "crawl_cache.json"
+    HISTORY_PATH = DATA_DIR / "search_history.json"
+
+
+def configure_paths(base_dir: Path | str) -> Path:
+    """Inject a runtime base directory for sandbox/worktree isolation."""
+    global _configured_base_dir
+    _configured_base_dir = Path(base_dir)
+    _refresh_path_constants()
+    return BASE_DIR
+
+
+def reset_configured_paths() -> None:
+    """Clear injected base directory and restore default resolution."""
+    global _configured_base_dir
+    _configured_base_dir = None
+    _refresh_path_constants()
 
 
 def get_resource_path(relative_path):
@@ -60,14 +95,16 @@ def get_resource_path(relative_path):
     return base_path / relative_path
 
 
-BASE_DIR = get_base_dir()
-DATA_DIR = BASE_DIR / "data"
-LOG_DIR = BASE_DIR / "logs"
-DB_PATH = DATA_DIR / "complexes.db"
-SETTINGS_PATH = DATA_DIR / "settings.json"
-PRESETS_PATH = DATA_DIR / "presets.json"
-CACHE_PATH = DATA_DIR / "crawl_cache.json"
-HISTORY_PATH = DATA_DIR / "search_history.json"
+BASE_DIR: Path
+DATA_DIR: Path
+LOG_DIR: Path
+DB_PATH: Path
+SETTINGS_PATH: Path
+PRESETS_PATH: Path
+CACHE_PATH: Path
+HISTORY_PATH: Path
+
+_refresh_path_constants()
 
 
 def _can_migrate_sqlite_file(path: Path) -> bool:

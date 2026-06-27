@@ -1,0 +1,257 @@
+python : 199 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6
+��ġ ��:1 ����:136
++ ... d-scrapper; python -m PyInstaller --clean --noconfirm naverland-scrap ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (199 INFO: PyIns...b hooks: 2026.6:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+200 INFO: Python: 3.14.6
+228 INFO: Platform: Windows-11-10.0.26200-SP0
+229 INFO: Python environment: C:\Users\soulb\AppData\Local\Python\pythoncore-3.14-64
+232 INFO: Removing temporary files and cleaning cache in C:\Users\soulb\AppData\Local\pyinstaller
+3145 INFO: Module search paths (PYTHONPATH):
+['C:\\twbeatles-repos\\naverland-scrapper',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\python314.zip',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\DLLs',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64',
+ 'C:\\Users\\soulb\\AppData\\Roaming\\Python\\Python314\\site-packages',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages',
+ 'C:\\twbeatles-repos\\kcsc-mcp\\src',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\win32',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\win32\\lib',
+ 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\pythonwin',
+ 'C:\\twbeatles-repos\\naverland-scrapper']
+3498 INFO: checking Analysis
+3499 INFO: Building Analysis because Analysis-00.toc is non existent
+3499 INFO: Looking for Python shared library...
+3499 INFO: Using Python shared library: C:\Users\soulb\AppData\Local\Python\pythoncore-3.14-64\python314.dll
+3499 INFO: Running Analysis Analysis-00.toc
+3499 INFO: Target bytecode optimization level: 0
+3499 INFO: Initializing module dependency graph...
+3500 INFO: Initializing module graph hook caches...
+3577 INFO: Analyzing modules for base_library.zip ...
+5403 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonco
+re-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+5921 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-
+3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+6213 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.
+14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+6366 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore
+-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+6387 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3
+.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+9447 INFO: Caching module dependency graph...
+9488 INFO: Analyzing C:\twbeatles-repos\naverland-scrapper\app_entry.py
+10051 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncor
+e-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+10333 INFO: Processing standard module hook 'hook-playwright.sync_api.py' from 'C:\\Users\\soulb\\AppData\\Local\\Pytho
+n\\pythoncore-3.14-64\\Lib\\site-packages\\playwright\\_impl\\__pyinstaller'
+11194 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+11303 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.
+14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+11657 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonc
+ore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+11664 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncor
+e-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+12387 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonco
+re-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+13007 INFO: Processing standard module hook 'hook-playwright.async_api.py' from 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\playwright\\_impl\\__pyinstaller'
+13783 INFO: Processing standard module hook 'hook-PyQt6.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-
+3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+15014 INFO: Processing standard module hook 'hook-PyQt6.QtGui.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pytho
+ncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+22686 INFO: Processing standard module hook 'hook-PyQt6.QtCore.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pyth
+oncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+26943 INFO: Processing standard module hook 'hook-PyQt6.QtWidgets.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\p
+ythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+29055 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\python
+core-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+29427 INFO: Processing standard module hook 'hook-openpyxl.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonco
+re-3.14-64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+29511 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-
+3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+29915 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\soulb\\AppData\\Local\\
+Python\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+29918 INFO: SetuptoolsInfo: initializing cached setuptools info...
+32195 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+32307 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\py
+thoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+33199 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncore-3.
+14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+33367 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonc
+ore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+34147 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\p
+ythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+35112 INFO: Processing standard module hook 'hook-selenium.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythonco
+re-3.14-64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+35353 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncor
+e-3.14-64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+35384 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pythoncor
+e-3.14-64\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+35525 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\
+pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35526 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vend
+or.backports'!
+35536 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\python
+core-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+35553 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\
+pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35592 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\pyt
+honcore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35593 INFO: Setuptools: 'jaraco' appears to be a partial setuptools-vendored copy - extending search paths to ['C:\\Use
+rs\\soulb\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\jaraco', 'C:\\Users\\soulb\\AppData\\Local\\
+Python\\pythoncore-3.14-64\\Lib\\site-packages\\setuptools\\_vendor\\jaraco']!
+35594 INFO: Processing pre-safe-import-module hook 'hook-jaraco.functools.py' from 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35607 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\soulb\\AppData\\Local\\Pyt
+hon\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35917 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python\\
+pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+36194 INFO: Processing pre-safe-import-module hook 'hook-jaraco.text.py' from 'C:\\Users\\soulb\\AppData\\Local\\Python
+\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+36196 INFO: Setuptools: 'jaraco.text' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.
+jaraco.text'!
+36211 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\soulb\\AppData\\L
+ocal\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\PyInstaller\\hooks'
+36214 INFO: Processing pre-safe-import-module hook 'hook-importlib_resour
+
+... (output truncated) ...
+
+Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\bcrypt\\_bcrypt.pyd'.
+383898 WARNING: Library not found: could not resolve 'bcryptprimitives.dll', dependency of 'C:\\Users\\soulb\\AppData\\
+Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\cryptography\\hazmat\\bindings\\_rust.pyd'.
+383898 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\cryptography\\hazmat\\bindings\\_rust.pyd'.
+383905 WARNING: Library not found: could not resolve 'pdh.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Python
+\\pythoncore-3.14-64\\Lib\\site-packages\\psutil\\_psutil_windows.pyd'.
+383905 WARNING: Library not found: could not resolve 'IPHLPAPI.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\psutil\\_psutil_windows.pyd'.
+383906 WARNING: Library not found: could not resolve 'PSAPI.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\psutil\\_psutil_windows.pyd'.
+383906 WARNING: Library not found: could not resolve 'POWRPROF.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\psutil\\_psutil_windows.pyd'.
+383974 WARNING: Library not found: could not resolve 'MFReadWrite.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local
+\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383974 WARNING: Library not found: could not resolve 'dxgi.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pytho
+n\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383974 WARNING: Library not found: could not resolve 'WSOCK32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383974 WARNING: Library not found: could not resolve 'MFPlat.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyt
+hon\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383974 WARNING: Library not found: could not resolve 'SHLWAPI.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383974 WARNING: Library not found: could not resolve 'MF.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Python\
+\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383975 WARNING: Library not found: could not resolve 'COMDLG32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383975 WARNING: Library not found: could not resolve 'd3d11.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\cv2\\cv2.pyd'.
+383976 WARNING: Library not found: could not resolve 'bcryptprimitives.dll', dependency of 'C:\\Users\\soulb\\AppData\\
+Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd'.
+383976 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\pydantic_core\\_pydantic_core.cp314-win_amd64.pyd'.
+383977 WARNING: Library not found: could not resolve 'bcryptprimitives.dll', dependency of 'C:\\Users\\soulb\\AppData\\
+Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\safetensors\\_safetensors_rust.pyd'.
+383977 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\safetensors\\_safetensors_rust.pyd'.
+383978 WARNING: Library not found: could not resolve 'Secur32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\win32\\win32api.pyd'.
+383978 WARNING: Library not found: could not resolve 'VERSION.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\win32\\win32api.pyd'.
+383978 WARNING: Library not found: could not resolve 'bcryptprimitives.dll', dependency of 'C:\\Users\\soulb\\AppData\\
+Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\rpds\\rpds.cp314-win_amd64.pyd'.
+383979 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\rpds\\rpds.cp314-win_amd64.pyd'.
+383981 WARNING: Library not found: could not resolve 'bcryptprimitives.dll', dependency of 'C:\\Users\\soulb\\AppData\\
+Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\tokenizers\\tokenizers.pyd'.
+383981 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\tokenizers\\tokenizers.pyd'.
+384010 WARNING: Library not found: could not resolve 'SHLWAPI.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\win32comext\\shell\\shell.pyd'.
+384010 WARNING: Library not found: could not resolve 'WINSPOOL.DRV', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\pythonwin\\win32ui.pyd'.
+384010 WARNING: Library not found: could not resolve 'COMCTL32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\pythonwin\\win32ui.pyd'.
+384011 WARNING: Library not found: could not resolve 'mfc140u.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\pythonwin\\win32ui.pyd'.
+384034 WARNING: Library not found: could not resolve 'PSAPI.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PIL\\_imagingtk.cp314-win_amd64.pyd'.
+384038 WARNING: Library not found: could not resolve 'COMCTL32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\matplotlib\\backends\\_tkagg.cp314-win_amd64.pyd'.
+384038 WARNING: Library not found: could not resolve 'PSAPI.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\matplotlib\\backends\\_tkagg.cp314-win_amd64.pyd'.
+384043 WARNING: Library not found: could not resolve 'DWrite.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyt
+hon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Gui.dll'.
+384043 WARNING: Library not found: could not resolve 'd3d12.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Gui.dll'.
+384043 WARNING: Library not found: could not resolve 'dxgi.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pytho
+n\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Gui.dll'.
+384043 WARNING: Library not found: could not resolve 'd3d11.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Gui.dll'.
+384043 WARNING: Library not found: could not resolve 'UxTheme.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Gui.dll'.
+384044 WARNING: Library not found: could not resolve 'UxTheme.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Widgets.dll'.
+384044 WARNING: Library not found: could not resolve 'dwmapi.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyt
+hon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Widgets.dll'.
+384044 WARNING: Library not found: could not resolve 'icuuc.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384044 WARNING: Library not found: could not resolve 'AUTHZ.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384045 WARNING: Library not found: could not resolve 'USERENV.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384045 WARNING: Library not found: could not resolve 'WINMM.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384046 WARNING: Library not found: could not resolve 'MPR.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Python
+\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384046 WARNING: Library not found: could not resolve 'NETAPI32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384047 WARNING: Library not found: could not resolve 'ntdll.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyth
+on\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384047 WARNING: Library not found: could not resolve 'VERSION.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Core.dll'.
+384048 WARNING: Library not found: could not resolve 'IPHLPAPI.DLL', dependency of 'C:\\Users\\soulb\\AppData\\Local\\P
+ython\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Network.dll'.
+384048 WARNING: Library not found: could not resolve 'DNSAPI.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Pyt
+hon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Network.dll'.
+384048 WARNING: Library not found: could not resolve 'Secur32.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Network.dll'.
+384049 WARNING: Library not found: could not resolve 'WINHTTP.dll', dependency of 'C:\\Users\\soulb\\AppData\\Local\\Py
+thon\\pythoncore-3.14-64\\Lib\\site-packages\\PyQt6\\Qt6\\bin\\Qt6Network.dll'.
+384243 INFO: Warnings written to C:\twbeatles-repos\naverland-scrapper\build\naverland-scrapper\warn-naverland-scrapper
+.txt
+385284 INFO: Graph cross-reference written to C:\twbeatles-repos\naverland-scrapper\build\naverland-scrapper\xref-naver
+land-scrapper.html
+385660 INFO: checking PYZ
+385661 INFO: Building PYZ because PYZ-00.toc is non existent
+385661 INFO: Building PYZ (ZlibArchive) C:\twbeatles-repos\naverland-scrapper\build\naverland-scrapper\PYZ-00.pyz
+391798 INFO: Building PYZ (ZlibArchive) C:\twbeatles-repos\naverland-scrapper\build\naverland-scrapper\PYZ-00.pyz compl
+eted successfully.
+392019 INFO: checking PKG
+392019 INFO: Building PKG because PKG-00.toc is non existent
+392019 INFO: Building PKG (CArchive) naverland.pkg
+392091 INFO: Building PKG (CArchive) naverland.pkg completed successfully.
+392092 INFO: Bootloader C:\Users\soulb\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\PyInstaller\bootloader
+\Windows-64bit-intel\runw.exe
+392092 INFO: checking EXE
+392092 INFO: Building EXE because EXE-00.toc is non existent
+392092 INFO: Building EXE from EXE-00.toc
+392092 INFO: Copying bootloader EXE to C:\twbeatles-repos\naverland-scrapper\build\naverland-scrapper\naverland.exe
+392097 INFO: Copying icon to EXE
+392101 INFO: Copying 0 resources to EXE
+392101 INFO: Embedding manifest in EXE
+392105 INFO: Appending PKG archive to EXE
+392154 INFO: Fixing EXE headers
+392521 INFO: Building EXE from EXE-00.toc completed successfully.
+392570 INFO: checking COLLECT
+392570 INFO: Building COLLECT because COLLECT-00.toc is non existent
+392570 INFO: Removing dir C:\twbeatles-repos\naverland-scrapper\dist\naverland
+392734 INFO: Building COLLECT COLLECT-00.toc
+397096 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+[spec] NAVERLAND_BUNDLE_CHROMIUM=1 but Chromium executable was not found.397232 INFO: Build complete! The results are available in: C:\twbeatles-repos\naverland-scrapper\dist
+
