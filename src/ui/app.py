@@ -35,7 +35,13 @@ except Exception:
 from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
 from src.utils.logger import get_logger
 from src.core.database import ComplexDatabase
-from src.core.managers import SettingsManager, FilterPresetManager, SearchHistoryManager, RecentlyViewedManager
+from src.core.managers import (
+    settings,
+    get_settings,
+    FilterPresetManager,
+    SearchHistoryManager,
+    RecentlyViewedManager,
+)
 from src.ui.styles import get_stylesheet
 from src.ui.input_wheel_guard import install_global_wheel_guard, apply_wheel_guard_recursively
 from src.utils.helpers import DateTimeHelper, get_article_url
@@ -52,7 +58,6 @@ from src.ui.dialogs import (
 )
 from src.ui.widgets.toast import ToastWidget
 
-settings = SettingsManager()
 ui_logger = get_logger("UI")
 
 from src.utils.mixin_rebind import rebind_inherited_methods

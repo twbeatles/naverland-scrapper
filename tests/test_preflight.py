@@ -208,6 +208,29 @@ class TestPreflight(unittest.TestCase):
             self.assertTrue(ok)
             self.assertEqual(errors, [])
 
+    def test_run_preflight_checks_honors_naverland_data_dir_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "preflight-sandbox"
+            data_dir = sandbox / "data"
+            log_dir = sandbox / "logs"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False),
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+            ):
+                ok, errors = run_preflight_checks(profile="startup")
+            self.assertTrue(ok)
+            self.assertEqual(errors, [])
+            from src.utils import paths as paths_module
+
+            self.assertEqual(paths_module.get_base_dir(), sandbox)
+            os.environ.pop("NAVERLAND_DATA_DIR", None)
+            paths_module.reset_configured_paths()
+
     def test_full_profile_keeps_internal_import_smoke(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

@@ -9,7 +9,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
-from src.utils.paths import ensure_directories
+from src.utils.paths import bootstrap_runtime_paths
 from src.utils.preflight import run_preflight_checks
 
 
@@ -66,7 +66,7 @@ def main():
     _configure_stdio_encoding()
     _configure_qt_font_dir()
 
-    ensure_directories()
+    bootstrap_runtime_paths()
     setup_logger()
     logger = get_logger("Main")
     cleanup_old_logs()

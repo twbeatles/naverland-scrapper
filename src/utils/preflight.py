@@ -9,7 +9,7 @@ from typing import Iterable, Optional
 
 from src.utils.helpers import ChromeParamHelper
 from src.utils.logger import get_logger
-from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH, apply_runtime_path_overrides_from_env
+from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH, bootstrap_runtime_paths
 
 
 REQUIRED_DEPENDENCIES = [
@@ -203,7 +203,7 @@ def run_preflight_checks(
     logger=None,
     profile: Literal["full", "startup"] = "full",
 ) -> tuple[bool, list[str]]:
-    apply_runtime_path_overrides_from_env()
+    bootstrap_runtime_paths()
     base = base_dir or Path(__file__).resolve().parent.parent.parent
     data = data_dir or DATA_DIR
     logs = log_dir or LOG_DIR

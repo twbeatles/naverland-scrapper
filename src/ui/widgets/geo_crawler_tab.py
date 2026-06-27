@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.models.crawl_models import GeoSweepConfig
-from src.core.managers import SettingsManager
+from src.core.managers import settings
 from src.ui.widgets.crawler_tab import (
     CrawlerTab,
     _get_crawl_cache_cls,
@@ -25,7 +25,7 @@ from src.ui.widgets.crawler_tab import (
 )
 
 
-settings = SettingsManager()
+
 CrawlerThread = None
 
 

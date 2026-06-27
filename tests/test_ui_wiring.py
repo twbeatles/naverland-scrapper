@@ -17,6 +17,11 @@ def _table_text(table, row: int, column: int) -> str:
     return item.text()
 
 
+def _force_complex_schedule_mode(app) -> None:
+    mode_index = app.schedule_mode_combo.findData("complex")
+    app.schedule_mode_combo.setCurrentIndex(mode_index if mode_index >= 0 else 0)
+
+
 @unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
 class TestUIWiring(unittest.TestCase):
     @classmethod
@@ -635,6 +640,7 @@ class TestUIWiring(unittest.TestCase):
 
         app.schedule_group_combo.clear()
         app.schedule_group_combo.addItem("테스트그룹", 10)
+        _force_complex_schedule_mode(app)
 
         def _get_setting(key, default=None):
             if key == "crawl_engine":
@@ -650,7 +656,7 @@ class TestUIWiring(unittest.TestCase):
                     (2, "VL단지", "VL", "22222", ""),
                 ],
             ),
-            patch("src.ui.app.settings.get", side_effect=_get_setting),
+            patch("src.core.managers.settings.get", side_effect=_get_setting),
             patch.object(app.crawler_tab, "start_crawling") as mock_start,
         ):
             app._run_scheduled()
@@ -678,6 +684,7 @@ class TestUIWiring(unittest.TestCase):
 
         app.schedule_group_combo.clear()
         app.schedule_group_combo.addItem("테스트그룹", 11)
+        _force_complex_schedule_mode(app)
 
         def _get_setting(key, default=None):
             if key == "crawl_engine":
@@ -690,7 +697,7 @@ class TestUIWiring(unittest.TestCase):
                 "get_complexes_in_group",
                 return_value=[(1, "VL단지", "VL", "22222", "")],
             ),
-            patch("src.ui.app.settings.get", side_effect=_get_setting),
+            patch("src.core.managers.settings.get", side_effect=_get_setting),
             patch.object(app.crawler_tab, "start_crawling") as mock_start,
         ):
             app._run_scheduled()
@@ -969,6 +976,7 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 10)
+                _force_complex_schedule_mode(app)
                 app.crawler_tab.clear_tasks()
                 app.crawler_tab.add_task("기존APT", "99999", "APT")
                 app.crawler_tab.add_task("기존VL", "99999", "VL")
@@ -1021,6 +1029,7 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 11)
+                _force_complex_schedule_mode(app)
                 app.crawler_tab.clear_tasks()
                 app.crawler_tab.add_task("기존APT", "99999", "APT")
                 app.crawler_tab.add_task("기존VL", "99999", "VL")

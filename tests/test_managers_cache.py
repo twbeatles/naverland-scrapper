@@ -17,6 +17,8 @@ from src.core.managers import (
     SearchHistoryManager,
     RecentlyViewedManager,
     _sanitize_settings_payload,
+    get_settings,
+    settings,
 )
 
 
@@ -32,7 +34,7 @@ class TestCacheAndManagers(unittest.TestCase):
     def test_settings_manager_reset_for_tests_clears_singleton(self):
         settings_path = self.tmp_path / "settings.json"
         SettingsManager.reset_for_tests()
-        with patch("src.core.managers.SETTINGS_PATH", settings_path):
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
             first = SettingsManager()
             first.set("theme", "reset-test-theme")
             SettingsManager.reset_for_tests()
@@ -41,6 +43,26 @@ class TestCacheAndManagers(unittest.TestCase):
             second = SettingsManager()
             self.assertIsNot(first, second)
             self.assertEqual(second.get("theme"), DEFAULT_SETTINGS["theme"])
+        SettingsManager.reset_for_tests()
+
+    def test_settings_accessor_delegates_to_singleton(self):
+        settings_path = self.tmp_path / "settings.json"
+        SettingsManager.reset_for_tests()
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
+            settings.set("theme", "accessor-theme")
+            self.assertEqual(settings.get("theme"), "accessor-theme")
+            self.assertEqual(get_settings().get("theme"), "accessor-theme")
+            settings._settings = dict(DEFAULT_SETTINGS)
+            self.assertEqual(get_settings().get("theme"), DEFAULT_SETTINGS["theme"])
+        SettingsManager.reset_for_tests()
+
+    def test_settings_accessor_save_delegates_without_error(self):
+        settings_path = self.tmp_path / "settings.json"
+        SettingsManager.reset_for_tests()
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
+            settings.set("theme", "persist-theme")
+            settings._save()
+            self.assertTrue(settings_path.exists())
         SettingsManager.reset_for_tests()
 
     def test_crawl_cache_set_get_clear(self):
@@ -98,9 +120,9 @@ class TestCacheAndManagers(unittest.TestCase):
         history_path = self.tmp_path / "search_history.json"
 
         with (
-            patch("src.core.managers.SETTINGS_PATH", settings_path),
-            patch("src.core.managers.PRESETS_PATH", presets_path),
-            patch("src.core.managers.HISTORY_PATH", history_path),
+            patch("src.utils.paths.get_settings_path", return_value=settings_path),
+            patch("src.utils.paths.get_presets_path", return_value=presets_path),
+            patch("src.utils.paths.get_history_path", return_value=history_path),
         ):
             SettingsManager.reset_for_tests()
             settings = SettingsManager()
@@ -235,7 +257,7 @@ class TestCacheAndManagers(unittest.TestCase):
 
     def test_recently_viewed_manager(self):
         storage_path = self.tmp_path / "recently_viewed.json"
-        with patch.object(RecentlyViewedManager, "STORAGE_PATH", storage_path):
+        with patch.object(RecentlyViewedManager, "_storage_path", return_value=storage_path):
             mgr = RecentlyViewedManager(max_items=2)
             mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A"})
             mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "VL", "단지명": "단지A"})
@@ -252,11 +274,11 @@ class TestCacheAndManagers(unittest.TestCase):
         settings_path = self.tmp_path / "settings.json"
         settings_path.write_text("{broken", encoding="utf-8")
 
-        with patch("src.core.managers.SETTINGS_PATH", settings_path):
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
             SettingsManager.reset_for_tests()
-            settings = SettingsManager()
+            mgr = SettingsManager()
 
-        self.assertEqual(settings.get("theme"), "dark")
+        self.assertEqual(mgr.get("theme"), "dark")
         backups = list(self.tmp_path.glob("settings.json.broken.settings.*"))
         self.assertEqual(len(backups), 1)
         self.assertFalse((self.tmp_path / "settings.json.tmp").exists())

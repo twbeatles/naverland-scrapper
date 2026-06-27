@@ -55,17 +55,45 @@ def get_base_dir():
     return Path(__file__).resolve().parent.parent.parent
 
 
+def get_data_dir() -> Path:
+    return get_base_dir() / "data"
+
+
+def get_log_dir() -> Path:
+    return get_base_dir() / "logs"
+
+
+def get_db_path() -> Path:
+    return get_data_dir() / "complexes.db"
+
+
+def get_settings_path() -> Path:
+    return get_data_dir() / "settings.json"
+
+
+def get_presets_path() -> Path:
+    return get_data_dir() / "presets.json"
+
+
+def get_cache_path() -> Path:
+    return get_data_dir() / "crawl_cache.json"
+
+
+def get_history_path() -> Path:
+    return get_data_dir() / "search_history.json"
+
+
 def _refresh_path_constants() -> None:
     global BASE_DIR, DATA_DIR, LOG_DIR, DB_PATH, SETTINGS_PATH, PRESETS_PATH, CACHE_PATH, HISTORY_PATH
     base = get_base_dir()
     BASE_DIR = base
-    DATA_DIR = base / "data"
-    LOG_DIR = base / "logs"
-    DB_PATH = DATA_DIR / "complexes.db"
-    SETTINGS_PATH = DATA_DIR / "settings.json"
-    PRESETS_PATH = DATA_DIR / "presets.json"
-    CACHE_PATH = DATA_DIR / "crawl_cache.json"
-    HISTORY_PATH = DATA_DIR / "search_history.json"
+    DATA_DIR = get_data_dir()
+    LOG_DIR = get_log_dir()
+    DB_PATH = get_db_path()
+    SETTINGS_PATH = get_settings_path()
+    PRESETS_PATH = get_presets_path()
+    CACHE_PATH = get_cache_path()
+    HISTORY_PATH = get_history_path()
 
 
 def configure_paths(base_dir: Path | str) -> Path:
@@ -88,9 +116,14 @@ def apply_runtime_path_overrides_from_env() -> Path | None:
     raw = os.environ.get("NAVERLAND_DATA_DIR", "").strip()
     if not raw:
         return None
-    configured = configure_paths(raw)
+    return configure_paths(raw)
+
+
+def bootstrap_runtime_paths() -> Path:
+    """Apply env overrides, ensure runtime directories, and return BASE_DIR."""
+    apply_runtime_path_overrides_from_env()
     ensure_directories()
-    return configured
+    return get_base_dir()
 
 
 def get_resource_path(relative_path):

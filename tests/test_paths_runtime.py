@@ -123,8 +123,35 @@ class TestRuntimePaths(unittest.TestCase):
                     configured = paths.apply_runtime_path_overrides_from_env()
                     self.assertEqual(configured, sandbox)
                     self.assertEqual(paths.BASE_DIR, sandbox)
-                    self.assertTrue(paths.DATA_DIR.exists())
+                    self.assertEqual(paths.get_data_dir(), sandbox / "data")
             finally:
                 os.environ.pop("NAVERLAND_DATA_DIR", None)
+                paths.reset_configured_paths()
+            self._reload_paths()
+
+    def test_bootstrap_runtime_paths_uses_env_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "bootstrap-env"
+            paths = self._reload_paths()
+            try:
+                with patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False):
+                    base = paths.bootstrap_runtime_paths()
+                    self.assertEqual(base, sandbox)
+                    self.assertTrue(paths.get_settings_path().parent.exists())
+            finally:
+                os.environ.pop("NAVERLAND_DATA_DIR", None)
+                paths.reset_configured_paths()
+            self._reload_paths()
+
+    def test_path_getters_refresh_after_configure_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "getter-refresh"
+            sandbox.mkdir(parents=True, exist_ok=True)
+            paths = self._reload_paths()
+            try:
+                paths.configure_paths(sandbox)
+                self.assertEqual(paths.get_db_path(), sandbox / "data" / "complexes.db")
+                self.assertEqual(paths.SETTINGS_PATH, paths.get_settings_path())
+            finally:
                 paths.reset_configured_paths()
             self._reload_paths()

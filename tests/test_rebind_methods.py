@@ -133,6 +133,33 @@ class TestMixinMethodRebinding(unittest.TestCase):
             inspect.getattr_static(PlaywrightCrawlerEngine, "_process_raw_items_with_filtered_details", None)
         )
 
+    def test_playwright_engine_exports_article_api_helpers(self):
+        from src.core.engines.playwright_engine import (
+            MAX_ARTICLE_API_PAGES,
+            PlaywrightArticleApiMixin,
+            PlaywrightCrawlerEngine,
+            article_api_has_more_pages,
+            article_api_list_count,
+            article_api_path_kind,
+            article_api_real_estate_type,
+            build_article_api_url,
+        )
+
+        public_objects = [
+            PlaywrightCrawlerEngine,
+            PlaywrightArticleApiMixin,
+            MAX_ARTICLE_API_PAGES,
+            article_api_has_more_pages,
+            article_api_list_count,
+            article_api_path_kind,
+            article_api_real_estate_type,
+            build_article_api_url,
+        ]
+        self.assertTrue(all(obj is not None for obj in public_objects))
+        self.assertIn("_supplement_article_api_pages", PlaywrightArticleApiMixin.__dict__)
+        self.assertIn("_record_article_api_failure", PlaywrightArticleApiMixin.__dict__)
+        self.assertIn("_mark_article_api_page_cap_truncation", PlaywrightArticleApiMixin.__dict__)
+
     def test_facade_modules_keep_public_imports(self):
         from src.core.database_parts.article_ops import ComplexDatabaseArticleOpsMixin
         from src.core.database_parts.crawl_snapshot_ops import ComplexDatabaseCrawlSnapshotOpsMixin

@@ -17,7 +17,7 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 from src.utils.constants import TRADE_COLORS
-from src.core.managers import SettingsManager
+from src.core.managers import settings
 from src.utils.helpers import PriceConverter
 from src.utils.logger import get_logger
 from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
@@ -25,7 +25,7 @@ from src.ui.styles import COLORS
 from src.ui.widgets.components import EmptyStateWidget
 
 logger = get_logger("Dashboard")
-settings = SettingsManager()
+
 
 
 class StatCard(QFrame):

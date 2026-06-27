@@ -173,6 +173,19 @@ class PlaywrightArticleApiMixin:
             int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
         )
 
+    def _record_article_api_failure(self, reason: str, *, status: str = "") -> None:
+        self._article_api_fast_path_fail_stats()
+        label = str(status or reason or "unknown")
+        self.thread.stats["article_api_last_status"] = label
+        failures = self.thread.stats.setdefault("article_api_failure_reasons", {})
+        key = str(reason or "unknown")
+        failures[key] = int(failures.get(key, 0)) + 1
+
+    def _mark_article_api_page_cap_truncation(self) -> None:
+        self.thread.stats["article_api_page_cap_truncated_count"] = (
+            int(self.thread.stats.get("article_api_page_cap_truncated_count", 0)) + 1
+        )
+
     async def _paginate_article_api_request_context(
         self,
         request_context,
@@ -196,6 +209,7 @@ class PlaywrightArticleApiMixin:
         final_api_url = ""
         response_match_count = 0
         first_page = max(1, int(start_page or 1))
+        last_has_more = False
 
         for page in range(first_page, MAX_ARTICLE_API_PAGES + 1):
             api_url = self._build_article_api_url(
@@ -213,7 +227,7 @@ class PlaywrightArticleApiMixin:
             self.thread.stats["article_api_last_status"] = status_label
             if status is not None and int(status) >= 400:
                 if page == first_page and not all_raw_items:
-                    self._article_api_fast_path_fail_stats()
+                    self._record_article_api_failure("http_error", status=status_label)
                     return None
                 break
             payload = await response.json()
@@ -232,14 +246,17 @@ class PlaywrightArticleApiMixin:
             )
             if not valid_payload:
                 if page == first_page and not all_raw_items:
-                    self._article_api_fast_path_fail_stats()
-                    self.thread.stats["article_api_last_status"] = status_label or "invalid_payload"
+                    self._record_article_api_failure("invalid_payload", status=status_label or "invalid_payload")
                     return None
                 break
             list_count = article_api_list_count(payload)
             all_raw_items.extend(raw_items)
-            if not article_api_has_more_pages(payload, list_count):
+            last_has_more = article_api_has_more_pages(payload, list_count)
+            if not last_has_more:
                 break
+
+        if last_has_more and page >= MAX_ARTICLE_API_PAGES:
+            self._mark_article_api_page_cap_truncation()
 
         if not all_raw_items and response_match_count == 0:
             return None
@@ -292,8 +309,7 @@ class PlaywrightArticleApiMixin:
                 start_page=1,
             )
         except Exception as exc:
-            self._article_api_fast_path_fail_stats()
-            self.thread.stats["article_api_last_status"] = f"{type(exc).__name__}"
+            self._record_article_api_failure(type(exc).__name__, status=type(exc).__name__)
             self.thread.log(f"   Article API fast path fallback({base_kind}/{cid}): {exc}", 10)
             return None
 
@@ -317,10 +333,11 @@ class PlaywrightArticleApiMixin:
     ) -> list[dict]:
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return list(existing_items or [])
-        if not isinstance(last_payload, dict):
-            return list(existing_items or [])
-        list_count = article_api_list_count(last_payload)
-        if not article_api_has_more_pages(last_payload, list_count):
+        if isinstance(last_payload, dict):
+            list_count = article_api_list_count(last_payload)
+            if not article_api_has_more_pages(last_payload, list_count):
+                return list(existing_items or [])
+        elif not existing_items:
             return list(existing_items or [])
         context = self._desktop_context
         request_context = getattr(context, "request", None) if context is not None else None
@@ -344,7 +361,8 @@ class PlaywrightArticleApiMixin:
                 start_page=2,
                 existing_items=list(existing_items or []),
             )
-        except Exception:
+        except Exception as exc:
+            self._record_article_api_failure(type(exc).__name__, status=type(exc).__name__)
             return list(existing_items or [])
         if result is None:
             return list(existing_items or [])

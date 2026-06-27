@@ -14,7 +14,7 @@ import re
 
 from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url, get_complex_url
 from src.core.services.price_snapshots import build_price_snapshot_rows
-from src.core.managers import SettingsManager
+from src.core.managers import settings
 from src.ui.widgets.components import (
     SearchBar, SpeedSlider, ProgressWidget, SummaryCard, SortableTableWidgetItem
 )
@@ -29,7 +29,7 @@ from src.ui.dialogs import (
 from src.ui.styles import COLORS
 from src.utils.logger import get_logger
 
-settings = SettingsManager()
+
 logger = get_logger("CrawlerTab")
 
 CrawlerThread = None

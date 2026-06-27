@@ -76,9 +76,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from src.utils.paths import apply_runtime_path_overrides_from_env
+    from src.utils.paths import bootstrap_runtime_paths
 
-    apply_runtime_path_overrides_from_env()
+    bootstrap_runtime_paths()
     args = _parse_args(argv)
 
     if args.preflight:

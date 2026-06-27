@@ -18,7 +18,7 @@ class AppLifecycleMixin:
         if geo: self.setGeometry(*geo)
         else: self.setGeometry(100, 100, 1500, 950)
         
-        self.settings_manager = SettingsManager()
+        self.settings_manager = get_settings()
         self.preset_manager = FilterPresetManager()
         self.history_manager = SearchHistoryManager(max_items=settings.get("max_search_history", 20))
         self.recently_viewed = RecentlyViewedManager(

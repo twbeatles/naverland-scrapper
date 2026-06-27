@@ -53,6 +53,7 @@ from src.utils.mixin_rebind import rebind_inherited_methods
 
 from src.core.engines.playwright_parts.runtime import PlaywrightRuntimeMixin
 from src.core.engines.playwright_parts.complex_mode import PlaywrightComplexModeMixin
+from src.core.engines.playwright_parts.complex_mode_parts.article_api import PlaywrightArticleApiMixin
 from src.core.engines.playwright_parts.geo_mode import PlaywrightGeoModeMixin
 
 

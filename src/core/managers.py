@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from pathlib import Path
 from threading import Lock
 from typing import Any, List
-from src.utils.paths import DATA_DIR, SETTINGS_PATH, PRESETS_PATH, HISTORY_PATH
+
+from src.utils import paths as paths_util
 from src.utils.logger import get_logger
 from src.utils.helpers import DateTimeHelper
 from src.utils.json_store import atomic_write_json, load_json_with_recovery
@@ -147,6 +149,7 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
     sanitized["schedule_config"] = _normalize_schedule_config(sanitized.get("schedule_config"))
     return sanitized
 
+
 class SettingsManager:
     _instance = None
     _lock = Lock()
@@ -163,15 +166,25 @@ class SettingsManager:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
         return cls._instance
+
     def __init__(self):
-        if self._initialized: return
+        if self._initialized:
+            return
         self._initialized = True
         self._settings: dict[str, Any] = deepcopy(DEFAULT_SETTINGS)
         self._load()
 
+    @property
+    def _settings(self) -> dict[str, Any]:
+        return self.__dict__["_settings"]
+
+    @_settings.setter
+    def _settings(self, value: dict[str, Any]) -> None:
+        self.__dict__["_settings"] = value
+
     def _load(self):
         payload = load_json_with_recovery(
-            SETTINGS_PATH,
+            paths_util.get_settings_path(),
             default_factory=lambda: deepcopy(DEFAULT_SETTINGS),
             logger_name="SettingsManager",
             label="settings",
@@ -183,12 +196,14 @@ class SettingsManager:
         else:
             self._settings = deepcopy(DEFAULT_SETTINGS)
             self._save()
+
     def _save(self):
         try:
             self._settings = _sanitize_settings_payload(self._settings)
-            atomic_write_json(SETTINGS_PATH, self._settings)
+            atomic_write_json(paths_util.get_settings_path(), self._settings)
         except OSError as e:
-            get_logger('SettingsManager').warning(f"설정 저장 실패: {e}")
+            get_logger("SettingsManager").warning(f"설정 저장 실패: {e}")
+
     def get(self, key: str, default: Any = None) -> Any:
         return self._settings.get(key, default)
 
@@ -214,52 +229,102 @@ class SettingsManager:
         self._settings.pop("result_tab_mode", None)
         self._save()
 
+
+class _SettingsAccessor:
+    """Module-level accessor delegating to the SettingsManager singleton."""
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return get_settings().get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        get_settings().set(key, value)
+
+    def update(self, data: dict[str, Any]) -> None:
+        get_settings().update(data)
+
+    @property
+    def _settings(self) -> dict[str, Any]:
+        return get_settings()._settings
+
+    @_settings.setter
+    def _settings(self, value: dict[str, Any]) -> None:
+        get_settings()._settings = value
+
+    def _save(self) -> None:
+        get_settings()._save()
+
+
+def get_settings() -> SettingsManager:
+    return SettingsManager()
+
+
+settings = _SettingsAccessor()
+
+
 class FilterPresetManager:
     def __init__(self):
         self._presets = {}
         self._load()
+
     def _load(self):
         payload = load_json_with_recovery(
-            PRESETS_PATH,
+            paths_util.get_presets_path(),
             default_factory=dict,
             logger_name="FilterPresetManager",
             label="presets",
         )
         self._presets = payload if isinstance(payload, dict) else {}
+
     def _save(self):
         try:
-            atomic_write_json(PRESETS_PATH, self._presets)
+            atomic_write_json(paths_util.get_presets_path(), self._presets)
         except OSError as e:
-            get_logger('FilterPresetManager').warning(f"프리셋 저장 실패: {e}")
-    def add(self, name, config): self._presets[name] = config; self._save(); return True
-    def save_preset(self, name, config): return self.add(name, config)
-    def get(self, name): return self._presets.get(name)
+            get_logger("FilterPresetManager").warning(f"프리셋 저장 실패: {e}")
+
+    def add(self, name, config):
+        self._presets[name] = config
+        self._save()
+        return True
+
+    def save_preset(self, name, config):
+        return self.add(name, config)
+
+    def get(self, name):
+        return self._presets.get(name)
+
     def delete(self, name):
-        if name in self._presets: del self._presets[name]; self._save(); return True
+        if name in self._presets:
+            del self._presets[name]
+            self._save()
+            return True
         return False
-    def get_all_names(self): return list(self._presets.keys())
+
+    def get_all_names(self):
+        return list(self._presets.keys())
+
 
 class SearchHistoryManager:
     """최근 검색 기록 관리"""
+
     def __init__(self, max_items=20):
         self.max_items = max_items
         self._history = []
         self._load()
-    
+
     def _load(self):
         payload = load_json_with_recovery(
-            HISTORY_PATH,
+            paths_util.get_history_path(),
             default_factory=list,
             logger_name="SearchHistoryManager",
             label="search_history",
         )
         self._history = payload if isinstance(payload, list) else []
-    
+
     def _save(self):
         try:
-            atomic_write_json(HISTORY_PATH, self._history[:self.max_items])
+            atomic_write_json(paths_util.get_history_path(), self._history[: self.max_items])
         except OSError as e:
-            get_logger('SearchHistoryManager').warning(f"검색 기록 저장 실패: {e}")
+            get_logger("SearchHistoryManager").warning(f"검색 기록 저장 실패: {e}")
 
     @staticmethod
     def _normalize_complexes(complexes) -> list[dict]:
@@ -296,32 +361,31 @@ class SearchHistoryManager:
             "price_filter": cls._canonical_obj(search_info.get("price_filter") or {}),
         }
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    
+
     def add(self, search_info):
         """검색 기록 추가"""
         payload = dict(search_info or {})
-        payload['timestamp'] = DateTimeHelper.now_string()
+        payload["timestamp"] = DateTimeHelper.now_string()
         key = self._dedupe_key(payload)
-        # 중복 제거
         self._history = [h for h in self._history if self._dedupe_key(h) != key]
         self._history.insert(0, payload)
-        self._history = self._history[:self.max_items]
+        self._history = self._history[: self.max_items]
         self._save()
-    
+
     def get_recent(self, count=10):
         return self._history[:count]
-    
+
     def clear(self):
         """검색 기록 전체 삭제"""
         self._history = []
         self._save()
 
+
 class RecentlyViewedManager:
     """최근 본 매물 관리 (v13.0)"""
-    
+
     MAX_ITEMS = 50
-    STORAGE_PATH = DATA_DIR / "recently_viewed.json"
-    
+
     def __init__(self, max_items: int | None = None):
         self.max_items = self._normalize_max_items(max_items)
         self._items: List[dict] = []
@@ -337,35 +401,39 @@ class RecentlyViewedManager:
         return max(1, value)
 
     @staticmethod
+    def _storage_path() -> Path:
+        return paths_util.get_data_dir() / "recently_viewed.json"
+
+    @staticmethod
     def _article_identity(article: dict[str, Any]) -> tuple[str, str, str]:
         asset_type = str(article.get("자산유형", article.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
         complex_id = str(article.get("단지ID", article.get("complex_id", "")) or "").strip()
         article_id = str(article.get("매물ID", article.get("article_id", "")) or "").strip()
         return asset_type, complex_id, article_id
-    
+
     def _load(self):
         """파일에서 로드"""
         payload = load_json_with_recovery(
-            self.STORAGE_PATH,
+            self._storage_path(),
             default_factory=list,
             logger_name="RecentlyViewedManager",
             label="recently_viewed",
         )
-        self._items = list(payload[:self.max_items]) if isinstance(payload, list) else []
-    
+        self._items = list(payload[: self.max_items]) if isinstance(payload, list) else []
+
     def _save(self):
         """파일에 저장"""
         try:
-            atomic_write_json(self.STORAGE_PATH, self._items[:self.max_items])
+            atomic_write_json(self._storage_path(), self._items[: self.max_items])
         except OSError as e:
-            get_logger('RecentlyViewedManager').warning(f"최근 본 매물 저장 실패: {e}")
+            get_logger("RecentlyViewedManager").warning(f"최근 본 매물 저장 실패: {e}")
 
     def set_max_items(self, max_items: int | None) -> None:
         with self._lock:
             self.max_items = self._normalize_max_items(max_items)
-            self._items = self._items[:self.max_items]
+            self._items = self._items[: self.max_items]
             self._save()
-    
+
     def add(self, article: dict):
         """최근 본 매물 추가"""
         with self._lock:
@@ -375,25 +443,21 @@ class RecentlyViewedManager:
                 return
 
             article_key = self._article_identity(article_copy)
-            # 기존 항목 제거 (중복 방지)
             self._items = [
-                item for item in self._items 
+                item for item in self._items
                 if self._article_identity(item) != article_key
             ]
-            
-            # 맨 앞에 추가
+
             article_copy["viewed_at"] = DateTimeHelper.now_string()
             self._items.insert(0, article_copy)
-            
-            # 최대 개수 유지
-            self._items = self._items[:self.max_items]
+            self._items = self._items[: self.max_items]
             self._save()
-    
+
     def get_recent(self, count: int | None = None) -> List[dict]:
         """최근 본 매물 목록"""
         limit = self.max_items if count is None else max(1, int(count))
         return self._items[:limit]
-    
+
     def clear(self):
         """전체 삭제"""
         with self._lock:

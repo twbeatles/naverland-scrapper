@@ -18,10 +18,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from src.core.managers import SettingsManager
+from src.core.managers import settings
 from src.utils.constants import CRAWL_SPEED_PRESETS, SHORTCUTS
 
-settings = SettingsManager()
+
 
 
 class SettingsDialog(QDialog):
