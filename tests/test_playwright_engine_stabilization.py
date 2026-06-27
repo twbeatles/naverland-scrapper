@@ -699,6 +699,170 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(collect_result.get("api_fast_path"))
         self.assertEqual(len(collect_result.get("raw_items", [])), 1)
 
+    async def test_supplement_article_api_pages_fetches_page_two(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=2",
+                    payload={
+                        "isMoreData": False,
+                        "articleList": [{"articleNo": "SUP-2", "tradeTypeCode": "A1"}],
+                    },
+                )
+            ]
+        )
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._article_api_auth_header = "Bearer supplement-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    side_effect=lambda article, **kwargs: {
+                        "매물ID": str(article.get("articleNo", "")),
+                        _LEGACY_ARTICLE_ID_KEY: str(article.get("articleNo", "")),
+                    },
+                ),
+            ):
+                supplemented = await engine._supplement_article_api_pages(
+                    name="테스트단지",
+                    cid="12345",
+                    trade_type=trade_type,
+                    base_kind="complexes",
+                    path_asset="APT",
+                    target_url="https://new.land.naver.com/complexes/12345",
+                    mode="complex",
+                    source_lat=None,
+                    source_lon=None,
+                    source_zoom=None,
+                    marker_id="",
+                    seen_ids=set(),
+                    existing_items=[{"매물ID": "SUP-1", _LEGACY_ARTICLE_ID_KEY: "SUP-1"}],
+                    last_payload={
+                        "isMoreData": True,
+                        "articleList": [{"articleNo": f"SUP-{i}", "tradeTypeCode": "A1"} for i in range(20)],
+                    },
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(len(supplemented), 2)
+        self.assertEqual(len(request.calls), 1)
+        self.assertIn("page=2", request.calls[0]["url"])
+
+    async def test_supplement_skips_without_last_payload(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=2",
+                    payload={"articleList": [{"articleNo": "SKIP-2", "tradeTypeCode": "A1"}]},
+                )
+            ]
+        )
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._article_api_auth_header = "Bearer supplement-token"
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            supplemented = await engine._supplement_article_api_pages(
+                name="테스트단지",
+                cid="12345",
+                trade_type=trade_type,
+                base_kind="complexes",
+                path_asset="APT",
+                target_url="https://new.land.naver.com/complexes/12345",
+                mode="complex",
+                source_lat=None,
+                source_lon=None,
+                source_zoom=None,
+                marker_id="",
+                seen_ids=set(),
+                existing_items=[{"매물ID": "SKIP-1", _LEGACY_ARTICLE_ID_KEY: "SKIP-1"}],
+                last_payload=None,
+            )
+        finally:
+            engine._loop.close()
+
+        self.assertEqual(len(supplemented), 1)
+        self.assertEqual(len(request.calls), 0)
+
+    async def test_response_capture_supplements_after_browser_capture_with_is_more_data(self):
+        thread = _ThreadStub()
+        trade_type = thread.trade_types[0]
+        engine = PlaywrightCrawlerEngine(thread)
+        request = _FakeRequestContext(
+            [
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?page=2",
+                    payload={
+                        "isMoreData": False,
+                        "articleList": [{"articleNo": "CAP-2", "tradeTypeCode": "A1"}],
+                    },
+                )
+            ]
+        )
+        page = _FakePage(
+            responses=[
+                _FakeResponse(
+                    url="https://new.land.naver.com/api/articles/complex/12345?tradeType=A1",
+                    payload={
+                        "isMoreData": True,
+                        "articleList": [{"articleNo": "CAP-1", "tradeTypeCode": "A1"}],
+                    },
+                    request_headers={"authorization": "Bearer browser-token"},
+                )
+            ]
+        )
+        engine._desktop_context = _FakeContextWithRequest(request)
+        engine._desktop_page = page
+
+        async def _noop_started():
+            return None
+
+        engine._ensure_started = _noop_started
+
+        try:
+            with (
+                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.normalize_article_payload",
+                    side_effect=lambda article, **kwargs: {
+                        "매물ID": str(article.get("articleNo", "")),
+                        _LEGACY_ARTICLE_ID_KEY: str(article.get("articleNo", "")),
+                    },
+                ),
+            ):
+                collect_result = await engine._collect_target_raw_items(
+                    "테스트단지",
+                    "12345",
+                    trade_type,
+                    asset_type="APT",
+                    mode="complex",
+                )
+        finally:
+            engine._loop.close()
+
+        self.assertFalse(collect_result.get("api_fast_path", False))
+        self.assertEqual(len(collect_result.get("raw_items", [])), 2)
+        self.assertEqual(len(request.calls), 1)
+        self.assertEqual(getattr(engine, "_article_api_auth_header", ""), "Bearer browser-token")
+
     async def test_article_api_fast_path_empty_result_is_confirmed_without_navigation(self):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]

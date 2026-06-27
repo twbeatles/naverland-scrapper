@@ -41,7 +41,7 @@ python app_entry.py --live-smoke --smoke-headless --live-smoke-detail-fields --s
 
 최근 확인:
 
-- pytest 전체 통과: `301 passed`
+- pytest 전체 통과: `305 passed`
 - perf baseline 통과
 - live smoke `[article-api]`, `[complex]`, `[detail]`, `[detail-fields]`, `[geo-marker]`, `[article-lookup]` OK
 

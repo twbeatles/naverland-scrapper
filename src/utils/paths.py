@@ -83,6 +83,16 @@ def reset_configured_paths() -> None:
     _refresh_path_constants()
 
 
+def apply_runtime_path_overrides_from_env() -> Path | None:
+    """Apply NAVERLAND_DATA_DIR when set (preflight, live-smoke, GUI entry)."""
+    raw = os.environ.get("NAVERLAND_DATA_DIR", "").strip()
+    if not raw:
+        return None
+    configured = configure_paths(raw)
+    ensure_directories()
+    return configured
+
+
 def get_resource_path(relative_path):
     """번들/일반 실행 환경에서 리소스 경로를 반환"""
     if is_frozen_runtime():

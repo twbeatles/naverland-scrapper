@@ -317,9 +317,10 @@ class PlaywrightArticleApiMixin:
     ) -> list[dict]:
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return list(existing_items or [])
-        list_count = article_api_list_count(last_payload) if last_payload else len(existing_items or [])
-        payload_for_more = last_payload if last_payload else {"articleList": [None] * list_count}
-        if not article_api_has_more_pages(payload_for_more, list_count):
+        if not isinstance(last_payload, dict):
+            return list(existing_items or [])
+        list_count = article_api_list_count(last_payload)
+        if not article_api_has_more_pages(last_payload, list_count):
             return list(existing_items or [])
         context = self._desktop_context
         request_context = getattr(context, "request", None) if context is not None else None

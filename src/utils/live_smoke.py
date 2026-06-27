@@ -62,6 +62,9 @@ def run_live_smoke(
     include_geo_marker: bool = True,
     include_detail_fields: bool = False,
 ) -> tuple[bool, list[str]]:
+    from src.utils.paths import apply_runtime_path_overrides_from_env
+
+    apply_runtime_path_overrides_from_env()
     _sync_facade_overrides()
     probe_urls = list(urls or default_live_smoke_urls())
     runtime_meta = _runtime_metadata()

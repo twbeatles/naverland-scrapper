@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-from src.core.services.article_api import build_article_api_url
+from src.core.services.article_api import (
+    article_api_has_more_pages,
+    article_api_list_count,
+    build_article_api_url,
+)
 from src.utils.helpers import ChromeParamHelper
 from src.utils.paths import BASE_DIR, DATA_DIR, is_frozen_runtime
 from src.core.services.detail_fetcher import fetch_mobile_article_detail
@@ -60,10 +64,12 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
     if not cid:
         return False, "[fail] [article-api] missing complex id", "", None
 
-    target_url = build_article_api_url("complexes", cid, "매매", "APT", page=1)
+    trade_type = "매매"
+    target_url = build_article_api_url("complexes", cid, trade_type, "APT", page=1)
     final_url = target_url
     status = None
     article_count = None
+    pages_fetched = 0
     sample_article_id = ""
     reason = ""
     headers = {
@@ -134,6 +140,7 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
         if not isinstance(article_list, list):
             reason = _append_reason(reason, "article_list_not_list")
         else:
+            pages_fetched = 1
             article_count = len(article_list)
             for article in article_list:
                 if not isinstance(article, dict):
@@ -144,12 +151,43 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                     break
             if article_count <= 0:
                 reason = _append_reason(reason, "articles_empty")
+            elif isinstance(payload, dict) and article_api_has_more_pages(
+                payload, article_api_list_count(payload)
+            ):
+                page2_url = build_article_api_url("complexes", cid, trade_type, "APT", page=2)
+                try:
+                    response2 = await context.request.get(
+                        page2_url,
+                        headers=headers,
+                        timeout=max(1000, int(timeout_ms)),
+                    )
+                    status2 = int(getattr(response2, "status", 0) or 0)
+                    if status2 < 400:
+                        payload2 = await response2.json()
+                        list2 = payload2.get("articleList") or payload2.get("articles") or []
+                        if isinstance(list2, list):
+                            pages_fetched = 2
+                            article_count = int(article_count or 0) + len(list2)
+                            final_url = page2_url
+                            for article in list2:
+                                if not isinstance(article, dict):
+                                    continue
+                                aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
+                                if aid and not sample_article_id:
+                                    sample_article_id = aid
+                                    break
+                    else:
+                        reason = _append_reason(reason, f"article_api_page2_http_{status2}")
+                except Exception as exc:
+                    reason = _append_reason(reason, f"article_api_page2:{type(exc).__name__}")
     except Exception as exc:
         reason = _append_reason(reason, f"article_api_exception:{type(exc).__name__}:{exc}")
 
     ok = bool(status is None or status < 400) and article_count is not None and int(article_count) > 0
     extra = (
         f"api_articles={status if status is not None else '-'} "
+        f"tradeType=A1 "
+        f"pages_fetched={pages_fetched} "
         f"article_count={article_count if article_count is not None else '-'} "
         f"sample_article={sample_article_id or '-'}"
     )

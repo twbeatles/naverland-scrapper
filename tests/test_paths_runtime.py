@@ -113,3 +113,18 @@ class TestRuntimePaths(unittest.TestCase):
             finally:
                 paths.reset_configured_paths()
             self._reload_paths()
+
+    def test_apply_runtime_path_overrides_from_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = Path(tmp) / "env-root"
+            paths = self._reload_paths()
+            try:
+                with patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False):
+                    configured = paths.apply_runtime_path_overrides_from_env()
+                    self.assertEqual(configured, sandbox)
+                    self.assertEqual(paths.BASE_DIR, sandbox)
+                    self.assertTrue(paths.DATA_DIR.exists())
+            finally:
+                os.environ.pop("NAVERLAND_DATA_DIR", None)
+                paths.reset_configured_paths()
+            self._reload_paths()
