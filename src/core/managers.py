@@ -174,14 +174,6 @@ class SettingsManager:
         self._settings: dict[str, Any] = deepcopy(DEFAULT_SETTINGS)
         self._load()
 
-    @property
-    def _settings(self) -> dict[str, Any]:
-        return self.__dict__["_settings"]
-
-    @_settings.setter
-    def _settings(self, value: dict[str, Any]) -> None:
-        self.__dict__["_settings"] = value
-
     def _load(self):
         payload = load_json_with_recovery(
             paths_util.get_settings_path(),

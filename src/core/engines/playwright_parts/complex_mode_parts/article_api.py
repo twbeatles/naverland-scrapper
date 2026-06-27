@@ -210,8 +210,10 @@ class PlaywrightArticleApiMixin:
         response_match_count = 0
         first_page = max(1, int(start_page or 1))
         last_has_more = False
+        last_page = first_page
 
         for page in range(first_page, MAX_ARTICLE_API_PAGES + 1):
+            last_page = page
             api_url = self._build_article_api_url(
                 base_kind, cid, trade_type, path_asset, page=page
             )
@@ -255,7 +257,7 @@ class PlaywrightArticleApiMixin:
             if not last_has_more:
                 break
 
-        if last_has_more and page >= MAX_ARTICLE_API_PAGES:
+        if last_has_more and last_page >= MAX_ARTICLE_API_PAGES:
             self._mark_article_api_page_cap_truncation()
 
         if not all_raw_items and response_match_count == 0:

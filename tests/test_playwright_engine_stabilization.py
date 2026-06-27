@@ -872,6 +872,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             engine._loop.close()
 
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(len(result.get("raw_items", [])), 2)
         self.assertEqual(int(thread.stats.get("article_api_page_cap_truncated_count", 0)), 1)
 
