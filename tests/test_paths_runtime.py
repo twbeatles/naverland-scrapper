@@ -75,3 +75,26 @@ class TestRuntimePaths(unittest.TestCase):
                 self.assertEqual(row[0], "legacy")
 
             self._reload_paths()
+
+    def test_frozen_runtime_uses_xdg_data_home_on_linux(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exe_dir = Path(tmp) / "dist"
+            exe_dir.mkdir(parents=True, exist_ok=True)
+            exe_path = exe_dir / "naverland"
+            exe_path.write_text("", encoding="utf-8")
+            xdg_root = Path(tmp) / "xdg-data"
+            xdg_root.mkdir(parents=True, exist_ok=True)
+
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "executable", str(exe_path)),
+                patch.object(sys, "platform", "linux"),
+                patch.dict(os.environ, {"XDG_DATA_HOME": str(xdg_root)}, clear=False),
+            ):
+                paths = self._reload_paths()
+                self.assertEqual(
+                    paths.BASE_DIR,
+                    xdg_root / "NaverlandScrapperProPlus",
+                )
+
+            self._reload_paths()

@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
+from src.core.services.article_api import (
+    MAX_ARTICLE_API_PAGES,
+    article_api_has_more_pages,
+    article_api_path_kind,
+    article_api_real_estate_type,
+    build_article_api_url,
+)
 from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
 from src.core.services.response_capture import TRADE_CODE_MAP, detect_trade_type, normalize_article_payload
 
@@ -32,47 +38,22 @@ class PlaywrightArticleApiMixin:
 
     @staticmethod
     def _article_api_path_kind(base_kind: str) -> str:
-        return "house" if str(base_kind or "") == "houses" else "complex"
+        return article_api_path_kind(base_kind)
 
     @staticmethod
     def _article_api_real_estate_type(path_asset: str) -> str:
-        asset = str(path_asset or "APT").strip().upper()
-        if asset == "VL":
-            return "VL:DDDGG:JWJT:SGJT"
-        return "APT:ABYG:JGC"
+        return article_api_real_estate_type(path_asset)
 
-    def _build_article_api_url(self, base_kind: str, cid: str, trade_type: str, path_asset: str = "APT") -> str:
-        path_kind = self._article_api_path_kind(base_kind)
-        params = {
-            "realEstateType": self._article_api_real_estate_type(path_asset),
-            "tradeType": _TRADE_TO_CODE.get(trade_type, "A1"),
-            "tag": "::::::::",
-            "rentPriceMin": "0",
-            "rentPriceMax": "900000000",
-            "priceMin": "0",
-            "priceMax": "900000000",
-            "areaMin": "0",
-            "areaMax": "900000000",
-            "oldBuildYears": "",
-            "recentlyBuildYears": "",
-            "minHouseHoldCount": "",
-            "maxHouseHoldCount": "",
-            "showArticle": "false",
-            "sameAddressGroup": "false",
-            "minMaintenanceCost": "",
-            "maxMaintenanceCost": "",
-            "priceType": "RETAIL",
-            "directions": "",
-            "page": "1",
-            "buildingNos": "",
-            "areaNos": "",
-            "type": "list",
-            "order": "rank",
-        }
-        return (
-            f"https://new.land.naver.com/api/articles/{path_kind}/{cid}?"
-            + urlencode(params)
-        )
+    def _build_article_api_url(
+        self,
+        base_kind: str,
+        cid: str,
+        trade_type: str,
+        path_asset: str = "APT",
+        *,
+        page: int = 1,
+    ) -> str:
+        return build_article_api_url(base_kind, cid, trade_type, path_asset, page=page)
 
     def _article_api_headers(self, target_url: str) -> dict[str, str]:
         headers = {
@@ -184,58 +165,69 @@ class PlaywrightArticleApiMixin:
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return None
 
-        api_url = self._build_article_api_url(base_kind, cid, trade_type, path_asset)
+        all_raw_items: list[dict] = []
+        final_api_url = ""
         status_label = ""
+        response_match_count = 0
         try:
-            response = await request_context.get(
-                api_url,
-                headers=self._article_api_headers(target_url),
-                timeout=self._article_api_timeout_ms(),
-            )
-            status = getattr(response, "status", None)
-            status_label = str(status if status is not None else "")
-            self.thread.stats["article_api_last_status"] = status_label
-            if status is not None and int(status) >= 400:
-                self.thread.stats["article_api_fast_path_fail_count"] = (
-                    int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
+            for page in range(1, MAX_ARTICLE_API_PAGES + 1):
+                api_url = self._build_article_api_url(
+                    base_kind, cid, trade_type, path_asset, page=page
                 )
-                self.thread.stats["article_api_fast_path_fallback_count"] = (
-                    int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
+                final_api_url = api_url
+                response = await request_context.get(
+                    api_url,
+                    headers=self._article_api_headers(target_url),
+                    timeout=self._article_api_timeout_ms(),
                 )
-                return None
-            payload = await response.json()
-            raw_items, valid_payload = self._normalize_article_api_payload(
-                payload,
-                name=name,
-                cid=cid,
-                trade_type=trade_type,
-                path_asset=path_asset,
-                mode=mode,
-                source_lat=source_lat,
-                source_lon=source_lon,
-                source_zoom=source_zoom,
-                marker_id=marker_id,
-                seen_ids=seen_ids,
-            )
-            if not valid_payload:
-                self.thread.stats["article_api_fast_path_fail_count"] = (
-                    int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
+                response_match_count += 1
+                status = getattr(response, "status", None)
+                status_label = str(status if status is not None else "")
+                self.thread.stats["article_api_last_status"] = status_label
+                if status is not None and int(status) >= 400:
+                    self.thread.stats["article_api_fast_path_fail_count"] = (
+                        int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
+                    )
+                    self.thread.stats["article_api_fast_path_fallback_count"] = (
+                        int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
+                    )
+                    return None
+                payload = await response.json()
+                raw_items, valid_payload = self._normalize_article_api_payload(
+                    payload,
+                    name=name,
+                    cid=cid,
+                    trade_type=trade_type,
+                    path_asset=path_asset,
+                    mode=mode,
+                    source_lat=source_lat,
+                    source_lon=source_lon,
+                    source_zoom=source_zoom,
+                    marker_id=marker_id,
+                    seen_ids=seen_ids,
                 )
-                self.thread.stats["article_api_fast_path_fallback_count"] = (
-                    int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
-                )
-                self.thread.stats["article_api_last_status"] = status_label or "invalid_payload"
-                return None
+                if not valid_payload:
+                    self.thread.stats["article_api_fast_path_fail_count"] = (
+                        int(self.thread.stats.get("article_api_fast_path_fail_count", 0)) + 1
+                    )
+                    self.thread.stats["article_api_fast_path_fallback_count"] = (
+                        int(self.thread.stats.get("article_api_fast_path_fallback_count", 0)) + 1
+                    )
+                    self.thread.stats["article_api_last_status"] = status_label or "invalid_payload"
+                    return None
+                all_raw_items.extend(raw_items)
+                if not article_api_has_more_pages(payload, len(raw_items)):
+                    break
             self.thread.stats["article_api_fast_path_hit_count"] = (
                 int(self.thread.stats.get("article_api_fast_path_hit_count", 0)) + 1
             )
             return {
-                "raw_items": raw_items,
+                "raw_items": all_raw_items,
                 "response_seen": True,
                 "parse_success": True,
                 "drain_timed_out": False,
-                "response_match_count": 1,
-                "final_url": api_url,
+                "response_match_count": response_match_count,
+                "final_url": final_api_url,
                 "block_like_redirect": False,
                 "block_reason": "",
                 "capture_failed": False,

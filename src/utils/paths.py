@@ -30,10 +30,21 @@ def _local_appdata_root() -> Path:
     return Path.home() / "AppData" / "Local"
 
 
+def _frozen_runtime_data_root() -> Path:
+    if sys.platform == "win32":
+        return _local_appdata_root() / FROZEN_APP_DIR_NAME
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / FROZEN_APP_DIR_NAME
+    xdg_data_home = os.environ.get("XDG_DATA_HOME")
+    if xdg_data_home:
+        return Path(xdg_data_home) / FROZEN_APP_DIR_NAME
+    return Path.home() / ".local" / "share" / FROZEN_APP_DIR_NAME
+
+
 def get_base_dir():
     """실행 파일 기준의 기본 디렉토리를 반환"""
     if is_frozen_runtime():
-        return _local_appdata_root() / FROZEN_APP_DIR_NAME
+        return _frozen_runtime_data_root()
     return Path(__file__).resolve().parent.parent.parent
 
 
