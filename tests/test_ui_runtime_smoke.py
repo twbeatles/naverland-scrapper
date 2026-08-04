@@ -48,7 +48,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         self.assertIn("빠른 시작 가이드", guide_html)
         self.assertIn("탭별 안내", guide_html)
         self.assertIn("메뉴 안내", guide_html)
-        self.assertIn("데이터 수집", guide_html)
+        self.assertIn("매물 수집", guide_html)
         self.assertIn("DB 백업", guide_html)
 
         if hasattr(w, "schedule_timer") and w.schedule_timer:

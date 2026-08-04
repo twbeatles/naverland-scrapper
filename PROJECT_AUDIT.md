@@ -1,200 +1,238 @@
 # Project Audit
 
+**감사 기준일**: 2026-08-04  
+**범위**: 기능 구현 관점 (최근 네이버 사이트 호환·옵션·UI 포함)  
+**방법**: `README.md` 정독, CodeGraph MCP 호출 경로/blast radius, 보조적 파일·테스트 확인  
+**참고**: 루트에 `CLAUDE.md` / `.claude` 는 **없음**. 규칙 문서는 `README.md`, `docs/NAVER_LAND_SURVEY_2026-08-04.md`, `update_history.md`, 본 파일의 이전 버전 이력을 교차함.
+
+---
+
 ## 1. Executive Summary
 
-Naverland Scrapper Pro Plus v15.0은 PyQt6 + Playwright 기반 네이버 부동산(`new.land.naver.com`) 수집 데스크톱 앱입니다. 287개 단위 테스트와 live-smoke 게이트가 있어 **기본 자동화 기반은 양호**하지만, Superpowers(TDD·환경 격리·에이전트 자율 개발) 관점에서 **중간~높은 위험** 요소가 존재했습니다.
+Naverland Scrapper Pro Plus는 **PyQt6 데스크톱 UI + Playwright 수집 엔진 + SQLite 로컬 DB** 구조의 네이버(Npay) 부동산 매물 수집 앱입니다. 최근 작업으로 Article API 페이지네이션, front-api 상세 보강, 수집/표시 옵션, 설정 탭 UI, 결과 확장 컬럼이 들어갔습니다. 단위 테스트는 **322 passed** 수준으로 자동화 기반은 양호합니다.
 
-핵심 발견:
+**전체 위험도: Medium (일부 항목 High)**
 
-| 영역 | 위험도 | 요약 |
-|------|--------|------|
-| Naver Article API 페이지네이션 | **High** | Fast path가 `page=1`만 요청해 대형 단지 매물 누락 가능 |
-| Frozen 런타임 경로 (비-Windows) | **High** | `LOCALAPPDATA` 전용 → Linux/macOS PyInstaller 샌드박스 실패 |
-| 모듈 import 시점 경로 고정 | **Medium** | `BASE_DIR`/`DATA_DIR` 모듈 상수가 worktree 격리를 어렵게 함 |
-| SettingsManager 싱글톤 | **Medium** | 테스트 간 상태 오염 가능(일부 테스트에서 수동 reset) |
-| Response-capture fallback | **Medium** | 브라우저 캡처 경로도 단일 응답만 소비, 페이지네이션 미지원 |
-| 광범위 `except Exception` | **Medium** | 자동화 시 실패 원인 은폐(다만 fallback 설계 의도 있음) |
+| 영역 | 위험도 | 한 줄 요약 |
+|------|--------|------------|
+| 수집 탭 ↔ 지도 탭 동시 실행 | **High** | 각각 자체 `CrawlerThread` + **공유 `ComplexDatabase`** → 동시 쓰기 가능 |
+| 상세 보강 끄기/상한 UX | **Medium** | 옵션은 동작하나, 상한 초과 매물은 상세 없이 조용히 통과(사용자 피드백 약함) |
+| 「표시 항목」메뉴 닫기 동작 | **Medium** | 메뉴 취소 시에도 체크 상태를 설정에 **항상 저장** (의도치 않은 덮어쓰기 가능) |
+| 광범위 `except Exception` | **Medium** | 폴백 설계상 의도 있으나, 실패 원인 분류·재현이 어려움 |
+| README vs 실제 설정 | **Medium** | README 설정 표가 최신 옵션(PRE·상세 상한·표시 항목 등)을 반영하지 않음 |
+| 비공식 Naver API / 429 | **Medium** | 구조적 리스크; 완화 옵션은 있으나 차단 시 수집 불완전 가능 |
+| Settings 싱글톤 | **Low~Medium** | 테스트 격리 API 존재; 프로덕션 단일 프로세스에서는 실무 리스크 낮음 |
+| 이전 High(페이지네이션·경로) | **완화됨** | 페이지 루프·frozen path·lazy path 등 이전 감사 항목 상당수 반영 |
 
-**조치 상태**: 1~3단계 핵심 항목 반영 완료 — Article API 페이지네이션(사전 필터 `list_count`, 부분 페이지 보존), response-capture fallback 보충 페이지(`_supplement_article_api_pages`), `bootstrap_runtime_paths`/`get_*_path` lazy accessor, `settings` 모듈 accessor, `_record_article_api_failure`/`_mark_article_api_page_cap_truncation`, live-smoke `build_article_api_url` 통합. pytest **314 passed**.
-
-**분석 방법**: CodeGraph MCP는 현재 harness에서 사용 불가하여, `grep`·파일 직접 열람·호출 경로 추적·Naver 공개 스크래퍼 문서([chongjae/naver_land](https://github.com/chongjae/naver_land), [jissp/naver-land-crawler](https://github.com/jissp/naver-land-crawler)) 및 live-smoke 프로브 URL을 교차 검증했습니다.
+**조치 상태 (2026-08-04 후속)**: 권장 1~3단계 핵심 항목 구현 반영 — 전역 수집 락, 완료 로그 상세 skip/상한/API 실패 요약, 표시 항목 토글 저장, 예약 busy+락 가드, `ui_labels` 상수, README 설정 표 갱신, 일부 예외 범위 축소. `docs/`·spec·`.gitignore` 동기화 완료. 자세한 변경은 `update_history.md` 참고. 검증: `pytest` 328 passed.
 
 ---
 
 ## 2. Project Understanding
 
-### 아키텍처
+### 목적 (README)
+
+- 네이버 부동산 매물 **자동 수집**
+- **가격 이력·알림·소멸 추적**
+- 테이블/카드 결과, 대시보드, 즐겨찾기, 중복 묶기
+- 데이터는 로컬 SQLite (`data/`), 외부 전송 없음
+
+### 아키텍처 (CodeGraph + 모듈 구조)
 
 ```
 app_entry.py
-  └─ --preflight / --live-smoke / GUI
-       └─ src/main.py → src/ui/app.py (PyQt6)
-            └─ CrawlerTab / GeoCrawlerTab
-                 └─ CrawlerThread (QThread)
-                      └─ PlaywrightCrawlerEngine (facade)
-                           ├─ runtime_parts/   (browser, contexts, navigation)
-                           ├─ complex_mode_parts/
-                           │    ├─ loop.py          단지 수집 루프
-                           │    ├─ article_api.py    Article API fast path
-                           │    ├─ response_capture.py  Playwright 응답 캡처 fallback
-                           │    └─ detail_enrichment.py
-                           └─ geo_mode_parts/    지도 마커 스캔
+  ├─ --preflight / --live-smoke
+  └─ GUI → src/main.py → src/ui/app.py (RealEstateApp)
+        ├─ 매물 수집 (CrawlerTab)
+        ├─ 지도로 찾기 (GeoCrawlerTab ⊂ CrawlerTab)
+        ├─ 내 단지 / 단지 묶음 / 예약 수집 / 수집 기록 / 가격 통계 / 대시보드 / 즐겨찾기 / 가이드
+        └─ 설정 다이얼로그 (탭: 기본 · 매물 수집 · 속도·안정 · 지도 탐색 · 결과 화면)
+
+CrawlerThread (QThread, state_runtime + crawler mixins)
+  └─ PlaywrightCrawlerEngine
+        ├─ complex: article_api fast path → response_capture fallback → detail_enrichment
+        └─ geo: marker scan → per-complex crawl
+
+ComplexDatabase (SQLite facade + database_parts/*)
+SettingsManager 싱글톤 → data/settings.json (atomic write)
 ```
 
-- **DB**: `ComplexDatabase` facade → `database_parts/*` (SQLite, migration 보존)
-- **설정**: `SettingsManager` 싱글톤 → `data/settings.json`
-- **경로**: `src/utils/paths.py` → `BASE_DIR`, `DATA_DIR`, `DB_PATH`
+### 주요 실행 흐름
 
-### Naver Land API 정렬 (실제 구조)
+1. **단지 수집**: UI가 단지 목록·거래유형·필터 검증 → `CrawlerThread(complex)` 시작 → Article API multi-page 또는 브라우저 캡처 → (옵션) 상세 front-api → 이력/스냅샷/UI 배치 반영.
+2. **지도 수집**: 좌표·범위·주택 종류 검증 → `CrawlerThread(geo_sweep)` → 마커 스캔 후 단지별 수집.
+3. **옵션 배선**: `collection_runtime_kwargs(settings)` → thread 속성  
+   `include_pre_sale_rights`, `detail_enrichment_*`, `detail_front_api_enabled`, `article_api_page_delay_ms`.
+4. **결과 표시**: `collected_data` 메모리 리스트 + 테이블/카드; 확장 컬럼은 **DB 미저장**.
 
-| 엔드포인트 | 용도 | 주요 파라미터 |
-|-----------|------|--------------|
-| `GET /api/articles/complex/{cid}` | 단지 매물 목록 | `realEstateType`, `tradeType`, `page`, `type=list`, `order=rank` |
-| `GET /api/articles/house/{cid}` | 빌라/주택 | 동일 |
-| `GET /api/complexes/single-markers` | 지도 마커 | geo 스캔 |
-| `m.land.naver.com/article/...` | 상세 보강 | `detail_fetcher.py` |
+### 최근 기능 (감사 대상 핵심)
 
-응답 페이로드: `articleList[]` 항목에 `articleNo`/`atclNo`, `dealOrWarrantPrc`, `area1`/`area2`, `tradeTypeCode`, `floorInfo` 등. 페이지네이션: `page` 쿼리 + 응답 `isMoreData`(공개 스크래퍼 관례).
-
-### 주요 실행 흐름 (단지 수집)
-
-```
-_run_complex_mode (loop.py)
-  → _crawl_target_with_cache (cache_flow.py)
-    → _collect_target_raw_items (response_capture mixin)
-      → _fetch_article_api_fast_path (article_api.py)  [auth header 필요]
-         실패 시 → Playwright page navigation + response handler
-      → normalize_article_payload (response_capture.py)
-      → detail enrichment (detail_fetcher.py)
-  → ComplexDatabase bulk upsert
-```
-
-### Superpowers 적합성 요약
-
-- **TDD**: `normalize_*`, `detail_fetcher`, `paths`, `managers` 등 순수 함수/모듈 테스트 존재. Playwright 엔진은 stub 기반 async 테스트로 Red-Green 가능.
-- **환경 격리**: `tempfile` + `patch(CACHE_PATH)` 패턴 있음. `BASE_DIR` 모듈 상수와 Settings 싱글톤이 격리를 제한.
-- **자동화 게이트**: `compileall`, `pytest`, `perf_baseline.py`, `--live-smoke`가 Claude.md에 문서화됨.
+| 기능 | 구현 위치 | 기본값(경량) |
+|------|-----------|--------------|
+| front-api 상세 보충 | `detail_fetcher.py` | on |
+| 상세 on/off·단지당 상한 | `detail_enrichment.py` + settings | on / 0(무제한) |
+| PRE 분양권 | `article_api` + geo `a=` | off |
+| 목록 메타 필드 | `normalize_article_payload` | dict only |
+| 확장 컬럼 UI | 테이블 18+ 슬롯, 기본 숨김 | 빈 목록 |
+| 설정 탭 UI | `dialogs/settings.py` | — |
 
 ---
 
 ## 3. High-Risk Issues
 
-### H-1. Article API fast path — page=1 고정 (매물 누락)
+### H-1. 매물 수집 탭과 지도 탭 동시 크롤 가능 (공유 DB)
 
-* **위치**: `src/core/engines/playwright_parts/complex_mode_parts/article_api.py` — `_build_article_api_url`, `_fetch_article_api_fast_path` (기존 L66 `page=1`, 단일 GET)
-* **문제**: Naver `/api/articles/complex/{cid}`는 `page` 파라미터로 페이지네이션하며, 대형 단지는 20건 이상 매물이 존재. Fast path가 1페이지만 수집하면 나머지 매물이 누락됨.
-* **영향**: 수집 건수 과소, 가격 스냅샷/소멸 추적 오류, 에이전트가 “수집 완료”로 잘못 판단.
-* **근거**: Naver URL 예시 `page=2` ([chongjae/naver_land README](https://github.com/chongjae/naver_land)); jissp crawler는 `page: currentPage++` 루프. 코드: `"page": "1"` 하드코딩, `_fetch_article_api_fast_path` 단일 `request_context.get`.
-* **권장 수정 방향**: `page` 파라미터화 + `isMoreData`/페이지 크기 기반 루프, 순수 함수 `build_article_api_url`/`article_api_has_more_pages` 분리 및 단위 테스트.
-* **우선순위**: **Critical** → **수정 완료** (`src/core/services/article_api.py` 추가, fast path 페이지 루프)
+* **위치**: `CrawlerTabStartStopMixin.start_crawling`, `GeoCrawlerTab.start_crawling`  
+  (`src/ui/widgets/crawler_tab_parts/crawl_control_parts/start_stop.py`, `src/ui/widgets/geo_crawler_tab.py`)
+* **문제**: 각 탭은 **자기 `crawler_thread`만** 실행 중인지 검사합니다. 다른 탭 스레드는 보지 않습니다. 두 탭은 동일 `self.db`(ComplexDatabase)를 공유합니다.
+* **영향**: 동시 실행 시 SQLite 쓰기 경합, 이력/스냅샷 꼬임, UI 통계 혼선, “이미 실행 중” 가드 우회.
+* **근거**: CodeGraph blast — 두 start 경로 독립; `isRunning()` 은 인스턴스 로컬. app은 동일 DB 인스턴스를 양 탭에 주입.
+* **권장 수정 방향**: 앱 전역 “수집 락”(한 번에 하나의 crawl), 또는 시작 시 다른 탭 `shutdown_crawl`/경고 후 거부.
+* **우선순위**: **High**
 
-### H-2. Frozen 런타임 데이터 경로 — Windows 전용
+### H-2. 「표시 항목」메뉴가 닫힐 때 설정을 무조건 저장
 
-* **위치**: `src/utils/paths.py` — `_local_appdata_root`, `get_base_dir` (기존)
-* **문제**: PyInstaller frozen 모드가 `LOCALAPPDATA`/`AppData/Local`만 사용. Linux CI/샌드박스/macOS에서 데이터 디렉터리 생성 실패 가능.
-* **영향**: 자동화 빌드·headless smoke·에이전트 worktree에서 앱 기동 실패.
-* **근거**: `get_base_dir()` → `_local_appdata_root() / FROZEN_APP_DIR_NAME`; 비-Windows fallback이 `~/AppData/Local` (Windows 경로).
-* **권장 수정 방향**: `sys.platform`별 표준 경로 (Windows LOCALAPPDATA, macOS Application Support, Linux XDG_DATA_HOME).
-* **우선순위**: **High** → **수정 완료** (`_frozen_runtime_data_root`)
+* **위치**: `CrawlerTabTableRowRenderMixin._open_extra_columns_menu`  
+  (`src/ui/widgets/crawler_tab_parts/result_render_parts/table_rows.py`)
+* **문제**: `QMenu.exec` 후 체크 상태를 모아 `settings.set("result_extra_columns", selected)` 를 **항상** 호출합니다. 바깥 클릭으로 닫아도 저장됩니다. 의도적 “적용” UX가 아닙니다.
+* **영향**: 실수로 체크만 바꾼 뒤 메뉴를 닫으면 설정 파일이 바뀌고, 다음 실행/다른 화면에 반영.
+* **근거**: 메뉴 종료 후 무조건 `settings.set` 호출 코드.
+* **권장 수정 방향**: “적용” 액션 분리, 또는 변경 시에만 저장, 또는 체크 토글 시점에만 set.
+* **우선순위**: **Medium** (데이터 손실은 아니나 설정 오염)
 
-### H-3. Response-capture fallback — 단일 응답만 처리
+### H-3. 상세 상한/비활성 시 사용자 피드백 부족
 
-* **위치**: `src/core/engines/playwright_parts/complex_mode_parts/response_capture.py` — `_collect_target_raw_items` 내 `_consume` (L90–137)
-* **문제**: Playwright response handler가 첫 매칭 API 응답의 `articleList`만 병합. UI 스크롤/추가 페이지 요청을 트리거하지 않음.
-* **영향**: Fast path 실패 시 fallback도 대형 단지에서 불완전 수집 가능 (Claude.md: “안정성 > fast path” 원칙과 충돌).
-* **근거**: `_consume`이 `response.json()` 1회만 처리; `page` 증가 로직 없음.
-* **권장 수정 방향**: Fallback에서도 auth header 확보 후 programmatic pagination, 또는 페이지 UI 인터랙션으로 추가 API 응답 drain.
-* **우선순위**: **High** → **수정 완료** (`_supplement_article_api_pages` after browser capture)
+* **위치**: `PlaywrightDetailEnrichmentMixin._process_raw_items_with_filtered_details`  
+  (`detail_enrichment.py`)
+* **문제**: `detail_enrichment_enabled=false` 또는 `max_per_complex` 초과 시 상세 없이 passthrough 하고 `detail_fetch_skipped_count`만 증가. 로그/UI 요약에 잘 안 드러날 수 있음.
+* **영향**: 중개·갭 필드가 비어 “버그”로 오인; 상한 때문에 일부만 상세인 줄 모름.
+* **근거**: skip 분기 + stats 카운터만 증가, 완료 메시지 연계는 finish 경로에 선택적.
+* **권장 수정 방향**: 수집 완료 로그에 skip/상한 건수 명시; 설정 툴팁과 통계 카드 연동.
+* **우선순위**: **Medium**
 
-### H-4. 모듈 import 시점 `BASE_DIR` 고정
+### H-4. 광범위 예외 삼키기 (폴백 경로)
 
-* **위치**: `src/utils/paths.py` L52–59 `BASE_DIR = get_base_dir()`
-* **문제**: import 시 한 번 계산되어 `reload` 없이는 worktree/환경 변수 변경 반영 불가.
-* **영향**: 병렬 에이전트·격리 테스트에서 데이터 경로 충돌; `importlib.reload` 패턴 필요.
-* **근거**: `managers.py`가 `DATA_DIR`/`SETTINGS_PATH`를 import 시 바인딩; `test_paths_runtime.py`는 `reload`로 우회.
-* **권장 수정 방향**: lazy accessor 또는 `configure_paths(base_dir)` 주입 API (facade 호환 유지).
-* **우선순위**: **Medium** → **수정 완료** (`bootstrap_runtime_paths`, `get_data_dir`/`get_settings_path` 등 lazy getter)
+* **위치**: Playwright runtime, detail_fetcher, parser browser_fallback, UI start/finish 등 다수 `except Exception`
+* **문제**: 네트워크/파싱/UI 오류가 단일 경로로 삼켜져 원인 분류가 어렵습니다. 일부는 의도적 폴백입니다.
+* **영향**: 현장 장애 시 “왜 0건인지” 재현 비용 증가; 간헐적 버그 은폐.
+* **근거**: core/ui 전반 다수 Exception 캐치 패턴 (grep·CodeGraph 탐색).
+* **권장 수정 방향**: 수집 경로 핵심 구간만 예외 타입 분리 + 구조화 통계 키 유지 확대.
+* **우선순위**: **Medium**
 
-### H-5. SettingsManager 싱글톤 + 파일 경로 결합
+### H-5. 비공식 API·429·상세 SPA 불안정 (외부 의존)
 
-* **위치**: `src/core/managers.py` — `SettingsManager` (`_instance`, `SETTINGS_PATH`)
-* **문제**: 프로세스 전역 단일 인스턴스; 테스트는 `SettingsManager._instance = None` 수동 reset.
-* **영향**: 테스트 순서 의존, 에이전트 병렬 실행 시 설정 오염 **(추정)**.
-* **근거**: `__new__` double-checked locking; `test_managers_cache.py` tearDown에서 reset.
-* **권장 수정 방향**: `SettingsManager.for_path(path)` 팩토리 또는 테스트 전용 reset 공개 API.
-* **우선순위**: **Medium** → **수정 완료** (`get_settings()`, `settings` accessor, `reset_for_tests`)
+* **위치**: `article_api.py`, `detail_fetcher.py`, live-smoke 프로브
+* **문제**: Naver 내부 API/SPA 변경 및 rate limit. 완화(delay, front-api, fallback)는 있으나 완전 해결 불가.
+* **영향**: 수집 불완전, 상세 partial/fail, smoke 간헐 실패.
+* **근거**: 조사 문서·live-smoke 이력; 429 처리 분기 존재.
+* **권장 수정 방향**: live-smoke를 CI 게이트로 유지; 실패 시 “부분 성공” UX; 사용자 가이드에 차단 대응 명시.
+* **우선순위**: **Medium** (외부 요인, 앱 내부 High는 아님)
 
-### H-6. Article API fast path — auth 없으면 즉시 fallback
+### H-6. README 설명과 구현 불일치
 
-* **위치**: `article_api.py` L184–185
-* **문제**: `_article_api_auth_header` 없으면 fast path 스킵. 정상이나, cold start에서 항상 느린 경로.
-* **영향**: 성능·차단 위험 증가; 자동화 smoke는 페이지 방문으로 auth 캡처 (`probes.py` L82–119).
-* **근거**: `if not str(getattr(self, "_article_api_auth_header", "") or "").strip(): return None`
-* **권장 수정 방향**: 문서화 유지; preflight/smoke가 auth 캡처 성공을 게이트로 사용 (현행 적절).
+* **위치**: `README.md` 「주요 설정」표 vs `DEFAULT_SETTINGS` / 설정 UI
+* **문제**: README는 엔진·대기시간·중복·대시보드 지연 정도만 언급. 실제는 PRE, 상세 보강, 페이지 간격, 표시 항목, 워커 상한 등 다수 옵션 존재. “Python 3.9 이상” vs 로컬 3.13/3.14 캐시 혼재.
+* **영향**: 사용자·기여자가 기능을 못 찾거나 환경 오해.
+* **근거**: README 표와 managers DEFAULT_SETTINGS 비교.
+* **권장 수정 방향**: README 설정 절 갱신 + 조사 문서 링크 유지 (이미 일부 있음).
+* **우선순위**: **Medium**
+
+### H-7. 테마/엔진 콤보 값이 표시 문자열과 분리됨 (회귀 주의)
+
+* **위치**: `SettingsDialog` 테마·엔진 콤보 (`addItem(label, data)` + `currentData()`)
+* **문제**: 최근 사용자 친화 라벨 도입 후, 다른 코드가 `currentText()`로 theme/engine을 읽으면 깨짐. 현재 save는 `currentData()` 사용.
+* **영향**: 추후 패치 시 회귀 가능; 기존 테스트가 text를 가정하면 실패.
+* **근거**: settings `_load`/`_save` 구현.
+* **권장 수정 방향**: 테마/엔진은 data 역할만 문서화; 테스트로 data round-trip 고정.
 * **우선순위**: **Low**
+
+### H-8. (이전 감사 대비) Article API page=1 전용 — **완화됨**
+
+* **위치**: `services/article_api.py`, complex `article_api` mixin
+* **문제**: 과거 fast path 1페이지만 수집.
+* **근거**: multi-page 루프·`isMoreData`·supplement 존재; 단위·live-smoke 검증.
+* **우선순위**: **Low** (잔여: 페이지 cap 50, 429 시 부분 수집)
 
 ---
 
 ## 4. Potential Functional Gaps
 
-1. **Response-capture 페이지네이션 부재** (확실): H-3과 동일. 대형 단지 fallback 시 불완전.
-2. **`isMoreData` 필드 미처리** (확실, 수정됨): Fast path에 `article_api_has_more_pages` 추가.
-3. **VL(house) 경로 페이지네이션** (추정): `houses` base_kind에도 동일 API 구조 적용됨 — fast path 수정으로 커버.
-4. **Geo marker API rate limit** (추정): `geo_mode_parts/scan.py` 연속 스윕 시 차단 가능; 쿨다운은 complex loop에만 존재.
-5. **문서 vs 구현 — pytest 카운트**: Claude.md “287 passed” — 현재 baseline 일치. 신규 테스트 추가 시 문서 갱신 필요.
-6. **README Python 버전**: “3.9 이상” 명시; 코드베이스는 3.13 `__pycache__` 존재 — 3.9 호환 테스트(`test_python39_annotation_compat.py`)로 완화.
-7. **멱등성 — QThread 중복 시작** (추정): `crawl_control_parts/start_stop.py`에서 stop 후 restart 패턴; 전용 mutex 테스트 부족.
-8. **인코딩**: JSON 저장은 `atomic_write_json` 사용; SQLite/text는 UTF-8 전제 — Windows 콘솔 인코딩 이슈는 live-smoke JSON 로그로 우회.
+1. **전역 수집 뮤텍스 부재** (확실, H-1): 탭 간 동시 수집.
+2. **상세 상한 시 균등 샘플링 없음** (추정): 앞쪽 N건만 상세 → 편향 가능.
+3. **PRE on 시 결과 구분 표시 약함** (추정): 분양권/일반 매물 구분이 UI에 약할 수 있음.
+4. **확장 컬럼 ↔ 엑셀 템플릿 비동기** (확실): 표 표시 항목과 엑셀 체크가 별개 설정.
+5. **OPST 미지원** (확실, 의도): 경량 원칙; 사용자 요구 시 큰 작업.
+6. **meta 필드 DB 미영속** (확실, 의도): 확인일·동 등은 재수집 전 이력 분석에 못 씀.
+7. **Selenium + VL 거부** (확실): complex 시작 시 가드; 사용자는 Playwright로 우회 필요.
+8. **예약 수집과 UI 옵션 정합** (추정): 스케줄 경로가 최신 `collection_runtime_kwargs`를 항상 타는지 경로 점검 권장.
+9. **대시보드 lazy load** (확실): 첫 진입 시 생성; README와 대체로 일치.
+10. **가이드/탭 이름** (확실): 메뉴 친화화 후 가이드 문구 동기화됨; 외부 문서 일부는 구명칭 잔존 가능.
 
 ---
 
 ## 5. Recommended Fix Plan
 
-### 1단계 (즉시 수정) — **완료**
+### 1단계 — 즉시 (안정성·데이터 무결성)
 
-- [x] Article API URL 빌더·페이지네이션 순수 함수 추출 (`src/core/services/article_api.py`)
-- [x] Fast path 다중 페이지 루프 (`MAX_ARTICLE_API_PAGES` 안전 상한)
-- [x] Frozen 런타임 크로스 플랫폼 데이터 루트
-- [x] 단위 테스트: `tests/test_article_api.py`, pagination/async stub, Linux XDG path
+1. **전역 수집 락**: 매물 수집/지도/예약 시작 시 단일 실행 강제.
+2. 완료 로그에 `detail_fetch_skipped_count` / 상한 적용 여부 노출.
+3. README 주요 설정 표 최신화.
 
-### 2단계 (안정성 개선) — **완료**
+### 2단계 — 안정성·UX
 
-- [x] Response-capture fallback programmatic pagination (`_supplement_article_api_pages`, capture 후 page 2+)
-- [x] `SettingsManager.reset_for_tests()` 공개 API + 단위 테스트
-- [x] `configure_paths` / `apply_runtime_path_overrides_from_env` (`NAVERLAND_DATA_DIR`) — `app_entry`, preflight, live-smoke
-- [ ] 광범위 `except Exception` → 구체 예외 + 구조화 로그 (자동화 실패 분류) — 범위 외, 추후
+1. 「표시 항목」메뉴 저장 정책 수정 (변경 확인 또는 토글 즉시 저장 + 되돌리기).
+2. 수집 실패 원인 코드 표준화 (`article_api_failure_reasons` 확장, UI 요약).
+3. 스케줄 시작 경로가 `collection_runtime_kwargs`와 동일한지 회귀 테스트.
 
-### 3단계 (구조 및 TDD 개선) — **완료**
+### 3단계 — 구조
 
-- [x] `article_api` URL 빌더를 live-smoke `probes.py`와 통합 + page-2 smoke probe
-- [x] Geo sweep 통합 테스트 (marker handler + dedup + trade-type sweep)
-- [x] `bootstrap_runtime_paths` + path getter API (`get_data_dir`, `get_settings_path` 등)
-- [x] `settings` 모듈 accessor + UI 단일 import 경로
-- [x] Article API 실패/페이지 상한 truncation 구조화 통계
-- [x] Claude.md pytest 카운트 동기화 (`314 passed`)
+1. 탭 라벨/가이드/단축키 문자열 중앙 상수화.
+2. 핵심 경로 `except Exception` 축소 (네트워크 vs 파싱 vs 권한).
+3. (선택) 메타 필드 영속은 **별도 경량 테이블 또는 JSON side-car**로만 검토 — 본 이력 테이블 비대화 금지 원칙 유지.
 
 ---
 
 ## 6. Test Recommendations
 
-| 시나리오 | 목적 | 상태 |
-|---------|------|------|
-| `build_article_api_url(..., page=N)` 파라미터 검증 | Naver URL 계약 | **추가됨** |
-| `article_api_has_more_pages` — `isMoreData` true/false | 페이지 루프 종료 | **추가됨** |
-| Fast path 2페이지 stub (`_FakeRequestContext` 2응답) | 실제 엔진 pagination | **추가됨** |
-| Frozen Linux `XDG_DATA_HOME` | 샌드박스 경로 | **추가됨** |
-| Fallback multi-page (`_supplement` + capture `isMoreData`) | H-3 회귀 방지 | **추가됨** |
-| Supplement without `last_payload` when `existing_items` | 브라우저 캡처 메타 누락 보완 | **추가됨** |
-| Page-cap truncation (`_mark_article_api_page_cap_truncation`) | 대형 단지 상한 회귀 | **추가됨** |
-| `bootstrap_runtime_paths` / `test_main_paths` | 엔트리포인트 경로 부트스트랩 | **추가됨** |
-| `settings` accessor + `get_settings()` | UI/테스트 싱글톤 격리 | **추가됨** |
-| `SettingsManager.reset_for_tests` | 싱글톤 격리 | **추가됨** |
-| Live-smoke `pages_fetched=2` when `isMoreData` | 실네트워크 pagination | **추가됨** |
-| `normalize_article_payload` — `atclNo`/`dealOrWarrantPrc`/`area1` | Naver 필드 매핑 | 기존 + 유지 |
+| 테스트 | 목적 |
+|--------|------|
+| **전역 락**: crawler start 중 geo start → False | H-1 회귀 |
+| **표시 항목 메뉴**: 취소 시 settings 불변 (정책 확정 후) | H-2 |
+| **detail off**: enrich 미호출, 아이템 push 유지 | 옵션 배선 |
+| **detail max=2**: 3후보 중 2만 network detail | 상한 |
+| **include_pre=True**: URL에 PRE, geo `a=` 동일 | 옵션 정합 |
+| **settings theme/engine**: data round-trip (`dark`/`playwright`) | 라벨 분리 회귀 |
+| **sanitize**: workers/delay/extra_columns 클램프 (이미 일부 있음) | 유지 |
+| **schedule path**: 예약 실행 kwargs에 collection 옵션 포함 | 추정 갭 |
+| **live-smoke**: detail success + pages_fetched (네트워크 가용 시) | 외부 API |
 
-### Red-Green-Refactor 루프 가이드 (에이전트용)
+---
 
-1. **Red**: `tests/test_article_api.py` 또는 stabilization 테스트 먼저 작성
-2. **Green**: `src/core/services/article_api.py` 또는 mixin 최소 수정
-3. **Refactor**: URL 빌더 중복 제거 (`probes.py` → shared builder, 3단계)
-4. **Gate**: `python -m compileall -q app_entry.py src tests` → `pytest -q` → `perf_baseline.py` → `--live-smoke`
+## 부록 A. 이번 세션에서 반영한 UI 문구 (감사 외 요청)
+
+사용자 요청으로 **메뉴/탭/설정 라벨 친화화**는 코드에 반영했습니다 (기능 로직·DB 변경 없음).
+
+| 구분 | 예 |
+|------|-----|
+| 메인 탭 | 매물 수집, 지도로 찾기, 내 단지, 단지 묶음, 예약 수집, 수집 기록, 가격 통계 … |
+| 설정 탭 | 기본 / 매물 수집 / 속도·안정 / 지도 탐색 / 결과 화면 |
+| 옵션 | 분양권 매물도 함께 수집, 중개사·기전세 등 상세 정보 가져오기, 빠른 목록 조회 … |
+| 결과 툴바 | 「표시 항목」 |
+| 지도 | 아파트 / 빌라·연립, 탐색 범위 등 |
+
+저장 값은 기존과 동일 토큰 유지 (`theme=dark|light`, `crawl_engine=playwright|selenium`, 자산 `APT`/`VL`).
+
+---
+
+## 부록 B. 이전 감사 대비 상태
+
+| 이전 이슈 | 현재 |
+|-----------|------|
+| Article API page=1 only | 다중 페이지 + supplement |
+| frozen Windows-only path | cross-platform frozen root |
+| Settings 테스트 오염 | `reset_for_tests` / accessor |
+| 상세 DOM 붕괴 | front-api 보충 + live-smoke success 이력 |
+
+---
+
+*본 문서는 기능 감사 산출물이며, High-Risk 수정 구현은 별도 작업으로 진행하는 것을 권장합니다.*

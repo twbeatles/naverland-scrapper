@@ -5,7 +5,12 @@ import unittest
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
+from src.core.services.detail_fetcher import (
+    apply_mobile_detail,
+    build_front_api_agent_url,
+    fetch_mobile_article_detail,
+    parse_front_api_agent_payload,
+)
 
 
 class _FakeLocatorFirst:
@@ -18,8 +23,24 @@ class _FakeLocator:
         self.first = _FakeLocatorFirst()
 
 
+class _FakeRequestContext:
+    def __init__(self, routes=None):
+        self._routes = dict(routes or {})
+        self.calls = []
+
+    async def get(self, url, headers=None, timeout=None):
+        self.calls.append({"url": url, "headers": headers, "timeout": timeout})
+        entry = self._routes.get(url)
+        if entry is None:
+            return _FakeResponse(url, {"detailCode": "NOT_FOUND"}, status=404)
+        if isinstance(entry, _FakeResponse):
+            return entry
+        payload, status = entry if isinstance(entry, tuple) else (entry, 200)
+        return _FakeResponse(url, payload, status=status)
+
+
 class _FakePage:
-    def __init__(self, bodies, *, html=None, hydration=None, responses=None):
+    def __init__(self, bodies, *, html=None, hydration=None, responses=None, request_routes=None):
         self._bodies = dict(bodies)
         self._html = dict(html or {})
         self._hydration = dict(hydration or {})
@@ -28,6 +49,8 @@ class _FakePage:
         self.url = ""
         self.visited = []
         self.goto_calls = []
+        self.request = _FakeRequestContext(request_routes)
+        self.context = type("Ctx", (), {"request": self.request})()
 
     def on(self, event, handler):
         self._handlers.setdefault(event, []).append(handler)
@@ -69,8 +92,9 @@ class _FakePage:
 
 
 class _FakeResponse:
-    def __init__(self, url, payload):
+    def __init__(self, url, payload, status=200):
         self.url = url
+        self.status = status
         self._payload = payload
 
     async def json(self):
@@ -204,6 +228,49 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(page.goto_calls)
         self.assertEqual(page.goto_calls[0]["timeout"], 4321)
+
+    def test_parse_front_api_agent_payload_nested_phone(self):
+        fields = parse_front_api_agent_payload(
+            {
+                "result": {
+                    "brokerageName": "행복공인중개사",
+                    "brokerName": "김중개",
+                    "phone": {"brokerage": "02-111-2222", "mobile": "010-3333-4444"},
+                }
+            }
+        )
+        self.assertEqual(fields["부동산상호"], "행복공인중개사")
+        self.assertEqual(fields["중개사이름"], "김중개")
+        self.assertEqual(fields["전화1"], "02-111-2222")
+        self.assertEqual(fields["전화2"], "010-3333-4444")
+
+    async def test_fetch_uses_front_api_when_dom_is_404(self):
+        article_no = "2630745167"
+        fin_url = f"https://fin.land.naver.com/articles/{article_no}"
+        agent_url = build_front_api_agent_url(article_no)
+        page = _FakePage(
+            {
+                fin_url: "요청하신 페이지를 찾을 수 없어요",
+                f"https://m.land.naver.com/article/info/{article_no}": "요청하신 페이지를 찾을 수 없어요",
+                f"https://m.land.naver.com/article/view/{article_no}": "요청하신 페이지를 찾을 수 없어요",
+            },
+            request_routes={
+                agent_url: {
+                    "brokerageName": "남산중개",
+                    "brokerName": "이공인",
+                    "phones": ["02-555-6666", "010-7777-8888"],
+                }
+            },
+        )
+
+        detail = await fetch_mobile_article_detail(page, article_no)
+
+        self.assertEqual(detail["부동산상호"], "남산중개")
+        self.assertEqual(detail["중개사이름"], "이공인")
+        self.assertEqual(detail["전화1"], "02-555-6666")
+        self.assertIn(detail["_detail_meta"]["detail_parse_state"], {"partial", "success"})
+        self.assertGreaterEqual(int(detail["_detail_meta"]["network_response_count"]), 1)
+        self.assertTrue(any(agent_url in str(call.get("url", "")) for call in page.request.calls))
 
 
 if __name__ == "__main__":

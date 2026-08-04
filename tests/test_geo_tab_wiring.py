@@ -24,6 +24,16 @@ class TestGeoTabWiring(unittest.TestCase):
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
+    def setUp(self):
+        from src.core.crawl_lock import reset_crawl_lock_for_tests
+
+        reset_crawl_lock_for_tests()
+
+    def tearDown(self):
+        from src.core.crawl_lock import reset_crawl_lock_for_tests
+
+        reset_crawl_lock_for_tests()
+
     def test_geo_tab_builds_geo_sweep_thread(self):
         from src.core.database import ComplexDatabase
 

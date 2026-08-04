@@ -193,6 +193,26 @@ class TestCacheAndManagers(unittest.TestCase):
             DEFAULT_SETTINGS["schedule_config"]["geo"]["asset_types"],
         )
 
+    def test_settings_sanitizer_collection_and_extra_columns(self):
+        sanitized = _sanitize_settings_payload(
+            {
+                "include_pre_sale_rights": 1,
+                "detail_enrichment_enabled": 0,
+                "detail_enrichment_max_per_complex": 999,
+                "article_api_page_delay_ms": 5000,
+                "playwright_detail_workers": 99,
+                "result_extra_columns": ["confirm_date", "bogus", "building", "confirm_date"],
+            }
+        )
+        self.assertTrue(sanitized["include_pre_sale_rights"])
+        self.assertFalse(sanitized["detail_enrichment_enabled"])
+        self.assertEqual(sanitized["detail_enrichment_max_per_complex"], 500)
+        self.assertEqual(sanitized["article_api_page_delay_ms"], 2000)
+        self.assertEqual(sanitized["playwright_detail_workers"], 16)
+        self.assertEqual(sanitized["result_extra_columns"], ["confirm_date", "building"])
+        self.assertIn("detail_front_api_enabled", sanitized)
+        self.assertEqual(sanitized["card_show_extra_meta"], DEFAULT_SETTINGS["card_show_extra_meta"])
+
     def test_crawl_cache_empty_result_with_custom_ttl(self):
         cache_path = self.tmp_path / "crawl_cache.json"
         with patch("src.core.cache.CACHE_PATH", cache_path):

@@ -2,6 +2,19 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
+from src.utils.ui_labels import (
+    TAB_CRAWLER,
+    TAB_DASHBOARD,
+    TAB_DB,
+    TAB_FAVORITES,
+    TAB_GEO,
+    TAB_GROUP,
+    TAB_GUIDE,
+    TAB_HISTORY,
+    TAB_SCHEDULE,
+    TAB_STATS,
+)
+
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
 
@@ -32,16 +45,16 @@ class AppTabSetupMixin:
         self.status_bar = self.statusBar()
 
         self.crawler_tab = self._create_crawler_tab()
-        self.tabs.addTab(self.crawler_tab, "🏠 데이터 수집")
+        self.tabs.addTab(self.crawler_tab, TAB_CRAWLER)
 
         self.geo_tab = self._create_geo_tab()
-        self.tabs.addTab(self.geo_tab, "🧭 지도 탐색")
+        self.tabs.addTab(self.geo_tab, TAB_GEO)
 
         self.db_tab = self._create_db_tab()
-        self.tabs.addTab(self.db_tab, "💾 단지 DB")
+        self.tabs.addTab(self.db_tab, TAB_DB)
 
         self.group_tab = self._create_group_tab()
-        self.tabs.addTab(self.group_tab, "📁 그룹 관리")
+        self.tabs.addTab(self.group_tab, TAB_GROUP)
         
         self._setup_schedule_tab()
         self._setup_history_tab()
@@ -240,13 +253,13 @@ class AppTabSetupMixin:
         sg.setLayout(sl)
         layout.addWidget(sg)
 
-        self.schedule_empty_label = QLabel("예약할 그룹이 없습니다.\n그룹 관리 탭에서 그룹을 먼저 생성하세요.")
+        self.schedule_empty_label = QLabel("예약할 묶음이 없습니다.\n「단지 묶음」 탭에서 먼저 만들어 주세요.")
         self.schedule_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.schedule_empty_label.setStyleSheet("color: #888; padding: 20px; font-size: 13px;")
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
-        self.tabs.addTab(self.schedule_tab, "⏰ 예약")
+        self.tabs.addTab(self.schedule_tab, TAB_SCHEDULE)
 
         self.check_schedule.toggled.connect(self._save_schedule_config)
         self.time_edit.timeChanged.connect(self._save_schedule_config)
@@ -286,13 +299,13 @@ class AppTabSetupMixin:
         self.history_table.setAlternatingRowColors(True)
         layout.addWidget(self.history_table)
 
-        self.history_empty_label = QLabel("크롤링 이력이 없습니다.\n데이터 수집 탭에서 크롤링을 실행해 보세요.")
+        self.history_empty_label = QLabel("수집 기록이 없습니다.\n「매물 수집」 탭에서 수집을 실행해 보세요.")
         self.history_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.history_empty_label.setStyleSheet("color: #888; font-size: 13px; padding: 40px;")
         layout.addWidget(self.history_empty_label)
         self.history_empty_label.hide()
 
-        self.tabs.addTab(self.history_tab, "📜 히스토리")
+        self.tabs.addTab(self.history_tab, TAB_HISTORY)
     
     def _setup_stats_tab(self: Any):
         self.stats_tab = QWidget()
@@ -356,7 +369,7 @@ class AppTabSetupMixin:
         self.stats_splitter.addWidget(self.chart_placeholder)
         self.stats_splitter.setSizes([320, 280])
         layout.addWidget(self.stats_splitter)
-        self.tabs.addTab(self.stats_tab, "📈 통계/변동")
+        self.tabs.addTab(self.stats_tab, TAB_STATS)
     
     def _setup_dashboard_tab(self: Any):
         self.dashboard_tab = QWidget()
@@ -367,11 +380,11 @@ class AppTabSetupMixin:
         self.dashboard_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dashboard_placeholder.setObjectName("hintLabel")
         self.dashboard_layout.addWidget(self.dashboard_placeholder)
-        self.tabs.addTab(self.dashboard_tab, "📊 대시보드")
+        self.tabs.addTab(self.dashboard_tab, TAB_DASHBOARD)
     
     def _setup_favorites_tab(self: Any):
         self.favorites_tab = self._ensure_favorites_tab()
-        self.tabs.addTab(self.favorites_tab, "⭐ 즐겨찾기")
+        self.tabs.addTab(self.favorites_tab, TAB_FAVORITES)
     
     def _setup_guide_tab(self: Any):
         tab = QWidget()
@@ -506,7 +519,7 @@ class AppTabSetupMixin:
             <span class="step-num">2</span>
             <span class="step-title">단지 목록에 추가</span><br>
             <span class="step-desc">
-                <b>데이터 수집 탭</b> 좌측 패널에서<br>
+                <b>매물 수집 탭</b> 좌측 패널에서<br>
                 ① 단지 ID를 입력하고 ➕ 버튼을 클릭하세요.<br>
                 ② 또는 네이버 URL을 붙여넣어 <b>🔗 URL 버튼</b>을 사용하세요.
             </span>
@@ -534,6 +547,18 @@ class AppTabSetupMixin:
             ⚠️ 속도를 너무 빠르게 설정하면 서버에서 차단될 수 있습니다. '보통' 이상을 권장합니다.
         </div>
 
+        <h2>⚙️ 수집·표시 옵션 (가벼움)</h2>
+        <div class="step">
+            <span class="step-title">설정 → 수집 / 표시</span><br>
+            <span class="step-desc">
+                · <b>분양권(PRE)</b>: 기본 꺼짐. 켜면 목록이 늘어날 수 있습니다.<br>
+                · <b>상세 보강 / front-api</b>: 기본 켜짐. 끄면 중개·기전세 없이 더 빠르게 수집합니다.<br>
+                · <b>단지당 상세 상한</b>: 대형 단지 부하 제한(0=무제한).<br>
+                · <b>표시 항목</b>(확인일·동·타입명 등): 기본 숨김. 결과 툴바 <b>표시 항목</b> 또는 설정→결과 화면에서 켭니다. DB에는 저장하지 않습니다.<br>
+                · 자세한 사이트 조사: 저장소 <code>docs/NAVER_LAND_SURVEY_2026-08-04.md</code>
+            </span>
+        </div>
+
         <h2>⌨️ 단축키</h2>
         <table class="shortcut-table">
             <tr><th>기능</th><th>단축키</th></tr>
@@ -551,27 +576,27 @@ class AppTabSetupMixin:
         <ul>
             <li>결과 테이블에서 <b>더블클릭</b>하면 해당 매물 페이지로 이동합니다</li>
             <li>좌측 패널 슬라이더로 <b>패널 넓이</b>를 조절할 수 있습니다</li>
-            <li>예약 실행에는 먼저 <b>그룹 관리 탭</b>에서 단지 그룹을 생성하세요</li>
-            <li><b>데이터베이스 저장</b> 후 재실행하면 신규/변동 매물을 추적할 수 있습니다</li>
-            <li>대시보드 탭에서 <b>상승/하락/소멸 매물</b> 통계를 확인할 수 있습니다</li>
+            <li>예약 수집에는 먼저 <b>단지 묶음</b> 탭에서 그룹을 만들어 두세요</li>
+            <li><b>내 단지</b>에 저장한 뒤 다시 돌리면 신규/변동 매물을 추적할 수 있습니다</li>
+            <li>대시보드에서 <b>상승/하락/사라진 매물</b>을 한눈에 볼 수 있습니다</li>
         </ul>
 
         <h2>🗂 탭별 안내</h2>
         <div class="step">
-            <span class="step-title">🏠 데이터 수집</span><br>
-            <span class="step-desc">단지 ID를 직접 넣어 수집하는 기본 탭입니다. 단지 추가, 거래 유형 선택, 크롤링 시작, 저장 순서로 사용합니다.</span>
+            <span class="step-title">🏠 매물 수집</span><br>
+            <span class="step-desc">단지 번호를 직접 넣어 수집하는 기본 화면입니다. 단지 추가 → 거래 유형 선택 → 수집 시작 → 저장 순서입니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">🧭 지도 탐색</span><br>
-            <span class="step-desc">위도/경도를 기준으로 주변 단지를 자동 탐색합니다. 단지 ID를 모를 때 지역 단위 탐색에 적합합니다.</span>
+            <span class="step-title">🧭 지도로 찾기</span><br>
+            <span class="step-desc">위도·경도를 기준으로 주변 단지를 자동으로 찾습니다. 단지 번호를 모를 때 지역 단위로 훑기에 적합합니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">💾 단지 DB / 📁 그룹 관리 / ⭐ 즐겨찾기</span><br>
-            <span class="step-desc">DB는 저장 단지 관리, 그룹은 예약용 목록 구성, 즐겨찾기는 자주 보는 매물 재확인 용도입니다.</span>
+            <span class="step-title">💾 내 단지 / 📁 단지 묶음 / ⭐ 즐겨찾기</span><br>
+            <span class="step-desc">내 단지는 저장 단지 관리, 단지 묶음은 예약용 목록, 즐겨찾기는 자주 보는 매물 재확인에 씁니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">⏰ 예약 / 📜 히스토리 / 📈 통계·변동 / 📊 대시보드</span><br>
-            <span class="step-desc">예약은 자동 실행, 히스토리는 실행 기록, 통계는 시세 추이, 대시보드는 전체 요약을 보는 화면입니다.</span>
+            <span class="step-title">⏰ 예약 수집 / 📜 수집 기록 / 📈 가격 통계 / 📊 대시보드</span><br>
+            <span class="step-desc">예약 수집은 자동 실행, 수집 기록은 과거 실행 내역, 가격 통계는 시세 추이, 대시보드는 전체 요약입니다.</span>
         </div>
 
         <h2>📂 메뉴 안내</h2>
@@ -588,7 +613,7 @@ class AppTabSetupMixin:
         """)
 
         layout.addWidget(browser)
-        self.tabs.addTab(tab, "📖 가이드")
+        self.tabs.addTab(tab, TAB_GUIDE)
     
     def _ensure_chart_widget(self: Any):
         if self.chart_widget is not None:

@@ -14,11 +14,18 @@ def article_api_path_kind(base_kind: str) -> str:
     return "house" if str(base_kind or "") == "houses" else "complex"
 
 
-def article_api_real_estate_type(path_asset: str) -> str:
+def article_api_real_estate_type(path_asset: str, *, include_pre: bool = False) -> str:
+    """Map app asset token to Naver `realEstateType` query value.
+
+    Live UI (2026-08) defaults to APT:ABYG:JGC without PRE. Optional PRE covers 분양권.
+    """
     asset = str(path_asset or "APT").strip().upper()
     if asset == "VL":
         return "VL:DDDGG:JWJT:SGJT"
-    return "APT:ABYG:JGC"
+    base = "APT:ABYG:JGC"
+    if include_pre:
+        return f"{base}:PRE"
+    return base
 
 
 def build_article_api_query_params(
@@ -26,10 +33,11 @@ def build_article_api_query_params(
     path_asset: str = "APT",
     *,
     page: int = 1,
+    include_pre: bool = False,
 ) -> dict[str, str]:
     page_num = max(1, int(page or 1))
     return {
-        "realEstateType": article_api_real_estate_type(path_asset),
+        "realEstateType": article_api_real_estate_type(path_asset, include_pre=include_pre),
         "tradeType": _TRADE_TO_CODE.get(trade_type, "A1"),
         "tag": "::::::::",
         "rentPriceMin": "0",
@@ -63,9 +71,12 @@ def build_article_api_url(
     path_asset: str = "APT",
     *,
     page: int = 1,
+    include_pre: bool = False,
 ) -> str:
     path_kind = article_api_path_kind(base_kind)
-    params = build_article_api_query_params(trade_type, path_asset, page=page)
+    params = build_article_api_query_params(
+        trade_type, path_asset, page=page, include_pre=include_pre
+    )
     return f"https://new.land.naver.com/api/articles/{path_kind}/{cid}?" + urlencode(params)
 
 

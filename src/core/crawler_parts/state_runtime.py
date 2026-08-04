@@ -42,6 +42,11 @@ class CrawlerStateRuntimeMixin:
         playwright_article_api_timeout_ms=2500,
         playwright_article_response_wait_ms=1200,
         geo_incomplete_safety_mode=True,
+        include_pre_sale_rights=False,
+        detail_enrichment_enabled=True,
+        detail_enrichment_max_per_complex=0,
+        detail_front_api_enabled=True,
+        article_api_page_delay_ms=150,
     ):
         super().__init__()
         self.targets = targets
@@ -172,6 +177,17 @@ class CrawlerStateRuntimeMixin:
         except (TypeError, ValueError):
             self.playwright_article_response_wait_ms = 1200
         self.geo_incomplete_safety_mode = bool(geo_incomplete_safety_mode)
+        self.include_pre_sale_rights = bool(include_pre_sale_rights)
+        self.detail_enrichment_enabled = bool(detail_enrichment_enabled)
+        try:
+            self.detail_enrichment_max_per_complex = max(0, min(500, int(detail_enrichment_max_per_complex)))
+        except (TypeError, ValueError):
+            self.detail_enrichment_max_per_complex = 0
+        self.detail_front_api_enabled = bool(detail_front_api_enabled)
+        try:
+            self.article_api_page_delay_ms = max(0, min(2000, int(article_api_page_delay_ms)))
+        except (TypeError, ValueError):
+            self.article_api_page_delay_ms = 150
         self.geo_incomplete = False
         self.geo_incomplete_reasons = []
         self.geo_incomplete_count = 0

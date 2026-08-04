@@ -122,6 +122,24 @@ class ArticleCard(QFrame):
         name_label.setWordWrap(True)
         layout.addWidget(name_label)
 
+        # Lightweight one-line meta (동/타입명) — no broker phones on cards
+        try:
+            from src.core.managers import settings as _settings
+
+            show_extra = bool(_settings.get("card_show_extra_meta", True))
+        except Exception:
+            show_extra = True
+        if show_extra:
+            meta_bits = [
+                str(self.data.get("동", "") or "").strip(),
+                str(self.data.get("타입명", "") or "").strip(),
+            ]
+            meta_line = " · ".join(bit for bit in meta_bits if bit)
+            if meta_line:
+                meta_label = QLabel(meta_line[:40])
+                meta_label.setStyleSheet("font-size: 11px; color: #9ca3af;")
+                layout.addWidget(meta_label)
+
         price_text = self.data.get("매매가") or self.data.get("보증금") or ""
         if self.data.get("월세"):
             price_text += f" / {self.data.get('월세')}"

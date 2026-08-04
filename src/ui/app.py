@@ -34,6 +34,19 @@ except Exception:
 
 from src.utils.constants import APP_TITLE, APP_VERSION, SHORTCUTS
 from src.utils.logger import get_logger
+# Rebind globals for AppTabSetupMixin (tab labels must resolve on RealEstateApp).
+from src.utils.ui_labels import (  # noqa: F401
+    TAB_CRAWLER,
+    TAB_DASHBOARD,
+    TAB_DB,
+    TAB_FAVORITES,
+    TAB_GEO,
+    TAB_GROUP,
+    TAB_GUIDE,
+    TAB_HISTORY,
+    TAB_SCHEDULE,
+    TAB_STATS,
+)
 from src.core.database import ComplexDatabase
 from src.core.managers import (
     settings,

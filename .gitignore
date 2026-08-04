@@ -1,8 +1,8 @@
-# Rechecked 2026-06-09:
-# Current performance + structure refactor adds source packages only.
-# Generated artifacts remain covered by logs/, build/, dist/, data/, cache,
-# bytecode, Playwright, and local CodeGraph ignore rules below.
-# No new ignore pattern is required.
+# Rechecked 2026-08-04:
+# - Source packages (crawl_lock, result_columns, ui_labels, docs/) must stay tracked.
+# - Generated artifacts: logs/, build/, dist/, data/, caches, Playwright, CodeGraph.
+# - Agent dumps (agent-tools/, .grok/, CLAUDE.md 등) remain ignored.
+# - Project docs under docs/ and root *.md (README, PROJECT_AUDIT, update_history) are tracked.
 
 # Python
 __pycache__/
@@ -17,13 +17,16 @@ dist/
 htmlcov/
 .coverage*
 
-# Logs
+# Logs / local analysis dumps
 logs/
 *.log
 pyright_errors*.txt
 pyright_report*.json
+pyright_src*.json
+pyright_src*.txt
+agent-tools/
 
-# Data (Scraped data, DBs)
+# Data (Scraped data, DBs, local runtime JSON)
 data/
 *.db
 *.db-shm
@@ -47,7 +50,7 @@ test-results/
 .playwright-mcp/
 ms-playwright/
 
-# IDE
+# IDE / tool caches
 .vscode/*
 !.vscode/settings.json
 .idea/
@@ -66,7 +69,7 @@ venv/
 .venv/
 env/
 
-# AI Agent Docs & Directories
+# AI Agent Docs & Directories (not part of product source)
 .agents/
 .claude/
 .grok/

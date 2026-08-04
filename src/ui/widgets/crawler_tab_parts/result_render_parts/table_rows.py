@@ -62,12 +62,64 @@ class CrawlerTabTableRowRenderMixin:
             threshold = max(0, int(settings.get("price_change_threshold", 0)))
         except (TypeError, ValueError):
             threshold = 0
+        from src.utils.result_columns import normalize_result_extra_columns
+
         self._result_render_options = {
             "show_new_badge": bool(settings.get("show_new_badge", True)),
             "show_price_change": bool(settings.get("show_price_change", True)),
             "price_change_threshold": threshold,
+            "extra_columns": normalize_result_extra_columns(settings.get("result_extra_columns", [])),
         }
+        if hasattr(self, "_apply_extra_column_visibility"):
+            self._apply_extra_column_visibility()
         return self._result_render_options
+
+    def _apply_extra_column_visibility(self: Any):
+        if not hasattr(self, "result_table") or self.result_table is None:
+            return
+        enabled = set(
+            (getattr(self, "_result_render_options", {}) or {}).get("extra_columns")
+            or settings.get("result_extra_columns", [])
+            or []
+        )
+        mapping = getattr(self, "EXTRA_COLUMN_BY_ID", {}) or {}
+        for col_id, col_idx in mapping.items():
+            try:
+                self.result_table.setColumnHidden(int(col_idx), col_id not in enabled)
+            except (TypeError, ValueError, RuntimeError):
+                continue
+
+    def _open_extra_columns_menu(self: Any):
+        from PyQt6.QtGui import QAction
+        from PyQt6.QtWidgets import QMenu
+        from src.utils.result_columns import RESULT_EXTRA_COLUMN_DEFS, normalize_result_extra_columns
+
+        menu = QMenu(self)
+        baseline = normalize_result_extra_columns(settings.get("result_extra_columns", []))
+        baseline_box = {"ids": list(baseline)}
+        current_set = set(baseline)
+        actions = []
+        for defn in RESULT_EXTRA_COLUMN_DEFS:
+            action = QAction(defn["header"], menu)
+            action.setCheckable(True)
+            action.setChecked(defn["id"] in current_set)
+            action.setData(defn["id"])
+            menu.addAction(action)
+            actions.append(action)
+
+        # Toggle-save: persist only when the selection actually changes (not on mere close).
+        def _on_triggered(action: QAction) -> None:
+            if not action.isCheckable():
+                return
+            selected = [a.data() for a in actions if a.isChecked()]
+            if selected == baseline_box["ids"]:
+                return
+            settings.set("result_extra_columns", selected)
+            baseline_box["ids"] = list(selected)
+            self._refresh_result_render_options()
+
+        menu.triggered.connect(_on_triggered)
+        menu.exec(self.btn_columns.mapToGlobal(self.btn_columns.rect().bottomLeft()))
 
     def _rebuild_result_views_from_collected_data(self: Any):
         self._reset_result_state()
@@ -294,6 +346,27 @@ class CrawlerTabTableRowRenderMixin:
         sort_item = SortableTableWidgetItem(price_sort_text)
         sort_item.setData(Qt.ItemDataRole.EditRole, int(price_int))
         self.result_table.setItem(row, self.COL_PRICE_SORT, sort_item)
+
+        confirm_text = str(data.get("확인일", "") or "")
+        building_text = str(data.get("동", "") or "")
+        area_name_text = str(data.get("타입명", "") or "")
+        same_addr_raw = data.get("동일주소건수", 0)
+        try:
+            same_addr_text = str(int(same_addr_raw or 0) or "")
+        except (TypeError, ValueError):
+            same_addr_text = str(same_addr_raw or "")
+        cp_text = str(data.get("정보제공", "") or "")
+        broker_office_text = str(data.get("부동산상호", "") or "")
+        broker_phone_text = str(data.get("전화1", "") or "")
+        if hasattr(self, "COL_CONFIRM_DATE"):
+            self.result_table.setItem(row, self.COL_CONFIRM_DATE, QTableWidgetItem(confirm_text))
+            self.result_table.setItem(row, self.COL_BUILDING, QTableWidgetItem(building_text))
+            self.result_table.setItem(row, self.COL_AREA_NAME, QTableWidgetItem(area_name_text))
+            self.result_table.setItem(row, self.COL_SAME_ADDR, QTableWidgetItem(same_addr_text))
+            self.result_table.setItem(row, self.COL_CP, QTableWidgetItem(cp_text))
+            self.result_table.setItem(row, self.COL_BROKER_OFFICE, QTableWidgetItem(broker_office_text))
+            self.result_table.setItem(row, self.COL_BROKER_PHONE, QTableWidgetItem(broker_phone_text))
+
         payload = self._build_row_payload_from_data(
             data=data,
             trade_type=trade_type,
@@ -325,6 +398,13 @@ class CrawlerTabTableRowRenderMixin:
                 "🔗",
                 article_url,
                 price_sort_text,
+                confirm_text,
+                building_text,
+                area_name_text,
+                same_addr_text,
+                cp_text,
+                broker_office_text,
+                broker_phone_text,
             ]
         )
         while len(self._row_search_cache) <= row:

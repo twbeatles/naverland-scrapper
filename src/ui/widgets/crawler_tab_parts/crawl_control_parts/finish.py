@@ -10,19 +10,33 @@ class CrawlerTabFinishMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
+    def _format_api_failure_summary(self: Any, final_stats: dict) -> str:
+        reasons = final_stats.get("article_api_failure_reasons") or {}
+        if not isinstance(reasons, dict) or not reasons:
+            return ""
+        parts = []
+        for key, count in sorted(reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))):
+            parts.append(f"{key}={int(count or 0)}")
+        return ", ".join(parts[:8])
+
     def _on_crawl_finished(self: Any, data):
         final_stats = {}
         thread = self.crawler_thread
         if thread and hasattr(thread, "stats"):
             try:
                 final_stats = dict(thread.stats or {})
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 final_stats = {}
         try:
             self.btn_save.setEnabled(True)
             self.progress_widget.complete()
             self.append_log(f"✅ 크롤링 완료: 총 {len(data)}건 수집")
             if final_stats:
+                detail_skip = int(final_stats.get("detail_fetch_skipped_count", 0) or 0)
+                detail_cap = int(final_stats.get("detail_cap_truncated", 0) or 0)
+                detail_disabled = int(final_stats.get("detail_enrichment_disabled", 0) or 0)
+                api_last = str(final_stats.get("article_api_last_status", "") or "-")
+                fail_summary = self._format_api_failure_summary(final_stats)
                 self.append_log(
                     "📌 진단 요약: "
                     f"browser={final_stats.get('playwright_browser_source', '-')}, "
@@ -31,12 +45,30 @@ class CrawlerTabFinishMixin:
                     f"match={int(final_stats.get('response_match_count', 0) or 0)}, "
                     f"api_hit={int(final_stats.get('article_api_fast_path_hit_count', 0) or 0)}, "
                     f"api_fallback={int(final_stats.get('article_api_fast_path_fallback_count', 0) or 0)}, "
+                    f"api_status={api_last}, "
                     f"capture_fail={int(final_stats.get('capture_failed_count', 0) or 0)}, "
                     f"block_like={int(final_stats.get('block_like_redirect_count', 0) or 0)}, "
                     f"detail_partial={int(final_stats.get('detail_partial_count', 0) or 0)}, "
-                    f"detail_fail={int(final_stats.get('detail_fail_count', 0) or 0)}",
+                    f"detail_fail={int(final_stats.get('detail_fail_count', 0) or 0)}, "
+                    f"detail_skip={detail_skip}, "
+                    f"detail_cap={detail_cap}, "
+                    f"detail_off={detail_disabled}",
                     10,
                 )
+                if fail_summary:
+                    self.append_log(f"📌 목록 API 실패 사유: {fail_summary}", 10)
+                if detail_disabled:
+                    self.append_log("ℹ️ 상세 정보 조회가 설정에서 꺼져 있어 중개·기전세 필드는 비어 있을 수 있습니다.", 20)
+                elif detail_cap > 0:
+                    self.append_log(
+                        f"ℹ️ 단지당 상세 조회 상한으로 {detail_cap}건은 상세 없이 목록만 반영했습니다.",
+                        20,
+                    )
+                elif detail_skip > 0:
+                    self.append_log(
+                        f"ℹ️ 상세 조회를 건너뛴 매물 {detail_skip}건이 있습니다.",
+                        20,
+                    )
 
             if self.crawl_cache:
                 self.crawl_cache.flush()
@@ -44,7 +76,7 @@ class CrawlerTabFinishMixin:
             # DB Write
             try:
                 self._save_price_snapshots()
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError, TypeError) as e:
                 self.append_log(f"⚠️ 가격 스냅샷 저장 실패: {e}", 30)
 
             if self._compact_duplicates and self._compact_items_by_key:
@@ -54,19 +86,21 @@ class CrawlerTabFinishMixin:
             if settings.get("play_sound_on_complete", True):
                 try:
                     QApplication.beep()
-                except Exception as e:
+                except RuntimeError as e:
                     logger.debug(f"완료 알림음 재생 실패 (무시): {e}")
             
             self.data_collected.emit(data) # Notify App
             self.crawling_stopped.emit()
             
-        except Exception as e:
+        except (RuntimeError, AttributeError, TypeError, ValueError) as e:
             self.append_log(f"❌ 크롤링 마무리 중 오류: {e}", 40)
             logger.error(f"Crawl finish handler failed: {e}")
         finally:
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
             self.crawler_thread = None
+            if hasattr(self, "_release_crawl_lock"):
+                self._release_crawl_lock()
 
     def _on_complex_finished(self: Any, name, cid, trade_types, count):
         self.append_log(f"📌 단지 완료: {name} ({cid}) {count}건", 10)

@@ -53,3 +53,5 @@ class CrawlerTabRuntimeSettingsSetupMixin:
 
         compact = bool(settings.get("compact_duplicate_listings", True))
         self.check_compact_duplicates.setChecked(compact)
+        if hasattr(self, "_apply_extra_column_visibility"):
+            self._apply_extra_column_visibility()

@@ -30,6 +30,16 @@ class TestUIWiring(unittest.TestCase):
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
+    def setUp(self):
+        from src.core.crawl_lock import reset_crawl_lock_for_tests
+
+        reset_crawl_lock_for_tests()
+
+    def tearDown(self):
+        from src.core.crawl_lock import reset_crawl_lock_for_tests
+
+        reset_crawl_lock_for_tests()
+
     def test_crawler_tab_saves_search_history_and_complex_finished_slot_is_ui_only(self):
         from src.core.crawler import CrawlerThread
         from src.core.database import ComplexDatabase

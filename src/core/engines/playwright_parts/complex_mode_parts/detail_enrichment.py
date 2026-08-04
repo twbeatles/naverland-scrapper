@@ -39,8 +39,37 @@ class PlaywrightDetailEnrichmentMixin:
             )
 
         if detail_candidates:
-            detailed_items = await self._enrich_items_with_mobile_details(detail_candidates)
-            for detailed_item in detailed_items:
+            enrich_enabled = bool(getattr(self.thread, "detail_enrichment_enabled", True))
+            try:
+                max_detail = max(0, int(getattr(self.thread, "detail_enrichment_max_per_complex", 0) or 0))
+            except (TypeError, ValueError):
+                max_detail = 0
+
+            if not enrich_enabled:
+                to_enrich: list[dict] = []
+                passthrough = list(detail_candidates)
+                self.thread.stats["detail_enrichment_disabled"] = 1
+                self.thread.stats["detail_fetch_skipped_count"] = (
+                    int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + len(passthrough)
+                )
+            elif max_detail > 0 and len(detail_candidates) > max_detail:
+                to_enrich = list(detail_candidates[:max_detail])
+                passthrough = list(detail_candidates[max_detail:])
+                cap_n = len(passthrough)
+                self.thread.stats["detail_cap_truncated"] = (
+                    int(self.thread.stats.get("detail_cap_truncated", 0)) + cap_n
+                )
+                self.thread.stats["detail_fetch_skipped_count"] = (
+                    int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + cap_n
+                )
+            else:
+                to_enrich = list(detail_candidates)
+                passthrough = []
+
+            detailed_items = (
+                await self._enrich_items_with_mobile_details(to_enrich) if to_enrich else []
+            )
+            for detailed_item in list(detailed_items) + list(passthrough):
                 processed_item = self.thread._enrich_item_with_history_and_alerts(dict(detailed_item))
                 if self.thread._check_filters(processed_item, trade_type):
                     if self.thread._push_item(processed_item):
@@ -63,12 +92,14 @@ class PlaywrightDetailEnrichmentMixin:
             try:
                 article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
                 self.thread.stats["detail_fetch_total"] = int(self.thread.stats.get("detail_fetch_total", 0)) + 1
+                front_api_enabled = bool(getattr(self.thread, "detail_front_api_enabled", True))
                 detail = await self._async_retry(
                     f"mobile detail {article_no}",
                     lambda: fetch_mobile_article_detail(
                         page,
                         article_no,
                         navigation_timeout_ms=self._navigation_timeout_ms(),
+                        front_api_enabled=front_api_enabled,
                     ),
                 )
                 detail_meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}

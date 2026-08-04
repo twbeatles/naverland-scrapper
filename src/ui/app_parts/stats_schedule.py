@@ -376,6 +376,8 @@ class AppStatsScheduleMixin:
         config = self._collect_schedule_config()
         mode = str(config.get("mode", "complex") or "complex")
         active_slot = slot or self._schedule_slot_for(config)
+        from src.core.crawl_lock import get_crawl_lock
+
         crawler_running = bool(
             hasattr(self, "crawler_tab")
             and getattr(self.crawler_tab, "crawler_thread", None)
@@ -386,11 +388,13 @@ class AppStatsScheduleMixin:
             and getattr(self.geo_tab, "crawler_thread", None)
             and self.geo_tab.crawler_thread.isRunning()
         )
-        if crawler_running or geo_running:
+        lock_held = get_crawl_lock().is_held()
+        if crawler_running or geo_running or lock_held:
+            owner = get_crawl_lock().owner() or "busy"
             self._remember_schedule_skip(
                 active_slot,
                 "busy",
-                "⏸ 예약 작업 건너뜀: 다른 크롤링이 이미 실행 중입니다.",
+                f"⏸ 예약 작업 건너뜀: 다른 수집이 이미 실행 중입니다. ({owner})",
             )
             return False
 

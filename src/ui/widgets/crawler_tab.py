@@ -117,6 +117,24 @@ class CrawlerTab(
     COL_LINK = 15
     COL_URL = 16
     COL_PRICE_SORT = 17
+    # Optional extra columns (default hidden; no DB storage)
+    COL_CONFIRM_DATE = 18
+    COL_BUILDING = 19
+    COL_AREA_NAME = 20
+    COL_SAME_ADDR = 21
+    COL_CP = 22
+    COL_BROKER_OFFICE = 23
+    COL_BROKER_PHONE = 24
+    RESULT_COLUMN_COUNT = 25
+    EXTRA_COLUMN_BY_ID = {
+        "confirm_date": COL_CONFIRM_DATE,
+        "building": COL_BUILDING,
+        "area_name": COL_AREA_NAME,
+        "same_addr": COL_SAME_ADDR,
+        "cp": COL_CP,
+        "broker_office": COL_BROKER_OFFICE,
+        "broker_phone": COL_BROKER_PHONE,
+    }
     
     # Signals
     data_collected = pyqtSignal(list)  # 수집 완료 시 데이터 전송

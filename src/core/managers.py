@@ -66,6 +66,14 @@ DEFAULT_SETTINGS = {
     "geo_last_lon": 126.9888,
     "schedule_geo_lat": 37.5608,
     "schedule_geo_lon": 126.9888,
+    # 수집 옵션 (경량 기본값 — DB 스키마 불변)
+    "include_pre_sale_rights": False,  # APT realEstateType 에 :PRE (분양권)
+    "detail_enrichment_enabled": True,  # 필터 통과 매물 상세 보강
+    "detail_enrichment_max_per_complex": 0,  # 0=무제한, 단지당 상세 상한
+    "detail_front_api_enabled": True,  # fin.land front-api 직접 보충
+    "article_api_page_delay_ms": 150,  # 목록 API 페이지 간격
+    "result_extra_columns": [],  # 결과 테이블 확장 컬럼 id 목록
+    "card_show_extra_meta": True,  # 카드에 동/타입명 한 줄
     "schedule_config": {
         "enabled": False,
         "mode": "complex",
@@ -131,7 +139,17 @@ def _normalize_schedule_config(value: Any) -> dict[str, Any]:
     return normalized
 
 
+def _clamp_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = int(default)
+    return max(minimum, min(maximum, parsed))
+
+
 def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
+    from src.utils.result_columns import normalize_result_extra_columns
+
     sanitized = deepcopy(DEFAULT_SETTINGS)
     if not isinstance(value, dict):
         sanitized["schedule_config"] = _normalize_schedule_config(sanitized.get("schedule_config"))
@@ -147,7 +165,41 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
 
     sanitized.pop("result_tab_mode", None)
     sanitized["schedule_config"] = _normalize_schedule_config(sanitized.get("schedule_config"))
+
+    sanitized["include_pre_sale_rights"] = bool(sanitized.get("include_pre_sale_rights", False))
+    sanitized["detail_enrichment_enabled"] = bool(sanitized.get("detail_enrichment_enabled", True))
+    sanitized["detail_front_api_enabled"] = bool(sanitized.get("detail_front_api_enabled", True))
+    sanitized["card_show_extra_meta"] = bool(sanitized.get("card_show_extra_meta", True))
+    sanitized["detail_enrichment_max_per_complex"] = _clamp_int(
+        sanitized.get("detail_enrichment_max_per_complex", 0), 0, 0, 500
+    )
+    sanitized["article_api_page_delay_ms"] = _clamp_int(
+        sanitized.get("article_api_page_delay_ms", 150), 150, 0, 2000
+    )
+    sanitized["playwright_detail_workers"] = _clamp_int(
+        sanitized.get("playwright_detail_workers", 12), 12, 1, 16
+    )
+    sanitized["result_extra_columns"] = normalize_result_extra_columns(
+        sanitized.get("result_extra_columns", [])
+    )
     return sanitized
+
+
+def collection_runtime_kwargs(settings_obj: Any = None) -> dict[str, Any]:
+    """Kwargs shared by complex/geo crawler thread construction."""
+    src = settings_obj if settings_obj is not None else get_settings()
+    getter = src.get if hasattr(src, "get") else (lambda k, d=None: d)
+    return {
+        "include_pre_sale_rights": bool(getter("include_pre_sale_rights", False)),
+        "detail_enrichment_enabled": bool(getter("detail_enrichment_enabled", True)),
+        "detail_enrichment_max_per_complex": _clamp_int(
+            getter("detail_enrichment_max_per_complex", 0), 0, 0, 500
+        ),
+        "detail_front_api_enabled": bool(getter("detail_front_api_enabled", True)),
+        "article_api_page_delay_ms": _clamp_int(
+            getter("article_api_page_delay_ms", 150), 150, 0, 2000
+        ),
+    }
 
 
 class SettingsManager:

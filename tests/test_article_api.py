@@ -20,12 +20,20 @@ class TestArticleApiHelpers(unittest.TestCase):
     def test_real_estate_type_for_vl(self):
         self.assertEqual(article_api_real_estate_type("VL"), "VL:DDDGG:JWJT:SGJT")
 
+    def test_real_estate_type_optional_pre(self):
+        self.assertEqual(article_api_real_estate_type("APT"), "APT:ABYG:JGC")
+        self.assertEqual(article_api_real_estate_type("APT", include_pre=True), "APT:ABYG:JGC:PRE")
+
     def test_build_url_includes_page_param(self):
         url = build_article_api_url("complexes", "3833", "매매", "APT", page=2)
         self.assertIn("/api/articles/complex/3833?", url)
         self.assertIn("page=2", url)
         self.assertIn("tradeType=A1", url)
         self.assertIn("realEstateType=APT%3AABYG%3AJGC", url)
+
+    def test_build_url_include_pre(self):
+        url = build_article_api_url("complexes", "3833", "매매", "APT", page=1, include_pre=True)
+        self.assertIn("realEstateType=APT%3AABYG%3AJGC%3APRE", url)
 
     def test_query_params_default_page_is_one(self):
         params = build_article_api_query_params("전세", "APT")

@@ -11,12 +11,11 @@ from PyInstaller.utils.hooks import collect_submodules
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
 #
-# Rechecked 2026-06-09 after performance + facade structure refactor:
-# - Newly split `*_parts` packages are normal Python source modules reached through
-#   static imports from existing facade modules.
-# - Article API fast path, response-capture fallback, price snapshot worker, parser
-#   split, live-smoke split, dashboard/style split, and common mixin rebinding do not
-#   require additional PyInstaller datas, hidden imports, or runtime hooks.
+# Rechecked 2026-08-04 after Naver site survey + options/UI audit fixes:
+# - Still pure static imports for new modules: crawl_lock, result_columns, ui_labels,
+#   collection_runtime_kwargs, detail front-api helpers, settings tab UI.
+# - No new binary datas, runtime hooks, or package data files are required.
+# - Article API multi-page + front-api detail enrichment remain runtime-only HTTP.
 # - Keep existing dynamic hidden imports for matplotlib Qt backend, plyer Windows
 #   notifications, undetected_chromedriver, Selenium DevTools, and Playwright.
 # - Keep the Playwright runtime hook and optional Chromium/headless-shell bundle rules.

@@ -146,6 +146,25 @@ def normalize_article_payload(
     if isinstance(feature, list):
         feature = ", ".join(str(x) for x in feature if x)
 
+    confirm_ymd = str(_first(article, "articleConfirmYmd", "confirmYmd", "atclCfmYmd", default="")).strip()
+    building_name = str(_first(article, "buildingName", "bildNm", "dongNm", default="")).strip()
+    area_name = str(_first(article, "areaName", "area1Name", "ptpNm", default="")).strip()
+    same_addr_cnt_raw = _first(article, "sameAddrCnt", "sameAddressCount", "sameAddrCount", default="")
+    try:
+        same_addr_cnt = int(same_addr_cnt_raw or 0)
+    except (TypeError, ValueError):
+        same_addr_cnt = 0
+    cp_name = str(_first(article, "cpName", "cpNm", "providerName", default="")).strip()
+
+    article_lat = _to_float(_first(article, "latitude", "lat", default=0.0))
+    article_lon = _to_float(_first(article, "longitude", "lon", "lng", default=0.0))
+    resolved_lat = float(lat) if lat is not None else 0.0
+    resolved_lon = float(lon) if lon is not None else 0.0
+    if resolved_lat == 0.0 and article_lat:
+        resolved_lat = article_lat
+    if resolved_lon == 0.0 and article_lon:
+        resolved_lon = article_lon
+
     item = {
         "단지명": str(complex_name or _first(article, "articleName", default=f"단지_{complex_id}")),
         "단지ID": str(complex_id or ""),
@@ -162,11 +181,16 @@ def normalize_article_payload(
         ),
         "층/방향": floor_info,
         "타입/특징": str(feature or ""),
+        "확인일": confirm_ymd,
+        "동": building_name,
+        "타입명": area_name,
+        "동일주소건수": same_addr_cnt,
+        "정보제공": cp_name,
         "수집시각": DateTimeHelper.now_string(),
         "자산유형": detect_asset_type(article, fallback=asset_type),
         "수집모드": str(mode or "complex"),
-        "위도": float(lat) if lat is not None else 0.0,
-        "경도": float(lon) if lon is not None else 0.0,
+        "위도": resolved_lat,
+        "경도": resolved_lon,
         "줌": int(zoom or 0),
         "마커ID": str(marker_id or ""),
         "부동산상호": "",

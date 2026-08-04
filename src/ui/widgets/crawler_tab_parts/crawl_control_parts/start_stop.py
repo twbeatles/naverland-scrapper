@@ -11,6 +11,8 @@ class CrawlerTabStartStopMixin:
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def start_crawling(self: Any) -> bool:
+        from src.core.crawl_lock import get_crawl_lock
+        from src.core.managers import collection_runtime_kwargs, settings
         from src.ui.widgets.crawler_tab import (
             _get_crawl_cache_cls,
             _get_crawler_thread_cls,
@@ -21,21 +23,39 @@ class CrawlerTabStartStopMixin:
             self.status_message.emit("이미 크롤링이 실행 중입니다.")
             return False
 
+        crawl_lock = get_crawl_lock()
+        lock_owner = "complex"
+        if not crawl_lock.try_acquire(lock_owner):
+            other = crawl_lock.owner() or "다른 작업"
+            self.append_log(
+                f"⚠️ 다른 수집이 진행 중이라 시작할 수 없습니다. (실행 중: {other})",
+                30,
+            )
+            self.status_message.emit("다른 수집이 끝나야 시작할 수 있습니다.")
+            return False
+        self._crawl_lock_owner = lock_owner
+
         try:
             in_maintenance = bool(self._maintenance_guard()) if callable(self._maintenance_guard) else False
-        except Exception:
+        except (TypeError, ValueError, AttributeError, RuntimeError):
             in_maintenance = False
         if in_maintenance:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
             self.append_log("⛔ 유지보수 모드에서는 크롤링을 시작할 수 없습니다.", 30)
             self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
             return False
 
         if self.table_list.rowCount() == 0:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
             QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
             return False
         
         target_list = self._normalize_task_table()
         if not target_list:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
             QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
             return False
              
@@ -45,6 +65,8 @@ class CrawlerTabStartStopMixin:
         if self.check_monthly.isChecked(): trade_types.append("월세")
         
         if not trade_types:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
             QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
             return False
 
@@ -55,6 +77,8 @@ class CrawlerTabStartStopMixin:
             if self._normalize_task_asset_type(asset_type) != "APT"
         ]
         if engine_name == "selenium" and unsupported_selenium_targets:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
             QMessageBox.warning(
                 self,
                 "경고",
@@ -150,6 +174,7 @@ class CrawlerTabStartStopMixin:
             playwright_article_api_fast_path=settings.get("playwright_article_api_fast_path", True),
             playwright_article_api_timeout_ms=settings.get("playwright_article_api_timeout_ms", 2500),
             playwright_article_response_wait_ms=settings.get("playwright_article_response_wait_ms", 1200),
+            **collection_runtime_kwargs(settings),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
         self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
@@ -159,10 +184,26 @@ class CrawlerTabStartStopMixin:
         self.crawler_thread.alert_triggered_signal.connect(self._on_alert_triggered)
         self.crawler_thread.error_signal.connect(lambda msg: self.append_log(f"❌ 크롤링 오류: {msg}", 40))
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
-        self.crawler_thread.start()
+        try:
+            self.crawler_thread.start()
+        except RuntimeError as exc:
+            crawl_lock.release(lock_owner)
+            self._crawl_lock_owner = None
+            self.crawler_thread = None
+            self.btn_start.setEnabled(True)
+            self.btn_stop.setEnabled(False)
+            self.append_log(f"❌ 크롤링 스레드 시작 실패: {exc}", 40)
+            return False
         
         self.crawling_started.emit()
         return True
+
+    def _release_crawl_lock(self: Any) -> None:
+        from src.core.crawl_lock import get_crawl_lock
+
+        owner = getattr(self, "_crawl_lock_owner", None)
+        get_crawl_lock().release(owner)
+        self._crawl_lock_owner = None
 
     def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():
@@ -173,9 +214,11 @@ class CrawlerTabStartStopMixin:
     def shutdown_crawl(self: Any, timeout_ms: int = 8000) -> bool:
         thread = self.crawler_thread
         if not thread:
+            self._release_crawl_lock()
             return True
         if not thread.isRunning():
             self.crawler_thread = None
+            self._release_crawl_lock()
             return True
 
         if hasattr(thread, "set_shutdown_mode"):
@@ -188,6 +231,7 @@ class CrawlerTabStartStopMixin:
         finished = bool(thread.wait(wait_ms))
         if finished:
             self.crawler_thread = None
+            self._release_crawl_lock()
             return True
         self.append_log(f"⚠️ 크롤링 종료 대기 타임아웃 ({wait_ms}ms)", 30)
         return False

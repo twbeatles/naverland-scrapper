@@ -205,9 +205,24 @@ class PlaywrightGeoScanMixin:
             return False
         base_kind = "houses" if asset_type == "VL" else "complexes"
         trade_code = _TRADE_TO_CODE.get(trade_type, "A1")
+        # Align with live UI default (e.g. a=APT:ABYG:JGC) instead of bare APT/VL.
+        try:
+            from src.core.services.article_api import article_api_real_estate_type
+
+            include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
+            map_asset = article_api_real_estate_type(asset_type, include_pre=include_pre)
+        except Exception:
+            map_asset = str(asset_type or "APT")
         url = (
             f"https://new.land.naver.com/{base_kind}?"
-            + urlencode({"ms": f"{lat},{lon},{zoom}", "a": asset_type, "tradeTypes": trade_code})
+            + urlencode(
+                {
+                    "ms": f"{lat},{lon},{zoom}",
+                    "a": map_asset,
+                    "tradeTypes": trade_code,
+                    "e": "RETAIL",
+                }
+            )
         )
         last_failure = ""
         for plan in self._build_entry_plans(url):

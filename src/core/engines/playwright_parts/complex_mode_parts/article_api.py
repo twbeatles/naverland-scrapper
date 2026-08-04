@@ -41,9 +41,11 @@ class PlaywrightArticleApiMixin:
     def _article_api_path_kind(base_kind: str) -> str:
         return article_api_path_kind(base_kind)
 
-    @staticmethod
-    def _article_api_real_estate_type(path_asset: str) -> str:
-        return article_api_real_estate_type(path_asset)
+    def _article_api_include_pre(self) -> bool:
+        return bool(getattr(self.thread, "include_pre_sale_rights", False))
+
+    def _article_api_real_estate_type(self, path_asset: str) -> str:
+        return article_api_real_estate_type(path_asset, include_pre=self._article_api_include_pre())
 
     def _build_article_api_url(
         self,
@@ -54,7 +56,21 @@ class PlaywrightArticleApiMixin:
         *,
         page: int = 1,
     ) -> str:
-        return build_article_api_url(base_kind, cid, trade_type, path_asset, page=page)
+        return build_article_api_url(
+            base_kind,
+            cid,
+            trade_type,
+            path_asset,
+            page=page,
+            include_pre=self._article_api_include_pre(),
+        )
+
+    def _article_api_page_delay_sec(self) -> float:
+        try:
+            ms = int(getattr(self.thread, "article_api_page_delay_ms", 150) or 0)
+        except (TypeError, ValueError):
+            ms = 150
+        return max(0.0, min(2.0, float(ms) / 1000.0))
 
     def _article_api_headers(self, target_url: str) -> dict[str, str]:
         headers = {
@@ -214,6 +230,13 @@ class PlaywrightArticleApiMixin:
 
         for page in range(first_page, MAX_ARTICLE_API_PAGES + 1):
             last_page = page
+            if page > first_page:
+                delay_sec = self._article_api_page_delay_sec()
+                if delay_sec > 0:
+                    try:
+                        await asyncio.sleep(delay_sec)
+                    except Exception:
+                        pass
             api_url = self._build_article_api_url(
                 base_kind, cid, trade_type, path_asset, page=page
             )
@@ -228,11 +251,30 @@ class PlaywrightArticleApiMixin:
             status_label = str(status if status is not None else "")
             self.thread.stats["article_api_last_status"] = status_label
             if status is not None and int(status) >= 400:
+                if int(status) == 429:
+                    self._record_article_api_failure("rate_limited", status=status_label)
+                    if page == first_page and not all_raw_items:
+                        return None
+                    break
                 if page == first_page and not all_raw_items:
                     self._record_article_api_failure("http_error", status=status_label)
                     return None
                 break
-            payload = await response.json()
+            try:
+                payload = await response.json()
+            except Exception:
+                if page == first_page and not all_raw_items:
+                    self._record_article_api_failure("invalid_json", status=status_label or "invalid_json")
+                    return None
+                break
+            if isinstance(payload, dict) and (
+                str(payload.get("code", "") or "").upper() in {"TOO_MANY_REQUESTS", "429"}
+                or str(payload.get("detailCode", "") or "").upper() == "TOO_MANY_REQUESTS"
+            ):
+                self._record_article_api_failure("rate_limited", status=status_label or "429")
+                if page == first_page and not all_raw_items:
+                    return None
+                break
             raw_items, valid_payload = self._normalize_article_api_payload(
                 payload,
                 name=name,

@@ -252,41 +252,228 @@ def _phone_list_from_value(value) -> list[str]:
     return ordered
 
 
+_OFFICE_KEYS = {
+    "brokerageName",
+    "officeName",
+    "realtorName",
+    "realtorOfficeName",
+    "agencyName",
+    "cpName",
+    "brokerageFirmName",
+}
+_AGENT_NAME_KEYS = {
+    "brokerName",
+    "agentName",
+    "brokerRepresentativeName",
+    "representativeName",
+    "realtorRepresentativeName",
+    "agentRepresentativeName",
+}
+_PHONE_KEYS = {
+    "phone",
+    "phones",
+    "telNo",
+    "telephone",
+    "mobileNo",
+    "mobilePhone",
+    "cellPhone",
+    "brokeragePhone",
+    "agentPhone",
+    "tel",
+    "mobile",
+}
+_PREV_JEONSE_KEYS = {
+    "prevJeonse",
+    "prevJeonsePrice",
+    "previousJeonse",
+    "previousJeonsePrice",
+    "warrantPrice",
+}
+
+
+def _merge_detail_field_maps(base: dict, extra: dict | None) -> dict:
+    merged = dict(base or {})
+    for key, value in dict(extra or {}).items():
+        if key.startswith("_"):
+            continue
+        if value in (None, "", [], {}):
+            continue
+        current = merged.get(key)
+        if current in (None, "", 0, 0.0):
+            merged[key] = value
+    return merged
+
+
+def _fields_from_named_tree(source_tree) -> dict:
+    fields = {
+        "부동산상호": "",
+        "중개사이름": "",
+        "전화1": "",
+        "전화2": "",
+        "전세_기간(년)": 0,
+        "전세_기간내_최고(원)": 0,
+        "전세_기간내_최저(원)": 0,
+        "기전세금(원)": 0,
+    }
+    office = _find_named_value(source_tree, _OFFICE_KEYS)
+    if office not in (None, "", [], {}):
+        fields["부동산상호"] = str(office).strip()
+
+    agent_name = _find_named_value(source_tree, _AGENT_NAME_KEYS)
+    if agent_name not in (None, "", [], {}):
+        # Avoid treating office-like blobs as a person name when nested "name" matches first.
+        token = str(agent_name).strip()
+        if token and token != fields["부동산상호"] and not re.search(r"\d{2,}", token):
+            fields["중개사이름"] = token
+
+    phone_value = _find_named_value(source_tree, _PHONE_KEYS)
+    phones = _phone_list_from_value(phone_value)
+    if not phones:
+        phones = _phone_list_from_value(source_tree)
+    if phones:
+        fields["전화1"] = phones[0]
+        if len(phones) >= 2:
+            fields["전화2"] = phones[1]
+
+    prev_jeonse_value = _find_named_value(source_tree, _PREV_JEONSE_KEYS)
+    prev_jeonse = parse_kr_money_to_won(str(prev_jeonse_value or ""))
+    if prev_jeonse:
+        fields["기전세금(원)"] = prev_jeonse
+    return fields
+
+
 def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dict:
     artifacts = dict(artifacts or {})
     source_tree = {
         "hydration_state": artifacts.get("hydration_state", {}),
         "responses": artifacts.get("responses", []),
     }
-    office = _find_named_value(source_tree, {"brokerageName", "officeName", "realtorName"})
-    if office and not str(fields.get("부동산상호", "") or "").strip():
-        fields["부동산상호"] = str(office).strip()
+    extracted = _fields_from_named_tree(source_tree)
+    return _merge_detail_field_maps(fields, extracted)
 
-    agent_name = _find_named_value(
-        source_tree,
-        {"brokerName", "agentName", "brokerRepresentativeName", "representativeName"},
-    )
-    if agent_name and not str(fields.get("중개사이름", "") or "").strip():
-        fields["중개사이름"] = str(agent_name).strip()
 
-    if not str(fields.get("전화1", "") or "").strip() or not str(fields.get("전화2", "") or "").strip():
-        phone_value = _find_named_value(source_tree, {"phone", "phones", "telNo", "telephone", "mobileNo"})
-        phones = _phone_list_from_value(phone_value)
-        if phones and not str(fields.get("전화1", "") or "").strip():
-            fields["전화1"] = phones[0]
-        if len(phones) >= 2 and not str(fields.get("전화2", "") or "").strip():
-            fields["전화2"] = phones[1]
+def build_front_api_agent_url(article_no: str) -> str:
+    aid = str(article_no or "").strip()
+    return f"https://fin.land.naver.com/front-api/v1/article/agent?articleNumber={aid}"
 
-    if int(fields.get("기전세금(원)", 0) or 0) <= 0:
-        prev_jeonse_value = _find_named_value(
-            source_tree,
-            {"prevJeonse", "prevJeonsePrice", "previousJeonse"},
+
+def build_front_api_basic_info_url(article_no: str) -> str:
+    aid = str(article_no or "").strip()
+    return f"https://fin.land.naver.com/front-api/v1/article/basicInfo?articleId={aid}"
+
+
+def parse_front_api_agent_payload(payload) -> dict:
+    """Map fin.land agent/basicInfo JSON into detail field dict."""
+    if not isinstance(payload, dict):
+        return {}
+    # Some APIs wrap under result/data
+    candidates = [payload]
+    for key in ("result", "data", "body", "articleAgent", "agent"):
+        nested = payload.get(key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+        elif isinstance(nested, list):
+            for item in nested:
+                if isinstance(item, dict):
+                    candidates.append(item)
+    merged: dict = {}
+    for tree in candidates:
+        extracted = _fields_from_named_tree(tree)
+        merged = _merge_detail_field_maps(merged, extracted)
+    return {k: v for k, v in merged.items() if v not in (None, "", 0, 0.0)}
+
+
+def _request_context_from_page(detail_page):
+    if detail_page is None:
+        return None
+    for attr in ("request",):
+        request = getattr(detail_page, attr, None)
+        if request is not None and hasattr(request, "get"):
+            return request
+    context = getattr(detail_page, "context", None)
+    if context is not None:
+        request = getattr(context, "request", None)
+        if request is not None and hasattr(request, "get"):
+            return request
+    return None
+
+
+async def _fetch_front_api_json(request_context, url: str, *, referer: str, timeout_ms: int = 8000):
+    if request_context is None or not url:
+        return None, None
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "referer": referer or "https://fin.land.naver.com/",
+    }
+    try:
+        response = await request_context.get(url, headers=headers, timeout=max(1000, int(timeout_ms or 8000)))
+    except TypeError:
+        try:
+            response = await request_context.get(url, headers=headers)
+        except Exception:
+            return None, None
+    except Exception:
+        return None, None
+    status = getattr(response, "status", None)
+    try:
+        payload = await response.json()
+    except Exception:
+        return status, None
+    return status, payload
+
+
+async def _supplement_front_api_artifacts(
+    detail_page,
+    article_no: str,
+    artifacts: dict | None,
+    *,
+    navigation_timeout_ms: int | None = None,
+) -> dict:
+    """Explicitly pull fin.land front-api payloads when DOM/detail SPA is empty or 404."""
+    artifacts = dict(artifacts or {})
+    responses = list(artifacts.get("responses", []) or [])
+    existing_urls = {str(item.get("url", "") or "") for item in responses if isinstance(item, dict)}
+    request_context = _request_context_from_page(detail_page)
+    referer = f"https://fin.land.naver.com/articles/{article_no}"
+    timeout_ms = 8000
+    if navigation_timeout_ms is not None:
+        try:
+            timeout_ms = min(15000, max(1500, int(navigation_timeout_ms)))
+        except (TypeError, ValueError):
+            timeout_ms = 8000
+
+    for url in (
+        build_front_api_agent_url(article_no),
+        build_front_api_basic_info_url(article_no),
+    ):
+        if url in existing_urls:
+            continue
+        status, payload = await _fetch_front_api_json(
+            request_context,
+            url,
+            referer=referer,
+            timeout_ms=timeout_ms,
         )
-        prev_jeonse = parse_kr_money_to_won(str(prev_jeonse_value or ""))
-        if prev_jeonse:
-            fields["기전세금(원)"] = prev_jeonse
+        if status is not None and int(status) == 429:
+            artifacts["front_api_rate_limited"] = True
+            break
+        if payload is None:
+            continue
+        if status is not None and int(status) >= 400:
+            continue
+        responses.append({"url": url, "payload": payload, "status": status})
+        existing_urls.add(url)
 
-    return fields
+    artifacts["responses"] = responses
+    if responses or artifacts.get("hydration_state") or artifacts.get("body_text") or artifacts.get("html_text"):
+        artifacts["corpus_text"] = _build_detail_corpus(
+            str(artifacts.get("body_text", "") or ""),
+            str(artifacts.get("html_text", "") or ""),
+            dict(artifacts.get("hydration_state", {}) or {}),
+            responses,
+        )
+    return artifacts
 
 
 async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout_ms: int | None = None) -> dict:
@@ -298,13 +485,17 @@ async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout
         if not response_url:
             return
         lower_url = response_url.lower()
-        if not any(token in lower_url for token in ("land.naver.com", "/api/", "article", "realtor")):
+        if not any(
+            token in lower_url
+            for token in ("land.naver.com", "/api/", "front-api", "article", "realtor", "agent")
+        ):
             return
         try:
             payload = await response.json()
         except Exception:
             return
-        responses.append({"url": response_url, "payload": payload})
+        status = getattr(response, "status", None)
+        responses.append({"url": response_url, "payload": payload, "status": status})
 
     def _handle(response):
         try:
@@ -508,7 +699,13 @@ def _build_detail_meta(source: str, body_text: str, fields: dict, artifacts: dic
     }
 
 
-async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigation_timeout_ms: int | None = None) -> dict:
+async def fetch_mobile_article_detail(
+    detail_page,
+    article_no: str,
+    *,
+    navigation_timeout_ms: int | None = None,
+    front_api_enabled: bool = True,
+) -> dict:
     if not article_no:
         return {}
 
@@ -518,6 +715,8 @@ async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigatio
     best_meta: dict = {}
     best_body_text = ""
     best_score = -1
+    use_front_api = bool(front_api_enabled)
+    # fin first (Npay). m.land redirects to fin as of 2026-08 and is lower priority.
     for source, url in (
         ("fin_article", f"https://fin.land.naver.com/articles/{article_no}"),
         ("m_info", f"https://m.land.naver.com/article/info/{article_no}"),
@@ -528,9 +727,18 @@ async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigatio
             url,
             navigation_timeout_ms=navigation_timeout_ms,
         )
+        # DOM may be 404/map-only; still pull front-api with browser cookies.
+        if use_front_api:
+            artifacts = await _supplement_front_api_artifacts(
+                detail_page,
+                article_no,
+                artifacts,
+                navigation_timeout_ms=navigation_timeout_ms,
+            )
         candidate_body = str(artifacts.get("body_text", "") or "")
         candidate_corpus = str(artifacts.get("corpus_text", "") or "")
-        if _is_not_found_body(candidate_body) and not candidate_corpus:
+        has_network = bool(artifacts.get("responses"))
+        if _is_not_found_body(candidate_body) and not candidate_corpus and not has_network:
             continue
         merged_artifacts = dict(artifacts)
 
@@ -547,7 +755,16 @@ async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigatio
         corpus_text = str(merged_artifacts.get("corpus_text", "") or candidate_corpus or "")
         fields = _parse_detail_fields(body_text, fallback_text=corpus_text)
         fields = _backfill_fields_from_artifacts(fields, merged_artifacts)
+        # Prefer structured front-api payloads when present.
+        for response_item in list(merged_artifacts.get("responses", []) or []):
+            if not isinstance(response_item, dict):
+                continue
+            payload = response_item.get("payload")
+            if isinstance(payload, dict):
+                fields = _merge_detail_field_maps(fields, parse_front_api_agent_payload(payload))
         meta = _build_detail_meta(source, body_text, fields, merged_artifacts)
+        if bool(merged_artifacts.get("front_api_rate_limited")):
+            meta["front_api_rate_limited"] = True
         score = _detail_candidate_score(fields, meta)
 
         if score > best_score:
@@ -560,6 +777,34 @@ async def fetch_mobile_article_detail(detail_page, article_no: str, *, navigatio
 
         if _detail_core_field_score(fields) > 0 and str(meta.get("detail_parse_state", "")) in {"partial", "success"}:
             break
+
+    # Last resort: front-api only without successful page body (cold request may 429).
+    if use_front_api and _detail_core_field_score(best_fields) <= 0:
+        cold_artifacts = await _supplement_front_api_artifacts(
+            detail_page,
+            article_no,
+            {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
+            navigation_timeout_ms=navigation_timeout_ms,
+        )
+        cold_fields: dict = {}
+        for response_item in list(cold_artifacts.get("responses", []) or []):
+            if not isinstance(response_item, dict):
+                continue
+            payload = response_item.get("payload")
+            if isinstance(payload, dict):
+                cold_fields = _merge_detail_field_maps(cold_fields, parse_front_api_agent_payload(payload))
+        cold_fields = _backfill_fields_from_artifacts(cold_fields, cold_artifacts)
+        cold_meta = _build_detail_meta("front_api", "", cold_fields, cold_artifacts)
+        if bool(cold_artifacts.get("front_api_rate_limited")):
+            cold_meta["front_api_rate_limited"] = True
+        cold_score = _detail_candidate_score(cold_fields, cold_meta)
+        if cold_score > best_score:
+            best_source = "front_api"
+            best_artifacts = cold_artifacts
+            best_fields = cold_fields
+            best_meta = cold_meta
+            best_body_text = ""
+            best_score = cold_score
 
     final_fields = dict(best_fields)
     final_meta = dict(best_meta) if best_meta else _build_detail_meta(best_source, best_body_text, final_fields, best_artifacts)

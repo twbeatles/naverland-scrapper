@@ -68,6 +68,13 @@ class CrawlerTabResultAreaSetupMixin:
         self.btn_view_mode.setChecked(self.view_mode == "card")
         self.btn_view_mode.clicked.connect(self._toggle_view_mode)
         search_sort.addWidget(self.btn_view_mode)
+
+        from src.utils.ui_labels import BTN_EXTRA_COLUMNS
+
+        self.btn_columns = QPushButton(BTN_EXTRA_COLUMNS)
+        self.btn_columns.setToolTip("표에 더 보여줄 항목을 고릅니다. 설정과 맞춰 두며, DB에는 저장하지 않습니다.")
+        self.btn_columns.clicked.connect(self._open_extra_columns_menu)
+        search_sort.addWidget(self.btn_columns)
         layout.addWidget(toolbar_widget)
         
         # Result Tabs
@@ -78,16 +85,19 @@ class CrawlerTabResultAreaSetupMixin:
         
         # Table View
         self.result_table = QTableWidget()
-        self.result_table.setColumnCount(18)
+        self.result_table.setColumnCount(int(getattr(self, "RESULT_COLUMN_COUNT", 25)))
         self.result_table.setHorizontalHeaderLabels([
             "단지명", "거래", "가격", "면적", "평당가", "층/방향", "특징",
             "묶음", "🆕", "📊 변동", "자산", "기전세금", "갭금액", "갭비율",
-            "시각", "링크", "URL", "가격(숫자)"
+            "시각", "링크", "URL", "가격(숫자)",
+            "확인일", "동", "타입명", "동일주소", "정보제공", "중개소", "전화",
         ])
         self.result_table.setColumnHidden(self.COL_URL, True)
         self.result_table.setColumnHidden(self.COL_PRICE_SORT, True)
         self.result_table.setAlternatingRowColors(True)
         self.result_table.doubleClicked.connect(self._open_article_url)
+        if hasattr(self, "_apply_extra_column_visibility"):
+            self._apply_extra_column_visibility()
         
         # Card View
         self.view_stack = QStackedWidget()
