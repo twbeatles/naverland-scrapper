@@ -80,36 +80,41 @@ class CrawlerTabResultAreaSetupMixin:
         # Embed secondary widgets in a panel-like menu section via QWidgetAction-free
         # simple actions where possible; keep real widgets for stateful toggles.
         compact_action = more_menu.addAction("같은 매물 묶기")
-        compact_action.setCheckable(True)
-        compact_action.setChecked(self.check_compact_duplicates.isChecked())
-        compact_action.toggled.connect(self.check_compact_duplicates.setChecked)
-        self.check_compact_duplicates.toggled.connect(compact_action.setChecked)
+        if compact_action is not None:
+            compact_action.setCheckable(True)
+            compact_action.setChecked(self.check_compact_duplicates.isChecked())
+            compact_action.toggled.connect(self.check_compact_duplicates.setChecked)
+            self.check_compact_duplicates.toggled.connect(compact_action.setChecked)
 
         sort_menu = more_menu.addMenu("정렬")
-        for text in [
-            "가격 ↑",
-            "가격 ↓",
-            "면적 ↑",
-            "면적 ↓",
-            "단지명 ↑",
-            "단지명 ↓",
-            "거래유형 ↑",
-            "거래유형 ↓",
-        ]:
-            act = sort_menu.addAction(text)
-            act.triggered.connect(
-                lambda _=False, t=text: self.combo_sort.setCurrentText(t)
-            )
+        if sort_menu is not None:
+            for text in [
+                "가격 ↑",
+                "가격 ↓",
+                "면적 ↑",
+                "면적 ↓",
+                "단지명 ↑",
+                "단지명 ↓",
+                "거래유형 ↑",
+                "거래유형 ↓",
+            ]:
+                act = sort_menu.addAction(text)
+                if act is not None:
+                    act.triggered.connect(
+                        lambda _=False, t=text: self.combo_sort.setCurrentText(t)
+                    )
 
         more_menu.addAction("고급 필터…", self.open_advanced_filter_dialog)
         self._clear_filter_menu_action = more_menu.addAction(
             "고급 필터 해제", self.clear_advanced_filters
         )
-        self._clear_filter_menu_action.setEnabled(False)
+        if self._clear_filter_menu_action is not None:
+            self._clear_filter_menu_action.setEnabled(False)
         more_menu.addAction(BTN_EXTRA_COLUMNS, self._open_extra_columns_menu)
         more_menu.addSeparator()
         self._result_more_filter_status_action = more_menu.addAction("필터 상태: OFF")
-        self._result_more_filter_status_action.setEnabled(False)
+        if self._result_more_filter_status_action is not None:
+            self._result_more_filter_status_action.setEnabled(False)
         self.btn_result_more.setMenu(more_menu)
 
         # Keep legacy widgets in layout but hidden (signal/slot compatibility).

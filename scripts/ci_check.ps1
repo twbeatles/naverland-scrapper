@@ -1,5 +1,10 @@
 # Mirrors .github/workflows/ci.yml locally (Windows).
 # Usage: powershell -File scripts/ci_check.ps1
+#
+# Run this before every push that touches src/ui or tests — GitHub CI fails the
+# same pyright + pytest subset steps. UI helpers that wrap QWidget (e.g.
+# prepare_page) must preserve concrete types (TypeVar) so attributes like
+# CrawlerTab.table_list stay visible to pyright.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
@@ -7,13 +12,18 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK = "1"
 $env:NAVERLAND_SKIP_PLAYWRIGHT_TESTS = "1"
+$env:QT_QPA_PLATFORM = if ($env:QT_QPA_PLATFORM) { $env:QT_QPA_PLATFORM } else { "offscreen" }
 
 Write-Host "== Syntax check =="
 python -m compileall -q app_entry.py src tests
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Pyright =="
 npx --yes pyright
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Pyright failed. Fix type errors before push (CI will fail on the same step)." -ForegroundColor Red
+  exit $LASTEXITCODE
+}
 
 Write-Host "== Pytest (CI subset) =="
 python -m pytest -q `

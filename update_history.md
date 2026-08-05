@@ -1,5 +1,11 @@
 # Update History
 
+## 2026-08-05: Fix CI Pyright (Fluent prepare_page types)
+
+- Root cause: `prepare_page()` returned bare `QWidget`, so `crawler_tab`/`geo_tab`/… lost concrete types (75 pyright errors on `test_ui_wiring` + menu Optional).
+- Fix: `TypeVar` on `prepare_page`; null-safe `QMenu.addAction`/`addMenu` in result toolbar.
+- Recurrence: `scripts/ci_check.ps1` + CI comments; run `powershell -File scripts/ci_check.ps1` before UI pushes.
+
 ## 2026-08-05: Theme contrast + slim PyInstaller
 
 - 라이트 모드: 도메인 QSS에서 bare `QWidget` 배경/색 강제 제거 → Fluent 입력·카드 검은 깨짐 완화

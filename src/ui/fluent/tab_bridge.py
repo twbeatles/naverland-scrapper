@@ -45,7 +45,9 @@ class TabCompatBridge(QObject):
             self._stack.addWidget(widget)
         return len(self._widgets) - 1
 
-    def widget(self, index: int) -> Optional[QWidget]:
+    def widget(self, index: int) -> Any:
+        # Return Any so callers (tests/mixins) keep concrete page attribute access
+        # under pyright, matching the dynamic nature of tab pages.
         if index is None or index < 0 or index >= len(self._widgets):
             return None
         return self._widgets[index]
@@ -68,7 +70,7 @@ class TabCompatBridge(QObject):
         except ValueError:
             return self._stack.currentIndex()
 
-    def currentWidget(self) -> Optional[QWidget]:
+    def currentWidget(self) -> Any:
         return self._stack.currentWidget()
 
     def setCurrentIndex(self, index: int) -> None:

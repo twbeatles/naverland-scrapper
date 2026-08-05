@@ -45,9 +45,15 @@ jobs:
         run: python -m compileall -q app_entry.py src tests
 
       - name: Run Pyright
+        # Must stay in sync with scripts/ci_check.ps1. UI facade helpers that
+        # return QWidget (e.g. prepare_page) must use TypeVar to preserve page types.
         run: npx --yes pyright
+        env:
+          QT_QPA_PLATFORM: offscreen
 
       - name: Run core pytest subset
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: >
           python -m pytest -q
           tests/test_parser_module.py

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence, TypeVar
 
 from PyQt6.QtWidgets import QWidget
 from qfluentwidgets import FluentIcon, NavigationInterface, NavigationItemPosition
+
+_TWidget = TypeVar("_TWidget", bound=QWidget)
 
 
 @dataclass(frozen=True)
@@ -95,7 +97,8 @@ NAV_ENTRIES: Sequence[tuple[str, NavEntry | str]] = (
 )
 
 
-def prepare_page(widget: QWidget, route_key: str) -> QWidget:
+def prepare_page(widget: _TWidget, route_key: str) -> _TWidget:
+    """Set objectName for Fluent routing while preserving the concrete widget type."""
     widget.setObjectName(route_key)
     return widget
 
