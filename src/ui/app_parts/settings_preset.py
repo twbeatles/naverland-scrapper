@@ -17,19 +17,28 @@ class AppSettingsPresetMixin:
             new_theme = "light" if self.current_theme == "dark" else "dark"
         self.current_theme = new_theme
         
-        # Fluent theme + domain stylesheet
+        # Fluent theme + domain stylesheet (+ guide HTML)
         if hasattr(self, "_apply_domain_stylesheet"):
             self._apply_domain_stylesheet(new_theme)
         else:
             self.setStyleSheet(get_stylesheet(new_theme))
         
         # 개별 위젯 테마 업데이트
-        if hasattr(self, "crawler_tab"):
+        if hasattr(self, "crawler_tab") and hasattr(self.crawler_tab, "set_theme"):
             self.crawler_tab.set_theme(new_theme)
+        if hasattr(self, "geo_tab") and hasattr(self.geo_tab, "set_theme"):
+            try:
+                self.geo_tab.set_theme(new_theme)
+            except Exception:
+                pass
         if self.dashboard_widget is not None:
             self.dashboard_widget.set_theme(new_theme)
-        if hasattr(self, 'favorites_tab'):
+        if hasattr(self, "favorites_tab") and hasattr(self.favorites_tab, "set_theme"):
             self.favorites_tab.set_theme(new_theme)
+        if hasattr(self, "action_theme_dark"):
+            self.action_theme_dark.setChecked(new_theme == "dark")
+        if hasattr(self, "action_theme_light"):
+            self.action_theme_light.setChecked(new_theme == "light")
         
         settings.set("theme", new_theme)
         self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")

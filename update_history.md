@@ -1,5 +1,12 @@
 # Update History
 
+## 2026-08-05: Theme contrast + slim PyInstaller
+
+- 라이트 모드: 도메인 QSS에서 bare `QWidget` 배경/색 강제 제거 → Fluent 입력·카드 검은 깨짐 완화
+- 가이드: 테마별 HTML(`src/ui/guide_content.py`)로 다크/라이트 본문 대비 확보, 테마 전환 시 재렌더
+- `naverland-scrapper.spec` 슬림 설계: playwright 전량 collect 중단, selenium/devtools 옵션화, ML 스택 exclude+TOC 필터
+- README 슬림 빌드 env 표 보강
+
 ## 2026-08-05: Docs / Spec / Gitignore sync (Fluent push)
 
 - `README.md` / `PROJECT_AUDIT.md` / `docs/NAVER_LAND_SURVEY_2026-08-04.md`: Fluent 네비·설정 기본/고급·테스트 수 정합

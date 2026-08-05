@@ -95,7 +95,7 @@ class AppLifecycleMixin:
             return
 
     def _apply_domain_stylesheet(self: Any, theme: str | None = None):
-        """Apply legacy domain QSS to content pages only (keep Fluent nav clean)."""
+        """Apply Fluent theme + domain QSS (scoped) without crushing Fluent controls."""
         theme_name = str(theme or getattr(self, "current_theme", "dark") or "dark")
         try:
             from src.ui.fluent.theme import apply_app_theme
@@ -103,21 +103,42 @@ class AppLifecycleMixin:
             apply_app_theme(theme_name)
         except Exception:
             pass
+        from src.ui.styles_parts.colors import COLORS
+
+        c = COLORS.get(theme_name, COLORS["dark"])
+        # Window chrome only — do not put full domain QSS on QMainWindow (breaks Fluent nav).
+        chrome = (
+            f"QMainWindow {{ background-color: {c['bg_primary']}; color: {c['text_primary']}; }}"
+            f"QMenuBar {{ background-color: {c['bg_secondary']}; color: {c['text_primary']}; }}"
+            f"QMenuBar::item:selected {{ background-color: {c['accent_bg']}; }}"
+            f"QStatusBar {{ background-color: {c['bg_statusbar']}; color: {c['text_secondary']}; "
+            f"border-top: 1px solid {c['border_subtle']}; }}"
+            f"QMenu {{ background-color: {c['bg_menu']}; color: {c['text_primary']}; "
+            f"border: 1px solid {c['border_subtle']}; }}"
+            f"QMenu::item:selected {{ background-color: {c['select_bg']}; }}"
+        )
+        try:
+            self.setStyleSheet(chrome)
+        except Exception:
+            pass
+
         sheet = get_stylesheet(theme_name)
-        # Avoid painting over NavigationInterface; style stacked content + status bar.
         stack = getattr(self, "stackedWidget", None)
         if stack is not None:
             stack.setObjectName("domainContent")
             stack.setStyleSheet(sheet)
-        else:
-            self.setStyleSheet(sheet)
         try:
             sb = self.statusBar()
             if sb is not None:
                 sb.setObjectName("appStatusBar")
-                sb.setStyleSheet(sheet)
         except Exception:
             pass
+        # Guide HTML embeds its own theme colors (QTextBrowser document defaults are black).
+        if hasattr(self, "_refresh_guide_theme"):
+            try:
+                self._refresh_guide_theme(theme_name)
+            except Exception:
+                pass
     
     def _init_menu(self: Any):
         menubar = self.menuBar()

@@ -110,9 +110,21 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 |---|---|
 | `NAVERLAND_ONEFILE=1` | 단일 실행 파일로 빌드 |
 | `NAVERLAND_BUNDLE_CHROMIUM=0` | Chromium 제외 (용량 절감, 별도 브라우저 필요) |
+| `NAVERLAND_INCLUDE_SELENIUM=0` | Selenium/UC 제외 (Playwright 전용 슬림) |
+| `NAVERLAND_INCLUDE_DEVTOOLS=1` | Selenium CDP devtools 전체 포함 (기본 끔) |
 | `NAVERLAND_CONSOLE=1` | 콘솔 창 함께 표시 |
 
 기본 빌드는 Chromium이 포함된 폴더 형태(`onedir`, 출력: `dist/naverland/`)로 생성됩니다.
+
+슬림 빌드 예:
+
+```powershell
+$env:NAVERLAND_BUNDLE_CHROMIUM="0"
+$env:NAVERLAND_INCLUDE_SELENIUM="0"
+python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
+```
+
+spec은 분석 후 `torch`/`sklearn`/`cv2` 등 오염 PYTHONPATH 패키지를 TOC에서 제거합니다. 깨끗한 venv에서 빌드하는 것을 권장합니다.
 
 ---
 

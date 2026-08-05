@@ -1,4 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller spec — slim by default, optional Chromium / Selenium extras.
+
+Design goals (2026-08-05):
+  1) Only pull what this app imports (PyQt6, qfluentwidgets, playwright, matplotlib,
+     openpyxl, selenium/undetected_chromedriver as optional fallback).
+  2) Block accidental ML/data-science packages on polluted PYTHONPATH
+     (torch, sklearn, transformers, cv2, dask, pandas, …).
+  3) Avoid collect_submodules("playwright") / full selenium.devtools mega-graphs
+     unless explicitly requested.
+  4) Keep Chromium bundle opt-out for slim artifacts.
+
+Environment:
+  NAVERLAND_ONEFILE=1              → single-file EXE
+  NAVERLAND_BUNDLE_CHROMIUM=0      → no Playwright browser datas (slim)
+  NAVERLAND_CONSOLE=1              → show console
+  NAVERLAND_INCLUDE_SELENIUM=0     → exclude selenium + undetected_chromedriver
+  NAVERLAND_INCLUDE_DEVTOOLS=1     → include selenium.webdriver.common.devtools
+  NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER=1 (default) strip non-Windows selenium managers
+"""
 
 from __future__ import annotations
 
@@ -10,69 +29,99 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
-#
-# Rechecked 2026-08-05 after Fluent UI refactor:
-# - Pure static imports for UI modules under src/ui/fluent/ (theme, navigation,
-#   tab_bridge, notify) and existing crawl_lock / result_columns / ui_labels paths.
-# - No new binary datas or runtime hooks for Fluent; package is pure Python.
-# - Keep collect_submodules for qfluentwidgets + qframelesswindow (dynamic icons/styles).
-# - Article API multi-page + front-api detail enrichment remain runtime-only HTTP.
-# - Keep existing dynamic hidden imports for matplotlib Qt backend, plyer Windows
-#   notifications, undetected_chromedriver, Selenium DevTools, and Playwright.
-# - Keep the Playwright runtime hook and optional Chromium/headless-shell bundle rules.
 project_dir = Path.cwd().resolve()
-# Default distribution profile is onedir with bundled Chromium.
-# This avoids onefile extraction overhead and matches the current README/doc baseline.
-# Force onefile explicitly with NAVERLAND_ONEFILE=1.
+
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
-# Chromium-bundled build is the default so frozen apps work on machines without
-# a preinstalled Playwright browser. Set NAVERLAND_BUNDLE_CHROMIUM=0 for slim builds.
-# Runtime preflight still blocks startup when the effective crawl_engine is `playwright`
-# and Playwright Chromium/headless shell is neither installed locally nor bundled.
 bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "1") == "1"
-windows_only_selenium_manager = os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
-# Keep windowed mode by default. Enable console explicitly when debugging startup failures.
+windows_only_selenium_manager = (
+    os.environ.get("NAVERLAND_WINDOWS_ONLY_SELENIUM_MANAGER", "1") == "1"
+)
 enable_console = os.environ.get("NAVERLAND_CONSOLE", "0") == "1"
+include_selenium = os.environ.get("NAVERLAND_INCLUDE_SELENIUM", "1") == "1"
+include_devtools = os.environ.get("NAVERLAND_INCLUDE_DEVTOOLS", "0") == "1"
 
 app_name = "naverland_onefile" if build_onefile else "naverland"
 if not bundle_chromium:
     app_name = f"{app_name}_slim"
+if not include_selenium:
+    app_name = f"{app_name}_pw"
 
-# Keep hidden-imports minimal but reliable for modules that use dynamic imports.
+
+def _collect_submodules_skip(package: str, *skip_parts: str) -> list[str]:
+    try:
+        mods = collect_submodules(package)
+    except Exception as exc:
+        print(f"[spec] collect_submodules({package!r}) failed: {exc}")
+        return []
+    if not skip_parts:
+        return list(mods)
+    return [m for m in mods if not any(part in m for part in skip_parts)]
+
+
+# ── Hidden imports (minimal + intentional) ────────────────────────────
 hiddenimports: list[str] = [
-    # Matplotlib Qt backend is imported conditionally in `src/ui/widgets/chart.py`
-    # and `src/ui/widgets/dashboard.py`.
+    # Conditional matplotlib backend
     "matplotlib.backends.backend_qtagg",
-    # `src.ui.app` imports plyer dynamically, and plyer imports the Windows
-    # notification backend through a runtime proxy.
+    "matplotlib.backends.backend_agg",
+    # plyer notifications (dynamic)
     "plyer",
     "plyer.platforms.win.notification",
     "plyer.platforms.win.libs.balloontip",
+    # Fluent (import name qfluentwidgets)
+    "qfluentwidgets",
+    "qframelesswindow",
+    "darkdetect",
 ]
-hiddenimports += collect_submodules("undetected_chromedriver")
-hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
-hiddenimports += collect_submodules("playwright")
-# Fluent UI (package import name is `qfluentwidgets`).
-# Skip optional webengine/multimedia submodules (not used by this app; avoid
-# ModuleNotFoundError noise and unused QtWebEngine/Multimedia pulls).
-def _collect_submodules_skip(package: str, *skip_parts: str) -> list[str]:
-    mods = collect_submodules(package)
-    if not skip_parts:
-        return mods
-    return [
-        m
-        for m in mods
-        if not any(part in m for part in skip_parts)
+
+# Fluent: collect package modules but drop unused multimedia/webengine.
+hiddenimports += _collect_submodules_skip(
+    "qfluentwidgets", ".multimedia", ".webengine", ".gallery"
+)
+hiddenimports += _collect_submodules_skip("qframelesswindow", ".webengine")
+
+# Playwright: rely on package hook; only pin entry surfaces we use.
+# Full collect_submodules("playwright") pulls huge optional trees.
+hiddenimports += [
+    "playwright",
+    "playwright.sync_api",
+    "playwright.async_api",
+    "playwright._impl._api_structures",
+    "playwright._impl._driver",
+]
+
+if include_selenium:
+    hiddenimports += [
+        "selenium",
+        "selenium.webdriver",
+        "selenium.webdriver.chrome",
+        "selenium.webdriver.chrome.options",
+        "selenium.webdriver.chrome.service",
+        "selenium.webdriver.common.by",
+        "selenium.webdriver.support.ui",
+        "selenium.webdriver.support.expected_conditions",
+        "undetected_chromedriver",
     ]
+    if include_devtools:
+        # Large: only when explicitly needed for CDP debugging builds.
+        hiddenimports += _collect_submodules_skip("selenium.webdriver.common.devtools")
+    else:
+        # Keep a single recent CDP version if present (best-effort, optional).
+        hiddenimports += [
+            "selenium.webdriver.common.devtools.v130",
+            "selenium.webdriver.common.devtools.v131",
+            "selenium.webdriver.common.devtools.v132",
+        ]
 
+# Deduplicate while preserving order
+_seen: set[str] = set()
+_deduped: list[str] = []
+for _name in hiddenimports:
+    if _name not in _seen:
+        _seen.add(_name)
+        _deduped.append(_name)
+hiddenimports = _deduped
 
-hiddenimports += _collect_submodules_skip(
-    "qfluentwidgets", ".multimedia", ".webengine"
-)
-hiddenimports += _collect_submodules_skip(
-    "qframelesswindow", ".webengine"
-)
-
+# ── Datas (optional Chromium) ─────────────────────────────────────────
 datas: list[tuple[str, str]] = []
 runtime_hooks = [str(project_dir / "src" / "utils" / "runtime_playwright.py")]
 if bundle_chromium:
@@ -87,10 +136,6 @@ if bundle_chromium:
             revision = browser_root.name.rsplit("-", 1)[-1] if "-" in browser_root.name else ""
             candidate_names = [browser_root.name]
             if revision:
-                # Playwright 1.60 uses a separate headless-shell revision for
-                # `chromium.launch(headless=True)` when no executable_path is
-                # supplied. Bundle the matching revision so headless smoke works
-                # on machines without local Chrome.
                 candidate_names.append(f"chromium_headless_shell-{revision}")
             for candidate_name in candidate_names:
                 candidate_root = browser_root.parent / candidate_name
@@ -99,44 +144,123 @@ if bundle_chromium:
                 elif candidate_name != browser_root.name:
                     print(f"[spec] Chromium companion browser root was not found: {candidate_root}")
             for root in browser_roots:
-                # Preserve browser revision directories so Playwright can still
-                # resolve `<PLAYWRIGHT_BROWSERS_PATH>/<revision>/...` at runtime.
-                datas.append(
-                    (
-                        str(root),
-                        str(Path("ms-playwright") / root.name),
-                    )
-                )
+                datas.append((str(root), str(Path("ms-playwright") / root.name)))
         else:
             print("[spec] NAVERLAND_BUNDLE_CHROMIUM=1 but Chromium executable was not found.")
     except Exception as exc:
         print(f"[spec] Chromium bundle detection failed: {exc}")
 
-# Exclude obviously-unused modules to reduce bundle size.
+# ── Excludes (aggressive size guard) ──────────────────────────────────
 excludes: list[str] = [
-    "matplotlib.tests",
-    "numpy.tests",
-    "numpy.testing",
-    "numpy.f2py",
-    "numpy.distutils",
+    # Dev / test
     "pytest",
+    "py",
     "pydoc",
+    "doctest",
+    "unittest",
+    "test",
+    "tests",
+    "IPython",
+    "jupyter",
+    "notebook",
+    "sphinx",
+    # GUI toolkits we do not use
     "tkinter",
-    # Test-only plugin; do not bundle into production binary.
+    "PySide2",
+    "PySide6",
+    "PyQt5",
+    "wx",
+    # Qt modules not required by this app
+    "PyQt6.QtWebEngineCore",
+    "PyQt6.QtWebEngineWidgets",
+    "PyQt6.QtWebEngineQuick",
+    "PyQt6.QtWebChannel",
+    "PyQt6.QtBluetooth",
+    "PyQt6.QtNfc",
+    "PyQt6.QtPositioning",
+    "PyQt6.QtSensors",
+    "PyQt6.QtSerialPort",
+    "PyQt6.QtRemoteObjects",
+    "PyQt6.Qt3DCore",
+    "PyQt6.Qt3DRender",
+    "PyQt6.QtMultimedia",
+    "PyQt6.QtMultimediaWidgets",
+    "PyQt6.QtPdf",
+    "PyQt6.QtPdfWidgets",
+    "PyQt6.QtQuick",
+    "PyQt6.QtQuickWidgets",
+    "PyQt6.QtQml",
+    "PyQt6.QtTextToSpeech",
+    # Heavy stacks often present on polluted PYTHONPATH
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "transformers",
+    "tensorflow",
+    "keras",
+    "sklearn",
+    "scikit-learn",
+    "cv2",
+    "opencv",
+    "dask",
+    "distributed",
+    "pandas",
+    "pyarrow",
+    "polars",
+    "onnxruntime",
+    "tensorboard",
+    "sympy",
+    "numba",
+    "llvmlite",
+    "skimage",
+    "imageio",
+    "statsmodels",
+    "seaborn",
+    "bokeh",
+    "plotly",
+    "xarray",
+    "huggingface_hub",
+    "datasets",
+    "tokenizers",
+    "sentencepiece",
+    "langchain",
     "langsmith",
-    "langsmith.pytest_plugin",
-    # Optional parsers/backends that get picked up when installed, but are not required by this project.
+    "openai",
+    "anthropic",
+    # Optional HTML parsers / servers not required
     "lxml",
     "html5lib",
     "tornado",
-    "gi",
+    "aiohttp",
+    "fastapi",
+    "uvicorn",
+    "flask",
+    "django",
+    # Build tools
     "setuptools_scm",
     "cython",
     "Cython",
-    "PyQt6.QtWebEngineCore",
-    "PyQt6.QtWebEngineWidgets",
-    "PyQt6.QtWebChannel",
+    "numpy.f2py",
+    "numpy.distutils",
+    "numpy.tests",
+    "numpy.testing",
+    "matplotlib.tests",
+    "scipy.tests",
+    "gi",
 ]
+
+if not include_selenium:
+    excludes += [
+        "selenium",
+        "undetected_chromedriver",
+    ]
+
+# Prefer not pulling scipy if matplotlib can run without it (may still resolve via env).
+# Keep scipy excluded; matplotlib Agg/QtAgg usually works without full scipy.
+excludes += ["scipy"]
+
+
+from PyInstaller.building.build_main import Analysis, COLLECT, EXE, PYZ  # noqa: E402
 
 
 a = Analysis(
@@ -146,25 +270,109 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={
+        # Prefer minimal matplotlib backend discovery when supported.
+        "matplotlib": {"backends": "QtAgg,Agg"},
+    },
     runtime_hooks=runtime_hooks,
     excludes=excludes,
     noarchive=False,
     optimize=0,
 )
 
-if windows_only_selenium_manager:
-    def _keep_windows_selenium_manager(entry: tuple[str, str, str]) -> bool:
-        dest, _src, _kind = entry
-        norm = dest.replace("\\", "/")
+
+def _ban_path(name: str) -> bool:
+    """Return True if this TOC entry should be dropped from the bundle."""
+    norm = name.replace("\\", "/").lower()
+    banned_prefixes = (
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "transformers",
+        "tensorflow",
+        "sklearn",
+        "cv2",
+        "opencv",
+        "dask",
+        "pandas",
+        "pyarrow",
+        "onnxruntime",
+        "tensorboard",
+        "sympy",
+        "numba",
+        "skimage",
+        "scipy",
+        "IPython",
+        "jupyter",
+        "langsmith",
+        "langchain",
+        "huggingface",
+        "tokenizers",
+        "datasets",
+        "pyqt6/qt6/qml",
+        "pyqt6/qt6/translations",
+        "pyqt6/qt6/plugins/sqldrivers",
+        "pyqt6/qt6/plugins/geoservices",
+        "pyqt6/qt6/plugins/sensors",
+        "pyqt6/qt6/plugins/position",
+        "pyqt6/qt6/plugins/webview",
+        "pyqt6/qt6/plugins/multimedia",
+        "pyqt6/qt6/plugins/mediaservice",
+        "pyqt6.qtmultimedia",
+        "pyqt6.qtwebengine",
+        "pyqt6.qtquick",
+        "pyqt6.qtqml",
+        "pyqt6.qt3d",
+        "pyqt6.qtpdf",
+        "pyqt6.qtbluetooth",
+        "pyqt6.qtsensors",
+        "pyqt6.qtpositioning",
+        "qfluentwidgets/multimedia",
+        "matplotlib/tests",
+        "numpy/tests",
+        "numpy/f2py",
+    )
+    if any(norm.startswith(p) or f"/{p}" in f"/{norm}" for p in banned_prefixes):
+        return True
+    if not include_selenium and (
+        norm.startswith("selenium") or "undetected_chromedriver" in norm
+    ):
+        return True
+    return False
+
+
+def _filter_toc(entries):
+    kept = []
+    dropped = 0
+    for entry in entries:
+        # TOC tuples: (name, path, typecode) or similar; name is index 0
+        name = entry[0] if isinstance(entry, (list, tuple)) else str(entry)
+        if _ban_path(str(name)):
+            dropped += 1
+            continue
+        kept.append(entry)
+    if dropped:
+        print(f"[spec] Filtered {dropped} heavy/unwanted TOC entries")
+    return kept
+
+
+a.pure = _filter_toc(a.pure)
+a.binaries = _filter_toc(a.binaries)
+a.datas = _filter_toc(a.datas)
+
+if windows_only_selenium_manager and include_selenium:
+
+    def _keep_windows_selenium_manager(entry: tuple) -> bool:
+        dest = entry[0]
+        norm = str(dest).replace("\\", "/")
         if norm.startswith("selenium/webdriver/common/macos/"):
             return False
         if norm.startswith("selenium/webdriver/common/linux/"):
             return False
         return True
 
-    a.datas = [entry for entry in a.datas if _keep_windows_selenium_manager(entry)]
-    a.binaries = [entry for entry in a.binaries if _keep_windows_selenium_manager(entry)]
+    a.datas = [e for e in a.datas if _keep_windows_selenium_manager(e)]
+    a.binaries = [e for e in a.binaries if _keep_windows_selenium_manager(e)]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 

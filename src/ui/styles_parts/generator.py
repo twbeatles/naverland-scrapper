@@ -30,12 +30,32 @@ def _generate_stylesheet(theme: str = "dark") -> str:
    v15.0 {theme.title()} Theme — Token-driven Stylesheet
    ======================================== */
 
-/* === Base (domain content stack; Fluent nav stays unstyled) === */
-QWidget {{
+/* === Base (scoped for domain pages; avoid painting Fluent SearchLineEdit etc. black) === */
+/* Do NOT set background on bare QWidget — it breaks Fluent child controls in light mode. */
+* {{
+    font-family: 'Pretendard', 'SUIT', 'Malgun Gothic', 'Segoe UI', -apple-system, sans-serif;
+}}
+QStackedWidget#domainContent {{
     background-color: {c['bg_primary']};
     color: {c['text_primary']};
-    font-family: 'Pretendard', 'SUIT', 'Malgun Gothic', 'Segoe UI', -apple-system, sans-serif;
     font-size: 13px;
+}}
+QStackedWidget#domainContent > QWidget {{
+    background-color: {c['bg_primary']};
+    color: {c['text_primary']};
+}}
+QLabel {{
+    color: {c['text_primary']};
+    background: transparent;
+}}
+QLabel#hintLabel {{
+    color: {c['text_secondary']};
+    background: transparent;
+}}
+QCheckBox, QRadioButton {{
+    color: {c['text_primary']};
+    background: transparent;
+    spacing: 6px;
 }}
 QMainWindow {{
     background-color: {c['bg_primary']};
@@ -43,16 +63,32 @@ QMainWindow {{
 }}
 QDialog, QMessageBox {{
     background-color: {c['bg_primary']};
+    color: {c['text_primary']};
 }}
 QScrollArea {{
     background: transparent;
     border: none;
 }}
-QScrollArea > QWidget > QWidget {{
+QScrollArea > QWidget {{
     background: transparent;
 }}
 QFrame {{
     background-color: transparent;
+}}
+QListWidget {{
+    background-color: {c['bg_table']};
+    color: {c['text_primary']};
+    border: 1px solid {c['border_subtle']};
+    border-radius: 8px;
+    outline: none;
+}}
+QListWidget::item {{
+    color: {c['text_primary']};
+    padding: 6px 8px;
+}}
+QListWidget::item:selected {{
+    background-color: {c['select_bg']};
+    color: {select_text};
 }}
 
 /* === Glassmorphism Card (GroupBox) === */
@@ -407,14 +443,23 @@ QSplitter::handle:hover {{
     background-color: {c['splitter_hover']};
 }}
 
-/* === Text Browser === */
+/* === Text Browser (guide / about) === */
 QTextBrowser {{
-    background-color: {c['bg_table']};
+    background-color: {c['bg_primary']};
     border: 1px solid {c['border_subtle']};
     border-radius: 10px;
-    padding: 12px;
+    padding: 8px;
     color: {c['text_primary']};
     line-height: 1.5;
+    selection-background-color: {c['accent']};
+    selection-color: {select_text};
+}}
+QTextBrowser#guideBrowser {{
+    background-color: {c['bg_primary']};
+    color: {c['text_primary']};
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }}
 
 /* === Dialog === */
