@@ -104,13 +104,7 @@ if include_selenium:
     if include_devtools:
         # Large: only when explicitly needed for CDP debugging builds.
         hiddenimports += _collect_submodules_skip("selenium.webdriver.common.devtools")
-    else:
-        # Keep a single recent CDP version if present (best-effort, optional).
-        hiddenimports += [
-            "selenium.webdriver.common.devtools.v130",
-            "selenium.webdriver.common.devtools.v131",
-            "selenium.webdriver.common.devtools.v132",
-        ]
+    # else: do not pin CDP version modules — missing versions become hard Analysis errors.
 
 # Deduplicate while preserving order
 _seen: set[str] = set()
