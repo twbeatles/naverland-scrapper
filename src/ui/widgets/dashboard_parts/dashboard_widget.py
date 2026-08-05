@@ -79,12 +79,19 @@ class DashboardWidget(QWidget):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(14)
         
-        # 제목
-        title = QLabel("📊 분석 대시보드")
-        title.setStyleSheet("font-size: 22px; font-weight: 800; padding: 10px 0; letter-spacing: 0.5px;")
+        title = QLabel("분석 대시보드")
+        title.setStyleSheet(
+            "font-size: 20px; font-weight: 800; padding: 6px 0 2px 0; letter-spacing: 0.2px;"
+        )
         layout.addWidget(title)
+        subtitle = QLabel("최근 수집 결과 기준 요약입니다. 상세 시세는 「가격 통계」에서 확인하세요.")
+        subtitle.setObjectName("hintLabel")
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("color: #888; font-size: 12px; padding-bottom: 4px;")
+        layout.addWidget(subtitle)
         
         # 통계 카드 영역 (반응형 그리드)
         self.cards_container = QWidget()
@@ -92,11 +99,11 @@ class DashboardWidget(QWidget):
         self.cards_layout.setSpacing(12)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.total_card = self._create_stat_card("📦 총 매물", "0", "#3b82f6")
-        self.new_card = self._create_stat_card("🆕 신규 (오늘)", "0", "#22c55e")
-        self.up_card = self._create_stat_card("📈 가격 상승", "0", "#ef4444")
-        self.down_card = self._create_stat_card("📉 가격 하락", "0", "#10b981")
-        self.disappeared_card = self._create_stat_card("👻 소멸", "0", "#6b7280")
+        self.total_card = self._create_stat_card("총 매물", "0", "#3b82f6")
+        self.new_card = self._create_stat_card("신규", "0", "#22c55e")
+        self.up_card = self._create_stat_card("가격 상승", "0", "#ef4444")
+        self.down_card = self._create_stat_card("가격 하락", "0", "#10b981")
+        self.disappeared_card = self._create_stat_card("소멸", "0", "#6b7280")
         
         self._stat_cards = [
             self.total_card, self.new_card, self.up_card, self.down_card, self.disappeared_card
@@ -106,25 +113,25 @@ class DashboardWidget(QWidget):
         
         # 차트 영역
         charts_layout = QHBoxLayout()
+        charts_layout.setSpacing(12)
         
-        # 거래유형별 파이 차트
-        self.trade_chart_frame = QGroupBox("🏠 거래유형별 분포")
+        self.trade_chart_frame = QGroupBox("거래유형별 분포")
         self._trade_chart_layout = QVBoxLayout(self.trade_chart_frame)
         self._trade_placeholder = QLabel("데이터 수집 후 차트가 표시됩니다.")
+        self._trade_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._trade_chart_layout.addWidget(self._trade_placeholder)
         charts_layout.addWidget(self.trade_chart_frame)
         
-        # 가격대별 히스토그램
-        self.price_chart_frame = QGroupBox("💰 가격대별 분포")
+        self.price_chart_frame = QGroupBox("가격대별 분포")
         self._price_chart_layout = QVBoxLayout(self.price_chart_frame)
         self._price_placeholder = QLabel("데이터 수집 후 차트가 표시됩니다.")
+        self._price_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._price_chart_layout.addWidget(self._price_placeholder)
         charts_layout.addWidget(self.price_chart_frame)
         
         layout.addLayout(charts_layout)
         
-        # 트렌드 정보 영역
-        self.trend_frame = QGroupBox("📈 시세 트렌드")
+        self.trend_frame = QGroupBox("시세 트렌드")
         trend_layout = QVBoxLayout(self.trend_frame)
         self.trend_label = QLabel("데이터 수집 후 트렌드 정보가 표시됩니다.")
         self.trend_label.setWordWrap(True)
@@ -132,11 +139,10 @@ class DashboardWidget(QWidget):
         layout.addWidget(self.trend_frame)
         self.trend_frame.setVisible(bool(settings.get("show_trend_analysis", True)))
 
-        # 빈 상태 안내
         self.empty_label = EmptyStateWidget(
             icon="📊",
             title="아직 수집된 데이터가 없습니다",
-            description="크롤링을 실행한 후 다시 확인하세요."
+            description="「매물 수집」을 실행한 뒤 이 화면에서 요약을 확인하세요.",
         )
         layout.addWidget(self.empty_label)
         self.empty_label.hide()
@@ -144,40 +150,7 @@ class DashboardWidget(QWidget):
         layout.addStretch()
     
     def _create_stat_card(self, title: str, value: str, color: str) -> StatCard:
-        """통계 카드 위젯 생성"""
-        c = COLORS[self._theme]
-        card = StatCard()
-        card.setObjectName("statCard")
-        card.setFrameStyle(QFrame.Shape.StyledPanel)
-        card.setMinimumWidth(180)
-        card.setStyleSheet(f"""
-            QFrame#statCard {{
-                background-color: {color}20;
-                border: 1px solid {color}40;
-                border-radius: 14px;
-                padding: 18px;
-            }}
-            QFrame#statCard:hover {{
-                border: 1px solid {color}80;
-                background-color: {color}28;
-            }}
-        """)
-
-        layout = QVBoxLayout(card)
-        layout.setSpacing(6)
-
-        title_label = QLabel(title)
-        title_label.setObjectName("statCardTitle")
-        title_label.setStyleSheet(f"font-size: 12px; color: {c['text_secondary']}; font-weight: 500;")
-        layout.addWidget(title_label)
-
-        value_label = QLabel(value)
-        value_label.setObjectName("value")
-        value_label.setStyleSheet(f"font-size: 32px; font-weight: 800; color: {color}; letter-spacing: -0.5px;")
-        layout.addWidget(value_label)
-        card._value_label = value_label
-
-        return card
+        return StatCard(title=title, value=value, color=color, theme=self._theme)
 
     def _ensure_chart_canvases(self):
         if not MATPLOTLIB_AVAILABLE or Figure is None or FigureCanvas is None:
@@ -307,11 +280,22 @@ class DashboardWidget(QWidget):
         self._theme = theme
         self._last_trade_chart_sig = None
         self._last_price_chart_sig = None
-        # 차트 색상 업데이트
+        for card in getattr(self, "_stat_cards", []) or []:
+            if hasattr(card, "set_theme"):
+                try:
+                    card.set_theme(theme)
+                except Exception:
+                    pass
         self.refresh()
 
     @staticmethod
     def _set_card_value(card, text: str):
+        if hasattr(card, "set_value"):
+            try:
+                card.set_value(text)
+                return
+            except Exception:
+                pass
         child = getattr(card, "_value_label", None)
         if child is not None:
             child.setText(text)

@@ -13,7 +13,7 @@ class CrawlerTabCardSyncMixin:
     def _toggle_view_mode(self: Any):
         if self.btn_view_mode.isChecked():
             self.view_mode = "card"
-            self.btn_view_mode.setText("📄 테이블")
+            self.btn_view_mode.setText("표")
             self.view_stack.setCurrentWidget(self.card_view)
             if self.collected_data:
                 if self._compact_duplicates:
@@ -28,7 +28,7 @@ class CrawlerTabCardSyncMixin:
                     self._apply_card_filters(self._pending_search_text)
         else:
             self.view_mode = "table"
-            self.btn_view_mode.setText("🃏 카드뷰")
+            self.btn_view_mode.setText("카드")
             self.view_stack.setCurrentWidget(self.result_table)
         settings.set("view_mode", self.view_mode)
 

@@ -1,5 +1,37 @@
 # Update History
 
+## 2026-08-05: Docs / Spec / Gitignore sync (Fluent push)
+
+- `README.md` / `PROJECT_AUDIT.md` / `docs/NAVER_LAND_SURVEY_2026-08-04.md`: Fluent 네비·설정 기본/고급·테스트 수 정합
+- `naverland-scrapper.spec`: 2026-08-05 Fluent hiddenimport 메모 갱신
+- `.gitignore`: OS junk, egg-info, `.env.*`, zip 산출물, 에이전트 로컬 문서 패턴 보강 (제품 `src/ui/fluent/` 는 추적)
+- 에이전트 문서(`claude.md` 등) 미추적 상태 유지
+
+## 2026-08-05: Fluent UI / UX refactor (shell + simplify)
+
+- `PyQt6-Fluent-Widgets` 도입 (`qfluentwidgets`), 좌측 `NavigationInterface` + 페이지 스택
+- 수평 탭 10개 → 그룹 구분 네비(수집 / 보관함 / 분석 / 자동화 / 가이드·설정)
+- 설정 UI: **기본 / 고급** progressive disclosure (엔진·타임아웃·워커는 고급)
+- 매물 수집: 좌측 우선순위 재배치, 면적·가격 필터 접기, 엔진 콤보 숨김(설정 단일 소스)
+- 결과 툴바: 검색·뷰 전환 중심, 묶기/정렬/고급필터/표시항목은「더보기」메뉴
+- 호환: `TabCompatBridge`로 기존 `tabs.*` / 탭 인덱스 테스트·믹신 유지
+- 패키징: `qfluentwidgets` / `qframelesswindow` hiddenimports
+- 검증: UI 관련 pytest 94 passed (전체 스위트는 동일 세션에서 재실행)
+
+### 후속 (지도·공통 컴포넌트)
+
+- 지도 탭: 위치/범위 1차 노출, 칸 간격·대기는 접기 옵션
+- `SearchBar` → Fluent `SearchLineEdit` (가능 시), `show_toast` → InfoBar 우선
+- 내 단지 / 단지 묶음 / 예약·기록·통계 버튼 라벨 정리
+- 검증: pytest 전체 재실행
+
+### 후속 (대시보드·카드)
+
+- `StatCard` KPI 카드 재구성(좌측 액센트 바, 테마 연동)
+- 대시보드/요약 카드/즐겨찾기 라벨 정리, EmptyState 통일
+- `ArticleCard` 서피스 스타일 정돈(상단 거래유형 액센트)
+- 도메인 QSS는 콘텐츠 스택에만 적용 (네비 비간섭)
+
 ## 2026-08-04: Docs / Spec / Gitignore Sync
 
 - `README.md`: 탭 이름·전역 수집 락·실행/빌드/문서 링크를 코드와 맞춤

@@ -2,6 +2,24 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
+from qfluentwidgets import NavigationInterface
+
+from src.ui.fluent.navigation import (
+    ROUTE_CRAWLER,
+    ROUTE_DASHBOARD,
+    ROUTE_DB,
+    ROUTE_FAVORITES,
+    ROUTE_GEO,
+    ROUTE_GROUP,
+    ROUTE_GUIDE,
+    ROUTE_HISTORY,
+    ROUTE_SCHEDULE,
+    ROUTE_STATS,
+    prepare_page,
+    register_navigation,
+    sync_nav_selection,
+)
+from src.ui.fluent.tab_bridge import TabCompatBridge
 from src.utils.ui_labels import (
     TAB_CRAWLER,
     TAB_DASHBOARD,
@@ -20,6 +38,7 @@ if TYPE_CHECKING:
 
 
 class AppTabSetupMixin:
+    # Stable page indices (tests + legacy mixins). Order must match addTab sequence.
     TAB_CRAWLER = 0
     TAB_GEO = 1
     TAB_DB = 2
@@ -37,32 +56,77 @@ class AppTabSetupMixin:
     def _init_ui(self: Any):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        layout = QVBoxLayout(main_widget)
-        layout.setContentsMargins(12, 8, 12, 4)
-        layout.setSpacing(6)
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs)
+        root = QHBoxLayout(main_widget)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.navigationInterface = NavigationInterface(
+            self, showMenuButton=True, showReturnButton=False
+        )
+        try:
+            self.navigationInterface.setExpandWidth(208)
+        except Exception:
+            pass
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(8, 8, 8, 4)
+        content_layout.setSpacing(4)
+
+        self.stackedWidget = QStackedWidget(content)
+        content_layout.addWidget(self.stackedWidget, 1)
+
+        def _on_switch(widget):
+            sync_nav_selection(self.navigationInterface, widget)
+
+        self.tabs = TabCompatBridge(
+            self.stackedWidget, on_switch=_on_switch, parent=self
+        )
         self.status_bar = self.statusBar()
 
-        self.crawler_tab = self._create_crawler_tab()
+        self.crawler_tab = prepare_page(self._create_crawler_tab(), ROUTE_CRAWLER)
         self.tabs.addTab(self.crawler_tab, TAB_CRAWLER)
 
-        self.geo_tab = self._create_geo_tab()
+        self.geo_tab = prepare_page(self._create_geo_tab(), ROUTE_GEO)
         self.tabs.addTab(self.geo_tab, TAB_GEO)
 
-        self.db_tab = self._create_db_tab()
+        self.db_tab = prepare_page(self._create_db_tab(), ROUTE_DB)
         self.tabs.addTab(self.db_tab, TAB_DB)
 
-        self.group_tab = self._create_group_tab()
+        self.group_tab = prepare_page(self._create_group_tab(), ROUTE_GROUP)
         self.tabs.addTab(self.group_tab, TAB_GROUP)
-        
+
         self._setup_schedule_tab()
         self._setup_history_tab()
         self._setup_stats_tab()
         self._setup_dashboard_tab()
         self._setup_favorites_tab()
         self._setup_guide_tab()
+
+        pages = {
+            ROUTE_CRAWLER: self.crawler_tab,
+            ROUTE_GEO: self.geo_tab,
+            ROUTE_DB: self.db_tab,
+            ROUTE_GROUP: self.group_tab,
+            ROUTE_SCHEDULE: self.schedule_tab,
+            ROUTE_HISTORY: self.history_tab,
+            ROUTE_STATS: self.stats_tab,
+            ROUTE_DASHBOARD: self.dashboard_tab,
+            ROUTE_FAVORITES: self.favorites_tab,
+            ROUTE_GUIDE: self.guide_tab,
+        }
+        register_navigation(
+            self.navigationInterface,
+            pages=pages,
+            on_select=self.tabs.setCurrentWidget,
+            on_settings=getattr(self, "_show_settings", None),
+        )
+
+        root.addWidget(self.navigationInterface)
+        root.addWidget(content, 1)
+
         self.tabs.currentChanged.connect(self._refresh_tab)
+        self.tabs.setCurrentWidget(self.crawler_tab)
 
     # Obsolete setup methods removed (replaced by modular widgets)
     # _setup_crawler_tab, _setup_db_tab, _setup_groups_tab removed
@@ -149,11 +213,11 @@ class AppTabSetupMixin:
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        sg = QGroupBox("⏰ 예약 크롤링")
+        sg = QGroupBox("예약 수집")
         sl = QVBoxLayout()
         sl.setSpacing(10)
 
-        self.check_schedule = QCheckBox("예약 실행 활성화")
+        self.check_schedule = QCheckBox("예약 실행 켜기")
         self.check_schedule.setToolTip("설정한 시간에 현재 예약 설정으로 자동 실행합니다.")
         sl.addWidget(self.check_schedule)
 
@@ -253,12 +317,15 @@ class AppTabSetupMixin:
         sg.setLayout(sl)
         layout.addWidget(sg)
 
-        self.schedule_empty_label = QLabel("예약할 묶음이 없습니다.\n「단지 묶음」 탭에서 먼저 만들어 주세요.")
+        self.schedule_empty_label = QLabel(
+            "예약할 묶음이 없습니다.\n좌측 네비 「단지 묶음」에서 먼저 만들어 주세요."
+        )
         self.schedule_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.schedule_empty_label.setStyleSheet("color: #888; padding: 20px; font-size: 13px;")
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
+        prepare_page(self.schedule_tab, ROUTE_SCHEDULE)
         self.tabs.addTab(self.schedule_tab, TAB_SCHEDULE)
 
         self.check_schedule.toggled.connect(self._save_schedule_config)
@@ -281,8 +348,9 @@ class AppTabSetupMixin:
         layout.setSpacing(8)
 
         bl = QHBoxLayout()
-        btn_rf = QPushButton("🔄 새로고침")
-        btn_rf.setToolTip("크롤링 이력을 다시 불러옵니다.")
+        btn_rf = QPushButton("새로고침")
+        btn_rf.setObjectName("secondaryBtn")
+        btn_rf.setToolTip("수집 이력을 다시 불러옵니다.")
         btn_rf.clicked.connect(self._load_history)
         bl.addWidget(btn_rf)
         bl.addStretch()
@@ -299,12 +367,15 @@ class AppTabSetupMixin:
         self.history_table.setAlternatingRowColors(True)
         layout.addWidget(self.history_table)
 
-        self.history_empty_label = QLabel("수집 기록이 없습니다.\n「매물 수집」 탭에서 수집을 실행해 보세요.")
+        self.history_empty_label = QLabel(
+            "수집 기록이 없습니다.\n「매물 수집」에서 수집을 실행해 보세요."
+        )
         self.history_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.history_empty_label.setStyleSheet("color: #888; font-size: 13px; padding: 40px;")
         layout.addWidget(self.history_empty_label)
         self.history_empty_label.hide()
 
+        prepare_page(self.history_tab, ROUTE_HISTORY)
         self.tabs.addTab(self.history_tab, TAB_HISTORY)
     
     def _setup_stats_tab(self: Any):
@@ -343,7 +414,8 @@ class AppTabSetupMixin:
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")
         fl.addWidget(self.stats_pyeong_combo)
-        btn_load = QPushButton("📊 조회")
+        btn_load = QPushButton("조회")
+        btn_load.setObjectName("primaryBtn")
         btn_load.setToolTip("선택한 조건으로 가격 시세 데이터를 불러옵니다.")
         btn_load.clicked.connect(self._load_stats)
         fl.addWidget(btn_load)
@@ -369,6 +441,7 @@ class AppTabSetupMixin:
         self.stats_splitter.addWidget(self.chart_placeholder)
         self.stats_splitter.setSizes([320, 280])
         layout.addWidget(self.stats_splitter)
+        prepare_page(self.stats_tab, ROUTE_STATS)
         self.tabs.addTab(self.stats_tab, TAB_STATS)
     
     def _setup_dashboard_tab(self: Any):
@@ -380,14 +453,16 @@ class AppTabSetupMixin:
         self.dashboard_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dashboard_placeholder.setObjectName("hintLabel")
         self.dashboard_layout.addWidget(self.dashboard_placeholder)
+        prepare_page(self.dashboard_tab, ROUTE_DASHBOARD)
         self.tabs.addTab(self.dashboard_tab, TAB_DASHBOARD)
     
     def _setup_favorites_tab(self: Any):
-        self.favorites_tab = self._ensure_favorites_tab()
+        self.favorites_tab = prepare_page(self._ensure_favorites_tab(), ROUTE_FAVORITES)
         self.tabs.addTab(self.favorites_tab, TAB_FAVORITES)
     
     def _setup_guide_tab(self: Any):
         tab = QWidget()
+        self.guide_tab = tab
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         browser = QTextBrowser()
@@ -519,9 +594,9 @@ class AppTabSetupMixin:
             <span class="step-num">2</span>
             <span class="step-title">단지 목록에 추가</span><br>
             <span class="step-desc">
-                <b>매물 수집 탭</b> 좌측 패널에서<br>
+                좌측 네비의 <b>매물 수집</b> 화면에서<br>
                 ① 단지 ID를 입력하고 ➕ 버튼을 클릭하세요.<br>
-                ② 또는 네이버 URL을 붙여넣어 <b>🔗 URL 버튼</b>을 사용하세요.
+                ② 또는 네이버 URL을 붙여넣어 <b>URL 버튼</b>을 사용하세요.
             </span>
         </div>
 
@@ -549,12 +624,12 @@ class AppTabSetupMixin:
 
         <h2>⚙️ 수집·표시 옵션 (가벼움)</h2>
         <div class="step">
-            <span class="step-title">설정 → 수집 / 표시</span><br>
+            <span class="step-title">설정 → 기본 / 고급</span><br>
             <span class="step-desc">
+                · 일상 옵션은 <b>기본</b> 탭에 모았습니다. 엔진·타임아웃 등은 <b>고급</b>에 있습니다.<br>
                 · <b>분양권(PRE)</b>: 기본 꺼짐. 켜면 목록이 늘어날 수 있습니다.<br>
-                · <b>상세 보강 / front-api</b>: 기본 켜짐. 끄면 중개·기전세 없이 더 빠르게 수집합니다.<br>
-                · <b>단지당 상세 상한</b>: 대형 단지 부하 제한(0=무제한).<br>
-                · <b>표시 항목</b>(확인일·동·타입명 등): 기본 숨김. 결과 툴바 <b>표시 항목</b> 또는 설정→결과 화면에서 켭니다. DB에는 저장하지 않습니다.<br>
+                · <b>상세 보강</b>: 기본 켜짐. 끄면 중개·기전세 없이 더 빠르게 수집합니다.<br>
+                · <b>표시 항목</b>(확인일·동·타입명 등): 기본 숨김. 결과 <b>더보기</b> 또는 설정→고급에서 켭니다.<br>
                 · 자세한 사이트 조사: 저장소 <code>docs/NAVER_LAND_SURVEY_2026-08-04.md</code>
             </span>
         </div>
@@ -581,22 +656,22 @@ class AppTabSetupMixin:
             <li>대시보드에서 <b>상승/하락/사라진 매물</b>을 한눈에 볼 수 있습니다</li>
         </ul>
 
-        <h2>🗂 탭별 안내</h2>
+        <h2>🗂 화면 안내 (좌측 네비)</h2>
         <div class="step">
-            <span class="step-title">🏠 매물 수집</span><br>
+            <span class="step-title">수집 · 매물 수집</span><br>
             <span class="step-desc">단지 번호를 직접 넣어 수집하는 기본 화면입니다. 단지 추가 → 거래 유형 선택 → 수집 시작 → 저장 순서입니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">🧭 지도로 찾기</span><br>
+            <span class="step-title">수집 · 지도로 찾기</span><br>
             <span class="step-desc">위도·경도를 기준으로 주변 단지를 자동으로 찾습니다. 단지 번호를 모를 때 지역 단위로 훑기에 적합합니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">💾 내 단지 / 📁 단지 묶음 / ⭐ 즐겨찾기</span><br>
+            <span class="step-title">보관함 · 내 단지 / 단지 묶음 / 즐겨찾기</span><br>
             <span class="step-desc">내 단지는 저장 단지 관리, 단지 묶음은 예약용 목록, 즐겨찾기는 자주 보는 매물 재확인에 씁니다.</span>
         </div>
         <div class="step">
-            <span class="step-title">⏰ 예약 수집 / 📜 수집 기록 / 📈 가격 통계 / 📊 대시보드</span><br>
-            <span class="step-desc">예약 수집은 자동 실행, 수집 기록은 과거 실행 내역, 가격 통계는 시세 추이, 대시보드는 전체 요약입니다.</span>
+            <span class="step-title">분석 · 대시보드 / 가격 통계 / 수집 기록 · 자동화 · 예약 수집</span><br>
+            <span class="step-desc">대시보드는 전체 요약, 가격 통계는 시세 추이, 수집 기록은 과거 실행 내역, 예약 수집은 자동 실행입니다.</span>
         </div>
 
         <h2>📂 메뉴 안내</h2>
@@ -613,6 +688,7 @@ class AppTabSetupMixin:
         """)
 
         layout.addWidget(browser)
+        prepare_page(tab, ROUTE_GUIDE)
         self.tabs.addTab(tab, TAB_GUIDE)
     
     def _ensure_chart_widget(self: Any):

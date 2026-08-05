@@ -45,8 +45,16 @@ class CrawlerTabControlSetupMixin:
         layout.addWidget(tg)
 
     def _setup_filter_group(self: Any, layout):
+        # Collapsed-by-default filter panel (reduces primary UI noise).
+        wrap = QGroupBox("수집 필터 (선택)")
+        wrap.setCheckable(True)
+        wrap.setChecked(False)
+        wrap.setToolTip("면적·가격 범위를 제한할 때만 켭니다. 기본은 전체 수집입니다.")
+        wrap_layout = QVBoxLayout()
+        wrap_layout.setSpacing(8)
+
         # 2. 면적 필터
-        ag = QGroupBox("면적 필터")
+        ag = QGroupBox("면적")
         al = QVBoxLayout()
         al.setSpacing(6)
         self.check_area_filter = QCheckBox("면적 필터 사용")
@@ -85,10 +93,10 @@ class CrawlerTabControlSetupMixin:
         area_input.addWidget(lbl_unit)
         al.addLayout(area_input)
         ag.setLayout(al)
-        layout.addWidget(ag)
+        wrap_layout.addWidget(ag)
         
         # 3. 가격 필터
-        pg = QGroupBox("가격 필터")
+        pg = QGroupBox("가격")
         pl = QVBoxLayout()
         pl.setSpacing(6)
         self.check_price_filter = QCheckBox("가격 필터 사용")
@@ -194,7 +202,17 @@ class CrawlerTabControlSetupMixin:
         
         pl.addLayout(price_grid)
         pg.setLayout(pl)
-        layout.addWidget(pg)
+        wrap_layout.addWidget(pg)
+        wrap.setLayout(wrap_layout)
+        layout.addWidget(wrap)
+        self.filter_panel = wrap
+
+        def _on_filter_panel_toggled(checked: bool):
+            ag.setVisible(bool(checked))
+            pg.setVisible(bool(checked))
+
+        wrap.toggled.connect(_on_filter_panel_toggled)
+        _on_filter_panel_toggled(False)
 
     def _setup_complex_list_group(self: Any, layout):
         cg = QGroupBox("단지 목록")
@@ -302,32 +320,27 @@ class CrawlerTabControlSetupMixin:
         layout.addWidget(cg)
 
     def _setup_speed_group(self: Any, layout):
-        spg = QGroupBox("크롤링 속도")
+        spg = QGroupBox("수집 속도")
         spl = QVBoxLayout()
         spl.setSpacing(6)
-        engine_row = QHBoxLayout()
-        lbl_engine = QLabel("엔진")
-        lbl_engine.setStyleSheet("font-size: 11px; color: #888;")
-        engine_row.addWidget(lbl_engine)
+        # Engine stays in Settings → Advanced. Keep a hidden combo for runtime sync / tests.
         self.combo_engine = QComboBox()
         self.combo_engine.addItems(["playwright", "selenium"])
         self.combo_engine.setCurrentText(settings.get("crawl_engine", "playwright"))
-        self.combo_engine.setToolTip(
-            "playwright (기본 권장): 빠르고 차단 회피 우수\n"
-            "selenium: playwright 실패 시 자동 fallback"
+        self.combo_engine.setVisible(False)
+        self.combo_engine.currentTextChanged.connect(
+            lambda text: settings.set("crawl_engine", text)
         )
-        self.combo_engine.currentTextChanged.connect(lambda text: settings.set("crawl_engine", text))
-        engine_row.addWidget(self.combo_engine, 1)
-        engine_row.addStretch()
-        spl.addLayout(engine_row)
+        spl.addWidget(self.combo_engine)
 
         self.speed_slider = SpeedSlider()
         self.speed_slider.set_speed(settings.get("crawl_speed", "보통"))
         self.speed_slider.speed_changed.connect(self._on_speed_changed)
         spl.addWidget(self.speed_slider)
 
-        hint = QLabel("💡 느릴수록 차단될 위험이 낮습니다.")
+        hint = QLabel("느릴수록 차단 위험이 낮습니다. 엔진은 설정 → 고급에서 변경합니다.")
         hint.setObjectName("hintLabel")
+        hint.setWordWrap(True)
         spl.addWidget(hint)
         spg.setLayout(spl)
         layout.addWidget(spg)
@@ -336,20 +349,20 @@ class CrawlerTabControlSetupMixin:
         eg = QGroupBox("실행")
         el = QHBoxLayout()
         el.setSpacing(8)
-        self.btn_start = QPushButton("▶ 크롤링 시작")
+        self.btn_start = QPushButton("수집 시작")
         self.btn_start.setObjectName("primaryBtn")
         self.btn_start.setMinimumHeight(44)
         self.btn_start.setToolTip("단지 목록의 모든 단지에서 매물을 수집합니다. (단축키: Ctrl+R)")
         self.btn_start.clicked.connect(self.start_crawling)
         
-        self.btn_stop = QPushButton("⏹ 중지")
+        self.btn_stop = QPushButton("중지")
         self.btn_stop.setObjectName("dangerBtn")
         self.btn_stop.setEnabled(False)
         self.btn_stop.setMinimumHeight(40)
         self.btn_stop.setToolTip("진행 중인 수집을 중지합니다. (단축키: Ctrl+Shift+R)")
         self.btn_stop.clicked.connect(self.stop_crawling)
         
-        self.btn_save = QPushButton("💾 저장")
+        self.btn_save = QPushButton("저장")
         self.btn_save.setObjectName("secondaryBtn")
         self.btn_save.setEnabled(False)
         self.btn_save.setMinimumHeight(40)

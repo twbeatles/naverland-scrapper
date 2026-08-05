@@ -60,9 +60,11 @@ class CardViewWidget(QScrollArea):
         
         self.setWidget(self.container)
 
-        self.empty_label = QLabel("조건에 맞는 매물이 없습니다.")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888; padding: 40px;")
+        self.empty_label = EmptyStateWidget(
+            icon="📭",
+            title="조건에 맞는 매물이 없습니다",
+            description="검색어·필터를 바꾸거나 수집을 다시 실행해 보세요.",
+        )
         self.grid_layout.addWidget(self.empty_label, 0, 0)
         self.empty_label.hide()
         scroll_bar = self.verticalScrollBar()

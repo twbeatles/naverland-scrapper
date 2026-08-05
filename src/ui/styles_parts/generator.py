@@ -30,17 +30,25 @@ def _generate_stylesheet(theme: str = "dark") -> str:
    v15.0 {theme.title()} Theme — Token-driven Stylesheet
    ======================================== */
 
-/* === Base === */
-QMainWindow, QWidget {{
+/* === Base (domain content stack; Fluent nav stays unstyled) === */
+QWidget {{
     background-color: {c['bg_primary']};
     color: {c['text_primary']};
     font-family: 'Pretendard', 'SUIT', 'Malgun Gothic', 'Segoe UI', -apple-system, sans-serif;
     font-size: 13px;
 }}
+QMainWindow {{
+    background-color: {c['bg_primary']};
+    color: {c['text_primary']};
+}}
 QDialog, QMessageBox {{
     background-color: {c['bg_primary']};
 }}
 QScrollArea {{
+    background: transparent;
+    border: none;
+}}
+QScrollArea > QWidget > QWidget {{
     background: transparent;
 }}
 QFrame {{

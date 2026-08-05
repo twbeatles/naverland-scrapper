@@ -11,10 +11,11 @@ from PyInstaller.utils.hooks import collect_submodules
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
 #
-# Rechecked 2026-08-04 after Naver site survey + options/UI audit fixes:
-# - Still pure static imports for new modules: crawl_lock, result_columns, ui_labels,
-#   collection_runtime_kwargs, detail front-api helpers, settings tab UI.
-# - No new binary datas, runtime hooks, or package data files are required.
+# Rechecked 2026-08-05 after Fluent UI refactor:
+# - Pure static imports for UI modules under src/ui/fluent/ (theme, navigation,
+#   tab_bridge, notify) and existing crawl_lock / result_columns / ui_labels paths.
+# - No new binary datas or runtime hooks for Fluent; package is pure Python.
+# - Keep collect_submodules for qfluentwidgets + qframelesswindow (dynamic icons/styles).
 # - Article API multi-page + front-api detail enrichment remain runtime-only HTTP.
 # - Keep existing dynamic hidden imports for matplotlib Qt backend, plyer Windows
 #   notifications, undetected_chromedriver, Selenium DevTools, and Playwright.
@@ -51,6 +52,9 @@ hiddenimports: list[str] = [
 hiddenimports += collect_submodules("undetected_chromedriver")
 hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
 hiddenimports += collect_submodules("playwright")
+# Fluent UI (package import name is `qfluentwidgets`).
+hiddenimports += collect_submodules("qfluentwidgets")
+hiddenimports += collect_submodules("qframelesswindow")
 
 datas: list[tuple[str, str]] = []
 runtime_hooks = [str(project_dir / "src" / "utils" / "runtime_playwright.py")]

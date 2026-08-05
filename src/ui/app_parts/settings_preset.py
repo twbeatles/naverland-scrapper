@@ -17,8 +17,11 @@ class AppSettingsPresetMixin:
             new_theme = "light" if self.current_theme == "dark" else "dark"
         self.current_theme = new_theme
         
-        # 스타일시트 적용
-        self.setStyleSheet(get_stylesheet(new_theme))
+        # Fluent theme + domain stylesheet
+        if hasattr(self, "_apply_domain_stylesheet"):
+            self._apply_domain_stylesheet(new_theme)
+        else:
+            self.setStyleSheet(get_stylesheet(new_theme))
         
         # 개별 위젯 테마 업데이트
         if hasattr(self, "crawler_tab"):
@@ -42,7 +45,10 @@ class AppSettingsPresetMixin:
         new_theme = str(settings.get("theme", "dark") or "dark")
         if new_theme != self.current_theme:
             self.current_theme = new_theme
-            self.setStyleSheet(get_stylesheet(new_theme))
+            if hasattr(self, "_apply_domain_stylesheet"):
+                self._apply_domain_stylesheet(new_theme)
+            else:
+                self.setStyleSheet(get_stylesheet(new_theme))
             
             # 개별 위젯 테마 업데이트 (안전하게)
             try:

@@ -49,11 +49,18 @@ class AppLifecycleMixin:
         self.toast_widgets: List[ToastWidget] = []
         
         self.current_theme = settings.get("theme", "dark")
-        self.setStyleSheet(get_stylesheet(self.current_theme))
+        try:
+            from src.ui.fluent.theme import apply_app_theme
+
+            apply_app_theme(self.current_theme)
+        except Exception:
+            pass
+        # Domain widgets still use the legacy QSS palette; applied after shell init.
         self._input_wheel_guard = install_global_wheel_guard(QApplication.instance())
         
         # UI 초기화
         self._init_ui()
+        self._apply_domain_stylesheet(self.current_theme)
         apply_wheel_guard_recursively(self, self._input_wheel_guard)
         self._init_menu()
         self._init_shortcuts()
@@ -86,6 +93,31 @@ class AppLifecycleMixin:
         except Exception:
             # Best-effort only; invalid saved geometry should not prevent startup.
             return
+
+    def _apply_domain_stylesheet(self: Any, theme: str | None = None):
+        """Apply legacy domain QSS to content pages only (keep Fluent nav clean)."""
+        theme_name = str(theme or getattr(self, "current_theme", "dark") or "dark")
+        try:
+            from src.ui.fluent.theme import apply_app_theme
+
+            apply_app_theme(theme_name)
+        except Exception:
+            pass
+        sheet = get_stylesheet(theme_name)
+        # Avoid painting over NavigationInterface; style stacked content + status bar.
+        stack = getattr(self, "stackedWidget", None)
+        if stack is not None:
+            stack.setObjectName("domainContent")
+            stack.setStyleSheet(sheet)
+        else:
+            self.setStyleSheet(sheet)
+        try:
+            sb = self.statusBar()
+            if sb is not None:
+                sb.setObjectName("appStatusBar")
+                sb.setStyleSheet(sheet)
+        except Exception:
+            pass
     
     def _init_menu(self: Any):
         menubar = self.menuBar()
@@ -365,22 +397,38 @@ class AppLifecycleMixin:
         event.ignore()
 
     def show_toast(self: Any, message, duration=3000, toast_type="info"):
-        # 화면 우측 하단에 표시
+        # Prefer Fluent InfoBar; keep custom Toast as fallback for edge cases.
+        try:
+            from src.ui.fluent.notify import show_info_bar
+
+            if show_info_bar(
+                self,
+                message,
+                toast_type=toast_type,
+                duration=duration,
+            ):
+                return
+        except Exception:
+            pass
+
         toast = ToastWidget(message, toast_type=toast_type, parent=self)
-        
+
         # 위치 계산 (쌓이도록)
         margin = 20
         y = self.height() - margin - toast.height()
         for t in self.toast_widgets:
             y -= (t.height() + 10)
-        
+
         x = self.width() - margin - toast.width()
         toast.move(x, y)
         toast.show_toast(duration)
-        
+
         self.toast_widgets.append(toast)
         # 종료 시 리스트에서 제거
-        QTimer.singleShot(duration + 500, lambda: self.toast_widgets.remove(toast) if toast in self.toast_widgets else None)
+        QTimer.singleShot(
+            duration + 500,
+            lambda: self.toast_widgets.remove(toast) if toast in self.toast_widgets else None,
+        )
         QTimer.singleShot(duration + 500, self._reposition_toasts)
 
     def _reposition_toasts(self: Any):

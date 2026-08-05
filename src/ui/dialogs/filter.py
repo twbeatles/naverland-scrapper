@@ -18,9 +18,9 @@ class MultiSelectDialog(QDialog):
         
         # 상단 버튼
         btn_layout = QHBoxLayout()
-        btn_all = QPushButton("✅ 전체 선택")
+        btn_all = QPushButton("전체 선택")
         btn_all.clicked.connect(self._select_all)
-        btn_none = QPushButton("⬜ 전체 해제")
+        btn_none = QPushButton("전체 해제")
         btn_none.clicked.connect(self._deselect_all)
         btn_layout.addWidget(btn_all)
         btn_layout.addWidget(btn_none)

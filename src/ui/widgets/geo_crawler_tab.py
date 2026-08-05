@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QVBoxLayout,
 )
 
 from src.core.models.crawl_models import GeoSweepConfig
@@ -51,49 +52,41 @@ class GeoCrawlerTab(CrawlerTab):
             return float(default)
 
     def _setup_complex_list_group(self, layout):
-        group = QGroupBox("4️⃣ 지도 위치·범위")
+        """Primary geo controls + collapsible advanced range options."""
+        group = QGroupBox("지도 위치·범위")
+        outer = QVBoxLayout()
+        outer.setSpacing(8)
+
         grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(6)
 
         self.spin_lat = QDoubleSpinBox()
         self.spin_lat.setRange(33.0, 39.5)
         self.spin_lat.setDecimals(6)
         self.spin_lat.setValue(self._float_setting("geo_last_lat", 37.5608))
-        grid.addWidget(QLabel("위도:"), 0, 0)
+        grid.addWidget(QLabel("위도"), 0, 0)
         grid.addWidget(self.spin_lat, 0, 1)
 
         self.spin_lon = QDoubleSpinBox()
         self.spin_lon.setRange(124.0, 132.1)
         self.spin_lon.setDecimals(6)
         self.spin_lon.setValue(self._float_setting("geo_last_lon", 126.9888))
-        grid.addWidget(QLabel("경도:"), 1, 0)
+        grid.addWidget(QLabel("경도"), 1, 0)
         grid.addWidget(self.spin_lon, 1, 1)
 
         self.spin_zoom = QSpinBox()
         self.spin_zoom.setRange(12, 18)
         self.spin_zoom.setValue(self._int_setting("geo_default_zoom", 15))
-        grid.addWidget(QLabel("확대 단계:"), 2, 0)
+        grid.addWidget(QLabel("확대"), 2, 0)
         grid.addWidget(self.spin_zoom, 2, 1)
 
         self.spin_rings = QSpinBox()
         self.spin_rings.setRange(0, 6)
         self.spin_rings.setValue(max(0, self._int_setting("geo_grid_rings", 1)))
         self.spin_rings.setToolTip("0이면 현재 위치만, 클수록 주변을 더 넓게 훑습니다.")
-        grid.addWidget(QLabel("탐색 범위:"), 3, 0)
+        grid.addWidget(QLabel("탐색 범위"), 3, 0)
         grid.addWidget(self.spin_rings, 3, 1)
-
-        self.spin_step = QSpinBox()
-        self.spin_step.setRange(120, 1600)
-        self.spin_step.setSingleStep(40)
-        self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
-        grid.addWidget(QLabel("칸 간격:"), 4, 0)
-        grid.addWidget(self.spin_step, 4, 1)
-
-        self.spin_dwell = QSpinBox()
-        self.spin_dwell.setRange(100, 5000)
-        self.spin_dwell.setSingleStep(100)
-        self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
-        grid.addWidget(QLabel("칸마다 대기(ms):"), 5, 0)
-        grid.addWidget(self.spin_dwell, 5, 1)
 
         asset_layout = QHBoxLayout()
         self.check_asset_apt = QCheckBox("아파트")
@@ -106,24 +99,63 @@ class GeoCrawlerTab(CrawlerTab):
         asset_layout.addWidget(self.check_asset_apt)
         asset_layout.addWidget(self.check_asset_vl)
         asset_layout.addStretch()
-        grid.addWidget(QLabel("주택 종류:"), 6, 0)
-        grid.addLayout(asset_layout, 6, 1)
+        grid.addWidget(QLabel("주택 종류"), 4, 0)
+        grid.addLayout(asset_layout, 4, 1)
+        outer.addLayout(grid)
+
+        # Advanced: step / dwell (usually fine with defaults from settings)
+        adv = QGroupBox("세부 탐색 옵션")
+        adv.setCheckable(True)
+        adv.setChecked(False)
+        adv.setToolTip("칸 간격·대기 시간은 기본값을 쓰는 것이 안전합니다.")
+        adv_grid = QGridLayout()
+        self.spin_step = QSpinBox()
+        self.spin_step.setRange(120, 1600)
+        self.spin_step.setSingleStep(40)
+        self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
+        adv_grid.addWidget(QLabel("칸 간격(px)"), 0, 0)
+        adv_grid.addWidget(self.spin_step, 0, 1)
+
+        self.spin_dwell = QSpinBox()
+        self.spin_dwell.setRange(100, 5000)
+        self.spin_dwell.setSingleStep(100)
+        self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
+        adv_grid.addWidget(QLabel("칸마다 대기(ms)"), 1, 0)
+        adv_grid.addWidget(self.spin_dwell, 1, 1)
+
+        save_defaults = QPushButton("이 설정을 기본으로 저장")
+        save_defaults.setObjectName("secondaryBtn")
+        save_defaults.clicked.connect(self._save_geo_defaults)
+        adv_grid.addWidget(save_defaults, 2, 0, 1, 2)
+        adv.setLayout(adv_grid)
+
+        def _toggle_adv(checked: bool):
+            for w in (self.spin_step, self.spin_dwell, save_defaults):
+                w.setVisible(bool(checked))
+            # Keep labels/layout readable when collapsed
+            adv_grid.setContentsMargins(8 if checked else 4, 8 if checked else 2, 8 if checked else 4, 8 if checked else 2)
+
+        adv.toggled.connect(_toggle_adv)
+        _toggle_adv(False)
+        outer.addWidget(adv)
 
         self.discovered_table = QTableWidget()
         self.discovered_table.setColumnCount(5)
-        self.discovered_table.setHorizontalHeaderLabels(["상태", "종류", "단지명", "단지번호", "매물수"])
+        self.discovered_table.setHorizontalHeaderLabels(
+            ["상태", "종류", "단지명", "단지번호", "매물수"]
+        )
         discovered_header = self.discovered_table.horizontalHeader()
         if discovered_header is not None:
             discovered_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        grid.addWidget(QLabel("찾은 단지:"), 7, 0, 1, 2)
-        grid.addWidget(self.discovered_table, 8, 0, 1, 2)
+        outer.addWidget(QLabel("찾은 단지"))
+        outer.addWidget(self.discovered_table, 1)
 
-        save_defaults = QPushButton("💾 이 설정을 기본으로 저장")
-        save_defaults.setObjectName("secondaryBtn")
-        save_defaults.clicked.connect(self._save_geo_defaults)
-        grid.addWidget(save_defaults, 9, 0, 1, 2)
+        hint = QLabel("위도·경도만 맞추고 시작하면 됩니다. 세부는 필요할 때만 펼치세요.")
+        hint.setObjectName("hintLabel")
+        hint.setWordWrap(True)
+        outer.addWidget(hint)
 
-        group.setLayout(grid)
+        group.setLayout(outer)
         layout.addWidget(group)
 
     def _save_geo_defaults(self):

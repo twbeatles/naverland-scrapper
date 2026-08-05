@@ -36,17 +36,19 @@ class DatabaseTab(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(6)
-        self.btn_refresh_db = QPushButton("🔄 새로고침")
+        self.btn_refresh_db = QPushButton("새로고침")
         self.btn_refresh_db.setObjectName("primaryBtn")
         self.btn_refresh_db.setToolTip("데이터베이스에서 단지 목록을 다시 불러옵니다.")
-        self.btn_refresh_db.clicked.connect(self.load_data) # Changed from _load_complexes to load_data to match existing method
-        self.btn_delete_db = QPushButton("🗑 삭제")
+        self.btn_refresh_db.clicked.connect(self.load_data)
+        self.btn_delete_db = QPushButton("삭제")
         self.btn_delete_db.setObjectName("dangerBtn")
         self.btn_delete_db.setToolTip("선택한 단지와 해당 매물 데이터를 데이터베이스에서 삭제합니다.")
-        self.btn_delete_db.clicked.connect(self._delete_complex) # Changed from _delete_selected to _delete_complex to match existing method
+        self.btn_delete_db.clicked.connect(self._delete_complex)
 
         btn_delete_multi = QPushButton("다중 삭제")
         btn_delete_multi.setObjectName("dangerBtn")
@@ -55,7 +57,7 @@ class DatabaseTab(QWidget):
         btn_memo.setObjectName("secondaryBtn")
         btn_memo.clicked.connect(self._edit_memo)
 
-        self.btn_delete = self.btn_delete_db # Update reference to the new button
+        self.btn_delete = self.btn_delete_db
         self.btn_delete_multi = btn_delete_multi
         self.btn_memo = btn_memo
 
@@ -79,12 +81,12 @@ class DatabaseTab(QWidget):
             table_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.doubleClicked.connect(self._open_complex_url)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
         self.empty_label = EmptyStateWidget(
             icon="📭",
             title="등록된 단지가 없습니다",
-            description="크롤러 탭에서 단지를 추가하거나 DB로 저장해 주세요.",
+            description="「매물 수집」에서 단지를 추가하거나 DB로 저장해 주세요.",
         )
         self.empty_label.hide()
         layout.addWidget(self.empty_label)

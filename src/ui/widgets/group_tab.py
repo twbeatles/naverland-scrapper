@@ -32,46 +32,49 @@ class GroupTab(QWidget):
 
     def _init_ui(self):
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         left_w = QWidget()
         left_l = QVBoxLayout(left_w)
+        left_l.setContentsMargins(0, 0, 0, 0)
 
-        # 그룹 목록 섹션 (QGroupBox로 변경)
-        gl = QGroupBox("그룹 목록")
+        gl = QGroupBox("단지 묶음")
         gl_layout = QVBoxLayout(gl)
         gl_layout.setSpacing(6)
 
         self.group_list = QListWidget()
         self.group_list.setAlternatingRowColors(True)
-        self.group_list.setToolTip("선택한 그룹의 단지 목록을 확인할 수 있습니다.") # Tooltip added
+        self.group_list.setToolTip("선택한 묶음의 단지 목록을 확인할 수 있습니다.")
         self.group_list.itemClicked.connect(self._load_group_complexes)
         gl_layout.addWidget(self.group_list)
 
-        # 그룹 버튼
         group_btns = QHBoxLayout()
         group_btns.setSpacing(4)
-        self.btn_create_group = QPushButton("➕ 생성")
+        self.btn_create_group = QPushButton("만들기")
         self.btn_create_group.setObjectName("primaryBtn")
-        self.btn_create_group.setToolTip("새 단지 그룹을 생성합니다.") # Tooltip added
+        self.btn_create_group.setToolTip("새 단지 묶음을 만듭니다.")
         self.btn_create_group.clicked.connect(self._create_group)
-        self.btn_delete_group = QPushButton("🗑 삭제")
+        self.btn_delete_group = QPushButton("삭제")
         self.btn_delete_group.setObjectName("dangerBtn")
-        self.btn_delete_group.setToolTip("선택한 그룹을 삭제합니다.") # Tooltip added
+        self.btn_delete_group.setToolTip("선택한 묶음을 삭제합니다.")
         self.btn_delete_group.clicked.connect(self._delete_group)
         group_btns.addWidget(self.btn_create_group)
         group_btns.addWidget(self.btn_delete_group)
         gl_layout.addLayout(group_btns)
 
-        hint_grp = QLabel("💡 그룹을 만들면 예약 구동에도 사용할 수 있습니다.")
+        hint_grp = QLabel("묶음은 예약 수집 대상으로 쓸 수 있습니다.")
         hint_grp.setObjectName("hintLabel")
+        hint_grp.setWordWrap(True)
         gl_layout.addWidget(hint_grp)
-        left_l.addWidget(gl) # Add the QGroupBox to the left_l layout
+        left_l.addWidget(gl)
         splitter.addWidget(left_w)
 
         right_w = QWidget()
         right_l = QVBoxLayout(right_w)
-        right_l.addWidget(QLabel("그룹 내 단지"))
+        right_l.setContentsMargins(0, 0, 0, 0)
+        right_l.addWidget(QLabel("묶음에 포함된 단지"))
 
         right_btn = QHBoxLayout()
         btn_add = QPushButton("단지 추가")

@@ -71,6 +71,26 @@ from src.ui.dialogs import (
 )
 from src.ui.widgets.toast import ToastWidget
 
+# Fluent shell helpers (required in app globals for mixin rebind).
+from qfluentwidgets import NavigationInterface  # noqa: F401
+from src.ui.fluent.tab_bridge import TabCompatBridge  # noqa: F401
+from src.ui.fluent.theme import apply_app_theme  # noqa: F401
+from src.ui.fluent.navigation import (  # noqa: F401
+    ROUTE_CRAWLER,
+    ROUTE_DASHBOARD,
+    ROUTE_DB,
+    ROUTE_FAVORITES,
+    ROUTE_GEO,
+    ROUTE_GROUP,
+    ROUTE_GUIDE,
+    ROUTE_HISTORY,
+    ROUTE_SCHEDULE,
+    ROUTE_STATS,
+    prepare_page,
+    register_navigation,
+    sync_nav_selection,
+)
+
 ui_logger = get_logger("UI")
 
 from src.utils.mixin_rebind import rebind_inherited_methods

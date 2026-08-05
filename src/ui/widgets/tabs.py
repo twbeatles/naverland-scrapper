@@ -23,21 +23,22 @@ class FavoritesTab(QWidget):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
         
-        # 헤더
         header = QHBoxLayout()
-        title = QLabel("⭐ 즐겨찾기 매물")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title = QLabel("즐겨찾기")
+        title.setStyleSheet("font-size: 18px; font-weight: 800;")
         header.addWidget(title)
         header.addStretch()
         
-        refresh_btn = QPushButton("🔄 새로고침")
+        refresh_btn = QPushButton("새로고침")
+        refresh_btn.setObjectName("secondaryBtn")
         refresh_btn.clicked.connect(self.refresh)
         header.addWidget(refresh_btn)
         
         layout.addLayout(header)
         
-        # 테이블
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
@@ -49,31 +50,32 @@ class FavoritesTab(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.itemSelectionChanged.connect(self._update_action_state)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
-        # 빈 상태
         self.empty_label = EmptyStateWidget(
             icon="⭐",
             title="즐겨찾기 매물이 없습니다",
-            description="카드/테이블에서 ⭐을 눌러 추가하세요."
+            description="결과 카드·표에서 별 아이콘을 눌러 추가하세요.",
         )
         self.empty_label.hide()
         layout.addWidget(self.empty_label)
         
-        # 하단 버튼
         btn_layout = QHBoxLayout()
         
-        self.note_btn = QPushButton("📝 메모 편집")
+        self.note_btn = QPushButton("메모 편집")
+        self.note_btn.setObjectName("secondaryBtn")
         self.note_btn.clicked.connect(self._edit_note)
         btn_layout.addWidget(self.note_btn)
         
-        self.remove_btn = QPushButton("❌ 즐겨찾기 해제")
+        self.remove_btn = QPushButton("즐겨찾기 해제")
+        self.remove_btn.setObjectName("dangerBtn")
         self.remove_btn.clicked.connect(self._remove_favorite)
         btn_layout.addWidget(self.remove_btn)
         
         btn_layout.addStretch()
         
-        self.open_btn = QPushButton("🔗 매물 페이지 열기")
+        self.open_btn = QPushButton("매물 페이지 열기")
+        self.open_btn.setObjectName("primaryBtn")
         self.open_btn.clicked.connect(self._open_article)
         btn_layout.addWidget(self.open_btn)
         

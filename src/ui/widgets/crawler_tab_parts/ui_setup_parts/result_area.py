@@ -25,56 +25,105 @@ class CrawlerTabResultAreaSetupMixin:
         search_sort.setContentsMargins(8, 6, 8, 6)
         search_sort.setSpacing(6)
 
-        self.check_compact_duplicates = QCheckBox("묶기")
-        self.check_compact_duplicates.setChecked(self._compact_duplicates)
-        self.check_compact_duplicates.setToolTip("동일 매물의 여러 호가를 하나로 묶어 표시합니다.")
-        self.check_compact_duplicates.toggled.connect(self._toggle_compact_duplicates)
-        search_sort.addWidget(self.check_compact_duplicates)
-
         self.result_search = SearchBar("결과 검색...")
         self.result_search.search_changed.connect(self._on_search_text_changed)
         search_sort.addWidget(self.result_search, 3)
 
-        self.btn_advanced_filter = QPushButton("⚙ 고급필터")
-        self.btn_advanced_filter.setToolTip("층수, 방 수, 주차 등 세부 조건으로 결과를 필터링합니다.")
-        self.btn_advanced_filter.clicked.connect(self.open_advanced_filter_dialog)
-        search_sort.addWidget(self.btn_advanced_filter)
-
-        self.btn_clear_advanced_filter = QPushButton("× 해제")
-        self.btn_clear_advanced_filter.setToolTip("적용된 고급 필터를 모두 해제합니다.")
-        self.btn_clear_advanced_filter.clicked.connect(self.clear_advanced_filters)
-        self.btn_clear_advanced_filter.setEnabled(False)
-        search_sort.addWidget(self.btn_clear_advanced_filter)
-
-        self.lbl_advanced_filter = QLabel("OFF")
-        self.lbl_advanced_filter.setObjectName("filterBadgeOff")
-        search_sort.addWidget(self.lbl_advanced_filter)
-        
-        lbl_sort = QLabel("정렬")
-        lbl_sort.setStyleSheet("font-size: 11px; color: #888;")
-        search_sort.addWidget(lbl_sort)
-        self.combo_sort = QComboBox()
-        self.combo_sort.addItems(
-            ["가격 ↑", "가격 ↓", "면적 ↑", "면적 ↓", "단지명 ↑", "단지명 ↓", "거래유형 ↑", "거래유형 ↓"]
-        )
-        self.combo_sort.setToolTip("결과 정렬 기준을 선택합니다.")
-        self.combo_sort.currentTextChanged.connect(self._sort_results)
-        search_sort.addWidget(self.combo_sort, 1)
-        
         self.view_mode = settings.get("view_mode", "table")
-        self.btn_view_mode = QPushButton("🃏" if self.view_mode != "card" else "📄")
+        # Label shows the mode you can switch *to*.
+        self.btn_view_mode = QPushButton("카드" if self.view_mode != "card" else "표")
         self.btn_view_mode.setToolTip("카드 뷰 / 테이블 뷰 전환")
         self.btn_view_mode.setCheckable(True)
         self.btn_view_mode.setChecked(self.view_mode == "card")
         self.btn_view_mode.clicked.connect(self._toggle_view_mode)
         search_sort.addWidget(self.btn_view_mode)
 
+        # Secondary actions moved into overflow menu to slim the toolbar.
+        self.btn_result_more = QPushButton("더보기")
+        self.btn_result_more.setToolTip("묶기, 정렬, 고급 필터, 표시 항목")
+        self.btn_result_more.setObjectName("secondaryBtn")
+        search_sort.addWidget(self.btn_result_more)
+
+        self.check_compact_duplicates = QCheckBox("묶기")
+        self.check_compact_duplicates.setChecked(self._compact_duplicates)
+        self.check_compact_duplicates.setToolTip("동일 매물의 여러 호가를 하나로 묶어 표시합니다.")
+        self.check_compact_duplicates.toggled.connect(self._toggle_compact_duplicates)
+
+        self.btn_advanced_filter = QPushButton("고급 필터")
+        self.btn_advanced_filter.setToolTip("층수, 방 수, 주차 등 세부 조건으로 결과를 필터링합니다.")
+        self.btn_advanced_filter.clicked.connect(self.open_advanced_filter_dialog)
+
+        self.btn_clear_advanced_filter = QPushButton("필터 해제")
+        self.btn_clear_advanced_filter.setToolTip("적용된 고급 필터를 모두 해제합니다.")
+        self.btn_clear_advanced_filter.clicked.connect(self.clear_advanced_filters)
+        self.btn_clear_advanced_filter.setEnabled(False)
+
+        self.lbl_advanced_filter = QLabel("OFF")
+        self.lbl_advanced_filter.setObjectName("filterBadgeOff")
+
+        self.combo_sort = QComboBox()
+        self.combo_sort.addItems(
+            ["가격 ↑", "가격 ↓", "면적 ↑", "면적 ↓", "단지명 ↑", "단지명 ↓", "거래유형 ↑", "거래유형 ↓"]
+        )
+        self.combo_sort.setToolTip("결과 정렬 기준을 선택합니다.")
+        self.combo_sort.currentTextChanged.connect(self._sort_results)
+
         from src.utils.ui_labels import BTN_EXTRA_COLUMNS
 
         self.btn_columns = QPushButton(BTN_EXTRA_COLUMNS)
-        self.btn_columns.setToolTip("표에 더 보여줄 항목을 고릅니다. 설정과 맞춰 두며, DB에는 저장하지 않습니다.")
+        self.btn_columns.setToolTip(
+            "표에 더 보여줄 항목을 고릅니다. 설정과 맞춰 두며, DB에는 저장하지 않습니다."
+        )
         self.btn_columns.clicked.connect(self._open_extra_columns_menu)
-        search_sort.addWidget(self.btn_columns)
+
+        more_menu = QMenu(self.btn_result_more)
+        # Embed secondary widgets in a panel-like menu section via QWidgetAction-free
+        # simple actions where possible; keep real widgets for stateful toggles.
+        compact_action = more_menu.addAction("같은 매물 묶기")
+        compact_action.setCheckable(True)
+        compact_action.setChecked(self.check_compact_duplicates.isChecked())
+        compact_action.toggled.connect(self.check_compact_duplicates.setChecked)
+        self.check_compact_duplicates.toggled.connect(compact_action.setChecked)
+
+        sort_menu = more_menu.addMenu("정렬")
+        for text in [
+            "가격 ↑",
+            "가격 ↓",
+            "면적 ↑",
+            "면적 ↓",
+            "단지명 ↑",
+            "단지명 ↓",
+            "거래유형 ↑",
+            "거래유형 ↓",
+        ]:
+            act = sort_menu.addAction(text)
+            act.triggered.connect(
+                lambda _=False, t=text: self.combo_sort.setCurrentText(t)
+            )
+
+        more_menu.addAction("고급 필터…", self.open_advanced_filter_dialog)
+        self._clear_filter_menu_action = more_menu.addAction(
+            "고급 필터 해제", self.clear_advanced_filters
+        )
+        self._clear_filter_menu_action.setEnabled(False)
+        more_menu.addAction(BTN_EXTRA_COLUMNS, self._open_extra_columns_menu)
+        more_menu.addSeparator()
+        self._result_more_filter_status_action = more_menu.addAction("필터 상태: OFF")
+        self._result_more_filter_status_action.setEnabled(False)
+        self.btn_result_more.setMenu(more_menu)
+
+        # Keep legacy widgets in layout but hidden (signal/slot compatibility).
+        for w in (
+            self.check_compact_duplicates,
+            self.btn_advanced_filter,
+            self.btn_clear_advanced_filter,
+            self.lbl_advanced_filter,
+            self.combo_sort,
+            self.btn_columns,
+        ):
+            w.setVisible(False)
+            search_sort.addWidget(w)
+
         layout.addWidget(toolbar_widget)
         
         # Result Tabs

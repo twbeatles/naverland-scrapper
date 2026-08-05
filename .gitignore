@@ -1,13 +1,18 @@
-# Rechecked 2026-08-04:
-# - Source packages (crawl_lock, result_columns, ui_labels, docs/) must stay tracked.
-# - Generated artifacts: logs/, build/, dist/, data/, caches, Playwright, CodeGraph.
-# - Agent dumps (agent-tools/, .grok/, CLAUDE.md 등) remain ignored.
-# - Project docs under docs/ and root *.md (README, PROJECT_AUDIT, update_history) are tracked.
+# Rechecked 2026-08-05 (Fluent UI + packaging):
+# - Track product source: src/ (incl. src/ui/fluent/), tests/, scripts/, requirements.txt,
+#   naverland-scrapper.spec, docs/, root product markdown (README, PROJECT_AUDIT, update_history).
+# - Ignore generated artifacts: logs/, build/, dist/, data/, caches, Playwright browsers,
+#   CodeGraph, agent session dumps.
+# - Agent-only docs (CLAUDE.md / claude.md / gemini.md / AGENTS.md 등) stay untracked.
+# - Do NOT ignore src/ui/fluent/ or PyQt6-Fluent-Widgets usage notes in product docs.
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+.eggs/
+*.egg
 
 # Distribution / Build
 build/
@@ -16,6 +21,8 @@ dist/
 !naverland-scrapper.spec
 htmlcov/
 .coverage*
+# Local release zips (onedir/onefile packaging dumps)
+*.zip
 
 # Logs / local analysis dumps
 logs/
@@ -63,8 +70,16 @@ Microsoft/
 node_modules/
 coverage.xml
 
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
 # Environment
 .env
+.env.*
+!.env.example
 venv/
 .venv/
 env/
@@ -87,3 +102,6 @@ AGENTS.md
 agents.md
 COPILOT.md
 copilot.md
+# Local agent context variants (case / path)
+**/CLAUDE.local.md
+**/claude.local.md

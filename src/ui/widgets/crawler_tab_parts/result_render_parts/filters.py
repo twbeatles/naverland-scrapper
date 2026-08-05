@@ -11,14 +11,17 @@ class CrawlerTabFilterRenderMixin:
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _update_advanced_filter_badge(self: Any):
-        if not hasattr(self, "lbl_advanced_filter"):
-            return
-        if self._advanced_filters:
-            self.lbl_advanced_filter.setText("고급필터: ON")
-            self.lbl_advanced_filter.setStyleSheet("color: #10b981; font-weight: 700;")
-        else:
-            self.lbl_advanced_filter.setText("고급필터: OFF")
-            self.lbl_advanced_filter.setStyleSheet("color: #888;")
+        active = bool(self._advanced_filters)
+        if hasattr(self, "lbl_advanced_filter"):
+            if active:
+                self.lbl_advanced_filter.setText("고급필터: ON")
+                self.lbl_advanced_filter.setStyleSheet("color: #10b981; font-weight: 700;")
+            else:
+                self.lbl_advanced_filter.setText("고급필터: OFF")
+                self.lbl_advanced_filter.setStyleSheet("color: #888;")
+        status_action = getattr(self, "_result_more_filter_status_action", None)
+        if status_action is not None:
+            status_action.setText("필터 상태: ON" if active else "필터 상태: OFF")
 
     def _apply_advanced_filter_items(self: Any, items):
         if not items:
@@ -32,8 +35,12 @@ class CrawlerTabFilterRenderMixin:
         if next_filters and self._is_default_advanced_filter(next_filters):
             next_filters = None
         self._advanced_filters = dict(next_filters) if isinstance(next_filters, dict) else None
+        enabled = self._advanced_filters is not None
         if hasattr(self, "btn_clear_advanced_filter"):
-            self.btn_clear_advanced_filter.setEnabled(self._advanced_filters is not None)
+            self.btn_clear_advanced_filter.setEnabled(enabled)
+        clear_action = getattr(self, "_clear_filter_menu_action", None)
+        if clear_action is not None:
+            clear_action.setEnabled(enabled)
         self._update_advanced_filter_badge()
         self._rebuild_result_views_from_collected_data()
         if self._advanced_filters:

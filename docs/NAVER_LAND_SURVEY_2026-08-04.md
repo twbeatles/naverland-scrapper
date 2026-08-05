@@ -160,12 +160,13 @@ services:
 - [x] 목록 메타 필드 (`확인일`, `동`, …)
 - [x] Article API 429 구분·페이지 간 delay
 - [x] Geo `a=` 복합 타입 정렬
-- [x] 수집/표시 옵션 + 설정 탭 UI + 결과「표시 항목」
+- [x] 수집/표시 옵션 + 설정 UI(기본/고급) + 결과「표시 항목」/더보기
 - [x] 전역 수집 락 (매물 수집 ↔ 지도 ↔ 예약)
 - [x] 완료 로그에 상세 skip/상한/API 실패 요약
-- [x] 단위 테스트 (`pytest` 328 passed, 2026-08-04)
+- [x] 단위 테스트 (`pytest` 328 passed, 2026-08-04/05)
 - [x] live-smoke (detail-fields `success` 이력; 로그는 로컬 `logs/` 미추적)
-- [x] `update_history.md` / `PROJECT_AUDIT.md` / `README.md` 동기화
+- [x] Fluent 좌측 네비 + `src/ui/fluent/` + `PyQt6-Fluent-Widgets` 의존성
+- [x] `update_history.md` / `PROJECT_AUDIT.md` / `README.md` / `naverland-scrapper.spec` / `.gitignore` 동기화
 
 ### 후속 (의도적 제외 · 경량 원칙)
 
@@ -180,4 +181,4 @@ services:
 - 프로젝트 내부: `PROJECT_AUDIT.md`, `update_history.md`, `README.md`, `naverland-scrapper.spec`
 - 외부: Npay 부동산 프론트 API 관례, 비공식 내부 API 사용 시 약관·rate limit 주의
 
-*문서 작성일: 2026-08-04 · 동기화: 2026-08-04 (감사 수정 반영 후)*
+*문서 작성일: 2026-08-04 · 동기화: 2026-08-05 (Fluent UI / 설정 기본·고급 반영)*

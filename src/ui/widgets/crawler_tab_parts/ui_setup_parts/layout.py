@@ -87,7 +87,7 @@ class CrawlerTabLayoutSetupMixin:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(400)
+        scroll.setMinimumWidth(320)
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
@@ -95,7 +95,7 @@ class CrawlerTabLayoutSetupMixin:
         left.setSpacing(6)
 
         self.controls_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.controls_splitter.setChildrenCollapsible(False)
+        self.controls_splitter.setChildrenCollapsible(True)
         self.controls_splitter.setHandleWidth(6)
 
         def _section(setup_fn):
@@ -107,11 +107,12 @@ class CrawlerTabLayoutSetupMixin:
             section_layout.addStretch(1)
             return section
 
+        # Primary path: trade types → complex list → run. Filters/speed are secondary.
         self.controls_splitter.addWidget(_section(self._setup_options_group))
-        self.controls_splitter.addWidget(_section(self._setup_filter_group))
         self.controls_splitter.addWidget(_section(self._setup_complex_list_group))
-        self.controls_splitter.addWidget(_section(self._setup_speed_group))
         self.controls_splitter.addWidget(_section(self._setup_action_group))
+        self.controls_splitter.addWidget(_section(self._setup_filter_group))
+        self.controls_splitter.addWidget(_section(self._setup_speed_group))
         left.addWidget(self.controls_splitter, 1)
 
         scroll.setWidget(scroll_content)

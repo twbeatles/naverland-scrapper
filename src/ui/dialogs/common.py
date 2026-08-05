@@ -5,7 +5,7 @@ from src.ui.styles import COLORS
 class AboutDialog(QDialog):
     def __init__(self, parent=None, theme="dark"):
         super().__init__(parent)
-        self.setWindowTitle("ℹ️ 정보")
+        self.setWindowTitle("정보")
         self.setMinimumSize(520, 540)
         c = COLORS[theme]
         accent = c["accent"]
@@ -17,23 +17,23 @@ class AboutDialog(QDialog):
         browser.setOpenExternalLinks(True)
         browser.setHtml(f"""
         <div style="text-align: center; padding: 24px 20px 10px 20px;">
-            <h1 style="color: {accent}; margin-bottom: 4px; font-size: 26px;">🏠 네이버 부동산 크롤러</h1>
+            <h1 style="color: {accent}; margin-bottom: 4px; font-size: 26px;">네이버 부동산 크롤러</h1>
             <p style="margin-top: 4px;">
                 <span style="background-color: {accent}; color: white; padding: 4px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;">
                     Pro Plus {APP_VERSION}
                 </span>
             </p>
-            <p style="color: {text_secondary}; font-size: 13px; margin-top: 8px;">Analytics &amp; Stability 업데이트</p>
+            <p style="color: {text_secondary}; font-size: 13px; margin-top: 8px;">Fluent UI · Analytics &amp; Stability</p>
         </div>
         
         <div style="background: {accent}14; border-radius: 12px; padding: 14px 16px; margin: 8px 12px;">
-            <h3 style="color: {accent}; margin: 0 0 8px 0; font-size: 14px;">🆕 {APP_VERSION} 하이라이트</h3>
+            <h3 style="color: {accent}; margin: 0 0 8px 0; font-size: 14px;">{APP_VERSION} 하이라이트</h3>
             <ul style="margin: 0; padding-left: 18px; line-height: 1.7;">
-                <li>📊 <b>시세 분석 대시보드</b> — 통계 카드, 차트, 트렌드</li>
-                <li>🃏 <b>카드 뷰 모드</b> — 시각적 매물 카드 조회</li>
-                <li>⭐ <b>즐겨찾기 탭</b> — 관심 매물 별도 관리</li>
-                <li>🔄 <b>안정성 강화</b> — 자동 재시도, Rate Limit 감지</li>
-                <li>🕐 <b>최근 본 매물</b> — 조회 히스토리 자동 저장</li>
+                <li><b>Fluent 네비게이션</b> — 수집 / 보관함 / 분석 / 자동화</li>
+                <li><b>기본·고급 설정 분리</b> — 일상 옵션만 먼저 노출</li>
+                <li><b>시세 분석 대시보드</b> — 통계 카드, 차트, 트렌드</li>
+                <li><b>카드 뷰 · 즐겨찾기</b> — 관심 매물 빠른 확인</li>
+                <li><b>안정성</b> — 자동 재시도, Rate Limit 감지</li>
             </ul>
         </div>
         

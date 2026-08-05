@@ -46,36 +46,56 @@ class EmptyStateWidget(QWidget):
             layout.addWidget(action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 class SearchBar(QWidget):
     search_changed = pyqtSignal(str)
+
     def __init__(self, placeholder="검색...", parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QLabel("🔍"))
-        self.input = QLineEdit()
-        self.input.setPlaceholderText(placeholder)
-        self.input.setObjectName("searchInput")
-        self.input.setClearButtonEnabled(True)
+        layout.setSpacing(0)
+
+        self._uses_fluent = False
+        try:
+            from qfluentwidgets import SearchLineEdit
+
+            self.input = SearchLineEdit(self)
+            self.input.setPlaceholderText(placeholder)
+            self.input.setClearButtonEnabled(True)
+            self._uses_fluent = True
+        except Exception:
+            layout.addWidget(QLabel("🔍"))
+            self.input = QLineEdit()
+            self.input.setPlaceholderText(placeholder)
+            self.input.setObjectName("searchInput")
+            self.input.setClearButtonEnabled(True)
+
         self.input.textChanged.connect(lambda t: self.search_changed.emit(t))
-        layout.addWidget(self.input)
-    def text(self): return self.input.text()
-    def clear(self): self.input.clear()
+        layout.addWidget(self.input, 1)
+
+    def text(self):
+        return self.input.text()
+
+    def clear(self):
+        self.input.clear()
+
     def setFocus(self, reason: Qt.FocusReason = Qt.FocusReason.OtherFocusReason):
         self.input.setFocus(reason)
+
 
 class SpeedSlider(QWidget):
     speed_changed = pyqtSignal(str)
     SPEEDS = ["빠름", "보통", "느림", "매우 느림"]
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         header = QHBoxLayout()
-        header.addWidget(QLabel("⚡ 속도:"))
+        header.addWidget(QLabel("속도"))
         self.label = QLabel("보통")
         self.label.setObjectName("speedLabel")
         self.label.setStyleSheet("font-weight: bold;")
         header.addWidget(self.label)
-        self.desc_label = QLabel("(권장 속도)")
+        self.desc_label = QLabel("(권장)")
         self.desc_label.setObjectName("speedDesc")
         self.desc_label.setStyleSheet("font-size: 11px;")
         header.addWidget(self.desc_label)
@@ -86,7 +106,7 @@ class SpeedSlider(QWidget):
         self.slider.setValue(1)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.slider.valueChanged.connect(self._on_change)
-        self.slider.setToolTip("크롤링 속도를 조절합니다. 느릴수록 차단 위험이 낮습니다.")
+        self.slider.setToolTip("수집 속도를 조절합니다. 느릴수록 차단 위험이 낮습니다.")
         layout.addWidget(self.slider)
     def _on_change(self, val):
         speed = self.SPEEDS[val]
@@ -154,7 +174,7 @@ class ProgressWidget(QWidget):
     
     def update_progress(self, percent, current_name, remaining_seconds):
         self.progress_bar.setValue(percent)
-        self.status_label.setText(f"🔄 {current_name}")
+        self.status_label.setText(str(current_name or "진행 중..."))
         
         if remaining_seconds > 0:
             mins, secs = divmod(remaining_seconds, 60)
@@ -198,16 +218,16 @@ class SummaryCard(QFrame):
 
         c = COLORS[theme]
 
-        self.total_widget = self._create_stat_widget("📊 총 수집", "0건", c["accent"])
+        self.total_widget = self._create_stat_widget("총 수집", "0건", c["accent"])
         layout.addWidget(self.total_widget)
 
-        self.trade_widget = self._create_stat_widget("🏠 매매", "0건", c["trade_매매"])
+        self.trade_widget = self._create_stat_widget("매매", "0건", c["trade_매매"])
         layout.addWidget(self.trade_widget)
 
-        self.jeonse_widget = self._create_stat_widget("📋 전세", "0건", c["trade_전세"])
+        self.jeonse_widget = self._create_stat_widget("전세", "0건", c["trade_전세"])
         layout.addWidget(self.jeonse_widget)
 
-        self.monthly_widget = self._create_stat_widget("💰 월세", "0건", c["trade_월세"])
+        self.monthly_widget = self._create_stat_widget("월세", "0건", c["trade_월세"])
         layout.addWidget(self.monthly_widget)
 
         self.sep = QFrame()
@@ -216,16 +236,16 @@ class SummaryCard(QFrame):
         self.sep.setStyleSheet(f"color: {c['summary_separator']};")
         layout.addWidget(self.sep)
 
-        self.new_widget = self._create_stat_widget("🆕 신규", "0건", c["warning"])
+        self.new_widget = self._create_stat_widget("신규", "0건", c["warning"])
         layout.addWidget(self.new_widget)
 
-        self.price_up_widget = self._create_stat_widget("📈 상승", "0건", c["error"])
+        self.price_up_widget = self._create_stat_widget("상승", "0건", c["error"])
         layout.addWidget(self.price_up_widget)
 
-        self.price_down_widget = self._create_stat_widget("📉 하락", "0건", c["success"])
+        self.price_down_widget = self._create_stat_widget("하락", "0건", c["success"])
         layout.addWidget(self.price_down_widget)
 
-        self.filtered_widget = self._create_stat_widget("🚫 제외", "0건", c["text_secondary"])
+        self.filtered_widget = self._create_stat_widget("제외", "0건", c["text_secondary"])
         layout.addWidget(self.filtered_widget)
 
         layout.addStretch()

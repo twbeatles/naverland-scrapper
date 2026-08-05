@@ -1,30 +1,30 @@
 # Project Audit
 
-**감사 기준일**: 2026-08-04  
-**범위**: 기능 구현 관점 (최근 네이버 사이트 호환·옵션·UI 포함)  
+**감사 기준일**: 2026-08-04 (UI 동기화 갱신: 2026-08-05)  
+**범위**: 기능 구현 관점 (최근 네이버 사이트 호환·옵션·Fluent UI 포함)  
 **방법**: `README.md` 정독, CodeGraph MCP 호출 경로/blast radius, 보조적 파일·테스트 확인  
-**참고**: 루트에 `CLAUDE.md` / `.claude` 는 **없음**. 규칙 문서는 `README.md`, `docs/NAVER_LAND_SURVEY_2026-08-04.md`, `update_history.md`, 본 파일의 이전 버전 이력을 교차함.
+**참고**: 루트 에이전트 전용 문서(`CLAUDE.md` 등)는 **저장소 미추적** (`.gitignore`). 규칙·제품 문서는 `README.md`, `docs/NAVER_LAND_SURVEY_2026-08-04.md`, `update_history.md`, 본 파일을 교차함.
 
 ---
 
 ## 1. Executive Summary
 
-Naverland Scrapper Pro Plus는 **PyQt6 데스크톱 UI + Playwright 수집 엔진 + SQLite 로컬 DB** 구조의 네이버(Npay) 부동산 매물 수집 앱입니다. 최근 작업으로 Article API 페이지네이션, front-api 상세 보강, 수집/표시 옵션, 설정 탭 UI, 결과 확장 컬럼이 들어갔습니다. 단위 테스트는 **322 passed** 수준으로 자동화 기반은 양호합니다.
+Naverland Scrapper Pro Plus는 **PyQt6 + PyQt6-Fluent-Widgets 데스크톱 UI + Playwright 수집 엔진 + SQLite 로컬 DB** 구조의 네이버(Npay) 부동산 매물 수집 앱입니다. Article API 페이지네이션, front-api 상세 보강, 수집/표시 옵션, **Fluent 좌측 네비 + 기본/고급 설정**, 결과 확장 컬럼이 반영되어 있습니다. 단위 테스트는 **328 passed** 수준입니다.
 
-**전체 위험도: Medium (일부 항목 High)**
+**전체 위험도: Medium (일부 항목 완화됨)**
 
 | 영역 | 위험도 | 한 줄 요약 |
 |------|--------|------------|
-| 수집 탭 ↔ 지도 탭 동시 실행 | **High** | 각각 자체 `CrawlerThread` + **공유 `ComplexDatabase`** → 동시 쓰기 가능 |
-| 상세 보강 끄기/상한 UX | **Medium** | 옵션은 동작하나, 상한 초과 매물은 상세 없이 조용히 통과(사용자 피드백 약함) |
-| 「표시 항목」메뉴 닫기 동작 | **Medium** | 메뉴 취소 시에도 체크 상태를 설정에 **항상 저장** (의도치 않은 덮어쓰기 가능) |
+| 수집 ↔ 지도 동시 실행 | **완화됨** | 전역 `crawl_lock`으로 상호 배제 |
+| 상세 보강 끄기/상한 UX | **Medium** | 옵션은 동작하나, 상한 초과 매물은 상세 없이 통과(완료 로그에 요약 있음) |
+| 「표시 항목」/더보기 메뉴 | **Low~Medium** | 토글 시 저장 정책 정리됨; 결과 툴바는 overflow「더보기」 |
 | 광범위 `except Exception` | **Medium** | 폴백 설계상 의도 있으나, 실패 원인 분류·재현이 어려움 |
-| README vs 실제 설정 | **Medium** | README 설정 표가 최신 옵션(PRE·상세 상한·표시 항목 등)을 반영하지 않음 |
+| README vs 실제 설정 | **완화됨** | 기본/고급 설정 표·네비 IA 반영 (2026-08-05) |
 | 비공식 Naver API / 429 | **Medium** | 구조적 리스크; 완화 옵션은 있으나 차단 시 수집 불완전 가능 |
 | Settings 싱글톤 | **Low~Medium** | 테스트 격리 API 존재; 프로덕션 단일 프로세스에서는 실무 리스크 낮음 |
-| 이전 High(페이지네이션·경로) | **완화됨** | 페이지 루프·frozen path·lazy path 등 이전 감사 항목 상당수 반영 |
+| Fluent/GPL UI 라이브러리 | **Low** | `PyQt6-Fluent-Widgets` GPLv3(비상업); README 고지 |
 
-**조치 상태 (2026-08-04 후속)**: 권장 1~3단계 핵심 항목 구현 반영 — 전역 수집 락, 완료 로그 상세 skip/상한/API 실패 요약, 표시 항목 토글 저장, 예약 busy+락 가드, `ui_labels` 상수, README 설정 표 갱신, 일부 예외 범위 축소. `docs/`·spec·`.gitignore` 동기화 완료. 자세한 변경은 `update_history.md` 참고. 검증: `pytest` 328 passed.
+**조치 상태 (2026-08-04 후속 + 2026-08-05 UI)**: 전역 수집 락, 완료 로그 상세 skip/상한/API 실패 요약, 표시 항목 토글 저장, 예약 busy+락 가드, `ui_labels` 상수, Fluent 네비·설정 기본/고급, 수집/지도 UX 단순화. `docs/`·spec·`.gitignore`·README 동기화. 검증: `pytest` **328 passed**.
 
 ---
 
@@ -43,10 +43,13 @@ Naverland Scrapper Pro Plus는 **PyQt6 데스크톱 UI + Playwright 수집 엔�
 app_entry.py
   ├─ --preflight / --live-smoke
   └─ GUI → src/main.py → src/ui/app.py (RealEstateApp)
-        ├─ 매물 수집 (CrawlerTab)
-        ├─ 지도로 찾기 (GeoCrawlerTab ⊂ CrawlerTab)
-        ├─ 내 단지 / 단지 묶음 / 예약 수집 / 수집 기록 / 가격 통계 / 대시보드 / 즐겨찾기 / 가이드
-        └─ 설정 다이얼로그 (탭: 기본 · 매물 수집 · 속도·안정 · 지도 탐색 · 결과 화면)
+        ├─ NavigationInterface (src/ui/fluent/) + TabCompatBridge
+        │     수집: 매물 수집 / 지도로 찾기
+        │     보관함: 내 단지 / 단지 묶음 / 즐겨찾기
+        │     분석: 대시보드 / 가격 통계 / 수집 기록
+        │     자동화: 예약 수집
+        │     하단: 가이드 · 설정
+        └─ 설정 다이얼로그 (기본 / 고급 progressive disclosure)
 
 CrawlerThread (QThread, state_runtime + crawler mixins)
   └─ PlaywrightCrawlerEngine
@@ -74,7 +77,7 @@ SettingsManager 싱글톤 → data/settings.json (atomic write)
 | PRE 분양권 | `article_api` + geo `a=` | off |
 | 목록 메타 필드 | `normalize_article_payload` | dict only |
 | 확장 컬럼 UI | 테이블 18+ 슬롯, 기본 숨김 | 빈 목록 |
-| 설정 탭 UI | `dialogs/settings.py` | — |
+| 설정 UI (기본/고급) | `dialogs/settings.py` | 일상 옵션 / 엔진·타임아웃 분리 |
 
 ---
 
@@ -214,11 +217,11 @@ SettingsManager 싱글톤 → data/settings.json (atomic write)
 
 | 구분 | 예 |
 |------|-----|
-| 메인 탭 | 매물 수집, 지도로 찾기, 내 단지, 단지 묶음, 예약 수집, 수집 기록, 가격 통계 … |
-| 설정 탭 | 기본 / 매물 수집 / 속도·안정 / 지도 탐색 / 결과 화면 |
+| 좌측 네비 | 매물 수집, 지도로 찾기, 내 단지, 단지 묶음, 즐겨찾기, 대시보드, 가격 통계, 수집 기록, 예약 수집, 가이드, 설정 |
+| 설정 | **기본** / **고급** (엔진·타임아웃·표시 컬럼 등은 고급) |
 | 옵션 | 분양권 매물도 함께 수집, 중개사·기전세 등 상세 정보 가져오기, 빠른 목록 조회 … |
-| 결과 툴바 | 「표시 항목」 |
-| 지도 | 아파트 / 빌라·연립, 탐색 범위 등 |
+| 결과 툴바 | 검색 · 표/카드 · 「더보기」(묶기/정렬/고급 필터/표시 항목) |
+| 지도 | 위도·경도·범위 1차 노출; 칸 간격·대기는 접기 |
 
 저장 값은 기존과 동일 토큰 유지 (`theme=dark|light`, `crawl_engine=playwright|selenium`, 자산 `APT`/`VL`).
 

@@ -40,22 +40,27 @@ class ArticleCard(QFrame):
 
         trade_type = self.data.get("거래유형", "매매")
         colors = TRADE_COLORS.get(trade_type, TRADE_COLORS["매매"])
-        bg_color = colors["dark_bg"] if self.is_dark else colors["bg"]
         fg_color = colors["dark_fg"] if self.is_dark else colors["fg"]
-        hover_bg = bg_color if self.is_dark else f"{fg_color}10"
 
-        style_key = (bg_color, fg_color, hover_bg)
+        theme_key = "dark" if self.is_dark else "light"
+        surface = COLORS[theme_key].get("card_bg", "#1e1e2e" if self.is_dark else "#ffffff")
+        hover_bg = COLORS[theme_key].get("card_bg_hover", surface)
+        border = COLORS[theme_key].get("card_border", f"{fg_color}40")
+        hover_border = COLORS[theme_key].get("card_border_hover", fg_color)
+        style_key = (surface, border, hover_border, fg_color, hover_bg)
         card_style = self._CARD_STYLE_CACHE.get(style_key)
         if card_style is None:
             card_style = (
                 "ArticleCard {"
-                f"background-color: {bg_color};"
-                f"border: 1px solid {fg_color}40;"
-                "border-radius: 14px;"
-                "padding: 14px;"
+                f"background-color: {surface};"
+                f"border: 1px solid {border};"
+                f"border-top: 3px solid {fg_color};"
+                "border-radius: 12px;"
+                "padding: 12px;"
                 "}"
                 "ArticleCard:hover {"
-                f"border: 2px solid {fg_color};"
+                f"border: 1px solid {hover_border};"
+                f"border-top: 3px solid {fg_color};"
                 f"background-color: {hover_bg};"
                 "}"
             )
@@ -63,7 +68,8 @@ class ArticleCard(QFrame):
         self.setStyleSheet(card_style)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
 
         top_layout = QHBoxLayout()
         type_label = QLabel(trade_type)
@@ -102,13 +108,15 @@ class ArticleCard(QFrame):
             change_badge.setStyleSheet("color: #22c55e; font-weight: 800;")
             top_layout.addWidget(change_badge)
 
-        theme_key = "dark" if self.is_dark else "light"
         accent = COLORS[theme_key]["accent"]
         self.fav_btn = QPushButton("")
-        self.fav_btn.setFixedSize(30, 30)
+        self.fav_btn.setFixedSize(28, 28)
+        self.fav_btn.setToolTip("즐겨찾기")
         fav_style = self._FAVORITE_STYLE_CACHE.get(accent)
         if fav_style is None:
-            fav_style = f"border: none; font-size: 18px; background: transparent; color: {accent};"
+            fav_style = (
+                f"border: none; font-size: 16px; background: transparent; color: {accent};"
+            )
             self._FAVORITE_STYLE_CACHE[accent] = fav_style
         self.fav_btn.setStyleSheet(fav_style)
         self.set_favorite_state(bool(self.data.get("is_favorite")))
@@ -118,7 +126,7 @@ class ArticleCard(QFrame):
         layout.addLayout(top_layout)
 
         name_label = QLabel(self.data.get("단지명", ""))
-        name_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        name_label.setStyleSheet("font-size: 14px; font-weight: 700; background: transparent;")
         name_label.setWordWrap(True)
         layout.addWidget(name_label)
 
@@ -137,7 +145,9 @@ class ArticleCard(QFrame):
             meta_line = " · ".join(bit for bit in meta_bits if bit)
             if meta_line:
                 meta_label = QLabel(meta_line[:40])
-                meta_label.setStyleSheet("font-size: 11px; color: #9ca3af;")
+                meta_label.setStyleSheet(
+                    "font-size: 11px; color: #9ca3af; background: transparent;"
+                )
                 layout.addWidget(meta_label)
 
         price_text = self.data.get("매매가") or self.data.get("보증금") or ""
@@ -146,7 +156,9 @@ class ArticleCard(QFrame):
         price_label = QLabel(price_text)
         price_style = self._PRICE_STYLE_CACHE.get(fg_color)
         if price_style is None:
-            price_style = f"color: {fg_color}; font-size: 18px; font-weight: 800;"
+            price_style = (
+                f"color: {fg_color}; font-size: 17px; font-weight: 800; background: transparent;"
+            )
             self._PRICE_STYLE_CACHE[fg_color] = price_style
         price_label.setStyleSheet(price_style)
         layout.addWidget(price_label)
@@ -156,24 +168,32 @@ class ArticleCard(QFrame):
             change_text = PriceConverter.to_string(abs(price_change))
             change_label = QLabel(f"변동 {sign}{change_text}")
             change_color = "#ef4444" if price_change > 0 else "#22c55e"
-            change_label.setStyleSheet(f"font-size: 11px; color: {change_color}; font-weight: 700;")
+            change_label.setStyleSheet(
+                f"font-size: 11px; color: {change_color}; font-weight: 700; background: transparent;"
+            )
             layout.addWidget(change_label)
 
         area = self.data.get("면적(평)", 0)
         floor = self.data.get("층/방향", "")
-        info_label = QLabel(f"📐 {area}평  •  {floor}")
-        info_label.setStyleSheet("font-size: 12px; color: #888;")
-        layout.addWidget(info_label)
+        info_bits = [f"{area}평"] if area not in (None, "", 0) else []
+        if floor:
+            info_bits.append(str(floor))
+        info_label = QLabel(" · ".join(info_bits) if info_bits else "")
+        info_label.setStyleSheet("font-size: 12px; color: #888; background: transparent;")
+        if info_bits:
+            layout.addWidget(info_label)
 
         if self.data.get("평당가_표시"):
-            pprice_label = QLabel(f"📊 {self.data.get('평당가_표시')}")
-            pprice_label.setStyleSheet("font-size: 11px; color: #888;")
+            pprice_label = QLabel(str(self.data.get("평당가_표시")))
+            pprice_label.setStyleSheet("font-size: 11px; color: #888; background: transparent;")
             layout.addWidget(pprice_label)
 
         feature = self.data.get("타입/특징", "")
         if feature:
             feature_label = QLabel(feature[:30])
-            feature_label.setStyleSheet("font-size: 11px; color: #9ca3af;")
+            feature_label.setStyleSheet(
+                "font-size: 11px; color: #9ca3af; background: transparent;"
+            )
             feature_label.setWordWrap(True)
             layout.addWidget(feature_label)
 
@@ -229,9 +249,11 @@ class CardViewWidget(QScrollArea):
 
         self.setWidget(self.container)
 
-        self.empty_label = QLabel("조건에 맞는 매물이 없습니다.")
-        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888; padding: 40px;")
+        self.empty_label = EmptyStateWidget(
+            icon="📭",
+            title="조건에 맞는 매물이 없습니다",
+            description="검색어·필터를 바꾸거나 수집을 다시 실행해 보세요.",
+        )
         self.grid_layout.addWidget(self.empty_label, 0, 0)
         self.empty_label.hide()
         scroll_bar = self.verticalScrollBar()

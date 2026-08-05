@@ -46,7 +46,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         browsers = w.findChildren(QTextBrowser)
         guide_html = "\n".join(browser.toHtml() for browser in browsers)
         self.assertIn("빠른 시작 가이드", guide_html)
-        self.assertIn("탭별 안내", guide_html)
+        self.assertIn("화면 안내", guide_html)
         self.assertIn("메뉴 안내", guide_html)
         self.assertIn("매물 수집", guide_html)
         self.assertIn("DB 백업", guide_html)
