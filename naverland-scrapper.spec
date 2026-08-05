@@ -53,8 +53,25 @@ hiddenimports += collect_submodules("undetected_chromedriver")
 hiddenimports += collect_submodules("selenium.webdriver.common.devtools")
 hiddenimports += collect_submodules("playwright")
 # Fluent UI (package import name is `qfluentwidgets`).
-hiddenimports += collect_submodules("qfluentwidgets")
-hiddenimports += collect_submodules("qframelesswindow")
+# Skip optional webengine/multimedia submodules (not used by this app; avoid
+# ModuleNotFoundError noise and unused QtWebEngine/Multimedia pulls).
+def _collect_submodules_skip(package: str, *skip_parts: str) -> list[str]:
+    mods = collect_submodules(package)
+    if not skip_parts:
+        return mods
+    return [
+        m
+        for m in mods
+        if not any(part in m for part in skip_parts)
+    ]
+
+
+hiddenimports += _collect_submodules_skip(
+    "qfluentwidgets", ".multimedia", ".webengine"
+)
+hiddenimports += _collect_submodules_skip(
+    "qframelesswindow", ".webengine"
+)
 
 datas: list[tuple[str, str]] = []
 runtime_hooks = [str(project_dir / "src" / "utils" / "runtime_playwright.py")]
