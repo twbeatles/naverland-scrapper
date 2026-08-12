@@ -155,6 +155,30 @@ def normalize_article_payload(
     except (TypeError, ValueError):
         same_addr_cnt = 0
     cp_name = str(_first(article, "cpName", "cpNm", "providerName", default="")).strip()
+    # List API often includes realtorName — fill 부동산상호 without detail fetch (2026-08-12).
+    realtor_name = str(
+        _first(article, "realtorName", "realtorNm", "agentName", "brokerageName", default="")
+    ).strip()
+    realtor_id = str(_first(article, "realtorId", "realtorNo", "agentId", default="")).strip()
+    same_addr_max = str(_first(article, "sameAddrMaxPrc", "sameAddrMaxPrice", default="")).strip()
+    same_addr_min = str(_first(article, "sameAddrMinPrc", "sameAddrMinPrice", default="")).strip()
+    verification_type = str(
+        _first(article, "verificationTypeCode", "verificationType", "confirmType", default="")
+    ).strip()
+    detail_address = str(
+        _first(article, "detailAddress", "dtlAddr", "addressDetail", default="")
+    ).strip()
+    direct_raw = _first(article, "isDirectTrade", "directTradeYn", "isDirect", default="")
+    if isinstance(direct_raw, bool):
+        is_direct = "Y" if direct_raw else "N"
+    else:
+        token = str(direct_raw or "").strip().upper()
+        if not token:
+            is_direct = ""
+        elif token in {"Y", "TRUE", "1", "YES"}:
+            is_direct = "Y"
+        else:
+            is_direct = "N"
 
     article_lat = _to_float(_first(article, "latitude", "lat", default=0.0))
     article_lon = _to_float(_first(article, "longitude", "lon", "lng", default=0.0))
@@ -185,6 +209,12 @@ def normalize_article_payload(
         "동": building_name,
         "타입명": area_name,
         "동일주소건수": same_addr_cnt,
+        "동일주소최고가": same_addr_max,
+        "동일주소최저가": same_addr_min,
+        "확인유형": verification_type,
+        "상세주소": detail_address,
+        "직거래": is_direct,
+        "중개ID": realtor_id,
         "정보제공": cp_name,
         "수집시각": DateTimeHelper.now_string(),
         "자산유형": detect_asset_type(article, fallback=asset_type),
@@ -193,7 +223,7 @@ def normalize_article_payload(
         "경도": resolved_lon,
         "줌": int(zoom or 0),
         "마커ID": str(marker_id or ""),
-        "부동산상호": "",
+        "부동산상호": realtor_name,
         "중개사이름": "",
         "전화1": "",
         "전화2": "",

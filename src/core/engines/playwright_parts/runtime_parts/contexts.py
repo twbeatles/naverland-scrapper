@@ -40,17 +40,17 @@ class PlaywrightContextRuntimeMixin:
             return
 
     async def _warmup_runtime_pages(self):
+        from src.core.services.site_contract import HOST_NEW
+
         desktop_page = self._desktop_page
         if desktop_page is not None:
-            for url in ("https://fin.land.naver.com/", "https://new.land.naver.com/"):
-                await self._warmup_page(desktop_page, url, label="desktop")
-        if self._page_pool is None or self._page_pool.empty():
-            return
-        page = await self._page_pool.get()
-        try:
-            await self._warmup_page(page, "https://m.land.naver.com/", label="mobile")
-        finally:
-            await self._page_pool.put(page)
+            # Prefer new.land only. fin/m HTML often 404s (2026-08-12) and wastes time.
+            ok = await self._warmup_page(desktop_page, f"{HOST_NEW}/", label="desktop")
+            if ok:
+                self.thread.stats["warmup_new_land_ok"] = 1
+            else:
+                self.thread.stats["warmup_new_land_fail"] = 1
+        # Mobile pool pages are warmed lazily on first detail use; skip m.land home 404.
 
     async def _warmup_page(self, page, url: str, *, label: str) -> bool:
         try:

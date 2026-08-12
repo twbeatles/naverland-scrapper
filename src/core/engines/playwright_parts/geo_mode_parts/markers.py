@@ -2,20 +2,109 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
-from src.core.services.map_geometry import build_grid_sweep_coords, clamp_korea
-from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
+from src.core.services.map_geometry import viewport_bounds
+from src.core.services.response_capture import normalize_marker_payload
+from src.core.services.site_contract import build_single_markers_url
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
-
-_TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.items()}
 
 
 class PlaywrightGeoMarkerMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
+
+    def _ingest_marker_payload(
+        self,
+        discovered: dict[str, dict],
+        payload: Any,
+        *,
+        asset_type: str,
+        stats: dict | None = None,
+    ) -> int:
+        if not isinstance(payload, list):
+            return 0
+        added = 0
+        asset = str(asset_type or "APT").strip().upper() or "APT"
+        for raw_marker in payload:
+            marker = normalize_marker_payload(raw_marker, asset_type=asset)
+            cid = marker.get("complex_id", "")
+            if not cid:
+                continue
+            dedupe_key = f"{asset}:{cid}"
+            current = discovered.get(dedupe_key)
+            marker_count = int(marker.get("count", 0) or 0)
+            current_count = int(current.get("count", 0) or 0) if current else -1
+            if current is None or marker_count > current_count:
+                discovered[dedupe_key] = marker
+                added += 1
+                self.thread.stats["geo_discovered_count"] = len(discovered)
+                self.thread.register_discovered_complex(marker)
+                self.thread.emit_stats()
+            else:
+                if stats is not None:
+                    stats["dedup_skipped"] = int(stats.get("dedup_skipped", 0)) + 1
+                    self.thread.stats["geo_dedup_count"] = int(stats.get("dedup_skipped", 0) or 0)
+                    self.thread.emit_stats()
+        return added
+
+    async def _fetch_single_markers_api(
+        self,
+        discovered: dict[str, dict],
+        *,
+        asset_type: str,
+        trade_type: str,
+        lat: float,
+        lon: float,
+        zoom: int,
+    ) -> int:
+        """Direct single-markers/2.0 request (fallback when DOM marker switch fails)."""
+        context = self._desktop_context
+        request_context = getattr(context, "request", None) if context is not None else None
+        if request_context is None or not hasattr(request_context, "get"):
+            return 0
+        bounds = viewport_bounds(lat, lon, zoom)
+        include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
+        url = build_single_markers_url(
+            asset_type=asset_type,
+            trade_type=trade_type,
+            zoom=zoom,
+            left_lon=bounds["leftLon"],
+            right_lon=bounds["rightLon"],
+            top_lat=bounds["topLat"],
+            bottom_lat=bounds["bottomLat"],
+            include_pre=include_pre,
+        )
+        self.thread.stats["geo_marker_api_attempt_count"] = (
+            int(self.thread.stats.get("geo_marker_api_attempt_count", 0)) + 1
+        )
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "ko-KR,ko;q=0.9",
+            "referer": "https://new.land.naver.com/complexes",
+        }
+        try:
+            response = await request_context.get(url, headers=headers, timeout=12000)
+            status = int(getattr(response, "status", 0) or 0)
+            if status >= 400:
+                self.thread.stats["geo_marker_api_fail_count"] = (
+                    int(self.thread.stats.get("geo_marker_api_fail_count", 0)) + 1
+                )
+                return 0
+            payload = await response.json()
+        except Exception:
+            self.thread.stats["geo_marker_api_fail_count"] = (
+                int(self.thread.stats.get("geo_marker_api_fail_count", 0)) + 1
+            )
+            return 0
+        added = self._ingest_marker_payload(discovered, payload, asset_type=asset_type)
+        if added > 0:
+            self.thread.stats["geo_marker_api_hit_count"] = (
+                int(self.thread.stats.get("geo_marker_api_hit_count", 0)) + 1
+            )
+            self.thread.stats["geo_marker_switch_last_method"] = "single_markers_api"
+        return added
 
     def _build_marker_handler(self, discovered: dict[str, dict]):
         pending_tasks: set[asyncio.Task] = set()
@@ -31,27 +120,8 @@ class PlaywrightGeoMarkerMixin:
                 payload = await response.json()
             except Exception:
                 return
-            if not isinstance(payload, list):
-                return
             asset = "VL" if "houses/" in url else "APT"
-            for raw_marker in payload:
-                marker = normalize_marker_payload(raw_marker, asset_type=asset)
-                cid = marker.get("complex_id", "")
-                if not cid:
-                    continue
-                dedupe_key = f"{asset}:{cid}"
-                current = discovered.get(dedupe_key)
-                marker_count = int(marker.get("count", 0) or 0)
-                current_count = int(current.get("count", 0) or 0) if current else -1
-                if current is None or marker_count > current_count:
-                    discovered[dedupe_key] = marker
-                    self.thread.stats["geo_discovered_count"] = len(discovered)
-                    self.thread.register_discovered_complex(marker)
-                    self.thread.emit_stats()
-                else:
-                    stats["dedup_skipped"] = int(stats.get("dedup_skipped", 0)) + 1
-                    self.thread.stats["geo_dedup_count"] = int(stats.get("dedup_skipped", 0) or 0)
-                    self.thread.emit_stats()
+            self._ingest_marker_payload(discovered, payload, asset_type=asset, stats=stats)
 
         def _handle(response):
             try:

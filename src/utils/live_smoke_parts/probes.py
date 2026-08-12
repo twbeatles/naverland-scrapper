@@ -41,18 +41,38 @@ async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool
     for url in urls:
         try:
             result = await _navigate_probe(page, url, timeout_ms)
+            final_url = str(result["final_url"] or "")
+            # new.land must be healthy; fin/m may 404 (2026-08) — report but don't fail overall smoke.
+            is_new = "new.land.naver.com" in (url or "")
+            is_fin_family = "fin.land.naver.com" in (url or "") or "m.land.naver.com" in (url or "")
+            dead = "financial.pstatic.net/404" in final_url.lower()
+            ok = bool(result["ok"]) and not (is_new and dead)
+            if is_fin_family and dead:
+                messages.append(
+                    _build_smoke_line(
+                        ok=True,
+                        kind="host-health",
+                        target=url,
+                        final_url=final_url,
+                        status=result["status"],
+                        title=str(result["title"] or ""),
+                        reason="fin_html_dead_degraded",
+                        extra="severity=ok",
+                    )
+                )
+                continue
             messages.append(
                 _build_smoke_line(
-                    ok=bool(result["ok"]),
+                    ok=ok,
                     kind="home",
                     target=url,
-                    final_url=str(result["final_url"] or ""),
+                    final_url=final_url,
                     status=result["status"],
                     title=str(result["title"] or ""),
-                    reason=str(result["reason"] or ""),
+                    reason=str(result["reason"] or "") + (";fin_html_dead" if dead else ""),
                 )
             )
-            overall_ok = overall_ok and bool(result["ok"])
+            overall_ok = overall_ok and ok
         except Exception as exc:
             messages.append(f"[fail] [home] {url} -> exception={exc}")
             overall_ok = False
@@ -125,6 +145,7 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                 except Exception:
                     pass
 
+    sample_realtor = ""
     try:
         response = await context.request.get(
             target_url,
@@ -146,8 +167,11 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                 if not isinstance(article, dict):
                     continue
                 aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
-                if aid:
+                if aid and not sample_article_id:
                     sample_article_id = aid
+                if not sample_realtor:
+                    sample_realtor = str(article.get("realtorName") or "").strip()
+                if sample_article_id and sample_realtor:
                     break
             if article_count <= 0:
                 reason = _append_reason(reason, "articles_empty")
@@ -175,11 +199,14 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                                 aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
                                 if aid and not sample_article_id:
                                     sample_article_id = aid
-                                    break
+                                if not sample_realtor:
+                                    sample_realtor = str(article.get("realtorName") or "").strip()
                     else:
                         reason = _append_reason(reason, f"article_api_page2_http_{status2}")
                 except Exception as exc:
                     reason = _append_reason(reason, f"article_api_page2:{type(exc).__name__}")
+            if article_count and int(article_count) > 0 and not sample_realtor:
+                reason = _append_reason(reason, "realtorName_missing")
     except Exception as exc:
         reason = _append_reason(reason, f"article_api_exception:{type(exc).__name__}:{exc}")
 
@@ -189,7 +216,8 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
         f"tradeType=A1 "
         f"pages_fetched={pages_fetched} "
         f"article_count={article_count if article_count is not None else '-'} "
-        f"sample_article={sample_article_id or '-'}"
+        f"sample_article={sample_article_id or '-'} "
+        f"realtorName={'yes' if sample_realtor else 'no'}"
     )
     return ok, _build_smoke_line(
         ok=ok,
@@ -415,11 +443,58 @@ async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tup
     )
 
 
+async def _run_geo_contract_probe(page, timeout_ms: int) -> tuple[bool, str]:
+    """Verify map URL keeps trade filter key ``b=`` (site drops tradeTypes)."""
+    from urllib.parse import parse_qs, urlparse
+
+    from src.core.services.site_contract import build_geo_map_url
+
+    target = build_geo_map_url(
+        base_kind="complexes",
+        lat=37.5485,
+        lon=126.9780,
+        zoom=15,
+        asset_type="APT",
+        trade_type="매매",
+    )
+    result = await _navigate_probe(page, target, timeout_ms)
+    final_url = str(result.get("final_url") or "")
+    qs = parse_qs(urlparse(final_url).query)
+    has_b = bool(qs.get("b"))
+    has_trade_types = bool(qs.get("tradeTypes"))
+    reason = str(result.get("reason") or "")
+    if not has_b:
+        reason = _append_reason(reason, "geo_b_missing")
+    if has_trade_types:
+        reason = _append_reason(reason, "geo_tradeTypes_still_present")
+    ok = bool(result.get("ok")) and has_b and not has_trade_types
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="geo-contract",
+        target=target,
+        final_url=final_url,
+        status=result.get("status"),
+        title=str(result.get("title") or ""),
+        reason=reason,
+        extra=f"b={qs.get('b')} tradeTypes={qs.get('tradeTypes')}",
+    )
+
+
 async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
     cid = str(complex_id or "").strip()
     if not cid:
         return False, "[fail] [geo-marker] missing complex id"
-    target_url = f"https://new.land.naver.com/complexes/{cid}?ms=37.5608,126.9888,15&a=APT"
+    from src.core.services.site_contract import build_complex_page_url
+
+    target_url = build_complex_page_url(
+        cid,
+        base_kind="complexes",
+        path_asset="APT",
+        trade_type="매매",
+        lat=37.5608,
+        lon=126.9888,
+        zoom=15,
+    )
     capture_task = asyncio.create_task(
         _capture_response_status(
             page,
@@ -451,7 +526,10 @@ async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple
         reason = _append_reason(reason, "marker_api_capture_missing")
     elif marker_status is not None and int(marker_status) >= 400:
         reason = _append_reason(reason, f"marker_api_http_{int(marker_status)}")
-    ok = bool(result["ok"]) and clicked and marker_seen and (marker_status is None or int(marker_status) < 400)
+    # Marker API capture alone can pass when DOM switch UI changed (2026-08 audit).
+    ok = bool(result["ok"]) and marker_seen and (marker_status is None or int(marker_status) < 400)
+    if ok and not clicked:
+        reason = _append_reason(reason, "dom_switch_skipped_api_ok")
     return ok, _build_smoke_line(
         ok=ok,
         kind="geo-marker",

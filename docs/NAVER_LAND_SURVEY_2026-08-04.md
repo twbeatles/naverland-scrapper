@@ -182,3 +182,11 @@ services:
 - 외부: Npay 부동산 프론트 API 관례, 비공식 내부 API 사용 시 약관·rate limit 주의
 
 *문서 작성일: 2026-08-04 · 동기화: 2026-08-05 (Fluent UI / 설정 기본·고급 반영)*
+
+---
+
+## 후속 조사
+
+**2026-08-12** 라이브 프로브 및 Phase 0–1 호환 수정은  
+[`NAVER_LAND_SURVEY_2026-08-12.md`](./NAVER_LAND_SURVEY_2026-08-12.md) 를 참고하세요.  
+(geo `b=` 정렬, fin HTML 404, 목록 `realtorName` 매핑, site_contract 도입)

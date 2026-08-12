@@ -353,13 +353,15 @@ def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dic
 
 
 def build_front_api_agent_url(article_no: str) -> str:
-    aid = str(article_no or "").strip()
-    return f"https://fin.land.naver.com/front-api/v1/article/agent?articleNumber={aid}"
+    from src.core.services.site_contract import build_front_api_agent_url as _build
+
+    return _build(article_no)
 
 
 def build_front_api_basic_info_url(article_no: str) -> str:
-    aid = str(article_no or "").strip()
-    return f"https://fin.land.naver.com/front-api/v1/article/basicInfo?articleId={aid}"
+    from src.core.services.site_contract import build_front_api_basic_info_url as _build
+
+    return _build(article_no)
 
 
 def parse_front_api_agent_payload(payload) -> dict:
@@ -423,6 +425,39 @@ async def _fetch_front_api_json(request_context, url: str, *, referer: str, time
     return status, payload
 
 
+async def _warm_front_api_session(detail_page, *, timeout_ms: int = 5000) -> bool:
+    """Best-effort cookie/auth warm before front-api (new.land + auth/si)."""
+    request_context = _request_context_from_page(detail_page)
+    if request_context is None:
+        return False
+    warmed = False
+    # Prefer new.land (stable host) so browser context has land cookies.
+    try:
+        if detail_page is not None and hasattr(detail_page, "goto"):
+            current = str(getattr(detail_page, "url", "") or "")
+            if "new.land.naver.com" not in current and "fin.land.naver.com" not in current:
+                await detail_page.goto(
+                    "https://new.land.naver.com/",
+                    wait_until="domcontentloaded",
+                    timeout=max(1000, int(timeout_ms)),
+                )
+                warmed = True
+    except Exception:
+        pass
+    try:
+        status, payload = await _fetch_front_api_json(
+            request_context,
+            "https://fin.land.naver.com/front-api/v1/auth/si",
+            referer="https://fin.land.naver.com/",
+            timeout_ms=timeout_ms,
+        )
+        if status is not None and int(status) < 400 and payload is not None:
+            warmed = True
+    except Exception:
+        pass
+    return warmed
+
+
 async def _supplement_front_api_artifacts(
     detail_page,
     article_no: str,
@@ -442,6 +477,18 @@ async def _supplement_front_api_artifacts(
             timeout_ms = min(15000, max(1500, int(navigation_timeout_ms)))
         except (TypeError, ValueError):
             timeout_ms = 8000
+
+    # One warm per page object to reduce repeated auth traffic.
+    if request_context is not None and not getattr(detail_page, "_front_api_session_warmed", False):
+        try:
+            await _warm_front_api_session(detail_page, timeout_ms=min(6000, timeout_ms))
+            try:
+                setattr(detail_page, "_front_api_session_warmed", True)
+            except Exception:
+                pass
+            artifacts["front_api_session_warmed"] = True
+        except Exception:
+            artifacts["front_api_session_warmed"] = False
 
     for url in (
         build_front_api_agent_url(article_no),
@@ -705,9 +752,12 @@ async def fetch_mobile_article_detail(
     *,
     navigation_timeout_ms: int | None = None,
     front_api_enabled: bool = True,
+    prefer_front_api_only: bool = False,
 ) -> dict:
     if not article_no:
         return {}
+
+    from src.core.services.site_contract import HOST_FIN, HOST_M, is_fin_html_dead_url
 
     best_source = ""
     best_artifacts: dict = {}
@@ -716,17 +766,54 @@ async def fetch_mobile_article_detail(
     best_body_text = ""
     best_score = -1
     use_front_api = bool(front_api_enabled)
-    # fin first (Npay). m.land redirects to fin as of 2026-08 and is lower priority.
-    for source, url in (
-        ("fin_article", f"https://fin.land.naver.com/articles/{article_no}"),
-        ("m_info", f"https://m.land.naver.com/article/info/{article_no}"),
-        ("m_view", f"https://m.land.naver.com/article/view/{article_no}"),
-    ):
+    fin_html_dead = False
+
+    # Skip HTML navigation when callers already know fin is dead / want API-only path.
+    if prefer_front_api_only and use_front_api:
+        cold_artifacts = await _supplement_front_api_artifacts(
+            detail_page,
+            article_no,
+            {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
+            navigation_timeout_ms=navigation_timeout_ms,
+        )
+        cold_fields: dict = {}
+        for response_item in list(cold_artifacts.get("responses", []) or []):
+            if not isinstance(response_item, dict):
+                continue
+            payload = response_item.get("payload")
+            if isinstance(payload, dict):
+                cold_fields = _merge_detail_field_maps(cold_fields, parse_front_api_agent_payload(payload))
+        cold_fields = _backfill_fields_from_artifacts(cold_fields, cold_artifacts)
+        cold_meta = _build_detail_meta("front_api", "", cold_fields, cold_artifacts)
+        if bool(cold_artifacts.get("front_api_rate_limited")):
+            cold_meta["front_api_rate_limited"] = True
+        cold_meta["detail_host_unreachable"] = True
+        cold_meta["prefer_front_api_only"] = True
+        cold_fields["_detail_meta"] = cold_meta
+        return cold_fields
+
+    # Prefer front-api-only first when HTML is known-dead; try fin once then skip m.* redirects.
+    url_candidates: list[tuple[str, str]] = [
+        ("fin_article", f"{HOST_FIN}/articles/{article_no}"),
+        ("m_info", f"{HOST_M}/article/info/{article_no}"),
+    ]
+    for source, url in url_candidates:
+        if fin_html_dead and source.startswith("m_"):
+            # m.land redirects into the same fin 404 chain — skip extra navigations.
+            continue
         artifacts = await _collect_detail_artifacts(
             detail_page,
             url,
             navigation_timeout_ms=navigation_timeout_ms,
         )
+        candidate_body = str(artifacts.get("body_text", "") or "")
+        try:
+            final_url = str(getattr(detail_page, "url", "") or url)
+        except Exception:
+            final_url = url
+        if is_fin_html_dead_url(final_url, candidate_body) or _is_not_found_body(candidate_body):
+            fin_html_dead = True
+            artifacts["detail_host_unreachable"] = True
         # DOM may be 404/map-only; still pull front-api with browser cookies.
         if use_front_api:
             artifacts = await _supplement_front_api_artifacts(
@@ -735,21 +822,23 @@ async def fetch_mobile_article_detail(
                 artifacts,
                 navigation_timeout_ms=navigation_timeout_ms,
             )
-        candidate_body = str(artifacts.get("body_text", "") or "")
         candidate_corpus = str(artifacts.get("corpus_text", "") or "")
         has_network = bool(artifacts.get("responses"))
         if _is_not_found_body(candidate_body) and not candidate_corpus and not has_network:
+            if fin_html_dead:
+                break
             continue
         merged_artifacts = dict(artifacts)
 
-        try:
-            await detail_page.locator("text=실거래가").first.click()
-            await detail_page.wait_for_timeout(250)
-            await detail_page.locator("text=전세").first.click()
-            inline_artifacts = await _collect_inline_artifacts(detail_page)
-            merged_artifacts = _merge_detail_artifacts(artifacts, inline_artifacts)
-        except Exception:
-            pass
+        if not fin_html_dead:
+            try:
+                await detail_page.locator("text=실거래가").first.click()
+                await detail_page.wait_for_timeout(250)
+                await detail_page.locator("text=전세").first.click()
+                inline_artifacts = await _collect_inline_artifacts(detail_page)
+                merged_artifacts = _merge_detail_artifacts(artifacts, inline_artifacts)
+            except Exception:
+                pass
 
         body_text = str(merged_artifacts.get("body_text", "") or candidate_body or "")
         corpus_text = str(merged_artifacts.get("corpus_text", "") or candidate_corpus or "")
@@ -765,6 +854,8 @@ async def fetch_mobile_article_detail(
         meta = _build_detail_meta(source, body_text, fields, merged_artifacts)
         if bool(merged_artifacts.get("front_api_rate_limited")):
             meta["front_api_rate_limited"] = True
+        if bool(merged_artifacts.get("detail_host_unreachable")):
+            meta["detail_host_unreachable"] = True
         score = _detail_candidate_score(fields, meta)
 
         if score > best_score:
@@ -776,6 +867,8 @@ async def fetch_mobile_article_detail(
             best_score = score
 
         if _detail_core_field_score(fields) > 0 and str(meta.get("detail_parse_state", "")) in {"partial", "success"}:
+            break
+        if fin_html_dead:
             break
 
     # Last resort: front-api only without successful page body (cold request may 429).
@@ -797,6 +890,8 @@ async def fetch_mobile_article_detail(
         cold_meta = _build_detail_meta("front_api", "", cold_fields, cold_artifacts)
         if bool(cold_artifacts.get("front_api_rate_limited")):
             cold_meta["front_api_rate_limited"] = True
+        if fin_html_dead:
+            cold_meta["detail_host_unreachable"] = True
         cold_score = _detail_candidate_score(cold_fields, cold_meta)
         if cold_score > best_score:
             best_source = "front_api"
@@ -808,6 +903,8 @@ async def fetch_mobile_article_detail(
 
     final_fields = dict(best_fields)
     final_meta = dict(best_meta) if best_meta else _build_detail_meta(best_source, best_body_text, final_fields, best_artifacts)
+    if fin_html_dead:
+        final_meta["detail_host_unreachable"] = True
     final_fields["_detail_meta"] = final_meta
     return final_fields
 
@@ -818,16 +915,44 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
     if isinstance(detail, dict):
         meta = dict(detail.get("_detail_meta", {}) or {})
         applied = {key: value for key, value in detail.items() if key != "_detail_meta"}
-        item.update(applied)
+        # Snapshot list-level broker before merge so empty detail cannot erase credit.
+        had_list_broker = bool(str(item.get("부동산상호", "") or "").strip())
+        # Do not wipe list-level fields (e.g. realtorName → 부동산상호) with empty detail values.
+        for key, value in applied.items():
+            if isinstance(value, str) and not value.strip():
+                existing = item.get(key)
+                if existing not in (None, ""):
+                    continue
+            if value in (0, 0.0) and key in {
+                "기전세금(원)",
+                "전세_기간(년)",
+                "전세_기간내_최고(원)",
+                "전세_기간내_최저(원)",
+                "갭금액(원)",
+                "갭비율",
+            }:
+                existing_num = item.get(key)
+                try:
+                    if existing_num not in (None, "", 0, 0.0) and float(existing_num) != 0:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            item[key] = value
         if meta:
             source = str(meta.get("detail_source", "") or "")
             parse_state = str(meta.get("detail_parse_state", "") or "")
+            # List already had broker name and detail failed → list-partial (not full failure).
+            if parse_state == "failed" and had_list_broker:
+                parse_state = "partial"
+                source = source or "list_meta"
             missing_count = int(meta.get("missing_field_count", 0) or 0)
             item["detail_source"] = source
             item["detail_parse_state"] = parse_state
             item["missing_field_count"] = missing_count
             item["detail_network_response_count"] = int(meta.get("network_response_count", 0) or 0)
             item["detail_hydration_hit"] = int(meta.get("hydration_hit", 0) or 0)
+            if meta.get("detail_host_unreachable"):
+                item["detail_host_unreachable"] = True
             item["상세소스"] = source
             item["상세수집상태"] = parse_state
             item["상세누락필드수"] = missing_count

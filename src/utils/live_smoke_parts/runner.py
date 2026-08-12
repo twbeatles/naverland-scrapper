@@ -31,6 +31,7 @@ from src.utils.live_smoke_parts.probes import (
     _run_complex_probe_detail,
     _run_detail_field_probe,
     _run_detail_probe,
+    _run_geo_contract_probe,
     _run_geo_marker_probe,
     _run_home_probes,
 )
@@ -137,6 +138,15 @@ async def _run_live_smoke_async(
                 await detail_fields_page.close()
 
         if include_geo_marker:
+            geo_contract_page = await _new_smoke_page(context)
+            try:
+                geo_contract_ok, geo_contract_line = await _run_geo_contract_probe(
+                    geo_contract_page, timeout_ms
+                )
+                messages.append(geo_contract_line)
+                overall_ok = overall_ok and geo_contract_ok
+            finally:
+                await geo_contract_page.close()
             geo_page = await _new_smoke_page(context)
             try:
                 geo_ok, geo_line = await _run_geo_marker_probe(geo_page, complex_id, timeout_ms)

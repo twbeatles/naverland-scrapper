@@ -166,6 +166,55 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(enriched["상세수집상태"], "failed")
         self.assertEqual(enriched["상세누락필드수"], 8)
 
+    async def test_apply_mobile_detail_preserves_list_realtor_and_marks_partial(self):
+        item = {
+            "단지ID": "3833",
+            "매물ID": "1",
+            "매매가": "10억",
+            "부동산상호": "목록중개",
+        }
+        detail = {
+            "부동산상호": "",
+            "전화1": "",
+            "_detail_meta": {
+                "detail_source": "fin_article",
+                "detail_parse_state": "failed",
+                "missing_field_count": 8,
+                "detail_host_unreachable": True,
+            },
+        }
+        enriched = apply_mobile_detail(dict(item), detail)
+        self.assertEqual(enriched["부동산상호"], "목록중개")
+        self.assertEqual(enriched["detail_parse_state"], "partial")
+        self.assertTrue(enriched.get("detail_host_unreachable"))
+
+    async def test_prefer_front_api_only_skips_html_navigation(self):
+        article_no = "2630745167"
+        agent_url = build_front_api_agent_url(article_no)
+        page = _FakePage(
+            {},
+            request_routes={
+                agent_url: {
+                    "brokerageName": "API중개",
+                    "brokerName": "김에이피아이",
+                    "phones": ["02-111-2222"],
+                }
+            },
+        )
+        detail = await fetch_mobile_article_detail(
+            page,
+            article_no,
+            prefer_front_api_only=True,
+            front_api_enabled=True,
+        )
+        self.assertEqual(detail.get("부동산상호"), "API중개")
+        self.assertEqual(detail.get("_detail_meta", {}).get("detail_source"), "front_api")
+        # Session warm may goto new.land once; never open fin article HTML in API-only mode.
+        self.assertFalse(
+            any("fin.land.naver.com/articles" in str(call.get("url", "")) for call in page.goto_calls)
+        )
+        self.assertLessEqual(len(page.goto_calls), 1)
+
     async def test_fetch_mobile_article_detail_uses_hydration_and_network_corpus(self):
         article_no = "2529610450"
         url = f"https://fin.land.naver.com/articles/{article_no}"

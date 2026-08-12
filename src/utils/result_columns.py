@@ -10,6 +10,11 @@ RESULT_EXTRA_COLUMN_DEFS: tuple[dict[str, str], ...] = (
     {"id": "building", "header": "동", "key": "동"},
     {"id": "area_name", "header": "타입명", "key": "타입명"},
     {"id": "same_addr", "header": "동일주소", "key": "동일주소건수"},
+    {"id": "same_addr_max", "header": "동일주소최고", "key": "동일주소최고가"},
+    {"id": "same_addr_min", "header": "동일주소최저", "key": "동일주소최저가"},
+    {"id": "verify_type", "header": "확인유형", "key": "확인유형"},
+    {"id": "detail_address", "header": "상세주소", "key": "상세주소"},
+    {"id": "direct_trade", "header": "직거래", "key": "직거래"},
     {"id": "cp", "header": "정보제공", "key": "정보제공"},
     {"id": "broker_office", "header": "중개소", "key": "부동산상호"},
     {"id": "broker_phone", "header": "전화", "key": "전화1"},
@@ -23,6 +28,11 @@ EXPORT_META_COLUMN_KEYS: tuple[str, ...] = (
     "동",
     "타입명",
     "동일주소건수",
+    "동일주소최고가",
+    "동일주소최저가",
+    "확인유형",
+    "상세주소",
+    "직거래",
     "정보제공",
 )
 

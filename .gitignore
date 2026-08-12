@@ -1,10 +1,13 @@
-# Rechecked 2026-08-05 (Fluent UI + packaging):
-# - Track product source: src/ (incl. src/ui/fluent/), tests/, scripts/, requirements.txt,
-#   naverland-scrapper.spec, docs/, root product markdown (README, PROJECT_AUDIT, update_history).
+# Rechecked 2026-08-12 (site contract + audit reform + packaging):
+# - Track product source: src/ (incl. src/ui/fluent/, src/core/services/site_contract.py),
+#   tests/, scripts/, requirements.txt, naverland-scrapper.spec,
+#   docs/ (incl. NAVER_LAND_SURVEY_2026-08-*.md), root product markdown
+#   (README.md, PROJECT_AUDIT.md, update_history.md).
 # - Ignore generated artifacts: logs/, build/, dist/, data/, caches, Playwright browsers,
-#   CodeGraph, agent session dumps.
-# - Agent-only docs (CLAUDE.md / claude.md / gemini.md / AGENTS.md 등) stay untracked.
-# - Do NOT ignore src/ui/fluent/ or PyQt6-Fluent-Widgets usage notes in product docs.
+#   CodeGraph, agent session dumps, local zips.
+# - Agent-only docs (CLAUDE.md / claude.md / gemini.md / AGENTS.md 등) stay untracked
+#   (intentionally removed from git history; do not re-add).
+# - Do NOT ignore src/ui/fluent/ or product docs under docs/.
 
 # Python
 __pycache__/
@@ -96,8 +99,10 @@ mcps/
 .windsurfrules
 CLAUDE.md
 claude.md
+Claude.md
 GEMINI.md
 gemini.md
+Gemini.md
 AGENTS.md
 agents.md
 COPILOT.md
@@ -105,3 +110,8 @@ copilot.md
 # Local agent context variants (case / path)
 **/CLAUDE.local.md
 **/claude.local.md
+**/AGENTS.local.md
+# Temporary plan/session mirrors (if ever written under repo)
+**/plan_mode.json
+**/chat_history.jsonl
+**/events.jsonl

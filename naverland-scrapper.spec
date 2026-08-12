@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec — slim by default, optional Chromium / Selenium extras.
 
-Design goals (2026-08-05):
+Design goals (2026-08-05 Fluent; rechecked 2026-08-12 site reform):
   1) Only pull what this app imports (PyQt6, qfluentwidgets, playwright, matplotlib,
      openpyxl, selenium/undetected_chromedriver as optional fallback).
   2) Block accidental ML/data-science packages on polluted PYTHONPATH
@@ -9,6 +9,9 @@ Design goals (2026-08-05):
   3) Avoid collect_submodules("playwright") / full selenium.devtools mega-graphs
      unless explicitly requested.
   4) Keep Chromium bundle opt-out for slim artifacts.
+  5) 2026-08-12: site_contract / article_api / detail_fetcher / geo markers are pure
+     Python under src/ — no extra datas. Analysis follows static imports from app_entry.
+     Optional pin below is only a safety net if Analysis pruning ever drops them.
 
 Environment:
   NAVERLAND_ONEFILE=1              → single-file EXE
@@ -87,6 +90,16 @@ hiddenimports += [
     "playwright.async_api",
     "playwright._impl._api_structures",
     "playwright._impl._driver",
+]
+
+# Site reform modules (static imports normally suffice; pin for frozen Analysis safety).
+hiddenimports += [
+    "src.core.services.site_contract",
+    "src.core.services.article_api",
+    "src.core.services.detail_fetcher",
+    "src.core.services.response_capture",
+    "src.core.services.map_geometry",
+    "src.core.crawl_lock",
 ]
 
 if include_selenium:

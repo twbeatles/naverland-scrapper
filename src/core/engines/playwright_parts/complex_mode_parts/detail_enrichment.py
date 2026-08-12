@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
 from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
-from src.core.services.response_capture import TRADE_CODE_MAP, detect_trade_type, normalize_article_payload
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
 
-_TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.items()}
 _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 
@@ -82,26 +79,120 @@ class PlaywrightDetailEnrichmentMixin:
         self.thread.emit_stats()
         return matched_count
 
+    def _detail_worker_count(self, item_count: int) -> int:
+        try:
+            configured = max(1, int(getattr(self.thread, "playwright_detail_workers", 1) or 1))
+        except (TypeError, ValueError):
+            configured = 1
+        # Cap under rate-limit pressure or front-api-only mode.
+        if bool(getattr(self, "_detail_rate_limited", False)):
+            configured = min(configured, 1)
+        elif bool(getattr(self, "_detail_prefer_front_api_only", False)):
+            configured = min(configured, 2)
+        elif int(self.thread.stats.get("detail_host_unreachable_count", 0) or 0) >= 2:
+            configured = min(configured, 2)
+        return min(max(1, item_count), configured)
+
+    def _record_detail_outcome(self, item: dict, detail: dict | None) -> dict:
+        """Apply detail and classify success after list-meta merge (audit H-4)."""
+        merged = apply_mobile_detail(dict(item), detail if isinstance(detail, dict) else {})
+        parse_state = str(merged.get("detail_parse_state", "") or "")
+        source = str(merged.get("detail_source", "") or "")
+        if merged.get("detail_host_unreachable"):
+            self.thread.stats["detail_host_unreachable_count"] = (
+                int(self.thread.stats.get("detail_host_unreachable_count", 0)) + 1
+            )
+        meta = {}
+        if isinstance(detail, dict):
+            meta = dict(detail.get("_detail_meta", {}) or {})
+        if meta.get("front_api_rate_limited") or parse_state == "rate_limited":
+            self.thread.stats["detail_front_api_rate_limited_count"] = (
+                int(self.thread.stats.get("detail_front_api_rate_limited_count", 0)) + 1
+            )
+            self._detail_rate_limited = True
+            self._detail_prefer_front_api_only = True
+
+        has_list_broker = bool(str(item.get("부동산상호", "") or "").strip())
+        has_merged_broker = bool(str(merged.get("부동산상호", "") or "").strip())
+        # Fields that typically require detail/front-api (not list-only realtorName).
+        detail_core = (
+            bool(str(merged.get("중개사이름", "") or "").strip())
+            or bool(str(merged.get("전화1", "") or "").strip())
+            or bool(str(merged.get("전화2", "") or "").strip())
+            or int(merged.get("기전세금(원)", 0) or 0) > 0
+        )
+
+        if parse_state == "success" or (parse_state == "partial" and detail_core):
+            self.thread.stats["detail_success_count"] = int(self.thread.stats.get("detail_success_count", 0)) + 1
+            self.thread.stats["detail_fetch_success"] = int(self.thread.stats.get("detail_fetch_success", 0)) + 1
+            if parse_state == "partial":
+                self.thread.stats["detail_partial_count"] = (
+                    int(self.thread.stats.get("detail_partial_count", 0)) + 1
+                )
+        elif has_list_broker or has_merged_broker:
+            # List-level broker name only — not a hard detail failure (audit H-4).
+            self.thread.stats["detail_list_meta_only_count"] = (
+                int(self.thread.stats.get("detail_list_meta_only_count", 0)) + 1
+            )
+            self.thread.stats["detail_partial_count"] = (
+                int(self.thread.stats.get("detail_partial_count", 0)) + 1
+            )
+            merged["detail_source"] = "list_meta" if not detail_core else (source or "list_meta")
+            merged["detail_parse_state"] = "partial"
+            merged["상세소스"] = merged["detail_source"]
+            merged["상세수집상태"] = "partial"
+        else:
+            self.thread.stats["detail_fail_count"] = int(self.thread.stats.get("detail_fail_count", 0)) + 1
+        return merged
+
     async def _enrich_items_with_mobile_details(self, items: list[dict]) -> list[dict]:
         if not items or self._page_pool is None:
             return items
 
-        async def _fetch_one(item: dict) -> dict:
+        # Per-complex flags (reset each batch).
+        self._detail_rate_limited = bool(getattr(self, "_detail_rate_limited", False))
+        prefer_api_only = bool(getattr(self.thread, "detail_front_api_only", False)) or bool(
+            getattr(self, "_detail_prefer_front_api_only", False)
+        )
+        if int(self.thread.stats.get("detail_host_unreachable_count", 0) or 0) >= 3:
+            prefer_api_only = True
+        self._detail_prefer_front_api_only = prefer_api_only
+
+        n = len(items)
+        ordered: list[dict | None] = [None] * n
+
+        async def _fetch_one(index: int, item: dict) -> None:
+            if bool(getattr(self, "_detail_abort_remaining", False)):
+                ordered[index] = apply_mobile_detail(dict(item), {})
+                self.thread.stats["detail_fetch_skipped_count"] = (
+                    int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + 1
+                )
+                return
+
             page = await self._page_pool.get()
-            detail_success = False
+            detail: dict = {}
             try:
                 article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
                 self.thread.stats["detail_fetch_total"] = int(self.thread.stats.get("detail_fetch_total", 0)) + 1
                 front_api_enabled = bool(getattr(self.thread, "detail_front_api_enabled", True))
-                detail = await self._async_retry(
-                    f"mobile detail {article_no}",
-                    lambda: fetch_mobile_article_detail(
-                        page,
-                        article_no,
-                        navigation_timeout_ms=self._navigation_timeout_ms(),
-                        front_api_enabled=front_api_enabled,
-                    ),
-                )
+                if bool(getattr(self, "_detail_rate_limited", False)):
+                    # After 429, skip network detail; keep list meta only.
+                    front_api_enabled = False
+                    prefer_local = True
+                else:
+                    prefer_local = bool(getattr(self, "_detail_prefer_front_api_only", False))
+
+                if front_api_enabled or not prefer_local:
+                    detail = await self._async_retry(
+                        f"mobile detail {article_no}",
+                        lambda: fetch_mobile_article_detail(
+                            page,
+                            article_no,
+                            navigation_timeout_ms=self._navigation_timeout_ms(),
+                            front_api_enabled=front_api_enabled,
+                            prefer_front_api_only=prefer_local and front_api_enabled,
+                        ),
+                    )
                 detail_meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
                 missing_field_count = int(detail_meta.get("missing_field_count", 0) or 0)
                 if missing_field_count > 0:
@@ -118,44 +209,37 @@ class PlaywrightDetailEnrichmentMixin:
                     self.thread.stats["detail_hydration_hit_count"] = (
                         int(self.thread.stats.get("detail_hydration_hit_count", 0)) + hydration_hit
                     )
-                parse_state = str(detail_meta.get("detail_parse_state", "") or "")
-                if parse_state == "partial":
-                    self.thread.stats["detail_partial_count"] = (
-                        int(self.thread.stats.get("detail_partial_count", 0)) + 1
-                    )
-                if detail and parse_state != "failed":
-                    detail_success = True
-                    self.thread.stats["detail_fetch_success"] = (
-                        int(self.thread.stats.get("detail_fetch_success", 0)) + 1
-                    )
+                if detail_meta.get("front_api_rate_limited"):
+                    self._detail_rate_limited = True
+                    self._detail_prefer_front_api_only = True
+                    # Abort remaining heavy detail after first hard rate limit for this batch.
+                    self._detail_abort_remaining = True
             except Exception:
                 detail = {}
             finally:
                 await self._page_pool.put(page)
-            if detail_success:
-                self.thread.stats["detail_success_count"] = int(self.thread.stats.get("detail_success_count", 0)) + 1
-            else:
-                self.thread.stats["detail_fail_count"] = int(self.thread.stats.get("detail_fail_count", 0)) + 1
-            return apply_mobile_detail(dict(item), detail)
 
-        queue: asyncio.Queue[dict] = asyncio.Queue()
-        for item in items:
-            queue.put_nowait(item)
-        result = []
+            ordered[index] = self._record_detail_outcome(item, detail)
+
+        queue: asyncio.Queue[tuple[int, dict]] = asyncio.Queue()
+        for idx, item in enumerate(items):
+            queue.put_nowait((idx, item))
         interrupted = False
+        self._detail_abort_remaining = False
 
         async def _worker() -> None:
             while not self.thread._should_stop():
                 try:
-                    item = queue.get_nowait()
+                    index, item = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     return
                 try:
-                    result.append(await _fetch_one(item))
+                    await _fetch_one(index, item)
                 finally:
                     queue.task_done()
 
-        worker_count = min(len(items), max(1, int(getattr(self.thread, "playwright_detail_workers", 1) or 1)))
+        worker_count = self._detail_worker_count(n)
+        self.thread.stats["detail_workers_used"] = worker_count
         tasks = [asyncio.create_task(_worker()) for _ in range(worker_count)]
         try:
             pending_tasks = set(tasks)
@@ -180,4 +264,12 @@ class PlaywrightDetailEnrichmentMixin:
             pending = [task for task in tasks if not task.done()]
             if pending:
                 await asyncio.gather(*pending, return_exceptions=True)
+
+        # Preserve input order on full completion; on stop return only finished slots.
+        if interrupted:
+            return [row for row in ordered if isinstance(row, dict)]
+        result: list[dict] = []
+        for idx, item in enumerate(items):
+            filled = ordered[idx]
+            result.append(filled if isinstance(filled, dict) else dict(item))
         return result

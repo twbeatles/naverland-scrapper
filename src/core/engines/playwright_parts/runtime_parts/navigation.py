@@ -17,20 +17,30 @@ class PlaywrightNavigationRuntimeMixin:
         target = str(target_url or "").strip()
         if not target:
             return []
-        return [
+        # new.land is the stable host (2026-08-12). fin/m HTML may 404; keep as last-resort only.
+        from src.core.services.site_contract import HOST_FIN, HOST_M, HOST_NEW
+
+        plans = [
             {"name": "direct", "warmups": [], "target": target},
-            {"name": "new_home_then_target", "warmups": ["https://new.land.naver.com/"], "target": target},
-            {
-                "name": "fin_then_new_target",
-                "warmups": ["https://fin.land.naver.com/", "https://new.land.naver.com/"],
-                "target": target,
-            },
-            {
-                "name": "mobile_then_new_target",
-                "warmups": ["https://m.land.naver.com/", "https://new.land.naver.com/"],
-                "target": target,
-            },
+            {"name": "new_home_then_target", "warmups": [f"{HOST_NEW}/"], "target": target},
         ]
+        allow_legacy = bool(getattr(self.thread, "playwright_allow_fin_m_entry_plans", False))
+        if allow_legacy:
+            plans.extend(
+                [
+                    {
+                        "name": "fin_then_new_target",
+                        "warmups": [f"{HOST_FIN}/", f"{HOST_NEW}/"],
+                        "target": target,
+                    },
+                    {
+                        "name": "mobile_then_new_target",
+                        "warmups": [f"{HOST_M}/", f"{HOST_NEW}/"],
+                        "target": target,
+                    },
+                ]
+            )
+        return plans
 
     async def _run_entry_plan(self, page, plan: dict, *, label: str) -> None:
         plan_name = str((plan or {}).get("name", "") or "direct")

@@ -23,24 +23,57 @@ class NaverNameLookupMixin:
     def _fetch_name_impl(cls, complex_id, asset_type="APT"):
         """네이버 API를 호출해 단지명을 조회한다."""
         asset_token = runtime_contract(cls)._normalize_asset_type(asset_type)
-        entity_path = "houses" if asset_token == "VL" else "complexes"
-        url = f"https://new.land.naver.com/api/{entity_path}/{complex_id}?sameAddressGroup=false"
-        req = urllib.request.Request(url)
-        req.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            detail = data.get("complexDetail", {}) if isinstance(data, dict) else {}
+        cid = str(complex_id or "").strip()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": f"https://new.land.naver.com/complexes/{cid}",
+        }
+
+        def _name_from_payload(data) -> str:
+            if not isinstance(data, dict):
+                return ""
+            detail = data.get("complexDetail", {}) if isinstance(data.get("complexDetail"), dict) else {}
             name_candidates = (
+                data.get("complexName"),
+                data.get("name"),
                 detail.get("complexName"),
                 detail.get("name"),
-                data.get("complexName") if isinstance(data, dict) else "",
-                data.get("name") if isinstance(data, dict) else "",
             )
             for candidate in name_candidates:
                 token = str(candidate or "").strip()
                 if token:
                     return token
-            return f"단지_{complex_id}"
+            return ""
+
+        # Prefer overview API for APT (live 2026-08); fall back to entity detail.
+        urls: list[str] = []
+        try:
+            from src.core.services.site_contract import build_complex_overview_url
+
+            urls.append(build_complex_overview_url(cid, asset_type=asset_token))
+        except Exception:
+            pass
+        entity_path = "houses" if asset_token == "VL" else "complexes"
+        urls.append(f"https://new.land.naver.com/api/{entity_path}/{cid}?sameAddressGroup=false")
+
+        last_error = None
+        for url in urls:
+            try:
+                req = urllib.request.Request(url)
+                for key, value in headers.items():
+                    req.add_header(key, value)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                    name = _name_from_payload(data)
+                    if name:
+                        return name
+            except Exception as exc:
+                last_error = exc
+                continue
+        if last_error:
+            logger.debug(f"단지명 API 조회 실패({cid}): {last_error}")
+        return f"단지_{complex_id}"
 
     @classmethod
     def _fetch_name_browser_fallback(cls, complex_id, asset_type="APT", cancel_checker=None):

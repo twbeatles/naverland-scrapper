@@ -214,18 +214,24 @@ class SettingsDialog(QDialog):
             "상세 페이지가 비어 있어도 중개 정보를 보충합니다."
         )
         detail_layout.addWidget(self.check_detail_front_api, 0, 0, 1, 2)
-        detail_layout.addWidget(QLabel("단지마다 상세 조회 한도:"), 1, 0)
+        self.check_detail_front_api_only = QCheckBox("상세 HTML 건너뛰고 API만 조회")
+        self.check_detail_front_api_only.setToolTip(
+            "fin.land 상세 페이지가 404이거나 느릴 때 권장합니다. "
+            "HTML 없이 front-api만 호출해 전화·중개 정보를 보충합니다."
+        )
+        detail_layout.addWidget(self.check_detail_front_api_only, 1, 0, 1, 2)
+        detail_layout.addWidget(QLabel("단지마다 상세 조회 한도:"), 2, 0)
         self.spin_detail_max = QSpinBox()
         self.spin_detail_max.setRange(0, 500)
         self.spin_detail_max.setSpecialValueText("제한 없음")
-        detail_layout.addWidget(self.spin_detail_max, 1, 1)
-        detail_layout.addWidget(QLabel("목록 페이지 사이 대기(ms):"), 2, 0)
+        detail_layout.addWidget(self.spin_detail_max, 2, 1)
+        detail_layout.addWidget(QLabel("목록 페이지 사이 대기(ms):"), 3, 0)
         self.spin_article_page_delay = QSpinBox()
         self.spin_article_page_delay.setRange(0, 2000)
         self.spin_article_page_delay.setSingleStep(50)
-        detail_layout.addWidget(self.spin_article_page_delay, 2, 1)
+        detail_layout.addWidget(self.spin_article_page_delay, 3, 1)
         self.check_article_api_fast_path = QCheckBox("빠른 목록 조회 사용 (권장)")
-        detail_layout.addWidget(self.check_article_api_fast_path, 3, 0, 1, 2)
+        detail_layout.addWidget(self.check_article_api_fast_path, 4, 0, 1, 2)
         detail_group.setLayout(detail_layout)
         layout.addWidget(detail_group)
 
@@ -353,6 +359,9 @@ class SettingsDialog(QDialog):
         self.check_detail_front_api.setChecked(
             bool(settings.get("detail_front_api_enabled", True))
         )
+        self.check_detail_front_api_only.setChecked(
+            bool(settings.get("detail_front_api_only", False))
+        )
         self.spin_detail_max.setValue(max(0, _int_setting("detail_enrichment_max_per_complex", 0)))
         self.spin_article_page_delay.setValue(max(0, _int_setting("article_api_page_delay_ms", 150)))
         self.combo_sort_col.setCurrentText(settings.get("default_sort_column", "가격"))
@@ -437,6 +446,7 @@ class SettingsDialog(QDialog):
             "include_pre_sale_rights": self.check_include_pre.isChecked(),
             "detail_enrichment_enabled": self.check_detail_enrichment.isChecked(),
             "detail_front_api_enabled": self.check_detail_front_api.isChecked(),
+            "detail_front_api_only": self.check_detail_front_api_only.isChecked(),
             "detail_enrichment_max_per_complex": self.spin_detail_max.value(),
             "article_api_page_delay_ms": self.spin_article_page_delay.value(),
             "default_sort_column": self.combo_sort_col.currentText(),

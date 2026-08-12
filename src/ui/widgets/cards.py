@@ -141,10 +141,12 @@ class ArticleCard(QFrame):
             meta_bits = [
                 str(self.data.get("동", "") or "").strip(),
                 str(self.data.get("타입명", "") or "").strip(),
+                str(self.data.get("확인일", "") or "").strip(),
+                str(self.data.get("부동산상호", "") or "").strip(),
             ]
             meta_line = " · ".join(bit for bit in meta_bits if bit)
             if meta_line:
-                meta_label = QLabel(meta_line[:40])
+                meta_label = QLabel(meta_line[:56])
                 meta_label.setStyleSheet(
                     "font-size: 11px; color: #9ca3af; background: transparent;"
                 )

@@ -1,5 +1,69 @@
 # Update History
 
+## 2026-08-12: Docs / spec / gitignore sync + push prep
+
+- `naverland-scrapper.spec`: 2026-08-12 사이트 계약 모듈 hiddenimport 핀·주석
+- `.gitignore`: 제품 docs/src 추적 규칙 명시, 에이전트 문서 삭제 상태 유지, 세션/도구 덤프 패턴 보강
+- `README.md`: 확장 컬럼·패키징 메모·survey 링크 정합
+- `PROJECT_AUDIT.md` / `docs/NAVER_LAND_SURVEY_2026-08-12.md` 조치 완료 상태 유지
+- 에이전트 문서(`claude.md` 등)는 저장소 미추적 (로컬만 존재 가능)
+
+## 2026-08-12: Remaining reform sweep (settings/session/smoke/fields)
+
+- 설정: `detail_front_api_only` (HTML 생략·API만) 기본/고급 배선 + thread kwargs
+- 목록 필드: `상세주소`, `직거래`, `중개ID` + 컬럼/export
+- front-api 세션 워밍: new.land goto + `/front-api/v1/auth/si`
+- live-smoke: `geo-contract`(`b=`), `realtorName=yes/no`, 마커 DOM 실패 시 API 캡처만으로 ok 허용
+- 카드: 확인일·중개소명 메타 한 줄
+- 앱 종료: `crawl_lock.force_release`
+- survey 체크리스트 완료 동기화
+
+## 2026-08-12: Audit fix plan (Phase 1–3)
+
+PROJECT_AUDIT 권고 전면 반영:
+
+### 1단계 진단·안정성
+
+- mixin rebind globals 가드 테스트 `tests/test_playwright_engine_globals.py`
+- 상세 통계: `detail_list_meta_only` / `detail_host_unreachable` / `detail_429` + finish 로그
+- 상세 워커: 429·host 불안정 시 워커 축소, 배치 조기 중단, **입력 순서 보존**
+- front-api-only (`prefer_front_api_only`) 경로
+
+### 2단계
+
+- geo `single-markers/2.0` 직접 호출 + DOM 전환 실패 시 API 폴백
+- live-smoke: fin HTML dead를 overall fail에서 제외(host-health degraded)
+
+### 3단계
+
+- 결과 컬럼/export: 동일주소최고·최저, 확인유형
+- name_lookup: complexes overview API 우선
+- README / Claude 문서 동기화
+
+## 2026-08-12: Naver site drift P0 (geo b=, list realtor, fin degrade)
+
+### 라이브 관측
+
+- `new.land` Article API / single-markers / overview 정상
+- `fin.land` HTML(`/`, `/map`, `/articles/*`) → `financial.pstatic.net/404` (자동화 경로)
+- geo: 사이트는 거래유형 키 **`b=`** 유지, 앱이 쓰던 **`tradeTypes`는 URL에서 소실**
+- 목록 JSON에 `realtorName` 등 존재하나 앱 미매핑
+
+### 코드
+
+- `src/core/services/site_contract.py` — 호스트·geo/complex URL·front-api 계약
+- geo scan / complex page URL: `a` + `b` + `e=RETAIL` (`build_geo_map_url` / `build_complex_page_url`)
+- `normalize_article_payload`: `realtorName`→`부동산상호`, 동일주소 최고/최저, 확인유형
+- entry plan 기본: `direct` + `new_home` only (`playwright_allow_fin_m_entry_plans` 로 레거시 복구)
+- desktop warmup: `new.land` 단독 (fin/m 홈 스킵)
+- detail: fin 404 시 m 연쇄 축소, list 중개명 empty wipe 방지, list-partial 상태
+- Selenium complex URL도 `b=` 정렬
+- 문서: `docs/NAVER_LAND_SURVEY_2026-08-12.md`
+
+### 검증
+
+- `tests/test_site_contract.py` 추가, normalize/detail 테스트 확장
+
 ## 2026-08-05: Fix CI Pyright (Fluent prepare_page types)
 
 - Root cause: `prepare_page()` returned bare `QWidget`, so `crawler_tab`/`geo_tab`/… lost concrete types (75 pyright errors on `test_ui_wiring` + menu Optional).

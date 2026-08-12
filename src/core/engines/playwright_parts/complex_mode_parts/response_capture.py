@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
 from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
-from src.core.services.response_capture import TRADE_CODE_MAP, detect_trade_type, normalize_article_payload
+from src.core.services.response_capture import detect_trade_type, normalize_article_payload
+from src.core.services.site_contract import HOST_NEW, build_complex_page_url
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
 
-_TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.items()}
 _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 
@@ -47,18 +46,20 @@ class PlaywrightResponseCaptureMixin:
         capture_last_payload: dict | None = None
         active_base_kind = "complexes"
         active_path_asset = str(asset_type or "APT")
-        active_target_url = f"https://new.land.naver.com/complexes/{cid}"
+        active_target_url = f"{HOST_NEW}/complexes/{cid}"
+        include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
-            target_url = (
-                f"https://new.land.naver.com/{base_kind}/{cid}?"
-                + urlencode(
-                    {
-                        "ms": f"{source_lat or 37.5},{source_lon or 127},{source_zoom or 16}",
-                        "a": path_asset,
-                        "tradeTypes": _TRADE_TO_CODE.get(trade_type, "A1"),
-                    }
-                )
+            # Use live map keys (a / b / e); bare path_asset + tradeTypes is ignored by site.
+            target_url = build_complex_page_url(
+                cid,
+                base_kind=base_kind,
+                path_asset=path_asset,
+                trade_type=trade_type,
+                lat=source_lat,
+                lon=source_lon,
+                zoom=source_zoom,
+                include_pre=include_pre,
             )
             active_base_kind = base_kind
             active_path_asset = path_asset

@@ -355,6 +355,13 @@ class AppLifecycleMixin:
                 ui_logger.warning("지도 탐색 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
                 self.status_bar.showMessage("⚠️ 지도 탐색 종료 후 다시 앱 종료를 시도하세요.")
                 return False
+        # Ensure process-wide crawl mutex never sticks after forced exit paths.
+        try:
+            from src.core.crawl_lock import get_crawl_lock
+
+            get_crawl_lock().force_release()
+        except Exception as lock_exc:
+            ui_logger.debug(f"crawl_lock force_release 무시: {lock_exc}")
         if hasattr(self, "schedule_timer") and self.schedule_timer:
             self.schedule_timer.stop()
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])

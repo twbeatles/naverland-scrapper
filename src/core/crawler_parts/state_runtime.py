@@ -46,6 +46,7 @@ class CrawlerStateRuntimeMixin:
         detail_enrichment_enabled=True,
         detail_enrichment_max_per_complex=0,
         detail_front_api_enabled=True,
+        detail_front_api_only=False,
         article_api_page_delay_ms=150,
     ):
         super().__init__()
@@ -85,8 +86,15 @@ class CrawlerStateRuntimeMixin:
             "detail_success_count": 0,
             "detail_fail_count": 0,
             "detail_partial_count": 0,
+            "detail_list_meta_only_count": 0,
+            "detail_host_unreachable_count": 0,
+            "detail_front_api_rate_limited_count": 0,
+            "detail_workers_used": 0,
             "detail_missing_field_total": 0,
             "detail_fetch_skipped_count": 0,
+            "geo_marker_api_attempt_count": 0,
+            "geo_marker_api_hit_count": 0,
+            "geo_marker_api_fail_count": 0,
             "blocked_page_count": 0,
             "playwright_recycle_count": 0,
             "playwright_last_recycle_reason": "",
@@ -184,6 +192,7 @@ class CrawlerStateRuntimeMixin:
         except (TypeError, ValueError):
             self.detail_enrichment_max_per_complex = 0
         self.detail_front_api_enabled = bool(detail_front_api_enabled)
+        self.detail_front_api_only = bool(detail_front_api_only)
         try:
             self.article_api_page_delay_ms = max(0, min(2000, int(article_api_page_delay_ms)))
         except (TypeError, ValueError):

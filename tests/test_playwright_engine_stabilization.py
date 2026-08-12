@@ -1477,7 +1477,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
             try:
                 self.assertEqual(int(thread.stats.get("playwright_session_reused", 0)), 2)
-                self.assertGreaterEqual(int(thread.stats.get("playwright_warmup_count", 0)), 3)
+                # 2026-08-12: desktop warmup is new.land only (fin/m home skipped).
+                self.assertGreaterEqual(int(thread.stats.get("playwright_warmup_count", 0)), 1)
+                self.assertEqual(int(thread.stats.get("warmup_new_land_ok", 0)), 1)
                 self.assertEqual(thread.stats.get("playwright_profile_dir"), tmp)
             finally:
                 await engine._shutdown_async()
@@ -1598,7 +1600,18 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._async_retry = _no_retry
         with patch(
             "src.core.engines.playwright_engine.fetch_mobile_article_detail",
-            side_effect=[{"brokerName": "ok"}, RuntimeError("detail failed")],
+            side_effect=[
+                {
+                    "중개사이름": "ok",
+                    "전화1": "02-111-2222",
+                    "_detail_meta": {
+                        "detail_source": "front_api",
+                        "detail_parse_state": "partial",
+                        "missing_field_count": 5,
+                    },
+                },
+                RuntimeError("detail failed"),
+            ],
         ):
             result = await engine._enrich_items_with_mobile_details(
                 [{"매물ID": "A-1"}, {"매물ID": "A-2"}]

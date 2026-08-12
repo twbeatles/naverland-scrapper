@@ -3,9 +3,12 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlencode
 
-from src.core.services.response_capture import TRADE_CODE_MAP
+from src.core.services.site_contract import (
+    HOST_NEW,
+    article_api_real_estate_type as _contract_real_estate_type,
+    trade_type_to_code,
+)
 
-_TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.items()}
 DEFAULT_ARTICLE_API_PAGE_SIZE = 20
 MAX_ARTICLE_API_PAGES = 50
 
@@ -19,13 +22,7 @@ def article_api_real_estate_type(path_asset: str, *, include_pre: bool = False) 
 
     Live UI (2026-08) defaults to APT:ABYG:JGC without PRE. Optional PRE covers 분양권.
     """
-    asset = str(path_asset or "APT").strip().upper()
-    if asset == "VL":
-        return "VL:DDDGG:JWJT:SGJT"
-    base = "APT:ABYG:JGC"
-    if include_pre:
-        return f"{base}:PRE"
-    return base
+    return _contract_real_estate_type(path_asset, include_pre=include_pre)
 
 
 def build_article_api_query_params(
@@ -38,7 +35,7 @@ def build_article_api_query_params(
     page_num = max(1, int(page or 1))
     return {
         "realEstateType": article_api_real_estate_type(path_asset, include_pre=include_pre),
-        "tradeType": _TRADE_TO_CODE.get(trade_type, "A1"),
+        "tradeType": trade_type_to_code(trade_type),
         "tag": "::::::::",
         "rentPriceMin": "0",
         "rentPriceMax": "900000000",
@@ -77,7 +74,7 @@ def build_article_api_url(
     params = build_article_api_query_params(
         trade_type, path_asset, page=page, include_pre=include_pre
     )
-    return f"https://new.land.naver.com/api/articles/{path_kind}/{cid}?" + urlencode(params)
+    return f"{HOST_NEW}/api/articles/{path_kind}/{cid}?" + urlencode(params)
 
 
 def article_api_list_count(payload: Any) -> int:

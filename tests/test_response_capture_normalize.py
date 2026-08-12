@@ -20,6 +20,13 @@ class TestNormalizeArticlePayload(unittest.TestCase):
             "latitude": 37.56,
             "longitude": 126.98,
             "articleFeatureDesc": "로얄층",
+            "realtorName": "약수하나공인중개사사무소",
+            "realtorId": "r-123",
+            "sameAddrMaxPrc": "20억",
+            "sameAddrMinPrc": "18억",
+            "verificationTypeCode": "DOC",
+            "detailAddress": "33동 1201호",
+            "isDirectTrade": False,
         }
         item = normalize_article_payload(
             article,
@@ -34,6 +41,13 @@ class TestNormalizeArticlePayload(unittest.TestCase):
         self.assertEqual(item["타입명"], "84A")
         self.assertEqual(item["동일주소건수"], 3)
         self.assertEqual(item["정보제공"], "네이버")
+        self.assertEqual(item["부동산상호"], "약수하나공인중개사사무소")
+        self.assertEqual(item["중개ID"], "r-123")
+        self.assertEqual(item["동일주소최고가"], "20억")
+        self.assertEqual(item["동일주소최저가"], "18억")
+        self.assertEqual(item["확인유형"], "DOC")
+        self.assertEqual(item["상세주소"], "33동 1201호")
+        self.assertEqual(item["직거래"], "N")
         self.assertAlmostEqual(float(item["위도"]), 37.56)
         self.assertAlmostEqual(float(item["경도"]), 126.98)
 

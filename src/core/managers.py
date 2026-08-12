@@ -71,6 +71,8 @@ DEFAULT_SETTINGS = {
     "detail_enrichment_enabled": True,  # 필터 통과 매물 상세 보강
     "detail_enrichment_max_per_complex": 0,  # 0=무제한, 단지당 상세 상한
     "detail_front_api_enabled": True,  # fin.land front-api 직접 보충
+    # HTML 상세 생략·API만 (fin HTML 404 환경에서 권장). 기본 off=자동 degrade.
+    "detail_front_api_only": False,
     "article_api_page_delay_ms": 150,  # 목록 API 페이지 간격
     "result_extra_columns": [],  # 결과 테이블 확장 컬럼 id 목록
     "card_show_extra_meta": True,  # 카드에 동/타입명 한 줄
@@ -169,6 +171,7 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
     sanitized["include_pre_sale_rights"] = bool(sanitized.get("include_pre_sale_rights", False))
     sanitized["detail_enrichment_enabled"] = bool(sanitized.get("detail_enrichment_enabled", True))
     sanitized["detail_front_api_enabled"] = bool(sanitized.get("detail_front_api_enabled", True))
+    sanitized["detail_front_api_only"] = bool(sanitized.get("detail_front_api_only", False))
     sanitized["card_show_extra_meta"] = bool(sanitized.get("card_show_extra_meta", True))
     sanitized["detail_enrichment_max_per_complex"] = _clamp_int(
         sanitized.get("detail_enrichment_max_per_complex", 0), 0, 0, 500
@@ -196,6 +199,7 @@ def collection_runtime_kwargs(settings_obj: Any = None) -> dict[str, Any]:
             getter("detail_enrichment_max_per_complex", 0), 0, 0, 500
         ),
         "detail_front_api_enabled": bool(getter("detail_front_api_enabled", True)),
+        "detail_front_api_only": bool(getter("detail_front_api_only", False)),
         "article_api_page_delay_ms": _clamp_int(
             getter("article_api_page_delay_ms", 150), 150, 0, 2000
         ),

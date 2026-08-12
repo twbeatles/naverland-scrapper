@@ -285,9 +285,25 @@ class CrawlerSeleniumFlowMixin:
                 self._flush_pending_items_if_needed(force=True)
                 return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
         
-        trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
-        base_url = get_complex_url(cid, asset_type=asset_token, preferred_family="new")
-        url = f"{base_url}?ms=37.5,127,16&a=APT&e=RETAIL&tradeTypes={trade_param}"
+        try:
+            from src.core.services.site_contract import build_complex_page_url
+
+            include_pre = bool(getattr(self, "include_pre_sale_rights", False))
+            url = build_complex_page_url(
+                cid,
+                base_kind="houses" if str(asset_token or "").upper() == "VL" else "complexes",
+                path_asset=str(asset_token or "APT"),
+                trade_type=ttype,
+                lat=37.5,
+                lon=127.0,
+                zoom=16,
+                include_pre=include_pre,
+            )
+        except Exception:
+            trade_param = {"매매": "A1", "전세": "B1", "월세": "B2"}.get(ttype, "A1")
+            base_url = get_complex_url(cid, asset_type=asset_token, preferred_family="new")
+            # Fallback aligned with live UI: b= trade code, composite a= when possible.
+            url = f"{base_url}?ms=37.5,127,16&a=APT:ABYG:JGC&e=RETAIL&b={trade_param}"
 
         try:
             parse_result = self.retry_handler.execute_with_retry(

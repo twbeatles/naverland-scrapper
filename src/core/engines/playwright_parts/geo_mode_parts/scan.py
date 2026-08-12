@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
 from src.core.services.map_geometry import build_grid_sweep_coords, clamp_korea
-from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
+from src.core.services.response_capture import normalize_marker_payload
+from src.core.services.site_contract import build_geo_map_url
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
-
-_TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.items()}
 
 
 class PlaywrightGeoScanMixin:
@@ -28,6 +26,7 @@ class PlaywrightGeoScanMixin:
         lat, lon = clamp_korea(geo.lat, geo.lon)
         zoom = int(geo.zoom or 15)
         discovered: dict[str, dict] = {}
+        self._geo_discovered_ref = discovered
         self.thread.log(
             f"지도 탐색 시작: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, 자산={','.join(geo.asset_types)}"
         )
@@ -204,25 +203,16 @@ class PlaywrightGeoScanMixin:
         if not self._desktop_page:
             return False
         base_kind = "houses" if asset_type == "VL" else "complexes"
-        trade_code = _TRADE_TO_CODE.get(trade_type, "A1")
-        # Align with live UI default (e.g. a=APT:ABYG:JGC) instead of bare APT/VL.
-        try:
-            from src.core.services.article_api import article_api_real_estate_type
-
-            include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
-            map_asset = article_api_real_estate_type(asset_type, include_pre=include_pre)
-        except Exception:
-            map_asset = str(asset_type or "APT")
-        url = (
-            f"https://new.land.naver.com/{base_kind}?"
-            + urlencode(
-                {
-                    "ms": f"{lat},{lon},{zoom}",
-                    "a": map_asset,
-                    "tradeTypes": trade_code,
-                    "e": "RETAIL",
-                }
-            )
+        # Live UI keeps trade filter as ``b=A1``; ``tradeTypes`` is dropped (2026-08-12).
+        include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
+        url = build_geo_map_url(
+            base_kind=base_kind,
+            lat=lat,
+            lon=lon,
+            zoom=zoom,
+            asset_type=str(asset_type or "APT"),
+            trade_type=trade_type,
+            include_pre=include_pre,
         )
         last_failure = ""
         for plan in self._build_entry_plans(url):
@@ -246,13 +236,34 @@ class PlaywrightGeoScanMixin:
                 except Exception:
                     self.thread.log("geo canvas wait timeout", 10)
                 await self._human_like_recenter(lat, lon, zoom)
+                # Prefer direct single-markers API; keep DOM switch + capture as supplement.
+                discovered = getattr(self, "_geo_discovered_ref", None)
+                if not isinstance(discovered, dict):
+                    discovered = {}
+                api_hits = 0
+                try:
+                    api_hits = await self._fetch_single_markers_api(
+                        discovered,
+                        asset_type=asset_type,
+                        trade_type=trade_type,
+                        lat=lat,
+                        lon=lon,
+                        zoom=zoom,
+                    )
+                except Exception as api_exc:
+                    self.thread.log(f"   geo marker API 실패: {api_exc}", 10)
                 switched = await self._switch_to_listing_markers()
-                if not switched:
+                if not switched and api_hits <= 0:
                     self.thread._mark_geo_incomplete(
                         "marker_switch_fail",
                         f"{asset_type}/{trade_type}",
                     )
                     return False
+                if not switched and api_hits > 0:
+                    self.thread.log(
+                        f"   geo DOM 마커 전환 실패 → API로 {api_hits}건 확보, 스윕 계속",
+                        20,
+                    )
                 coords = build_grid_sweep_coords(lat, lon, zoom, rings=geo.rings, step_px=geo.step_px)
                 dwell_ms = max(100, int(geo.dwell_ms))
                 total = len(coords)
@@ -266,6 +277,19 @@ class PlaywrightGeoScanMixin:
                     except Exception:
                         pass
                     await self._desktop_page.wait_for_timeout(dwell_ms)
+                    # Optional API refresh at grid points when DOM path is weak.
+                    if (not switched) or idx == 1 or idx == total:
+                        try:
+                            await self._fetch_single_markers_api(
+                                discovered,
+                                asset_type=asset_type,
+                                trade_type=trade_type,
+                                lat=target_lat,
+                                lon=target_lon,
+                                zoom=zoom,
+                            )
+                        except Exception:
+                            pass
                 return True
             except Exception as exc:
                 last_failure = str(exc)

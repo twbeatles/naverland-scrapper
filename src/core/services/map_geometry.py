@@ -28,6 +28,37 @@ def pixel_to_ll(x: float, y: float, zoom: float) -> tuple[float, float]:
     return lat, lon
 
 
+def viewport_bounds(
+    lat: float,
+    lon: float,
+    zoom: int,
+    *,
+    width_px: int = 1600,
+    height_px: int = 900,
+) -> dict[str, float]:
+    """Approximate map viewport WGS84 bounds for single-markers API."""
+    cx, cy = ll_to_pixel(lat, lon, zoom)
+    half_w = max(100, int(width_px or 1600)) / 2.0
+    half_h = max(100, int(height_px or 900)) / 2.0
+    top_lat, left_lon = pixel_to_ll(cx - half_w, cy - half_h, zoom)
+    bottom_lat, right_lon = pixel_to_ll(cx + half_w, cy + half_h, zoom)
+    # pixel_to_ll returns (lat, lon); y increases southward so top_lat >= bottom_lat typically
+    north = max(top_lat, bottom_lat)
+    south = min(top_lat, bottom_lat)
+    west = min(left_lon, right_lon)
+    east = max(left_lon, right_lon)
+    north, _ = clamp_korea(north, (west + east) / 2.0)
+    south, _ = clamp_korea(south, (west + east) / 2.0)
+    _, west = clamp_korea((north + south) / 2.0, west)
+    _, east = clamp_korea((north + south) / 2.0, east)
+    return {
+        "leftLon": float(west),
+        "rightLon": float(east),
+        "topLat": float(north),
+        "bottomLat": float(south),
+    }
+
+
 def build_grid_sweep_coords(
     center_lat: float,
     center_lon: float,

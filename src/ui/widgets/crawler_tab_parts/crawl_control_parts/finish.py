@@ -37,6 +37,9 @@ class CrawlerTabFinishMixin:
                 detail_disabled = int(final_stats.get("detail_enrichment_disabled", 0) or 0)
                 api_last = str(final_stats.get("article_api_last_status", "") or "-")
                 fail_summary = self._format_api_failure_summary(final_stats)
+                list_meta = int(final_stats.get("detail_list_meta_only_count", 0) or 0)
+                host_unreach = int(final_stats.get("detail_host_unreachable_count", 0) or 0)
+                rate_limited = int(final_stats.get("detail_front_api_rate_limited_count", 0) or 0)
                 self.append_log(
                     "📌 진단 요약: "
                     f"browser={final_stats.get('playwright_browser_source', '-')}, "
@@ -49,7 +52,10 @@ class CrawlerTabFinishMixin:
                     f"capture_fail={int(final_stats.get('capture_failed_count', 0) or 0)}, "
                     f"block_like={int(final_stats.get('block_like_redirect_count', 0) or 0)}, "
                     f"detail_partial={int(final_stats.get('detail_partial_count', 0) or 0)}, "
+                    f"detail_list_meta={list_meta}, "
                     f"detail_fail={int(final_stats.get('detail_fail_count', 0) or 0)}, "
+                    f"detail_host_unreach={host_unreach}, "
+                    f"detail_429={rate_limited}, "
                     f"detail_skip={detail_skip}, "
                     f"detail_cap={detail_cap}, "
                     f"detail_off={detail_disabled}",
@@ -67,6 +73,17 @@ class CrawlerTabFinishMixin:
                 elif detail_skip > 0:
                     self.append_log(
                         f"ℹ️ 상세 조회를 건너뛴 매물 {detail_skip}건이 있습니다.",
+                        20,
+                    )
+                if host_unreach > 0 or rate_limited > 0:
+                    self.append_log(
+                        "ℹ️ 상세 호스트(fin) 불안정 또는 front-api 429로 전화·기전세가 비어 있을 수 있습니다. "
+                        "목록의 중개소명(realtorName)은 유지됩니다.",
+                        20,
+                    )
+                elif list_meta > 0:
+                    self.append_log(
+                        f"ℹ️ {list_meta}건은 상세 API 없이 목록 메타(중개소명 등)만 반영했습니다.",
                         20,
                     )
 
