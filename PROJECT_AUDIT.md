@@ -39,7 +39,7 @@ Naverland Scrapper Pro Plus v15.0은 **PyQt6 + Fluent UI + Playwright + SQLite**
 
 **검증 스냅샷 (조치 후)**
 
-- UI 제외 pytest: **250+ passed** (환경별 UI 스위트는 PySide6 혼합 시 실패 가능)
+- UI 제외 pytest: **250+ passed** (`qfluentwidgets`가 PySide6 변종이면 preflight/spec이 실패)
 - 의도적 비범위: OPST 전면, article_history 스키마 확장, PRE 기본 on
 
 ---
@@ -227,7 +227,7 @@ crawl_lock      → complex / geo / schedule 상호 배제
 7. **live-smoke host health** — `b=` 보존, fin 404, list `realtorName` 검증 미확장 (**추정**: 회귀 조기 경보 약화).
 8. **DB에 메타·중개명 미저장** — 의도적 경량 원칙이나, 재실행 없이 이력 조회 시 공백 (**추정**: 제품 요구에 따라 갭).
 9. **OPST/기타 자산·PRE 기본** — 의도적 비범위.
-10. **UI 테스트 환경 PySide6 충돌** — 전체 pytest 그린을 막는 환경 이슈 가능; 기능 코드 회귀와 분리 필요 (**추정**).
+10. **UI 테스트 환경 PySide6 충돌** — `PySide6-Fluent-Widgets`가 `qfluentwidgets`를 덮어쓰면 소스/EXE 모두 `ModuleNotFoundError: No module named 'PySide6'`로 죽는다. preflight·spec이 PyQt6 바인딩을 강제한다. `PySide6-Fluent-Widgets`를 설치하지 말 것.
 
 ---
 

@@ -25,6 +25,7 @@ Environment:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -33,6 +34,17 @@ from PyInstaller.utils.hooks import collect_submodules
 # NOTE: In PyInstaller 6.x, the spec may be executed via `exec()` without `__file__`.
 # Assume the spec is invoked from repository root.
 project_dir = Path.cwd().resolve()
+
+# qfluentwidgets is shared by PyQt6-Fluent-Widgets and PySide6-Fluent-Widgets.
+# This app uses PyQt6 and excludes PySide6; the PySide6 variant would freeze
+# then crash with ModuleNotFoundError: No module named 'PySide6'.
+if str(project_dir) not in sys.path:
+    sys.path.insert(0, str(project_dir))
+from src.utils.preflight import find_qfluentwidgets_binding_mismatch  # noqa: E402
+
+_qfluent_binding_error = find_qfluentwidgets_binding_mismatch()
+if _qfluent_binding_error:
+    raise SystemExit(f"[spec] {_qfluent_binding_error}")
 
 build_onefile = os.environ.get("NAVERLAND_ONEFILE", "0") == "1"
 bundle_chromium = os.environ.get("NAVERLAND_BUNDLE_CHROMIUM", "1") == "1"

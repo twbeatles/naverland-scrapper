@@ -1,5 +1,12 @@
 # Update History
 
+## 2026-08-13: Light-mode cards + Fluent binding guard
+
+- 라이트 모드 매물 카드가 흑색 배경으로 남던 문제: `ArticleCard` objectName/`QFrame#articleCard` QSS, 불투명 surface 토큰, `CardViewWidget.set_theme`로 재렌더
+- 테마 전환 시 기존 카드를 다시 그려 라이트/다크 배경·본문색을 맞춤
+- `PySide6-Fluent-Widgets`가 `qfluentwidgets`를 덮어쓰면 패키징 EXE가 `No module named 'PySide6'`로 실패. spec/preflight가 PyQt6 변종을 강제
+- `README.md` / `PROJECT_AUDIT.md`에 설치·빌드 주의 명시
+
 ## 2026-08-12: Docs / spec / gitignore sync + push prep
 
 - `naverland-scrapper.spec`: 2026-08-12 사이트 계약 모듈 hiddenimport 핀·주석

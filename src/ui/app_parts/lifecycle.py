@@ -547,7 +547,10 @@ class AppLifecycleMixin:
         # 안내 문구
         recent_limit = int(getattr(self.recently_viewed, "max_items", settings.get("recently_viewed_count", 50)) or 50)
         info = QLabel(f"최근에 확인한 매물 목록입니다 (최대 {recent_limit}개).")
-        info.setStyleSheet("color: #888; margin-bottom: 10px;")
+        from src.ui.styles import COLORS
+
+        info_color = COLORS.get(self.current_theme, COLORS["dark"])["text_secondary"]
+        info.setStyleSheet(f"color: {info_color}; margin-bottom: 10px; background: transparent;")
         layout.addWidget(info)
         
         # 목록 (CardView 재사용)

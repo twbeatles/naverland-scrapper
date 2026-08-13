@@ -11,7 +11,9 @@ from src.utils.preflight import (
     _find_browser_executable_under,
     find_conflict_markers,
     find_missing_dependencies,
+    find_qfluentwidgets_binding_mismatch,
     get_effective_crawl_engine,
+    inspect_qfluentwidgets_binding,
     run_preflight_checks,
 )
 
@@ -84,6 +86,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
                 patch.dict(
                     os.environ,
                     {
@@ -113,6 +116,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
                 patch.dict(
                     os.environ,
                     {
@@ -141,6 +145,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
                 patch.dict(
                     os.environ,
                     {
@@ -169,6 +174,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser") as browser_check,
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
                 patch.dict(
                     os.environ,
                     {
@@ -197,6 +203,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures") as import_smoke,
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
@@ -221,6 +228,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
             ):
                 ok, errors = run_preflight_checks(profile="startup")
             self.assertTrue(ok)
@@ -241,6 +249,7 @@ class TestPreflight(unittest.TestCase):
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
                 patch("src.utils.preflight.find_internal_import_failures", return_value=[]) as import_smoke,
                 patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
@@ -251,6 +260,77 @@ class TestPreflight(unittest.TestCase):
             import_smoke.assert_called_once()
             self.assertTrue(ok)
             self.assertEqual(errors, [])
+
+    def test_inspect_qfluentwidgets_binding_detects_pyside6_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init_path = Path(tmp) / "__init__.py"
+            init_path.write_text(
+                '"""\nPySide6-Fluent-Widgets\n'
+                "A fluent design widgets library based on PySide6.\n"
+                '"""\nfrom .components import *\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(inspect_qfluentwidgets_binding(init_path), "PySide6")
+
+    def test_inspect_qfluentwidgets_binding_detects_pyqt6_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init_path = Path(tmp) / "__init__.py"
+            init_path.write_text(
+                '"""\nPyQt6-Fluent-Widgets\n'
+                "A fluent design widgets library based on PyQt6.\n"
+                '"""\nfrom .components import *\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(inspect_qfluentwidgets_binding(init_path), "PyQt6")
+
+    def test_find_qfluentwidgets_binding_mismatch_reports_pyside6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init_path = Path(tmp) / "__init__.py"
+            init_path.write_text(
+                '"""PySide6-Fluent-Widgets based on PySide6."""\n',
+                encoding="utf-8",
+            )
+            message = find_qfluentwidgets_binding_mismatch(init_path=init_path)
+            self.assertIn("PyQt6", message)
+            self.assertIn("PySide6", message)
+
+    def test_find_qfluentwidgets_binding_mismatch_accepts_pyqt6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init_path = Path(tmp) / "__init__.py"
+            init_path.write_text(
+                '"""PyQt6-Fluent-Widgets based on PyQt6."""\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(find_qfluentwidgets_binding_mismatch(init_path=init_path), "")
+
+    def test_run_preflight_checks_fails_on_pyside6_qfluentwidgets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            data_dir = base / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            init_path = base / "qfluentwidgets_init.py"
+            init_path.write_text(
+                '"""PySide6-Fluent-Widgets based on PySide6."""\n',
+                encoding="utf-8",
+            )
+            with (
+                patch("src.utils.preflight.find_conflict_markers", return_value=[]),
+                patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
+                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
+                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch(
+                    "src.utils.preflight.resolve_qfluentwidgets_init_path",
+                    return_value=init_path,
+                ),
+            ):
+                ok, errors = run_preflight_checks(
+                    base_dir=base,
+                    data_dir=data_dir,
+                    log_dir=base / "logs",
+                    profile="startup",
+                )
+            self.assertFalse(ok)
+            self.assertTrue(any("qfluentwidgets" in err and "PySide6" in err for err in errors))
 
 
 if __name__ == "__main__":

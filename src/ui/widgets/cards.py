@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCursor
+from PyQt6.QtGui import QColor, QCursor, QPalette
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -17,6 +19,14 @@ from src.utils.constants import TRADE_COLORS
 from src.utils.helpers import PriceConverter
 
 
+def _theme_key(is_dark: bool) -> str:
+    return "dark" if is_dark else "light"
+
+
+def _is_dark_theme(theme: str | None) -> bool:
+    return str(theme or "dark").strip().lower() != "light"
+
+
 class ArticleCard(QFrame):
     """매물 카드 위젯 (v13.0)"""
 
@@ -31,41 +41,59 @@ class ArticleCard(QFrame):
         super().__init__(parent)
         self.data = data
         self.is_dark = is_dark
+        self.setObjectName("articleCard")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAutoFillBackground(True)
         self._setup_ui()
 
-    def _setup_ui(self):
-        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setFixedSize(280, 210)
-
+    def _apply_card_chrome(self):
         trade_type = self.data.get("거래유형", "매매")
         colors = TRADE_COLORS.get(trade_type, TRADE_COLORS["매매"])
         fg_color = colors["dark_fg"] if self.is_dark else colors["fg"]
-
-        theme_key = "dark" if self.is_dark else "light"
-        surface = COLORS[theme_key].get("card_bg", "#1e1e2e" if self.is_dark else "#ffffff")
-        hover_bg = COLORS[theme_key].get("card_bg_hover", surface)
-        border = COLORS[theme_key].get("card_border", f"{fg_color}40")
-        hover_border = COLORS[theme_key].get("card_border_hover", fg_color)
-        style_key = (surface, border, hover_border, fg_color, hover_bg)
+        theme_key = _theme_key(self.is_dark)
+        palette = COLORS[theme_key]
+        surface = palette.get("card_bg", "#1e1e2e" if self.is_dark else "#ffffff")
+        hover_bg = palette.get("card_bg_hover", surface)
+        border = palette.get("card_border", f"{fg_color}40")
+        hover_border = palette.get("card_border_hover", fg_color)
+        text_primary = palette["text_primary"]
+        style_key = (surface, border, hover_border, fg_color, hover_bg, text_primary)
         card_style = self._CARD_STYLE_CACHE.get(style_key)
         if card_style is None:
             card_style = (
-                "ArticleCard {"
+                "QFrame#articleCard {"
                 f"background-color: {surface};"
                 f"border: 1px solid {border};"
                 f"border-top: 3px solid {fg_color};"
                 "border-radius: 12px;"
                 "padding: 12px;"
                 "}"
-                "ArticleCard:hover {"
+                "QFrame#articleCard:hover {"
                 f"border: 1px solid {hover_border};"
                 f"border-top: 3px solid {fg_color};"
                 f"background-color: {hover_bg};"
                 "}"
+                "QFrame#articleCard QLabel {"
+                f"color: {text_primary};"
+                "background: transparent;"
+                "}"
             )
             self._CARD_STYLE_CACHE[style_key] = card_style
         self.setStyleSheet(card_style)
+        fill = QColor(surface)
+        if fill.isValid():
+            widget_palette = self.palette()
+            widget_palette.setColor(QPalette.ColorRole.Window, fill)
+            widget_palette.setColor(QPalette.ColorRole.Base, fill)
+            self.setPalette(widget_palette)
+        return fg_color, palette
+
+    def _setup_ui(self):
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.setFixedSize(280, 210)
+
+        fg_color, palette = self._apply_card_chrome()
+        trade_type = self.data.get("거래유형", "매매")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
@@ -108,7 +136,7 @@ class ArticleCard(QFrame):
             change_badge.setStyleSheet("color: #22c55e; font-weight: 800;")
             top_layout.addWidget(change_badge)
 
-        accent = COLORS[theme_key]["accent"]
+        accent = palette["accent"]
         self.fav_btn = QPushButton("")
         self.fav_btn.setFixedSize(28, 28)
         self.fav_btn.setToolTip("즐겨찾기")
@@ -126,7 +154,9 @@ class ArticleCard(QFrame):
         layout.addLayout(top_layout)
 
         name_label = QLabel(self.data.get("단지명", ""))
-        name_label.setStyleSheet("font-size: 14px; font-weight: 700; background: transparent;")
+        name_label.setStyleSheet(
+            f"font-size: 14px; font-weight: 700; background: transparent; color: {palette['text_primary']};"
+        )
         name_label.setWordWrap(True)
         layout.addWidget(name_label)
 
@@ -148,7 +178,7 @@ class ArticleCard(QFrame):
             if meta_line:
                 meta_label = QLabel(meta_line[:56])
                 meta_label.setStyleSheet(
-                    "font-size: 11px; color: #9ca3af; background: transparent;"
+                    f"font-size: 11px; color: {palette['text_secondary']}; background: transparent;"
                 )
                 layout.addWidget(meta_label)
 
@@ -181,20 +211,24 @@ class ArticleCard(QFrame):
         if floor:
             info_bits.append(str(floor))
         info_label = QLabel(" · ".join(info_bits) if info_bits else "")
-        info_label.setStyleSheet("font-size: 12px; color: #888; background: transparent;")
+        info_label.setStyleSheet(
+            f"font-size: 12px; color: {palette['text_secondary']}; background: transparent;"
+        )
         if info_bits:
             layout.addWidget(info_label)
 
         if self.data.get("평당가_표시"):
             pprice_label = QLabel(str(self.data.get("평당가_표시")))
-            pprice_label.setStyleSheet("font-size: 11px; color: #888; background: transparent;")
+            pprice_label.setStyleSheet(
+                f"font-size: 11px; color: {palette['text_secondary']}; background: transparent;"
+            )
             layout.addWidget(pprice_label)
 
         feature = self.data.get("타입/특징", "")
         if feature:
             feature_label = QLabel(feature[:30])
             feature_label.setStyleSheet(
-                "font-size: 11px; color: #9ca3af; background: transparent;"
+                f"font-size: 11px; color: {palette['text_secondary']}; background: transparent;"
             )
             feature_label.setWordWrap(True)
             layout.addWidget(feature_label)
@@ -228,6 +262,7 @@ class CardViewWidget(QScrollArea):
     def __init__(self, is_dark: bool = True, parent=None):
         super().__init__(parent)
         self.is_dark = is_dark
+        self.setObjectName("cardView")
         self._cards = []
         self._all_data = []
         self._search_text_cache = []
@@ -261,6 +296,33 @@ class CardViewWidget(QScrollArea):
         scroll_bar = self.verticalScrollBar()
         if scroll_bar is not None:
             scroll_bar.valueChanged.connect(self._on_scroll)
+        self._apply_surface_style()
+
+    def _apply_surface_style(self):
+        palette = COLORS[_theme_key(self.is_dark)]
+        bg = palette.get("bg_primary", "#0f0f1a" if self.is_dark else "#f8fafc")
+        self.setStyleSheet(
+            f"QScrollArea#cardView {{ background-color: {bg}; border: none; }}"
+            f"QScrollArea#cardView > QWidget {{ background-color: {bg}; }}"
+        )
+        if hasattr(self, "container"):
+            self.container.setStyleSheet(f"background-color: {bg};")
+        fill = QColor(bg)
+        if fill.isValid():
+            widget_palette = self.palette()
+            widget_palette.setColor(QPalette.ColorRole.Window, fill)
+            widget_palette.setColor(QPalette.ColorRole.Base, fill)
+            self.setPalette(widget_palette)
+            self.setAutoFillBackground(True)
+            if hasattr(self, "container"):
+                self.container.setAutoFillBackground(True)
+                self.container.setPalette(widget_palette)
+
+    def set_theme(self, theme: str) -> None:
+        self.is_dark = _is_dark_theme(theme)
+        self._apply_surface_style()
+        if self._all_data:
+            self._apply_filter(reset_view=True)
 
     @staticmethod
     def _build_search_text(article: dict) -> str:

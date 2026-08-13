@@ -72,6 +72,10 @@ QScrollArea {{
 QScrollArea > QWidget {{
     background: transparent;
 }}
+QScrollArea#cardView,
+QScrollArea#cardView > QWidget {{
+    background-color: {c['bg_primary']};
+}}
 QFrame {{
     background-color: transparent;
 }}
@@ -552,6 +556,7 @@ QLabel#summaryValue {{
 /* === ArticleCard (v15.0) === */
 QFrame#articleCard {{
     background-color: {c['card_bg']};
+    color: {c['text_primary']};
     border: 1px solid {c['card_border']};
     border-radius: 14px;
     padding: 16px;
@@ -559,6 +564,10 @@ QFrame#articleCard {{
 QFrame#articleCard:hover {{
     background-color: {c['card_bg_hover']};
     border-color: {c['card_border_hover']};
+}}
+QFrame#articleCard QLabel {{
+    color: {c['text_primary']};
+    background: transparent;
 }}
 
 /* === StatCard (Dashboard) (v15.0) === */

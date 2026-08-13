@@ -210,7 +210,8 @@ class SummaryCard(QFrame):
     def __init__(self, parent=None, theme="dark"):
         super().__init__(parent)
         self.setObjectName("summaryCard")
-        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAutoFillBackground(True)
         self._theme = theme
         layout = QHBoxLayout(self)
         layout.setSpacing(12)
@@ -252,8 +253,8 @@ class SummaryCard(QFrame):
 
     def set_theme(self, theme):
         """테마 변경 시 호출"""
-        self._theme = theme
-        c = COLORS[theme]
+        self._theme = theme if theme in COLORS else "dark"
+        c = COLORS[self._theme]
         self.sep.setStyleSheet(f"color: {c['summary_separator']};")
         self._update_title_colors()
 

@@ -14,12 +14,15 @@ from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH, bootstrap_runtime_
 
 REQUIRED_DEPENDENCIES = [
     "PyQt6",
+    "qfluentwidgets",
     "bs4",
     "matplotlib",
     "playwright",
     "selenium",
     "undetected_chromedriver",
 ]
+
+EXPECTED_QFLUENT_BINDING = "PyQt6"
 
 OPTIONAL_DEPENDENCIES = [
     "psutil",
@@ -85,6 +88,51 @@ def find_conflict_markers(
 
 def find_missing_dependencies(packages: Iterable[str]) -> list[str]:
     return [pkg for pkg in packages if importlib.util.find_spec(pkg) is None]
+
+
+def inspect_qfluentwidgets_binding(init_path: Path) -> str:
+    """Return the Qt binding advertised by a qfluentwidgets ``__init__.py``."""
+    try:
+        text = Path(init_path).read_text(encoding="utf-8")
+    except OSError:
+        return "unknown"
+    head = text[:4000]
+    markers = (
+        ("PyQt6", ("PyQt6-Fluent-Widgets", "based on PyQt6", "from PyQt6")),
+        ("PySide6", ("PySide6-Fluent-Widgets", "based on PySide6", "from PySide6")),
+        ("PyQt5", ("PyQt5-Fluent-Widgets", "based on PyQt5", "from PyQt5")),
+        ("PySide2", ("PySide2-Fluent-Widgets", "based on PySide2", "from PySide2")),
+    )
+    for binding, tokens in markers:
+        if any(token in head for token in tokens):
+            return binding
+    return "unknown"
+
+
+def resolve_qfluentwidgets_init_path() -> Optional[Path]:
+    spec = importlib.util.find_spec("qfluentwidgets")
+    origin = getattr(spec, "origin", None) if spec is not None else None
+    if not origin:
+        return None
+    path = Path(origin)
+    return path if path.is_file() else None
+
+
+def find_qfluentwidgets_binding_mismatch(
+    expected: str = EXPECTED_QFLUENT_BINDING,
+    init_path: Optional[Path] = None,
+) -> str:
+    """Empty string if qfluentwidgets matches expected Qt binding, else an error."""
+    path = init_path if init_path is not None else resolve_qfluentwidgets_init_path()
+    if path is None:
+        return ""
+    actual = inspect_qfluentwidgets_binding(path)
+    if actual == expected:
+        return ""
+    return (
+        f"qfluentwidgets가 {expected} 용이 아닙니다(감지: {actual}). "
+        "PySide6-Fluent-Widgets를 제거하고 PyQt6-Fluent-Widgets를 다시 설치하세요."
+    )
 
 
 def find_internal_import_failures(modules: Iterable[str]) -> list[str]:
@@ -242,6 +290,11 @@ def run_preflight_checks(
                 )
             else:
                 app_logger.warning("%s", message)
+
+    binding_error = find_qfluentwidgets_binding_mismatch()
+    if binding_error:
+        errors.append(binding_error)
+        app_logger.error("%s", binding_error)
 
     if (
         profile_token == "full"

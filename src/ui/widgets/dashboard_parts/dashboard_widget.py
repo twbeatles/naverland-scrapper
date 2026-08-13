@@ -90,7 +90,8 @@ class DashboardWidget(QWidget):
         subtitle = QLabel("최근 수집 결과 기준 요약입니다. 상세 시세는 「가격 통계」에서 확인하세요.")
         subtitle.setObjectName("hintLabel")
         subtitle.setWordWrap(True)
-        subtitle.setStyleSheet("color: #888; font-size: 12px; padding-bottom: 4px;")
+        self._subtitle = subtitle
+        self._apply_subtitle_style()
         layout.addWidget(subtitle)
         
         # 통계 카드 영역 (반응형 그리드)
@@ -275,15 +276,25 @@ class DashboardWidget(QWidget):
         self._disappeared_cache_revision = -1
         self.refresh()
     
+    def _apply_subtitle_style(self):
+        subtitle = getattr(self, "_subtitle", None)
+        if subtitle is None:
+            return
+        color = COLORS.get(self._theme, COLORS["dark"])["text_secondary"]
+        subtitle.setStyleSheet(
+            f"color: {color}; font-size: 12px; padding-bottom: 4px; background: transparent;"
+        )
+
     def set_theme(self, theme: str):
         """테마 변경"""
-        self._theme = theme
+        self._theme = theme if theme in COLORS else "dark"
         self._last_trade_chart_sig = None
         self._last_price_chart_sig = None
+        self._apply_subtitle_style()
         for card in getattr(self, "_stat_cards", []) or []:
             if hasattr(card, "set_theme"):
                 try:
-                    card.set_theme(theme)
+                    card.set_theme(self._theme)
                 except Exception:
                     pass
         self.refresh()

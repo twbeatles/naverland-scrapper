@@ -55,6 +55,9 @@ python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
+> **필수**: UI는 `PyQt6-Fluent-Widgets`만 사용합니다. `PySide6-Fluent-Widgets`를 같이 설치하지 마세요. 두 패키지 모두 import 이름이 `qfluentwidgets`라서 나중에 깐 쪽이 파일을 덮어씁니다. 잘못된 패키지가 깔린 채 빌드하면 실행 시 `ModuleNotFoundError: No module named 'PySide6'`가 납니다.  
+> 복구: `python -m pip uninstall -y PySide6-Fluent-Widgets` 후 `python -m pip install --force-reinstall "PyQt6-Fluent-Widgets>=1.11.0"`
+
 ---
 
 ## 실행
@@ -129,6 +132,14 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 
 spec은 분석 후 `torch`/`sklearn`/`cv2` 등 오염 PYTHONPATH 패키지를 TOC에서 제거합니다. 깨끗한 venv에서 빌드하는 것을 권장합니다.
 
+빌드 전에 `qfluentwidgets`가 **PyQt6** 버전이어야 합니다. `PySide6-Fluent-Widgets`가 깔려 있으면 spec/preflight가 빌드·기동을 막습니다. 확인:
+
+```powershell
+python -c "import qfluentwidgets; print((qfluentwidgets.__doc__ or '').splitlines()[1])"
+```
+
+출력에 `PyQt6-Fluent-Widgets`가 보여야 합니다. `PySide6-Fluent-Widgets`이면 위 설치 절의 복구 명령을 실행한 뒤 다시 빌드하세요.
+
 ---
 
 ## 데이터 저장 위치
@@ -150,9 +161,11 @@ spec은 분석 후 `torch`/`sklearn`/`cv2` 등 오염 PYTHONPATH 패키지를 TO
 에이전트 전용 문서(`CLAUDE.md`, `AGENTS.md`, `gemini.md` 등)는 저장소에서 **추적하지 않습니다** (`.gitignore`, 저장소에서 삭제된 상태 유지).  
 제품 문서는 본 README, `docs/NAVER_LAND_SURVEY_*.md`, `PROJECT_AUDIT.md`, `update_history.md` 를 따릅니다.
 
-### 패키징 메모 (2026-08-12)
+### 패키징 메모 (2026-08-13)
 
 - `naverland-scrapper.spec`: Fluent(`qfluentwidgets` / `qframelesswindow`) + Playwright 엔트리 +  
   사이트 계약 모듈(`site_contract`, `article_api`, `detail_fetcher`, …) hiddenimport 안전 핀
+- spec/preflight가 `qfluentwidgets`가 PyQt6 용인지 검사한다. PySide6 변종이면 빌드·기동 실패
+- spec은 `PySide6`를 제외한다 (앱은 PyQt6 전용)
 - `src/ui/fluent/*`, `src/core/services/site_contract.py` 는 순수 Python (추가 data bundle 불필요)
 - Chromium / Selenium 포함 여부는 환경 변수로 조절 (위 표 참고)

@@ -188,5 +188,8 @@ class CrawlerTabLayoutSetupMixin:
         self.current_theme = theme
         if hasattr(self, 'summary_card'):
             self.summary_card.set_theme(theme)
-        if hasattr(self, 'card_view'):
-            self.card_view.is_dark = (theme == "dark")
+        if hasattr(self, "card_view"):
+            if hasattr(self.card_view, "set_theme"):
+                self.card_view.set_theme(theme)
+            else:
+                self.card_view.is_dark = str(theme or "dark").strip().lower() != "light"

@@ -2,7 +2,7 @@ COLORS = {
     "dark": {
         "bg_primary": "#0f0f1a",
         "bg_secondary": "#1a1a2e",
-        "bg_card": "rgba(30, 30, 40, 0.85)",
+        "bg_card": "#1e1e28",
         "bg_input": "rgba(30, 30, 46, 0.8)",
         "bg_input_focus": "rgba(30, 30, 46, 1)",
         "bg_table": "rgba(30, 30, 46, 0.6)",
@@ -78,20 +78,20 @@ COLORS = {
         "empty_title_color": "#888",
         "empty_desc_color": "#666",
         # SummaryCard
-        "summary_bg": "rgba(30, 30, 40, 0.9)",
+        "summary_bg": "#1e1e28",
         "summary_separator": "rgba(255, 255, 255, 0.08)",
         # ArticleCard
-        "card_bg": "rgba(30, 30, 46, 0.85)",
-        "card_bg_hover": "rgba(40, 40, 60, 0.95)",
+        "card_bg": "#1e1e2e",
+        "card_bg_hover": "#28283c",
         "card_border": "rgba(255, 255, 255, 0.08)",
         "card_border_hover": "rgba(245, 158, 11, 0.4)",
         # StatCard (Dashboard)
-        "stat_card_bg": "rgba(30, 30, 46, 0.7)",
+        "stat_card_bg": "#1e1e2e",
     },
     "light": {
         "bg_primary": "#f8fafc",
         "bg_secondary": "#ffffff",
-        "bg_card": "rgba(255, 255, 255, 0.9)",
+        "bg_card": "#ffffff",
         "bg_input": "#ffffff",
         "bg_input_focus": "#ffffff",
         "bg_table": "#ffffff",
@@ -171,7 +171,7 @@ COLORS = {
         "summary_separator": "#e2e8f0",
         # ArticleCard
         "card_bg": "#ffffff",
-        "card_bg_hover": "#f8fafc",
+        "card_bg_hover": "#f1f5f9",
         "card_border": "#e2e8f0",
         "card_border_hover": "#0ea5e9",
         # StatCard (Dashboard)
