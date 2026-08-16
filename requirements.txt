@@ -8,3 +8,4 @@ matplotlib>=3.7
 openpyxl>=3.1
 plyer>=2.1
 psutil>=5.9
+cryptography>=42.0

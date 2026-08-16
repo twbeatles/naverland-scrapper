@@ -1,5 +1,9 @@
 # Naverland Scrapper Pro Plus
 
+## Release Updates
+
+Windows release builds support signed GitHub Release updates. Release operators must follow [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md); the workflow requires the `NAVERLAND_UPDATE_PRIVATE_KEY_B64` repository secret and a matching embedded public key.
+
 네이버 부동산(Npay / `new.land` / `fin.land`) 매물을 자동으로 수집하고, 가격 이력을 추적하며, 알림과 대시보드 분석을 제공하는 데스크톱 앱입니다.
 
 버전: **v15.0** (`src/utils/version.py`)
