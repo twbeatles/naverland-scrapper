@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+from threading import RLock
 from pathlib import Path
 from typing import Any, Callable
 
 from src.utils.helpers import DateTimeHelper
 from src.utils.logger import get_logger
+
+_WRITE_LOCK = RLock()
 
 
 def backup_broken_json(path: Path, *, label: str = "json") -> Path | None:
@@ -20,12 +23,20 @@ def backup_broken_json(path: Path, *, label: str = "json") -> Path | None:
 
 
 def atomic_write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = f"{path.suffix}.tmp"
-    temp_path = path.with_suffix(suffix)
-    with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(temp_path, path)
+    with _WRITE_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f"{path.name}.{os.getpid()}.{id(payload)}.tmp")
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, path)
+        finally:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def load_json_with_recovery(

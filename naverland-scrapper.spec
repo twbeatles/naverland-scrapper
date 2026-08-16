@@ -75,6 +75,8 @@ def _collect_submodules_skip(package: str, *skip_parts: str) -> list[str]:
 
 # ── Hidden imports (minimal + intentional) ────────────────────────────
 hiddenimports: list[str] = [
+    "cryptography.hazmat.backends.openssl",
+    "cryptography.hazmat.bindings._rust",
     # Conditional matplotlib backend
     "matplotlib.backends.backend_qtagg",
     "matplotlib.backends.backend_agg",
