@@ -50,7 +50,7 @@ jobs:
           $url = "https://github.com/twbeatles/naverland-scrapper/releases/download/v$version/naverland-scrapper-v$version.exe"
           python scripts/build_update_manifest.py --version $version --artifact $artifact --artifact-url $url --output "$env:RUNNER_TEMP/latest.json"
           "ARTIFACT=$artifact" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ env.ARTIFACT }}
