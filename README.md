@@ -51,7 +51,7 @@ UI: **PyQt6 + PyQt6-Fluent-Widgets** (좌측 네비게이션, 기본/고급 설�
 
 ## 설치
 
-Python 3.9 이상이 필요합니다. (개발·CI는 3.11+ 환경을 권장합니다.)
+Python 3.11 이상이 필요합니다. (개발·CI는 3.11 및 최신 안정 Python 버전을 검증합니다.)
 
 ```powershell
 python -m pip install --upgrade pip

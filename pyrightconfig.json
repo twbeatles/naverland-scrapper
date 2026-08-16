@@ -16,7 +16,7 @@
     "logs",
     "pyright_report*.json"
   ],
-  "pythonVersion": "3.9",
+  "pythonVersion": "3.11",
   "pythonPlatform": "Windows",
   "typeCheckingMode": "standard",
   "useLibraryCodeForTypes": true,
