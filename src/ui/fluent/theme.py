@@ -20,6 +20,16 @@ def apply_app_theme(theme_name: str | None = "dark", *, accent: str | None = Non
     """Apply qfluentwidgets theme. Returns the resolved Theme enum."""
     theme = theme_from_settings(theme_name)
     setTheme(theme)
+    try:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QGuiApplication
+
+        hints = QGuiApplication.styleHints()
+        if hints is not None:
+            scheme = Qt.ColorScheme.Light if theme == Theme.LIGHT else Qt.ColorScheme.Dark
+            hints.setColorScheme(scheme)
+    except Exception:
+        pass
     # Amber accent aligns with the previous dark palette; sky-like for light is optional.
     if accent:
         setThemeColor(accent)

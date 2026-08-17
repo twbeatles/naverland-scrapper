@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from src.ui.styles import COLORS
@@ -29,7 +30,9 @@ class StatCard(QFrame):
         self._value_label: Optional[QLabel] = None
         self._title_label: Optional[QLabel] = None
         self.setObjectName("statCard")
-        self.setFrameStyle(QFrame.Shape.StyledPanel)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAutoFillBackground(True)
         self.setMinimumWidth(160)
         self.setMinimumHeight(96)
 

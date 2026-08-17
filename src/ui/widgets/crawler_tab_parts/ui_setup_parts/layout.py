@@ -183,10 +183,16 @@ class CrawlerTabLayoutSetupMixin:
         self._restore_splitter_state()
         self.update_runtime_settings()
         self._update_advanced_filter_badge()
+        from src.ui.styles_parts.surfaces import apply_theme_surfaces
+
+        apply_theme_surfaces(self, getattr(self, "current_theme", "dark"))
 
     def set_theme(self: Any, theme):
         self.current_theme = theme
-        if hasattr(self, 'summary_card'):
+        from src.ui.styles_parts.surfaces import apply_theme_surfaces
+
+        apply_theme_surfaces(self, theme)
+        if hasattr(self, "summary_card"):
             self.summary_card.set_theme(theme)
         if hasattr(self, "card_view"):
             if hasattr(self.card_view, "set_theme"):

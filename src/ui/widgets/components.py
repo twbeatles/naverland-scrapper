@@ -211,6 +211,7 @@ class SummaryCard(QFrame):
         super().__init__(parent)
         self.setObjectName("summaryCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
         self._theme = theme
         layout = QHBoxLayout(self)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QPalette
+from PyQt6.QtCore import QRectF, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPalette, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -43,6 +43,7 @@ class ArticleCard(QFrame):
         self.is_dark = is_dark
         self.setObjectName("articleCard")
         self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
         self._setup_ui()
 
@@ -87,6 +88,21 @@ class ArticleCard(QFrame):
             widget_palette.setColor(QPalette.ColorRole.Base, fill)
             self.setPalette(widget_palette)
         return fg_color, palette
+
+    def paintEvent(self, a0):
+        theme_key = _theme_key(self.is_dark)
+        palette = COLORS[theme_key]
+        surface = QColor(palette.get("card_bg", "#ffffff" if not self.is_dark else "#1e1e2e"))
+        border = QColor(palette.get("card_border", "#e2e8f0"))
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 12, 12)
+        painter.fillPath(path, surface)
+        painter.setPen(QPen(border, 1))
+        painter.drawPath(path)
+        painter.end()
 
     def _setup_ui(self):
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -263,6 +279,8 @@ class CardViewWidget(QScrollArea):
         super().__init__(parent)
         self.is_dark = is_dark
         self.setObjectName("cardView")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
         self._cards = []
         self._all_data = []
         self._search_text_cache = []

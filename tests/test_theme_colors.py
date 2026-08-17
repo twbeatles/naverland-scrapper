@@ -125,3 +125,41 @@ class TestArticleCardTheme(unittest.TestCase):
         self.assertTrue(view._cards)
         self.assertIn(COLORS["light"]["card_bg"], view._cards[0].styleSheet())
         view.deleteLater()
+
+    def test_light_article_card_enables_styled_background_and_paints_light_pixel(self):
+        from PyQt6.QtCore import Qt
+        from src.ui.styles_parts.colors import COLORS
+        from src.ui.widgets.cards import ArticleCard
+
+        card = ArticleCard(self._sample(), is_dark=False)
+        card.resize(280, 210)
+        self._qt_app.processEvents()
+        self.assertTrue(card.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
+        img = card.grab().toImage()
+        pixel = img.pixelColor(24, 36)
+        self.assertGreater(
+            (0.299 * pixel.red() + 0.587 * pixel.green() + 0.114 * pixel.blue()) / 255.0,
+            0.72,
+            f"light card pixel {pixel.name()} should be a light surface",
+        )
+        self.assertEqual(pixel.name().lower(), COLORS["light"]["card_bg"].lower())
+        card.deleteLater()
+
+    def test_crawler_set_theme_forces_light_groupbox_surfaces(self):
+        import tempfile
+        from src.core.database import ComplexDatabase
+        from src.ui.styles_parts.colors import COLORS
+        from src.ui.styles_parts.surfaces import apply_theme_surfaces
+        from src.ui.widgets.crawler_tab import CrawlerTab
+        from PyQt6.QtWidgets import QGroupBox
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = ComplexDatabase(os.path.join(tmp, "theme_cards.db"))
+            tab = CrawlerTab(db, theme="dark")
+            apply_theme_surfaces(tab, "light")
+            boxes = tab.findChildren(QGroupBox)
+            self.assertTrue(boxes)
+            for box in boxes:
+                self.assertIn(COLORS["light"]["bg_card"], box.styleSheet())
+            db.close()
+            tab.deleteLater()

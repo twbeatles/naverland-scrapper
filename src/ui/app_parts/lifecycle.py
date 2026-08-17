@@ -128,6 +128,12 @@ class AppLifecycleMixin:
         if stack is not None:
             stack.setObjectName("domainContent")
             stack.setStyleSheet(sheet)
+        from src.ui.styles_parts.surfaces import apply_theme_surfaces
+
+        for tab_name in ("crawler_tab", "geo_tab"):
+            tab = getattr(self, tab_name, None)
+            if tab is not None:
+                apply_theme_surfaces(tab, theme_name)
         try:
             sb = self.statusBar()
             if sb is not None:

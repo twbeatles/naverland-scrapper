@@ -879,7 +879,7 @@ async def fetch_mobile_article_detail(
             {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
             navigation_timeout_ms=navigation_timeout_ms,
         )
-        cold_fields: dict = {}
+        cold_fields = {}
         for response_item in list(cold_artifacts.get("responses", []) or []):
             if not isinstance(response_item, dict):
                 continue
