@@ -1,5 +1,14 @@
 # Update History
 
+## 2026-09-07: Dependabot PR 병합 및 주간 봇 제거
+
+- Dependabot PR #2–#7 squash 병합 (모두 CI quality 3.11/3.14 통과)
+  - pip: `selenium>=4.48.0`, `cryptography>=50.0.1`
+  - Actions: `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7`, `softprops/action-gh-release@v3`
+- `main` 이외 원격 브랜치 정리 (Dependabot head는 병합 후 삭제)
+- `.github/dependabot.yml` 삭제: 데스크톱 앱에 주간 버전 PR이 쌓이기만 해서 비활성. 하한은 `requirements.txt` / 워크플로에서 직접 올림
+- README·`docs/RELEASE_UPDATES.md`에 CI/릴리스 액션 및 Dependabot 비활성 상태를 맞춤
+
 ## 2026-08-13: Light-mode cards + Fluent binding guard
 
 - 라이트 모드 매물 카드가 흑색 배경으로 남던 문제: `ArticleCard` objectName/`QFrame#articleCard` QSS, 불투명 surface 토큰, `CardViewWidget.set_theme`로 재렌더

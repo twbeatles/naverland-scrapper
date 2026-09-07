@@ -28,6 +28,7 @@
 - [실전 활용 팁](#-실전-활용-팁)
 - [CLI 및 고급 검증 도구](#-cli-및-고급-검증-도구)
 - [단독 실행 파일 빌드 (PyInstaller)](#-단독-실행-파일-빌드-pyinstaller)
+- [GitHub CI 및 릴리스](#-github-ci-및-릴리스)
 - [데이터 저장 위치 및 개인정보 보호](#-데이터-저장-위치-및-개인정보-보호)
 
 ---
@@ -326,6 +327,16 @@ $env:NAVERLAND_BUNDLE_CHROMIUM="0"
 $env:NAVERLAND_INCLUDE_SELENIUM="0"
 python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ```
+
+---
+
+## 🔁 GitHub CI 및 릴리스
+
+- **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.11/3.14. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
+- **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1`
+- **릴리스**: `.github/workflows/release.yml` — 태그 `v*` 또는 수동 실행. `softprops/action-gh-release@v3`로 EXE와 서명 매니페스트를 GitHub Releases에 올리고 `updates/latest.json`을 `main`에 커밋
+- **앱 자동 업데이트 키·검증 절차**: [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md)
+- **의존성**: 주간 Dependabot 버전 PR은 쓰지 않습니다. pip 하한은 `requirements.txt`, Actions 메이저는 워크플로 파일에서 직접 올립니다.
 
 ---
 
