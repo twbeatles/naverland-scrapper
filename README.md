@@ -360,7 +360,6 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 - **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1`
 - **릴리스**: `.github/workflows/release.yml` — 태그 `v*` 또는 수동 실행. `softprops/action-gh-release@v3`로 EXE와 서명 매니페스트를 GitHub Releases에 올리고 `updates/latest.json`을 `main`에 커밋
 - **앱 자동 업데이트 키·검증 절차**: [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md)
-- **저장소 이름 변경 영향 분석**: [docs/REPOSITORY_RENAME_IMPACT.md](docs/REPOSITORY_RENAME_IMPACT.md) — 이름 변경은 수행하지 않았으며, 소유자 승인 후에만 검토합니다.
 - **의존성**: 주간 Dependabot 버전 PR은 쓰지 않습니다. pip 하한은 `requirements.txt`, Actions 메이저는 워크플로 파일에서 직접 올립니다.
 
 ---
