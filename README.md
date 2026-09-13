@@ -1,13 +1,37 @@
-# Naverland Scrapper Pro Plus
+# Naver Real Estate Scraper & Price Tracker
 
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PyQt6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Version](https://img.shields.io/badge/Version-v15.0-orange?style=flat-square)](#)
 
-**네이버 부동산(Npay / `new.land` / `fin.land`)의 실시간 매물 정보를 초고속으로 수집하고, 가격 변동 및 시세 이력을 추적·분석할 수 있는 데스크톱 애플리케이션입니다.**
+**네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
-현대적인 Windows 11 Fluent Design UI가 적용되어 직관적이며, 모든 수집 데이터는 로컬 SQLite 데이터베이스에 안전하게 보관됩니다.
+Naver Real Estate Scraper로 매물을 수집하는 데서 그치지 않고, 로컬 SQLite에 가격 이력을 쌓아 price tracker, listing monitor, local analytics 도구로 활용할 수 있습니다. Windows 11 Fluent Design GUI에서 단지 URL/ID 또는 지도 좌표로 수집 대상을 지정합니다.
+
+## 핵심 기능
+
+- **매물 수집과 지도 탐색**: 아파트(APT)·빌라/연립(VL)의 단지 ID·URL 수집과 좌표 기반 광역 탐색을 지원합니다.
+- **가격 이력과 매물 모니터링**: 일별 가격 스냅샷, 신규·가격 변동·사라진 매물을 확인합니다.
+- **예약 자동 수집**: 단지 묶음 또는 지도 영역을 지정한 시간에 수집할 수 있습니다.
+- **로컬 분석**: 대시보드와 가격 통계로 수집 데이터를 살펴보고, 모든 데이터는 로컬 SQLite에 보관합니다.
+- **내보내기**: 필요한 열을 선택해 Excel 또는 CSV로 저장합니다.
+
+## 빠른 시작
+
+Python 3.11 이상에서 아래 명령으로 설치하고 실행합니다.
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -r requirements.txt
+playwright install chromium
+python app_entry.py
+```
+
+## 사용 전 안내
+
+이 프로젝트는 네이버의 공식 API 제품이 아닙니다. 대상 사이트의 변경으로 일부 기능이 동작하지 않을 수 있으며, 과도한 요청을 권장하지 않습니다. 사용자는 네이버 서비스 약관 및 관련 법규를 준수해야 합니다.
 
 ---
 
@@ -336,6 +360,7 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 - **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1`
 - **릴리스**: `.github/workflows/release.yml` — 태그 `v*` 또는 수동 실행. `softprops/action-gh-release@v3`로 EXE와 서명 매니페스트를 GitHub Releases에 올리고 `updates/latest.json`을 `main`에 커밋
 - **앱 자동 업데이트 키·검증 절차**: [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md)
+- **저장소 이름 변경 영향 분석**: [docs/REPOSITORY_RENAME_IMPACT.md](docs/REPOSITORY_RENAME_IMPACT.md) — 이름 변경은 수행하지 않았으며, 소유자 승인 후에만 검토합니다.
 - **의존성**: 주간 Dependabot 버전 PR은 쓰지 않습니다. pip 하한은 `requirements.txt`, Actions 메이저는 워크플로 파일에서 직접 올립니다.
 
 ---
