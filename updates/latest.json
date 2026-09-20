@@ -1,0 +1,10 @@
+{
+  "payload": {
+    "artifact_url": "https://github.com/twbeatles/naverland-scrapper/releases/download/v15.1/naverland-scrapper-v15.1.exe",
+    "expires_at": "2027-09-20T08:22:55Z",
+    "sha256": "855653ce4bdcf28c7cbbe7d7973e58461d98b3dd845a0af8e820876aa5642ad0",
+    "size": 129659141,
+    "version": "15.1"
+  },
+  "signature": "bF216tq+VZGT5FkUMCP0+EXaz6er+sFsGGL39BbgYzDkzsrIAiqTPY82ZTrZv7Z/a1l0x6NegQOyJ5rJ3t3+Cw=="
+}
