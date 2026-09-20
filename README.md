@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PyQt6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.0-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.1-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 

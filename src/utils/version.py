@@ -1,4 +1,4 @@
-APP_VERSION = "v15.0"
+APP_VERSION = "v15.1"
 
 # This public key is embedded in release builds.  Configure it once using the
 # release checklist; the matching private key belongs only in GitHub Secrets.

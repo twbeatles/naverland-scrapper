@@ -1,5 +1,14 @@
 # Update History
 
+## 2026-09-20: SOLID 코드 분할 리팩토링 (v15.1)
+
+- 장문 5개 파일을 단일 책임 `_parts/` 패키지로 분할, 기존 경로는 파사드로 유지 (호출부 수정 없음)
+- `detail_fetcher.py` → `detail_fetcher_parts/` 11모듈 / `managers.py` → `managers_parts/` 8모듈 / `coercion.py` → `coercion_parts/` 3믹스인 / `stats_schedule.py` → 5믹스인 / `lifecycle.py` → 8믹스인
+- 기계적 줄 단위 이동 + 커버리지/name-set 검증으로 코드 누락 없음 확인
+- 신규 `tests/test_solid_split_facades.py` (파사드 parity 7건) + CI subset 등록
+- `APP_VERSION` v15.0 → v15.1, README 배지 동기화
+
+
 ## 2026-09-07: Dependabot PR 병합 및 주간 봇 제거
 
 - Dependabot PR #2–#7 squash 병합 (모두 CI quality 3.11/3.14 통과)
