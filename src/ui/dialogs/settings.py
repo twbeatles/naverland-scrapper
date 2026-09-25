@@ -248,6 +248,7 @@ class SettingsDialog(QDialog):
         self.spin_max_log_lines.setSingleStep(100)
         self.spin_playwright_workers = QSpinBox()
         self.spin_playwright_workers.setRange(1, 16)
+        self.spin_playwright_workers.setToolTip("동시에 띄우는 상세 페이지 수입니다. 낮을수록 가볍습니다 (권장 2~4).")
         self.check_playwright_headless = QCheckBox("브라우저 창 숨기고 수집 (백그라운드)")
         self.check_block_heavy_resources = QCheckBox("이미지·글꼴 등 무거운 리소스 불러오지 않기")
         self.spin_playwright_drain_timeout = QSpinBox()
@@ -377,9 +378,9 @@ class SettingsDialog(QDialog):
             bool(settings.get("compact_duplicate_listings", True))
         )
         self.spin_playwright_workers.setValue(
-            int(settings.get("playwright_detail_workers", 12) or 12)
+            int(settings.get("playwright_detail_workers", 4) or 4)
         )
-        self.check_playwright_headless.setChecked(bool(settings.get("playwright_headless", False)))
+        self.check_playwright_headless.setChecked(bool(settings.get("playwright_headless", True)))
         self.check_block_heavy_resources.setChecked(
             bool(settings.get("playwright_block_heavy_resources", True))
         )

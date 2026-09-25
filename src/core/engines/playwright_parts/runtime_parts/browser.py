@@ -22,6 +22,9 @@ class PlaywrightBrowserRuntimeMixin:
         self._desktop_page: Any | None = None
         self._mobile_context: Any | None = None
         self._page_pool: asyncio.Queue[Any] | None = None
+        self._page_pool_maxsize: int = 0
+        self._page_pool_created: int = 0
+        self._page_pool_lock: Any | None = None
         self._started: bool = False
         self._fallback_used: bool = False
         self._launch_headless_override: bool | None = None
@@ -204,7 +207,11 @@ class PlaywrightBrowserRuntimeMixin:
         await self._setup_blocking(mobile_context)
         page_pool: asyncio.Queue[Any] = asyncio.Queue()
         self._page_pool = page_pool
-        for _ in range(max(1, int(self.thread.playwright_detail_workers))):
+        self._page_pool_lock = asyncio.Lock()
+        self._page_pool_maxsize = max(1, int(self.thread.playwright_detail_workers))
+        self._page_pool_created = 0
+        # NOTE: creation mirrors _new_mobile_pool_page(); pre-create few, grow on demand.
+        for _ in range(max(1, min(2, self._page_pool_maxsize))):
             page = await mobile_context.new_page()
             await page.add_init_script(
                 """
@@ -213,8 +220,55 @@ class PlaywrightBrowserRuntimeMixin:
                 """
             )
             await page_pool.put(page)
+        self._page_pool_created = page_pool.qsize()
         await self._warmup_runtime_pages()
         self.thread.emit_stats()
+
+    async def _new_mobile_pool_page(self):
+        page = await self._mobile_context.new_page()
+        await page.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.open = (u) => { location.href = u; };
+            """
+        )
+        return page
+
+    async def _acquire_detail_page(self):
+        """Take a detail page, creating one on demand up to the pool maxsize.
+
+        Startup pre-creates only a couple of pages; extra pages are added here
+        as worker demand grows, so small batches never pay for the full pool.
+        """
+        pool = self._page_pool
+        if pool is None:
+            raise RuntimeError("detail page pool is not initialized")
+        maxsize = int(getattr(self, "_page_pool_maxsize", 0) or 0)
+        created = int(getattr(self, "_page_pool_created", 0) or 0)
+        context = getattr(self, "_mobile_context", None)
+        lock = getattr(self, "_page_pool_lock", None)
+        if context is not None and maxsize > 0 and created < maxsize and pool.empty():
+            if lock is None:
+                page = await self._new_mobile_pool_page()
+                self._page_pool_created = created + 1
+                return page
+            async with lock:
+                created = int(getattr(self, "_page_pool_created", 0) or 0)
+                if created < maxsize and pool.empty():
+                    page = await self._new_mobile_pool_page()
+                    self._page_pool_created = created + 1
+                    return page
+        return await pool.get()
+
+    async def _release_detail_page(self, page) -> None:
+        pool = self._page_pool
+        if pool is None:
+            try:
+                await page.close()
+            except Exception:
+                pass
+            return
+        await pool.put(page)
 
     async def _shutdown_async(self):
         await self._save_context_state(self._desktop_context, "desktop")
@@ -244,6 +298,9 @@ class PlaywrightBrowserRuntimeMixin:
         self._browser = None
         self._playwright = None
         self._page_pool = None
+        self._page_pool_maxsize = 0
+        self._page_pool_created = 0
+        self._page_pool_lock = None
         self._started = False
 
     async def _launch_browser(self, playwright, *, preferred_headless: bool):

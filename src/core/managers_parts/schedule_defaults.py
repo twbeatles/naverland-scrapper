@@ -38,8 +38,8 @@ DEFAULT_SETTINGS = {
     "compact_duplicate_listings": True,  # 동일 매물(가격/평수/층) 묶어서 표시
     "crawl_engine": "playwright",
     "fallback_engine_enabled": True,
-    "playwright_headless": False,
-    "playwright_detail_workers": 12,
+    "playwright_headless": True,
+    "playwright_detail_workers": 4,
     "playwright_block_heavy_resources": True,
     "playwright_response_drain_timeout_ms": 3000,
     "playwright_navigation_timeout_ms": 15000,

@@ -14,6 +14,35 @@ from src.core.managers_parts.schedule_normalize import _normalize_schedule_confi
 from src.core.managers_parts.settings_sanitize import _sanitize_settings_payload
 
 
+_LIGHT_DEFAULTS_MIGRATION_KEY = "light_defaults_migrated_v1"
+
+
+def _apply_light_defaults_migration(payload: dict[str, Any]) -> dict[str, Any]:
+    """One-time migration of untouched legacy performance defaults.
+
+    Fresh installs already get the light defaults from DEFAULT_SETTINGS, but
+    existing settings files still carry the old shipped values (headed browser,
+    12 detail workers). Entries that exactly match those old defaults are moved
+    to the new defaults once; anything the user changed explicitly is kept, and
+    the marker keeps a later explicit choice from being migrated again.
+    """
+    if payload.get(_LIGHT_DEFAULTS_MIGRATION_KEY):
+        return payload
+    migrated: list[str] = []
+    if payload.get("playwright_headless") is False:
+        payload["playwright_headless"] = True
+        migrated.append("브라우저 창 숨김(헤드리스)")
+    if payload.get("playwright_detail_workers") == 12:
+        payload["playwright_detail_workers"] = 4
+        migrated.append("상세 동시 조회 수 12→4")
+    payload[_LIGHT_DEFAULTS_MIGRATION_KEY] = True
+    if migrated:
+        get_logger("SettingsManager").info(
+            "경량 기본값 1회 적용 (%s). 설정에서 되돌릴 수 있습니다." % ", ".join(migrated)
+        )
+    return payload
+
+
 class SettingsManager:
     _instance = None
     _lock = Lock()
@@ -46,8 +75,10 @@ class SettingsManager:
             label="settings",
         )
         if isinstance(payload, dict):
+            needs_save = _LIGHT_DEFAULTS_MIGRATION_KEY not in payload
+            payload = _apply_light_defaults_migration(dict(payload))
             self._settings = _sanitize_settings_payload(payload)
-            if payload != self._settings:
+            if needs_save or payload != self._settings:
                 self._save()
         else:
             self._settings = deepcopy(DEFAULT_SETTINGS)

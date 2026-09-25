@@ -213,6 +213,38 @@ class TestCacheAndManagers(unittest.TestCase):
         self.assertIn("detail_front_api_enabled", sanitized)
         self.assertEqual(sanitized["card_show_extra_meta"], DEFAULT_SETTINGS["card_show_extra_meta"])
 
+    def test_detail_workers_default_is_lightweight(self):
+        self.assertEqual(DEFAULT_SETTINGS["playwright_detail_workers"], 4)
+        self.assertTrue(DEFAULT_SETTINGS["playwright_headless"])
+        self.assertTrue(_sanitize_settings_payload({})["playwright_headless"])
+        sanitized = _sanitize_settings_payload({})
+        self.assertEqual(sanitized["playwright_detail_workers"], 4)
+        explicit = _sanitize_settings_payload({"playwright_detail_workers": 8})
+        self.assertEqual(explicit["playwright_detail_workers"], 8)
+
+    def test_light_defaults_migration_applies_once(self):
+        from src.core.managers_parts.settings_manager import _LIGHT_DEFAULTS_MIGRATION_KEY
+
+        settings_path = self.tmp_path / "settings.json"
+        legacy = dict(DEFAULT_SETTINGS)
+        legacy["playwright_headless"] = False
+        legacy["playwright_detail_workers"] = 12
+        settings_path.write_text(json.dumps(legacy), encoding="utf-8")
+        SettingsManager.reset_for_tests()
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
+            migrated = SettingsManager()
+            self.assertTrue(migrated.get("playwright_headless"))
+            self.assertEqual(migrated.get("playwright_detail_workers"), 4)
+            migrated.set("playwright_headless", False)
+            migrated.set("playwright_detail_workers", 12)
+        SettingsManager.reset_for_tests()
+        with patch("src.utils.paths.get_settings_path", return_value=settings_path):
+            respected = SettingsManager()
+            self.assertFalse(respected.get("playwright_headless"))
+            self.assertEqual(respected.get("playwright_detail_workers"), 12)
+            self.assertTrue(respected.get(_LIGHT_DEFAULTS_MIGRATION_KEY))
+        SettingsManager.reset_for_tests()
+
     def test_crawl_cache_empty_result_with_custom_ttl(self):
         cache_path = self.tmp_path / "crawl_cache.json"
         with patch("src.core.cache.CACHE_PATH", cache_path):

@@ -169,7 +169,7 @@ class PlaywrightDetailEnrichmentMixin:
                 )
                 return
 
-            page = await self._page_pool.get()
+            page = await self._acquire_detail_page()
             detail: dict = {}
             try:
                 article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
@@ -217,7 +217,7 @@ class PlaywrightDetailEnrichmentMixin:
             except Exception:
                 detail = {}
             finally:
-                await self._page_pool.put(page)
+                await self._release_detail_page(page)
 
             ordered[index] = self._record_detail_outcome(item, detail)
 

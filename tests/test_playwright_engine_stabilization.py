@@ -1177,6 +1177,61 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         finally:
             engine._loop.close()
 
+    async def test_detail_page_pool_grows_on_demand_up_to_maxsize(self):
+        thread = _ThreadStub()
+        thread.playwright_detail_workers = 3
+        engine = PlaywrightCrawlerEngine(thread)
+        created = {"count": 0}
+
+        class _FakePoolPage:
+            async def add_init_script(self, _script):
+                return None
+
+            async def close(self):
+                return None
+
+        class _FakeMobileContext:
+            async def new_page(self):
+                created["count"] += 1
+                return _FakePoolPage()
+
+        engine._mobile_context = _FakeMobileContext()
+        engine._page_pool = asyncio.Queue()
+        engine._page_pool_maxsize = 3
+        engine._page_pool_created = 0
+        engine._page_pool_lock = asyncio.Lock()
+
+        try:
+            p1 = await engine._acquire_detail_page()
+            p2 = await engine._acquire_detail_page()
+            p3 = await engine._acquire_detail_page()
+            self.assertEqual(created["count"], 3)
+            self.assertEqual(engine._page_pool_created, 3)
+            await engine._release_detail_page(p1)
+            p4 = await engine._acquire_detail_page()
+            self.assertIs(p4, p1)
+            self.assertEqual(created["count"], 3)
+            for page in (p2, p3, p4):
+                await engine._release_detail_page(page)
+            self.assertEqual(engine._page_pool.qsize(), 3)
+        finally:
+            engine._loop.close()
+
+    async def test_detail_page_acquire_uses_existing_pool_without_context(self):
+        thread = _ThreadStub()
+        engine = PlaywrightCrawlerEngine(thread)
+        engine._page_pool = asyncio.Queue()
+        marker = object()
+        await engine._page_pool.put(marker)
+
+        try:
+            page = await engine._acquire_detail_page()
+            self.assertIs(page, marker)
+            await engine._release_detail_page(page)
+            self.assertEqual(engine._page_pool.qsize(), 1)
+        finally:
+            engine._loop.close()
+
     async def test_entry_plan_passes_navigation_timeout_to_page_goto(self):
         thread = _ThreadStub()
         thread.playwright_navigation_timeout_ms = 12345

@@ -43,7 +43,7 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
         sanitized.get("article_api_page_delay_ms", 150), 150, 0, 2000
     )
     sanitized["playwright_detail_workers"] = _clamp_int(
-        sanitized.get("playwright_detail_workers", 12), 12, 1, 16
+        sanitized.get("playwright_detail_workers", 4), 4, 1, 16
     )
     sanitized["result_extra_columns"] = normalize_result_extra_columns(
         sanitized.get("result_extra_columns", [])

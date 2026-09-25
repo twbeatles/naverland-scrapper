@@ -33,8 +33,8 @@ class CrawlerStateRuntimeMixin:
         crawl_mode="complex",
         geo_config=None,
         fallback_engine_enabled=True,
-        playwright_headless=False,
-        playwright_detail_workers=12,
+        playwright_headless=True,
+        playwright_detail_workers=4,
         block_heavy_resources=True,
         playwright_response_drain_timeout_ms=3000,
         playwright_navigation_timeout_ms=15000,
@@ -165,7 +165,7 @@ class CrawlerStateRuntimeMixin:
         try:
             self.playwright_detail_workers = max(1, int(playwright_detail_workers))
         except (TypeError, ValueError):
-            self.playwright_detail_workers = 12
+            self.playwright_detail_workers = 4
         self.block_heavy_resources = bool(block_heavy_resources)
         try:
             self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
