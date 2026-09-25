@@ -40,6 +40,9 @@ python -m pytest -q `
   tests/test_export_module.py `
   tests/test_rebind_methods.py `
   tests/test_detail_fetcher.py `
+  tests/test_solid_split_facades.py `
+  tests/test_browser_pool_guard.py `
+  tests/test_ci_subset_sync.py `
   tests/test_gap_analysis.py `
   tests/test_managers_cache.py `
   tests/test_mojibake_scan.py `

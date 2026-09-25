@@ -73,6 +73,8 @@ jobs:
           tests/test_gap_analysis.py
           tests/test_managers_cache.py
           tests/test_mojibake_scan.py
+          tests/test_browser_pool_guard.py
+          tests/test_ci_subset_sync.py
           tests/test_preflight.py
 
       - name: Preflight check

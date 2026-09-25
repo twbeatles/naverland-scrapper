@@ -225,7 +225,10 @@ class PlaywrightBrowserRuntimeMixin:
         self.thread.emit_stats()
 
     async def _new_mobile_pool_page(self):
-        page = await self._mobile_context.new_page()
+        context = self._mobile_context
+        if context is None:
+            raise RuntimeError("mobile context is not initialized")
+        page = await context.new_page()
         await page.add_init_script(
             """
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
