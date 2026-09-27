@@ -15,9 +15,19 @@ from src.ui.fluent.design_tokens import ACCENT_DARK, ACCENT_LIGHT
 
 _POLL_MS = 3000
 
+# User-pinned theme (explicit dark/light choice). The OS watcher must never
+# override it — otherwise Fluent nav labels/icons render with the opposite
+# theme's colors (dark-on-dark / white-on-white) and become unreadable.
+_PINNED_THEME: Theme | None = None
+
 
 def theme_from_settings(theme_name: str | None) -> Theme:
-    """저장된 설정값을 Theme enum으로. 미지정(신규 설치)은 OS 연동(AUTO)."""
+    """저장된 설정값을 Theme enum으로.
+
+    신규 설치 기본값은 dark다 (호출자가 ``settings.get("theme", "dark")``를
+    전달하므로 미지정 시 이 함수에 None이 아닌 "dark"가 들어온다).
+    OS 연동(AUTO)은 "auto"/"system"을 명시한 경우에만 선택되는 opt-in이다.
+    """
     name = str(theme_name or "auto").strip().lower()
     if name == "light":
         return Theme.LIGHT
@@ -28,7 +38,9 @@ def theme_from_settings(theme_name: str | None) -> Theme:
 
 def apply_app_theme(theme_name: str | None = "auto", *, accent: str | None = None) -> Theme:
     """Apply qfluentwidgets theme. Returns the resolved Theme enum."""
+    global _PINNED_THEME
     theme = theme_from_settings(theme_name)
+    _PINNED_THEME = theme
     setTheme(theme)
     try:
         from PyQt6.QtCore import Qt
@@ -57,7 +69,16 @@ def setup_app_theme(app: Any, theme_name: str | None = "auto") -> Theme:
 
 
 def sync_system_theme() -> None:
-    """OS 다크/라이트 설정을 qfluentwidgets에 반영 (AUTO 모드 전용 보정)."""
+    """OS 다크/라이트 설정을 qfluentwidgets에 반영 (AUTO 모드 전용 보정).
+
+    명시적 dark/light 선택이 있으면 OS 값을 무시하고 고정 테마를 재확인한다.
+    """
+    if _PINNED_THEME is not None and _PINNED_THEME != Theme.AUTO:
+        try:
+            setTheme(_PINNED_THEME)
+        except Exception:
+            pass
+        return
     try:
         import darkdetect
 
@@ -73,6 +94,10 @@ def sync_system_theme() -> None:
         pass
 
 
+def _on_system_scheme_changed(_scheme: Any = None) -> None:
+    sync_system_theme()
+
+
 def _install_theme_watcher(app: Any) -> None:
     try:
         from PyQt6.QtCore import QTimer
@@ -80,10 +105,19 @@ def _install_theme_watcher(app: Any) -> None:
 
         hints = QGuiApplication.styleHints()
         if hints is not None and hasattr(hints, "colorSchemeChanged"):
-            hints.colorSchemeChanged.connect(lambda _scheme: sync_system_theme())
+            try:
+                hints.colorSchemeChanged.disconnect(_on_system_scheme_changed)
+            except Exception:
+                pass
+            hints.colorSchemeChanged.connect(_on_system_scheme_changed)
         timer = QTimer(app)
         timer.timeout.connect(sync_system_theme)
         timer.start(_POLL_MS)
+        try:
+            # ISSUE-005: shutdown stops this poll timer via the handle.
+            setattr(app, "_theme_watcher_timer", timer)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -134,4 +168,18 @@ def apply_native_widget_style(root: Any) -> None:
 
 
 def is_dark_theme(theme_name: str | None) -> bool:
-    return theme_from_settings(theme_name) != Theme.LIGHT
+    resolved = theme_from_settings(theme_name)
+    if resolved == Theme.LIGHT:
+        return False
+    if resolved == Theme.DARK:
+        return True
+    try:
+        return bool(isDarkTheme())
+    except Exception:
+        pass
+    try:
+        import darkdetect
+
+        return darkdetect.theme() != "Light"
+    except Exception:
+        return True

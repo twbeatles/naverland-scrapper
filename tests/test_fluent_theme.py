@@ -48,6 +48,37 @@ class TestFluentTheme(unittest.TestCase):
         self.assertEqual(setup_app_theme(self._qt_app, "dark"), Theme.DARK)
         self._qt_app.processEvents()
 
+    def test_explicit_theme_survives_os_sync(self):
+        """명시적 dark/light는 OS 테마 감시(sync/poll)에 덮어씌워지지 않아야 한다.
+
+        회귀: OS가 라이트인데 앱이 다크면 Fluent nav가 라이트로 뒤집혀
+        상단 라벨이 어둡게 묻혔고, 반대 경우엔 라이트 배경에 흰 글자가 됐다.
+        """
+        from unittest import mock
+
+        from qfluentwidgets import Theme, isDarkTheme
+
+        from src.ui.fluent import theme as theme_mod
+
+        with mock.patch("darkdetect.theme", return_value="Light"):
+            theme_mod.apply_app_theme("dark")
+            theme_mod.sync_system_theme()
+            self.assertTrue(isDarkTheme())
+            theme_mod._on_system_scheme_changed(None)
+            self.assertTrue(isDarkTheme())
+        with mock.patch("darkdetect.theme", return_value="Dark"):
+            theme_mod.apply_app_theme("light")
+            theme_mod.sync_system_theme()
+            self.assertFalse(isDarkTheme())
+            theme_mod._on_system_scheme_changed(None)
+            self.assertFalse(isDarkTheme())
+        # AUTO 모드에서는 OS를 따라간다.
+        with mock.patch("darkdetect.theme", return_value="Dark"):
+            theme_mod.apply_app_theme("auto")
+            theme_mod.sync_system_theme()
+            self.assertEqual(theme_mod._PINNED_THEME, Theme.AUTO)
+        theme_mod.apply_app_theme("dark")
+
 
 class TestDesignTokens(unittest.TestCase):
     def test_spacing_scale(self):

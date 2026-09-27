@@ -1,5 +1,8 @@
 import csv
 import json
+import os
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from src.utils.helpers import PriceConverter, DateTimeHelper
 from src.utils.logger import get_logger
@@ -25,6 +28,26 @@ def _sanitize_spreadsheet_value(value):
     if isinstance(value, str) and value.startswith(_SPREADSHEET_FORMULA_PREFIXES):
         return f"'{value}"
     return value
+
+
+@contextmanager
+def _atomic_target(path):
+    """ISSUE-014: tmp 파일에 쓰고 os.replace로 원자 교체. 크래시 시 기존본 보존."""
+    target = os.fspath(path)
+    directory = os.path.dirname(os.path.abspath(target)) or "."
+    fd, tmp_path = tempfile.mkstemp(
+        dir=directory, prefix=".export-", suffix=".tmp"
+    )
+    os.close(fd)
+    try:
+        yield tmp_path
+        os.replace(tmp_path, target)
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
 
 
 @dataclass(frozen=True)
@@ -261,7 +284,8 @@ class DataExporter:
                 ws.column_dimensions[get_column_letter(col)].width = 15
             
             ws.freeze_panes = "A2"
-            wb.save(path)
+            with _atomic_target(path) as tmp_path:
+                wb.save(tmp_path)
             return self._success(path)
         except Exception as e:
             logger.error(f"Excel 저장 실패: {e}")
@@ -276,25 +300,25 @@ class DataExporter:
         try:
             columns = self._columns_from_template(template)
             
-            with open(path, 'w', newline='', encoding='utf-8-sig') as f:
-                writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
-                writer.writeheader()
+            with _atomic_target(path) as tmp_path, open(tmp_path, 'w', newline='', encoding='utf-8-sig') as f:
+                    writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
+                    writer.writeheader()
                 
-                for item in self.data:
-                    # 특수 컬럼 추가
-                    row = dict(item)
-                    row['신규여부'] = "신규" if item.get('is_new', False) else ""
-                    row['가격변동'] = self._format_price_change(item.get('price_change', 0))
-                    row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
-                    row = {
-                        column: (
-                            row.get(column, "")
-                            if column in {"신규여부", "가격변동", "갭비율"}
-                            else _sanitize_spreadsheet_value(row.get(column, ""))
-                        )
-                        for column in columns
-                    }
-                    writer.writerow(row)
+                    for item in self.data:
+                        # 특수 컬럼 추가
+                        row = dict(item)
+                        row['신규여부'] = "신규" if item.get('is_new', False) else ""
+                        row['가격변동'] = self._format_price_change(item.get('price_change', 0))
+                        row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
+                        row = {
+                            column: (
+                                row.get(column, "")
+                                if column in {"신규여부", "가격변동", "갭비율"}
+                                else _sanitize_spreadsheet_value(row.get(column, ""))
+                            )
+                            for column in columns
+                        }
+                        writer.writerow(row)
             return self._success(path)
         except Exception as e:
             logger.error(f"CSV 저장 실패: {e}")
@@ -307,14 +331,14 @@ class DataExporter:
     def export_json(self, path):
         """JSON으로 내보내기"""
         try:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "exported_at": DateTimeHelper.now_string(), 
-                    "total_count": len(self.data),
-                    "new_count": sum(1 for d in self.data if d.get('is_new', False)),
-                    "price_change_count": sum(1 for d in self.data if d.get('price_change', 0) != 0),
-                    "data": self.data
-                }, f, ensure_ascii=False, indent=2)
+            with _atomic_target(path) as tmp_path, open(tmp_path, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        "exported_at": DateTimeHelper.now_string(), 
+                        "total_count": len(self.data),
+                        "new_count": sum(1 for d in self.data if d.get('is_new', False)),
+                        "price_change_count": sum(1 for d in self.data if d.get('price_change', 0) != 0),
+                        "data": self.data
+                    }, f, ensure_ascii=False, indent=2)
             return self._success(path)
         except Exception as e:
             logger.error(f"JSON 저장 실패: {e}")

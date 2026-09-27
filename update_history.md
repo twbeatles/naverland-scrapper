@@ -1,5 +1,21 @@
 # Update History
 
+## 2026-09-27: PROJECT_AUDIT.md 지적 전체 수정 (P1-P3, v15.2)
+
+- P0 3건: 손상 geometry 검증 단일 경로 + 오프스크린 클램프, CrawlLock release(None) 분리, 즐겨찾기 DB 실패 시 UI 미반영 + 실패 통지
+- P1 7건: 스냅샷 rollback, 락/저장 순서 정리, 워커·타이머 종료 정리, UnicodeDecodeError 복구, detail 풀 중단 체크, 그룹/메모 DB 보호, 알림 수치 가드
+- P2 8건: 테마 독스트링 정합, export 원자 저장, 캐시 방어 복사, 탭 전환 디바운스, 에러 토스트 + 버튼 복구, 토스트 지오메트리, 단축키 중복 해제 (ISSUE-009/013/015는 추정 유지로 미변경)
+- 회귀 테스트 `tests/test_audit_fixes.py` 신규 (T-001~T-010)
+- Pyright 0 errors, CI 서브셋 + 신규 테스트 289 passed + 19 subtests
+
+## 2026-09-27: 상단 라벨 명암 반전 수정 (Fluent 테마 고정 + 다크 보조텍스트 밝게)
+
+- 원인: OS 테마 감시(3초 poll + colorSchemeChanged)가 명시적 dark/light 선택을 매번 덮어써 Fluent 내비 상단 라벨·아이콘이 반대 테마 색으로 렌더됨 (다크에서 어둡게 / 라이트에서 흰색으로)
+- `src/ui/fluent/theme.py`에 핀 고정 도입: 명시 선택 시 OS 동기 무시·테마 재확인, AUTO에서만 OS 연동; `is_dark_theme()` AUTO 해소 수정
+- 다크 보조 텍스트 밝게 (`design_tokens.py` + `colors.py` dark `text_secondary`)
+- 재발방지: `tests/test_fluent_theme.py`에 OS 감시 덮어쓰기 회귀 테스트 추가
+- Pyright 0 errors, CI subset 251 passed + 12 subtests, exe 재빌드 + `--preflight` exit 0
+
 ## 2026-09-27: 메뉴 라벨 정리 (이모지 제거·팝업 메뉴 텍스트색 명시)
 
 - 메뉴바·팝업 메뉴 20여 곳의 이모지를 FluentIcon으로 교체

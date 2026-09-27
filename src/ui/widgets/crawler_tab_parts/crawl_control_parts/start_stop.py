@@ -182,7 +182,7 @@ class CrawlerTabStartStopMixin:
         self.crawler_thread.stats_signal.connect(self._update_stats_ui)
         self.crawler_thread.complex_finished_signal.connect(self._on_complex_finished)
         self.crawler_thread.alert_triggered_signal.connect(self._on_alert_triggered)
-        self.crawler_thread.error_signal.connect(lambda msg: self.append_log(f"❌ 크롤링 오류: {msg}", 40))
+        self.crawler_thread.error_signal.connect(self._on_crawl_error)
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
         try:
             self.crawler_thread.start()
@@ -198,12 +198,48 @@ class CrawlerTabStartStopMixin:
         self.crawling_started.emit()
         return True
 
+    def _on_crawl_error(self: Any, message) -> None:
+        # ISSUE-019: 에러 시그널이 로그에만 머물러 버튼이 stale 상태로 남던
+        # 문제를 수정 — 로그+상태바/토스트 알림, 스레드 사망 시 버튼 복구.
+        text = f"❌ 크롤링 오류: {message}"
+        try:
+            self.append_log(text, 40)
+        except Exception:
+            pass
+        try:
+            self.status_message.emit(str(message or "크롤링 중 오류가 발생했습니다."))
+        except Exception:
+            pass
+        try:
+            window = self.window() if hasattr(self, "window") else None
+            show_toast = getattr(window, "show_toast", None)
+            if callable(show_toast):
+                show_toast(text, toast_type="error")
+        except Exception:
+            pass
+        try:
+            thread = getattr(self, "crawler_thread", None)
+            running = bool(thread is not None and thread.isRunning())
+        except Exception:
+            running = True
+        if not running:
+            for name, enabled in (("btn_start", True), ("btn_stop", False)):
+                try:
+                    getattr(self, name).setEnabled(enabled)
+                except Exception:
+                    pass
+
     def _release_crawl_lock(self: Any) -> None:
         from src.core.crawl_lock import get_crawl_lock
 
         owner = getattr(self, "_crawl_lock_owner", None)
-        get_crawl_lock().release(owner)
-        self._crawl_lock_owner = None
+        try:
+            # ISSUE-002: only the owning tab may release; a tab holding no
+            # lock (owner None) must never clear another tab's lock.
+            if owner:
+                get_crawl_lock().release(owner)
+        finally:
+            self._crawl_lock_owner = None
 
     def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():

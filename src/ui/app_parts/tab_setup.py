@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from typing import Any, TYPE_CHECKING
 
 from qfluentwidgets import NavigationInterface
@@ -548,12 +550,30 @@ class AppTabSetupMixin:
         force = index is None
         if index is None:
             index = self.tabs.currentIndex()
+        # ISSUE-018: currentChanged 연발 시 동기 DB 조회를 때리지 않도록
+        # 0.5s 디바운스. 명시적 새로고침(force)은 항상 통과.
+        if not force:
+            try:
+                _last_map = getattr(self, "_last_tab_refresh_at", None)
+                if not isinstance(_last_map, dict):
+                    _last_map = {}
+                    self._last_tab_refresh_at = _last_map
+                _now = time.monotonic()
+                if _now - float(_last_map.get(index, 0.0)) < 0.5:
+                    return
+                _last_map[index] = _now
+            except Exception:
+                pass
         if index == self.TAB_GEO:
             return
         if index == self.TAB_DB:
             self.db_tab.load_data()
         elif index == self.TAB_GROUP:
-            self._ensure_group_tab().load_groups()
+            try:
+                self._ensure_group_tab().load_groups()
+            except Exception as e:
+                ui_logger.exception(f"그룹 탭 로드 실패: {e}")
+                self.status_bar.showMessage("⚠️ 그룹 탭 로드 중 오류가 발생했습니다.")
         elif index == self.TAB_HISTORY:
             if not force and self._noncritical_loaded.get("history", False):
                 return

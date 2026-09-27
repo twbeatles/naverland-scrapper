@@ -36,6 +36,26 @@ class AppLifecycleShutdownMixin:
             ui_logger.debug(f"crawl_lock force_release 무시: {lock_exc}")
         if hasattr(self, "schedule_timer") and self.schedule_timer:
             self.schedule_timer.stop()
+        # ISSUE-005: stop the OS-theme watcher poll so it cannot outlive shutdown.
+        _timer_owners = [self]
+        try:
+            _timer_owners.append(QApplication.instance())
+        except Exception:
+            pass
+        for _timer_owner in _timer_owners:
+            try:
+                _theme_timer = getattr(_timer_owner, "_theme_watcher_timer", None)
+                if _theme_timer is not None:
+                    _theme_timer.stop()
+            except Exception as theme_exc:
+                ui_logger.debug(f"테마 watcher 정리 무시: {theme_exc}")
+        # ISSUE-005: wait briefly for update check/download workers.
+        _update_controller = getattr(self, "_update_controller", None)
+        if _update_controller is not None:
+            try:
+                _update_controller.wait_idle(timeout=5.0)
+            except Exception as update_exc:
+                ui_logger.debug(f"업데이트 워커 대기 무시: {update_exc}")
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])
         try:
             self.db.close()

@@ -261,32 +261,56 @@ class AppSettingsPresetMixin:
             decorated.append(row)
         return decorated
 
+    def _notify_favorite_failure(self: Any):
+        try:
+            self.show_toast("즐겨찾기 저장에 실패했습니다. 다시 시도해주세요.")
+        except Exception:
+            pass
+        try:
+            self.status_bar.showMessage("⚠️ 즐겨찾기 저장 실패")
+        except Exception:
+            pass
+
     def _on_favorite_toggled(self: Any, article_id, complex_id, asset_type, is_fav):
         if not article_id or not complex_id:
             return
         asset_token = str(asset_type or "APT").strip().upper() or "APT"
         try:
-            self.db.toggle_favorite(article_id, complex_id, asset_token, is_fav)
-        finally:
-            key = (asset_token, article_id, complex_id)
-            if is_fav:
-                self.favorite_keys.add(key)
-            else:
-                self.favorite_keys.discard(key)
-            if hasattr(self, "crawler_tab"):
-                self.crawler_tab._update_favorite_state_for_key(key, is_fav)
-            if hasattr(self, "geo_tab"):
-                self.geo_tab._update_favorite_state_for_key(key, is_fav)
-            if hasattr(self, 'favorites_tab'):
-                if self.tabs.currentWidget() is self.favorites_tab:
-                    self.favorites_tab.refresh()
-                    if hasattr(self, "_noncritical_loaded"):
-                        self._noncritical_loaded["favorites"] = True
-                elif hasattr(self, "_mark_noncritical_stale"):
-                    self._mark_noncritical_stale("favorites")
-                elif hasattr(self, "_noncritical_loaded"):
-                    self._noncritical_loaded["favorites"] = False
-    
+            saved = self.db.toggle_favorite(article_id, complex_id, asset_token, is_fav)
+        except Exception as e:
+            # ISSUE-003: DB failure must not update memory/UI state.
+            try:
+                ui_logger.warning(f"favorite toggle failed (exception), skip UI update: {e}")
+            except Exception:
+                pass
+            self._notify_favorite_failure()
+            return
+        if not saved:
+            try:
+                ui_logger.warning("favorite toggle failed (db returned False), skip UI update")
+            except Exception:
+                pass
+            self._notify_favorite_failure()
+            return
+        key = (asset_token, article_id, complex_id)
+        if is_fav:
+            self.favorite_keys.add(key)
+        else:
+            self.favorite_keys.discard(key)
+        if hasattr(self, "crawler_tab"):
+            self.crawler_tab._update_favorite_state_for_key(key, is_fav)
+        if hasattr(self, "geo_tab"):
+            self.geo_tab._update_favorite_state_for_key(key, is_fav)
+        if hasattr(self, 'favorites_tab'):
+            if self.tabs.currentWidget() is self.favorites_tab:
+                self.favorites_tab.refresh()
+                if hasattr(self, "_noncritical_loaded"):
+                    self._noncritical_loaded["favorites"] = True
+            elif hasattr(self, "_mark_noncritical_stale"):
+                self._mark_noncritical_stale("favorites")
+            elif hasattr(self, "_noncritical_loaded"):
+                self._noncritical_loaded["favorites"] = False
+
     def _check_advanced_filter(self: Any, d):
         if hasattr(self, "crawler_tab"):
             return self.crawler_tab._check_advanced_filter(d)

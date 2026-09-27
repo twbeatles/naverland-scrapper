@@ -261,7 +261,17 @@ class PlaywrightBrowserRuntimeMixin:
                     page = await self._new_mobile_pool_page()
                     self._page_pool_created = created + 1
                     return page
-        return await pool.get()
+        while True:
+            try:
+                return await asyncio.wait_for(pool.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                should_stop = False
+                try:
+                    should_stop = bool(self.thread._should_stop())
+                except Exception:
+                    should_stop = False
+                if should_stop:
+                    raise asyncio.CancelledError("detail page wait interrupted by stop request")
 
     async def _release_detail_page(self, page) -> None:
         pool = self._page_pool

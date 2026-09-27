@@ -22,6 +22,26 @@ class AppLifecycleShortcutsActionsMixin:
         self._register_shortcut(SHORTCUTS["settings"], self._show_settings)
 
     def _register_shortcut(self: Any, key_sequence, callback):
+        # ISSUE-021: 중복 키 재등록 시 기존 QShortcut을 먼저 해제해야
+        # 부모에 좀비 단축키가 남아 이중 발화하지 않는다.
+        try:
+            _reg = getattr(self, "_shortcuts", None)
+            _old = _reg.pop(key_sequence, None) if isinstance(_reg, dict) else None
+        except Exception:
+            _old = None
+        if _old is not None:
+            for _op in ("activated.disconnect", "setEnabled", "setParent", "deleteLater"):
+                try:
+                    if _op == "activated.disconnect":
+                        _old.activated.disconnect()
+                    elif _op == "setEnabled":
+                        _old.setEnabled(False)
+                    elif _op == "setParent":
+                        _old.setParent(None)
+                    else:
+                        _old.deleteLater()
+                except Exception:
+                    pass
         shortcut = QShortcut(QKeySequence(key_sequence), self)
         shortcut.activated.connect(callback)
         self._shortcuts[key_sequence] = shortcut

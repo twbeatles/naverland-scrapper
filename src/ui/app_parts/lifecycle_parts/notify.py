@@ -25,18 +25,35 @@ class AppLifecycleNotifyMixin:
             pass
 
         toast = ToastWidget(message, toast_type=toast_type, parent=self)
+        # ISSUE-020: show 전 width()/height()는 0일 수 있어 adjustSize +
+        # sizeHint로 초기 크기를 잡는다 (show 후 _reposition_toasts로 보정).
+        try:
+            toast.adjustSize()
+        except Exception:
+            pass
+        try:
+            _hint = toast.sizeHint()
+            _tw = max(int(toast.width()), int(_hint.width()), 320)
+            _th = max(int(toast.height()), int(_hint.height()), 1)
+        except Exception:
+            _tw, _th = 320, 1
 
         # 위치 계산 (쌓이도록)
         margin = 20
-        y = self.height() - margin - toast.height()
+        y = self.height() - margin - _th
         for t in self.toast_widgets:
             y -= (t.height() + 10)
 
-        x = self.width() - margin - toast.width()
+        x = self.width() - margin - _tw
         toast.move(x, y)
         toast.show_toast(duration)
 
         self.toast_widgets.append(toast)
+        # show 후 실제 지오메트리로 위치 재보정 (0-size 폴백 방지).
+        try:
+            self._reposition_toasts()
+        except Exception:
+            pass
         # 종료 시 리스트에서 제거
         QTimer.singleShot(
             duration + 500,

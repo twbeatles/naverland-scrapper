@@ -169,6 +169,15 @@ class PlaywrightDetailEnrichmentMixin:
                 )
                 return
 
+            try:
+                if bool(self.thread._should_stop()):
+                    ordered[index] = apply_mobile_detail(dict(item), {})
+                    self.thread.stats["detail_fetch_skipped_count"] = (
+                        int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + 1
+                    )
+                    return
+            except Exception:
+                pass
             page = await self._acquire_detail_page()
             detail: dict = {}
             try:

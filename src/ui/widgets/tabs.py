@@ -159,12 +159,16 @@ class FavoritesTab(QWidget):
             text=item_data.get("note", "")
         )
         if ok:
-            self.db.update_article_note(
-                item_data.get("article_id", ""),
-                item_data.get("complex_id", ""),
-                note,
-                asset_type=item_data.get("asset_type", "APT"),
-            )
+            try:
+                self.db.update_article_note(
+                    item_data.get("article_id", ""),
+                    item_data.get("complex_id", ""),
+                    note,
+                    asset_type=item_data.get("asset_type", "APT"),
+                )
+            except Exception as e:
+                logger.error(f"메모 저장 실패: {e}")
+                return
             self.refresh()
     
     def _remove_favorite(self):

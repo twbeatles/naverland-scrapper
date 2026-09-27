@@ -29,7 +29,7 @@ COLORS = {
         "border_table_item": "rgba(255, 255, 255, 0.03)",
         "border_focus": "#f59e0b",
         "text_primary": "#f0f0f0",
-        "text_secondary": "#a0a0b0",
+        "text_secondary": "#b6b6c6",
         "text_disabled": "#555",
         "text_tab_inactive": "#888",
         "text_tab_hover": "#ccc",

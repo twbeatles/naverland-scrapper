@@ -22,6 +22,31 @@ class UpdateController(QObject):
         super().__init__(parent)
         self._busy = False
         self._lock = threading.Lock()
+        self._threads: list = []
+
+    def wait_idle(self, timeout: float | None = 5.0) -> bool:
+        """Join update worker threads (ISSUE-005: no orphan check/download on exit)."""
+        import time as _time
+
+        deadline = None if timeout is None else _time.monotonic() + max(0.0, float(timeout))
+        while True:
+            with self._lock:
+                alive = [t for t in self._threads if t.is_alive()]
+                busy = self._busy
+            if not alive and not busy:
+                with self._lock:
+                    self._threads = []
+                return True
+            for thread in alive:
+                remaining = None if deadline is None else max(0.0, deadline - _time.monotonic())
+                thread.join(timeout=remaining)
+            with self._lock:
+                self._threads = [t for t in self._threads if t.is_alive()]
+                done = not self._threads and not self._busy
+            if done:
+                return True
+            if deadline is not None and _time.monotonic() >= deadline:
+                return False
 
     @property
     def configured(self) -> bool:
@@ -45,7 +70,10 @@ class UpdateController(QObject):
                 self.update_available.emit(manifest)
             finally:
                 with self._lock: self._busy = False
-        threading.Thread(target=worker, name="UpdateCheck", daemon=True).start()
+        check_thread = threading.Thread(target=worker, name="UpdateCheck", daemon=True)
+        with self._lock:
+            self._threads.append(check_thread)
+        check_thread.start()
         return True
 
     def download(self, manifest: ReleaseManifest) -> bool:
@@ -60,7 +88,10 @@ class UpdateController(QObject):
             except Exception as exc: self.failed.emit(str(exc))
             finally:
                 with self._lock: self._busy = False
-        threading.Thread(target=worker, name="UpdateDownload", daemon=True).start()
+        download_thread = threading.Thread(target=worker, name="UpdateDownload", daemon=True)
+        with self._lock:
+            self._threads.append(download_thread)
+        download_thread.start()
         return True
 
     @staticmethod

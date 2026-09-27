@@ -47,6 +47,10 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
             conn.commit()
             return True
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.error(f"가격 스냅샷 저장 실패: {e}")
             return False
         finally:
@@ -154,8 +158,14 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
             conn.commit()
             if skipped:
                 logger.debug(f"price snapshot bulk skipped malformed rows: {skipped}")
+            # 반환값은 기존 계약 유지: 처리된 입력 행 수. 동일 키 중복 행도
+            # ON CONFLICT DO UPDATE로 순서대로 쓰이므로 최신값이 남는다.
             return len(normalized_rows)
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.error(f"가격 스냅샷 일괄 저장 실패: {e}")
             return 0
         finally:

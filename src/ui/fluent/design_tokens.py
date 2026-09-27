@@ -54,7 +54,7 @@ def preferred_window_size(avail_width: int, avail_height: int) -> tuple[int, int
 # --- semantic colors (domain chrome keeps amber identity; not SRT/KTX red/blue) ---
 ACCENT_DARK = "#f59e0b"
 ACCENT_LIGHT = "#0ea5e9"
-TEXT_SECONDARY_DARK = "#a0a0b0"
+TEXT_SECONDARY_DARK = "#b6b6c6"
 TEXT_SECONDARY_LIGHT = "#64748b"
 
 

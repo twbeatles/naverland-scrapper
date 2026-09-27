@@ -20,10 +20,13 @@ class CrawlLock:
             return True
 
     def release(self, owner: str | None = None) -> None:
-        """Release if owner matches, or if owner is None (best-effort cleanup)."""
+        """Release only when owner matches.
+
+        owner=None is a no-op (normal release requires an owner).
+        Shutdown/cleanup paths must call force_release() explicitly.
+        """
         with self._lock:
             if owner is None:
-                self._owner = None
                 return
             if self._owner == str(owner).strip():
                 self._owner = None

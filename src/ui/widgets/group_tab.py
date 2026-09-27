@@ -18,6 +18,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from src.ui.dialogs import MultiSelectDialog
+from src.utils.logger import get_logger
+
+
+logger = get_logger("GroupTab")
 
 
 class GroupTab(QWidget):
@@ -128,8 +132,13 @@ class GroupTab(QWidget):
         return db_id, name, asset_type, cid, memo
 
     def load_groups(self):
+        try:
+            groups = self.db.get_all_groups()
+        except Exception as e:
+            logger.error(f"group load failed: {e}")
+            return
         self.group_list.clear()
-        for gid, name, desc in self.db.get_all_groups():
+        for gid, name, desc in groups:
             item = QListWidgetItem(f"{name} ({desc})" if desc else name)
             item.setData(Qt.ItemDataRole.UserRole, gid)
             self.group_list.addItem(item)

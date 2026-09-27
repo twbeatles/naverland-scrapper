@@ -52,7 +52,7 @@ def load_json_with_recovery(
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
         backup = backup_broken_json(path, label=label)
         logger.warning(f"{label} 로드 실패, 기본값으로 복구합니다: {e}")
         if backup:

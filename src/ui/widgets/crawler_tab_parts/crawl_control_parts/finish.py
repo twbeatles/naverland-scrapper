@@ -90,9 +90,10 @@ class CrawlerTabFinishMixin:
             if self.crawl_cache:
                 self.crawl_cache.flush()
             
-            # DB Write
+            # DB Write (ISSUE-007: synchronous while the crawl lock is held,
+            # so the save cannot outlive the finally-block lock release).
             try:
-                self._save_price_snapshots()
+                self._save_price_snapshots(async_save=False)
             except (OSError, RuntimeError, ValueError, TypeError) as e:
                 self.append_log(f"⚠️ 가격 스냅샷 저장 실패: {e}", 30)
 
@@ -123,11 +124,22 @@ class CrawlerTabFinishMixin:
         self.append_log(f"📌 단지 완료: {name} ({cid}) {count}건", 10)
 
     def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
+        try:
+            safe_alert_id = int(alert_id or 0)
+        except (TypeError, ValueError):
+            safe_alert_id = 0
+        try:
+            safe_area = float(area_pyeong)
+            area_text = f"{safe_area:.1f}평"
+        except (TypeError, ValueError):
+            safe_area = 0.0
+            fallback = "" if area_pyeong is None else str(area_pyeong).strip()
+            area_text = f"{fallback}평" if fallback else "평형 미상"
         self.append_log(
-            f"🔔 알림 조건 충족: {complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)",
+            f"🔔 알림 조건 충족: {complex_name} {trade_type} {price_text} ({area_text})",
             30,
         )
-        self.alert_triggered.emit(complex_name, trade_type, price_text, area_pyeong, int(alert_id or 0))
+        self.alert_triggered.emit(complex_name, trade_type, price_text, safe_area, safe_alert_id)
 
     def _update_stats_ui(self: Any, stats):
         self.summary_card.update_stats(

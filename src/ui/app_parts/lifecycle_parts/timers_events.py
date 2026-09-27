@@ -21,7 +21,12 @@ class AppLifecycleTimersEventsMixin:
         self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
 
     def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
-        message = f"{complex_name} {trade_type} {price_text} ({area_pyeong:.1f}평)"
+        try:
+            area_text = f"{float(area_pyeong):.1f}평"
+        except (TypeError, ValueError):
+            fallback = "" if area_pyeong is None else str(area_pyeong).strip()
+            area_text = f"{fallback}평" if fallback else "평형 미상"
+        message = f"{complex_name} {trade_type} {price_text} ({area_text})"
         self.show_toast(f"🔔 조건 매물 발견: {message}")
         self.show_notification("조건 매물 알림", message)
 

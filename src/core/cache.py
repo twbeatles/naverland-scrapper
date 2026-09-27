@@ -207,12 +207,13 @@ class CrawlCache:
                     suffix = f", context={context_ns}" if context_ns else ""
                     get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type}{suffix})")
                     # v14.2: raw_items 우선 사용, legacy items 포맷과 호환 유지
+                    # ISSUE-012: 내부 리스트 별칭 반환 금지 — 호출자 변이가 캐시를 오염시킨다.
                     raw_items = entry.get("raw_items")
                     if isinstance(raw_items, list):
-                        return raw_items
+                        return [dict(i) if isinstance(i, dict) else i for i in raw_items]
                     legacy_items = entry.get("items")
                     if isinstance(legacy_items, list):
-                        return legacy_items
+                        return [dict(i) if isinstance(i, dict) else i for i in legacy_items]
                     return []
                 else:
                     # 만료된 캐시 삭제

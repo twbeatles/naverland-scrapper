@@ -29,11 +29,9 @@ class AppLifecycleBootstrapMixin:
             pass
         from src.ui.fluent.design_tokens import MIN_WINDOW_WIDTH as _MIN_W, MIN_WINDOW_HEIGHT as _MIN_H
         self.setMinimumSize(_MIN_W, _MIN_H)
-        geo = settings.get("window_geometry")
-        if geo: self.setGeometry(*geo)
-        else:
-            from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW, DEFAULT_WINDOW_HEIGHT as _DH
-            self.resize(_DW, _DH)
+        # ISSUE-001: geometry is applied only through the validated
+        # _restore_window_geometry() single path (no unvalidated setGeometry).
+        self._restore_window_geometry()
         
         self.settings_manager = get_settings()
         self.preset_manager = FilterPresetManager()
@@ -100,17 +98,82 @@ class AppLifecycleBootstrapMixin:
             self.show_toast(startup_notice)
 
     def _restore_window_geometry(self: Any):
-        geo = settings.get("window_geometry")
+        """Apply saved window geometry after validation, clamped to visible screens.
+
+        Invalid saved values fall back to the default size so a corrupt
+        settings entry can never crash startup (ISSUE-001).
+        """
+        from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW, DEFAULT_WINDOW_HEIGHT as _DH
+        try:
+            geo = settings.get("window_geometry")
+        except Exception:
+            geo = None
         if not geo:
+            try:
+                self.resize(_DW, _DH)
+            except Exception:
+                pass
             return
-        if not isinstance(geo, (list, tuple)) or len(geo) != 4:
+        valid = (
+            isinstance(geo, (list, tuple))
+            and len(geo) == 4
+            and all(not isinstance(v, bool) for v in geo)
+        )
+        coords = None
+        if valid:
+            try:
+                coords = (int(geo[0]), int(geo[1]), int(geo[2]), int(geo[3]))
+            except (TypeError, ValueError):
+                coords = None
+        if coords is None:
+            try:
+                ui_logger.warning(f"invalid window_geometry ignored: {geo!r}")
+            except Exception:
+                pass
+            try:
+                self.resize(_DW, _DH)
+            except Exception:
+                pass
+            return
+        x, y, w, h = coords
+        if w <= 0 or h <= 0:
+            try:
+                ui_logger.warning(f"invalid window_geometry size ignored: {geo!r}")
+            except Exception:
+                pass
+            try:
+                self.resize(_DW, _DH)
+            except Exception:
+                pass
             return
         try:
-            x, y, w, h = (int(geo[0]), int(geo[1]), int(geo[2]), int(geo[3]))
+            from PyQt6.QtGui import QGuiApplication as _QGuiApp
+            _screen = _QGuiApp.primaryScreen()
+            _avail = _screen.availableGeometry() if _screen is not None else None
+        except Exception:
+            _avail = None
+        if _avail is not None:
+            try:
+                w = max(1, min(w, int(_avail.width())))
+                h = max(1, min(h, int(_avail.height())))
+                _margin = 100
+                _min_x = int(_avail.x()) - w + _margin
+                _max_x = int(_avail.x()) + int(_avail.width()) - _margin
+                _min_y = int(_avail.y()) - h + _margin
+                _max_y = int(_avail.y()) + int(_avail.height()) - _margin
+                if _min_x <= _max_x:
+                    x = min(max(x, _min_x), _max_x)
+                if _min_y <= _max_y:
+                    y = min(max(y, _min_y), _max_y)
+            except Exception:
+                pass
+        try:
             self.setGeometry(x, y, w, h)
         except Exception:
-            # Best-effort only; invalid saved geometry should not prevent startup.
-            return
+            try:
+                self.resize(_DW, _DH)
+            except Exception:
+                pass
 
     def _apply_domain_stylesheet(self: Any, theme: str | None = None):
         """Apply Fluent theme + domain QSS (scoped) without crushing Fluent controls."""
