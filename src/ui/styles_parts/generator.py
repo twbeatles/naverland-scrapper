@@ -414,6 +414,7 @@ QMenuBar::item:selected {{
 }}
 QMenu {{
     background-color: {c['bg_menu']};
+    color: {c['text_primary']};
     border: 1px solid {c['border']};
     border-radius: 8px;
     padding: 5px;

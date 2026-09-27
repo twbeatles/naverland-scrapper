@@ -73,7 +73,7 @@ from src.ui.dialogs import (
 from src.ui.widgets.toast import ToastWidget
 
 # Fluent shell helpers (required in app globals for mixin rebind).
-from qfluentwidgets import NavigationInterface  # noqa: F401
+from qfluentwidgets import FluentIcon as FIF, NavigationInterface  # noqa: F401
 from src.ui.fluent.tab_bridge import TabCompatBridge  # noqa: F401
 from src.ui.fluent.theme import apply_app_theme  # noqa: F401
 from src.ui.fluent.navigation import (  # noqa: F401
