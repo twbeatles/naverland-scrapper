@@ -27,6 +27,9 @@ from src.ui.dialogs import (
     AdvancedFilterDialog,
 )
 from src.ui.styles import COLORS
+# Re-exported into mixin rebind globals (rebind_inherited_methods below).
+from qfluentwidgets import FluentIcon as FIF  # noqa: F401
+from src.ui.fluent.design_tokens import secondary_text_color  # noqa: F401
 from src.utils.logger import get_logger
 
 

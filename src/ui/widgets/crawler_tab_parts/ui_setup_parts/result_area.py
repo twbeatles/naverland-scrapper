@@ -22,8 +22,8 @@ class CrawlerTabResultAreaSetupMixin:
         toolbar_widget = QWidget()
         toolbar_widget.setObjectName("resultToolbar")
         search_sort = QHBoxLayout(toolbar_widget)
-        search_sort.setContentsMargins(8, 6, 8, 6)
-        search_sort.setSpacing(6)
+        search_sort.setContentsMargins(8, 8, 8, 8)
+        search_sort.setSpacing(8)
 
         self.result_search = SearchBar("결과 검색...")
         self.result_search.search_changed.connect(self._on_search_text_changed)
@@ -135,7 +135,7 @@ class CrawlerTabResultAreaSetupMixin:
         result_tabs = QTabWidget()
         result_tab = QWidget()
         rl = QVBoxLayout(result_tab)
-        rl.setContentsMargins(0, 5, 0, 0)
+        rl.setContentsMargins(0, 4, 0, 0)
         
         # Table View
         self.result_table = QTableWidget()
@@ -175,7 +175,7 @@ class CrawlerTabResultAreaSetupMixin:
         # Log Tab
         log_tab = QWidget()
         ll = QVBoxLayout(log_tab)
-        ll.setContentsMargins(0, 5, 0, 0)
+        ll.setContentsMargins(0, 4, 0, 0)
         self.log_browser = QTextBrowser()
         self.log_browser.setMinimumHeight(150)
         ll.addWidget(self.log_browser)

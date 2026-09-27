@@ -1,5 +1,15 @@
 # Update History
 
+## 2026-09-27: Fluent 전면 재설계 (P1-P10) + CI 복구
+
+- 좌측 내비 시작 시 펼침으로 변경 (48px 아이콘 전용 → 208px 라벨 내비, srtgo parity)
+- EmptyState 아이콘을 Fluent IconWidget으로 교체, 버튼·진행 표시의 이모지 제거 후 FluentIcon 적용
+- 페이지 간격·타이포를 디자인 토큰으로 통일, 카드 radius 14→8, QSS 그라디언트 잔여분 제거
+- CI 실패 수정: `darkdetect>=1.4.0` 오기재 → `>=0.8.0`; 재발방지로 핀 정합 테스트 + install fail-fast
+- 신규 `tests/test_requirements_pins.py`, 내비 펼침 회귀 테스트 3건
+- Pyright 0 errors, CI subset 250개 통과
+- QMessageBox 호출부는 기존 테스트 계약이므로 유지 (파괴적 확인은 기본 No)
+
 ## 2026-09-27: Fluent UI 정리 (DESKTOP_UI_DESIGN_RULES + srtgo 기준)
 
 - `src/ui/fluent/design_tokens.py` 신설: spacing 4/8/12/16/24/32, 카드 radius 8, 창 크기 토큰, 시맨틱 보조 텍스트 색상

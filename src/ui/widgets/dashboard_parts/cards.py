@@ -37,8 +37,9 @@ class StatCard(QFrame):
         self.setMinimumHeight(96)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(6)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, SPACE_SM as _SM, SPACE_XS as _XS
+        layout.setContentsMargins(_GG, _SM, _GG, _SM)
+        layout.setSpacing(_XS)
 
         self._title_label = QLabel(title)
         self._title_label.setObjectName("statCardTitle")

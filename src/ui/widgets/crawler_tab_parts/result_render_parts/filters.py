@@ -18,7 +18,7 @@ class CrawlerTabFilterRenderMixin:
                 self.lbl_advanced_filter.setStyleSheet("color: #10b981; font-weight: 700;")
             else:
                 self.lbl_advanced_filter.setText("고급필터: OFF")
-                self.lbl_advanced_filter.setStyleSheet("color: #888;")
+                self.lbl_advanced_filter.setStyleSheet(f"color: {secondary_text_color(getattr(self, 'current_theme', None))};")
         status_action = getattr(self, "_result_more_filter_status_action", None)
         if status_action is not None:
             status_action.setText("필터 상태: ON" if active else "필터 상태: OFF")

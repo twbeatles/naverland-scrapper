@@ -45,7 +45,7 @@ def apply_theme_surfaces(root: QWidget, theme: str) -> None:
         f"background-color: {colors['bg_card']};"
         f"color: {colors['text_primary']};"
         f"border: 1px solid {colors['border_subtle']};"
-        f"border-radius: 12px;"
+        f"border-radius: 8px;"
         f"margin-top: 0.8em;"
         f"padding: 10px;"
         f"padding-top: 22px;"

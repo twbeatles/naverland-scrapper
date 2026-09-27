@@ -90,5 +90,67 @@ class TestDesignTokens(unittest.TestCase):
         self.assertIn(TEXT_SECONDARY_LIGHT, empty_state_qss("light", padding=40))
 
 
+def _close_app_window(w, qt_app):
+    if hasattr(w, "schedule_timer") and w.schedule_timer:
+        w.schedule_timer.stop()
+    if hasattr(w, "tray_icon") and w.tray_icon:
+        w.tray_icon.hide()
+    if hasattr(w, "db") and w.db:
+        w.db.close()
+    w.deleteLater()
+    qt_app.processEvents()
+
+
+@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+class TestNavigationExpanded(unittest.TestCase):
+    """Left navigation must start expanded with labels (srtgo parity)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from PyQt6.QtWidgets import QApplication
+
+        cls._qt_app = QApplication.instance() or QApplication([])
+
+    def _make_window(self, theme):
+        from src.core.managers import settings
+
+        settings.set("theme", theme)
+        from src.ui.app import RealEstateApp
+
+        w = RealEstateApp()
+        w.resize(1200, 800)
+        w.show()
+        self._qt_app.processEvents()
+        self.addCleanup(_close_app_window, w, self._qt_app)
+        return w
+
+    def test_nav_expanded_dark(self):
+        from qfluentwidgets import NavigationDisplayMode
+
+        w = self._make_window("dark")
+        nav = w.navigationInterface
+        self.assertGreaterEqual(nav.width(), 200)
+        self.assertEqual(nav.panel.displayMode, NavigationDisplayMode.EXPAND)
+
+    def test_nav_expanded_light(self):
+        from qfluentwidgets import NavigationDisplayMode
+
+        w = self._make_window("light")
+        nav = w.navigationInterface
+        self.assertGreaterEqual(nav.width(), 200)
+        self.assertEqual(nav.panel.displayMode, NavigationDisplayMode.EXPAND)
+
+    def test_nav_labels_present(self):
+        w = self._make_window("light")
+        items = w.navigationInterface.panel.items
+        from src.ui.fluent.navigation import ROUTE_CRAWLER, ROUTE_SETTINGS
+        self.assertIn(ROUTE_CRAWLER, items)
+        self.assertIn(ROUTE_SETTINGS, items)
+        text_of = lambda w: getattr(w, "text", lambda: "")()
+        labels = [text_of(entry.widget) for entry in items.values()]
+        self.assertIn("매물 수집", labels)
+        self.assertIn("설정", labels)
+
+
 if __name__ == "__main__":
     unittest.main()

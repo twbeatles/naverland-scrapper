@@ -9,22 +9,50 @@ from src.ui.styles import COLORS
 
 
 class EmptyStateWidget(QWidget):
-    """재사용 가능한 빈 상태 위젯 (v15.0)"""
+    """재사용 가능한 빈 상태 위젯 (Fluent IconWidget 기반)"""
     action_clicked = pyqtSignal()
 
-    def __init__(self, icon: str = "📭", title: str = "데이터가 없습니다",
+    _LEGACY_ICONS = {"📭": "DOCUMENT", "🔍": "SEARCH", "⭐": "HEART", "📁": "FOLDER", "ℹ": "INFO"}
+
+    def __init__(self, icon=None, title: str = "데이터가 없습니다",
                  description: str = "", action_text: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("emptyStateWidget")
+        from src.ui.fluent.design_tokens import SPACE_LG, SPACE_SM, SPACE_XL
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 60, 40, 60)
-        layout.setSpacing(12)
+        layout.setContentsMargins(SPACE_LG, SPACE_XL, SPACE_LG, SPACE_XL)
+        layout.setSpacing(SPACE_SM)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        icon_label = QLabel(icon)
-        icon_label.setObjectName("emptyStateIcon")
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(icon_label)
+        self.icon_widget = self._make_icon(icon)
+        layout.addWidget(self.icon_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    @classmethod
+    def _resolve_icon(cls, icon):
+        """Accept a FluentIcon member; map legacy emoji strings for compatibility."""
+        try:
+            from qfluentwidgets import FluentIcon as FIF
+        except Exception:
+            return None
+        if icon is None:
+            return FIF.DOCUMENT
+        name = cls._LEGACY_ICONS.get(icon, icon) if isinstance(icon, str) else icon
+        if isinstance(name, str):
+            return getattr(FIF, name, FIF.DOCUMENT)
+        return name
+
+    def _make_icon(self, icon):
+        resolved = self._resolve_icon(icon)
+        try:
+            from qfluentwidgets import IconWidget
+
+            widget = IconWidget(resolved)
+            widget.setFixedSize(48, 48)
+            return widget
+        except Exception:
+            fallback = QLabel("")
+            fallback.setObjectName("emptyStateIcon")
+            return fallback
 
         title_label = QLabel(title)
         title_label.setObjectName("emptyStateTitle")
@@ -39,7 +67,12 @@ class EmptyStateWidget(QWidget):
             layout.addWidget(desc_label)
 
         if action_text:
-            action_btn = QPushButton(action_text)
+            try:
+                from qfluentwidgets import PushButton as FluentPushButton
+
+                action_btn = FluentPushButton(action_text)
+            except Exception:
+                action_btn = QPushButton(action_text)
             action_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
             action_btn.clicked.connect(self.action_clicked.emit)
             action_btn.setMaximumWidth(200)
@@ -62,7 +95,6 @@ class SearchBar(QWidget):
             self.input.setClearButtonEnabled(True)
             self._uses_fluent = True
         except Exception:
-            layout.addWidget(QLabel("🔍"))
             self.input = QLineEdit()
             self.input.setPlaceholderText(placeholder)
             self.input.setObjectName("searchInput")
@@ -93,7 +125,7 @@ class SpeedSlider(QWidget):
         header.addWidget(QLabel("속도"))
         self.label = QLabel("보통")
         self.label.setObjectName("speedLabel")
-        self.label.setStyleSheet("font-weight: bold;")
+        self.label.setStyleSheet("font-weight: 600;")
         header.addWidget(self.label)
         self.desc_label = QLabel("(권장)")
         self.desc_label.setObjectName("speedDesc")
@@ -117,32 +149,6 @@ class SpeedSlider(QWidget):
     def current_speed(self): return self.SPEEDS[self.slider.value()]
     def set_speed(self, speed):
         if speed in self.SPEEDS: self.slider.setValue(self.SPEEDS.index(speed))
-
-class LinkButton(QPushButton):
-    """클릭 가능한 링크 버튼"""
-    def __init__(self, url, parent=None):
-        super().__init__("🔗 보기", parent)
-        self.url = url
-        self.setObjectName("linkButton")
-        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setToolTip(f"클릭하여 열기:\n{url[:50]}...")
-        # 버튼 크기 고정
-        self.setFixedHeight(26)
-        self.setMaximumWidth(70)
-        self.setMinimumWidth(60)
-        self.setStyleSheet("""
-            QPushButton {
-                font-size: 11px;
-                padding: 2px 6px;
-                min-height: 22px;
-                max-height: 24px;
-            }
-        """)
-        self.clicked.connect(self._open_url)
-    
-    def _open_url(self):
-        if self.url:
-            webbrowser.open(self.url)
 
 class ProgressWidget(QWidget):
     """진행 상태 위젯 - 예상 시간 표시"""
@@ -192,7 +198,7 @@ class ProgressWidget(QWidget):
     
     def complete(self):
         self.progress_bar.setValue(100)
-        self.status_label.setText("✅ 완료!")
+        self.status_label.setText("완료")
         self.time_label.setText("")
 
 class ColoredTableWidgetItem(QTableWidgetItem):

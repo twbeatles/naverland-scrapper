@@ -23,12 +23,14 @@ class FavoritesTab(QWidget):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM, SPACE_XS as _XS
+        layout.setContentsMargins(_PM, _GG, _PM, _GG)
+        layout.setSpacing(_XS)
         
         header = QHBoxLayout()
         title = QLabel("즐겨찾기")
-        title.setStyleSheet("font-size: 18px; font-weight: 800;")
+        from src.ui.fluent.design_tokens import FONT_PAGE_TITLE as _PT
+        title.setStyleSheet(f"font-size: {_PT}px; font-weight: 600;")
         header.addWidget(title)
         header.addStretch()
         
@@ -53,7 +55,7 @@ class FavoritesTab(QWidget):
         layout.addWidget(self.table, 1)
 
         self.empty_label = EmptyStateWidget(
-            icon="⭐",
+            icon="HEART",
             title="즐겨찾기 매물이 없습니다",
             description="결과 카드·표에서 별 아이콘을 눌러 추가하세요.",
         )

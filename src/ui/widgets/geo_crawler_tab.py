@@ -59,7 +59,7 @@ class GeoCrawlerTab(CrawlerTab):
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(6)
+        grid.setVerticalSpacing(8)
 
         self.spin_lat = QDoubleSpinBox()
         self.spin_lat.setRange(33.0, 39.5)

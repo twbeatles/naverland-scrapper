@@ -91,8 +91,8 @@ class CrawlerTabLayoutSetupMixin:
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
-        left.setContentsMargins(6, 6, 6, 6)
-        left.setSpacing(6)
+        left.setContentsMargins(8, 8, 8, 8)
+        left.setSpacing(8)
 
         self.controls_splitter = QSplitter(Qt.Orientation.Vertical)
         self.controls_splitter.setChildrenCollapsible(True)
@@ -121,7 +121,7 @@ class CrawlerTabLayoutSetupMixin:
         # Right Panel (Results)
         right_w = QWidget()
         right = QVBoxLayout(right_w)
-        right.setContentsMargins(6, 6, 6, 6)
+        right.setContentsMargins(8, 8, 8, 8)
         right.setSpacing(8)
         
         self.summary_card = SummaryCard(theme=self.current_theme)

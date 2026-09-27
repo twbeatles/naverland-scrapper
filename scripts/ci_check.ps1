@@ -47,7 +47,8 @@ python -m pytest -q `
   tests/test_managers_cache.py `
   tests/test_mojibake_scan.py `
   tests/test_preflight.py `
-  tests/test_fluent_theme.py
+  tests/test_fluent_theme.py `
+  tests/test_requirements_pins.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Preflight =="

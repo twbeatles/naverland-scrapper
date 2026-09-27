@@ -80,11 +80,13 @@ class DashboardWidget(QWidget):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(14)
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        layout.setSpacing(_SM)
         
+        from src.ui.fluent.design_tokens import FONT_PAGE_TITLE as _PT
         title = QLabel("분석 대시보드")
         title.setStyleSheet(
-            "font-size: 20px; font-weight: 800; padding: 6px 0 2px 0; letter-spacing: 0.2px;"
+            f"font-size: {_PT}px; font-weight: 600; padding: 6px 0 2px 0;"
         )
         layout.addWidget(title)
         subtitle = QLabel("최근 수집 결과 기준 요약입니다. 상세 시세는 「가격 통계」에서 확인하세요.")
@@ -141,7 +143,7 @@ class DashboardWidget(QWidget):
         self.trend_frame.setVisible(bool(settings.get("show_trend_analysis", True)))
 
         self.empty_label = EmptyStateWidget(
-            icon="📊",
+            icon="DOCUMENT",
             title="아직 수집된 데이터가 없습니다",
             description="「매물 수집」을 실행한 뒤 이 화면에서 요약을 확인하세요.",
         )

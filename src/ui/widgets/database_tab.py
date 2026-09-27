@@ -36,11 +36,12 @@ class DatabaseTab(QWidget):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM, SPACE_SM as _SM, SPACE_XS as _XS
+        layout.setContentsMargins(_PM, _GG, _PM, _GG)
+        layout.setSpacing(_SM)
 
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(6)
+        button_layout.setSpacing(_XS)
         self.btn_refresh_db = QPushButton("새로고침")
         self.btn_refresh_db.setObjectName("primaryBtn")
         self.btn_refresh_db.setToolTip("데이터베이스에서 단지 목록을 다시 불러옵니다.")
@@ -84,7 +85,7 @@ class DatabaseTab(QWidget):
         layout.addWidget(self.table, 1)
 
         self.empty_label = EmptyStateWidget(
-            icon="📭",
+            icon="DOCUMENT",
             title="등록된 단지가 없습니다",
             description="「매물 수집」에서 단지를 추가하거나 DB로 저장해 주세요.",
         )

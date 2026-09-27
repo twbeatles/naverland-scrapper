@@ -135,6 +135,11 @@ class AppTabSetupMixin:
             on_settings=getattr(self, "_show_settings", None),
         )
 
+        # Panel starts COMPACT (48px icons); expand for labeled nav (srtgo parity).
+        try:
+            self.navigationInterface.expand(useAni=False)
+        except Exception:
+            pass
         root.addWidget(self.navigationInterface)
         root.addWidget(content, 1)
 

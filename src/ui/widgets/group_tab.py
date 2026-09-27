@@ -32,7 +32,8 @@ class GroupTab(QWidget):
 
     def _init_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM, SPACE_XS as _XS
+        layout.setContentsMargins(_PM, _GG, _PM, _GG)
         layout.setSpacing(8)
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -42,7 +43,7 @@ class GroupTab(QWidget):
 
         gl = QGroupBox("단지 묶음")
         gl_layout = QVBoxLayout(gl)
-        gl_layout.setSpacing(6)
+        gl_layout.setSpacing(_XS)
 
         self.group_list = QListWidget()
         self.group_list.setAlternatingRowColors(True)
