@@ -1,5 +1,16 @@
 # Update History
 
+## 2026-09-27: Fluent UI 정리 (DESKTOP_UI_DESIGN_RULES + srtgo 기준)
+
+- `src/ui/fluent/design_tokens.py` 신설: spacing 4/8/12/16/24/32, 카드 radius 8, 창 크기 토큰, 시맨틱 보조 텍스트 색상
+- 테마 OS 연동: `setup_app_theme()` + `darkdetect` + `colorSchemeChanged` 감시, 설정에 "시스템 연동(auto)" 추가 (`requirements.txt`에 `darkdetect`)
+- 저장 기본 테마는 기존 계약 유지 (`dark`, `tests/test_managers_cache.py` 회귀 확인)
+- High-DPI PassThrough (`src/main.py`), 화면 가용 영역 맞춤 초기 창 크기 + 최소 960x640
+- QSS 절제: 그라디언트 제거(플랫 역할색), 카드 radius 12→8, Glassmorphism 명칭 정리
+- 보조 라벨 `#888` 인라인 9곳을 토큰 헬퍼로 교체, 단축키 안내 이모지 제거
+- 신규 `tests/test_fluent_theme.py` (6건) + CI subset 등록 (ci.yml / ci_check.ps1)
+- Pyright 0 errors, CI subset 전체 통과
+
 ## 2026-09-25: 수집 경량 기본값 (헤드리스 + 동시 4 + lazy 풀)
 
 - 상세 동시 조회 기본값 12 → 4, 브라우저 창 숨김(헤드리스) 기본값 끔 → 켬

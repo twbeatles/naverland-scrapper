@@ -12,10 +12,28 @@ class AppLifecycleBootstrapMixin:
     def __init__(self: Any):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
-        self.setMinimumSize(1400, 900)
+        try:
+            from src.ui.fluent.theme import configure_fluent_window as _configure_fluent
+            _configure_fluent(self)
+        except Exception:
+            pass
+        try:
+            from PyQt6.QtGui import QGuiApplication as _QGuiApp
+            from src.ui.fluent.design_tokens import preferred_window_size as _pref_size
+            _screen = _QGuiApp.primaryScreen()
+            _avail = _screen.availableGeometry() if _screen is not None else None
+            if _avail is not None:
+                _pw, _ph = _pref_size(_avail.width(), _avail.height())
+                self.resize(_pw, _ph)
+        except Exception:
+            pass
+        from src.ui.fluent.design_tokens import MIN_WINDOW_WIDTH as _MIN_W, MIN_WINDOW_HEIGHT as _MIN_H
+        self.setMinimumSize(_MIN_W, _MIN_H)
         geo = settings.get("window_geometry")
         if geo: self.setGeometry(*geo)
-        else: self.setGeometry(100, 100, 1500, 950)
+        else:
+            from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW, DEFAULT_WINDOW_HEIGHT as _DH
+            self.resize(_DW, _DH)
         
         self.settings_manager = get_settings()
         self.preset_manager = FilterPresetManager()
@@ -105,7 +123,14 @@ class AppLifecycleBootstrapMixin:
             pass
         from src.ui.styles_parts.colors import COLORS
 
-        c = COLORS.get(theme_name, COLORS["dark"])
+        _key = theme_name
+        if _key not in COLORS:
+            try:
+                import darkdetect
+                _key = "light" if darkdetect.theme() == "Light" else "dark"
+            except Exception:
+                _key = "dark"
+        c = COLORS.get(_key, COLORS["dark"])
         # Window chrome only — do not put full domain QSS on QMainWindow (breaks Fluent nav).
         chrome = (
             f"QMainWindow {{ background-color: {c['bg_primary']}; color: {c['text_primary']}; }}"
@@ -122,7 +147,7 @@ class AppLifecycleBootstrapMixin:
         except Exception:
             pass
 
-        sheet = get_stylesheet(theme_name)
+        sheet = get_stylesheet(_key)
         stack = getattr(self, "stackedWidget", None)
         if stack is not None:
             stack.setObjectName("domainContent")
@@ -132,7 +157,7 @@ class AppLifecycleBootstrapMixin:
         for tab_name in ("crawler_tab", "geo_tab"):
             tab = getattr(self, tab_name, None)
             if tab is not None:
-                apply_theme_surfaces(tab, theme_name)
+                apply_theme_surfaces(tab, _key)
         try:
             sb = self.statusBar()
             if sb is not None:
@@ -142,7 +167,7 @@ class AppLifecycleBootstrapMixin:
         # Guide HTML embeds its own theme colors (QTextBrowser document defaults are black).
         if hasattr(self, "_refresh_guide_theme"):
             try:
-                self._refresh_guide_theme(theme_name)
+                self._refresh_guide_theme(_key)
             except Exception:
                 pass
 

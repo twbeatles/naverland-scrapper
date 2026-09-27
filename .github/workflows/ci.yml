@@ -76,6 +76,7 @@ jobs:
           tests/test_browser_pool_guard.py
           tests/test_ci_subset_sync.py
           tests/test_preflight.py
+          tests/test_fluent_theme.py
 
       - name: Preflight check
         run: python -m src.utils.preflight

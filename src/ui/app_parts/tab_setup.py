@@ -37,6 +37,16 @@ if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
 
 
+def _secondary_label_qss(theme_name) -> str:
+    from src.ui.fluent.design_tokens import secondary_label_qss
+    return secondary_label_qss(theme_name)
+
+
+def _empty_state_qss(theme_name, padding: int = 20) -> str:
+    from src.ui.fluent.design_tokens import empty_state_qss
+    return empty_state_qss(theme_name, padding=padding)
+
+
 class AppTabSetupMixin:
     # Stable page indices (tests + legacy mixins). Order must match addTab sequence.
     TAB_CRAWLER = 0
@@ -64,14 +74,17 @@ class AppTabSetupMixin:
             self, showMenuButton=True, showReturnButton=False
         )
         try:
-            self.navigationInterface.setExpandWidth(208)
+            from src.ui.fluent.design_tokens import NAV_EXPAND_WIDTH as _NAV_W
+            self.navigationInterface.setExpandWidth(_NAV_W)
         except Exception:
             pass
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(8, 8, 8, 4)
-        content_layout.setSpacing(4)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM
+        content_layout.setContentsMargins(_PM, _GG, _PM, _GG)
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG2
+        content_layout.setSpacing(_GG2)
 
         self.stackedWidget = QStackedWidget(content)
         content_layout.addWidget(self.stackedWidget, 1)
@@ -223,7 +236,7 @@ class AppTabSetupMixin:
 
         tl = QHBoxLayout()
         lbl_time = QLabel("실행 시간")
-        lbl_time.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_time.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         tl.addWidget(lbl_time)
         self.time_edit = QTimeEdit()
         self.time_edit.setTime(QTime(9, 0))
@@ -234,7 +247,7 @@ class AppTabSetupMixin:
 
         ml = QHBoxLayout()
         lbl_mode = QLabel("실행 모드")
-        lbl_mode.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_mode.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         ml.addWidget(lbl_mode)
         self.schedule_mode_combo = QComboBox()
         self.schedule_mode_combo.addItem("complex", "complex")
@@ -248,7 +261,7 @@ class AppTabSetupMixin:
         gl = QHBoxLayout(self.schedule_group_widget)
         gl.setContentsMargins(0, 0, 0, 0)
         lbl_grp = QLabel("대상 그룹")
-        lbl_grp.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_grp.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         gl.addWidget(lbl_grp)
         self.schedule_group_combo = QComboBox()
         self.schedule_group_combo.setToolTip("예약 크롤링을 실행할 단지 그룹을 선택합니다.")
@@ -321,7 +334,7 @@ class AppTabSetupMixin:
             "예약할 묶음이 없습니다.\n좌측 네비 「단지 묶음」에서 먼저 만들어 주세요."
         )
         self.schedule_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.schedule_empty_label.setStyleSheet("color: #888; padding: 20px; font-size: 13px;")
+        self.schedule_empty_label.setStyleSheet(_empty_state_qss(getattr(self, "current_theme", None), padding=20))
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
@@ -371,7 +384,7 @@ class AppTabSetupMixin:
             "수집 기록이 없습니다.\n「매물 수집」에서 수집을 실행해 보세요."
         )
         self.history_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.history_empty_label.setStyleSheet("color: #888; font-size: 13px; padding: 40px;")
+        self.history_empty_label.setStyleSheet(_empty_state_qss(getattr(self, "current_theme", None), padding=40))
         layout.addWidget(self.history_empty_label)
         self.history_empty_label.hide()
 
@@ -387,19 +400,19 @@ class AppTabSetupMixin:
         fl = QHBoxLayout()
         fl.setSpacing(8)
         lbl_cplx = QLabel("단지")
-        lbl_cplx.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_cplx.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         fl.addWidget(lbl_cplx)
         self.stats_complex_combo = QComboBox()
         self.stats_complex_combo.setToolTip("통계를 볼 단지를 선택합니다.")
         fl.addWidget(self.stats_complex_combo)
         lbl_type = QLabel("유형")
-        lbl_type.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_type.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         fl.addWidget(lbl_type)
         self.stats_type_combo = QComboBox()
         self.stats_type_combo.addItems(["전체", "매매", "전세", "월세"])
         fl.addWidget(self.stats_type_combo)
         self.stats_metric_label = QLabel("지표")
-        self.stats_metric_label.setStyleSheet("font-size: 12px; color: #888;")
+        self.stats_metric_label.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         fl.addWidget(self.stats_metric_label)
         self.stats_metric_combo = QComboBox()
         self.stats_metric_combo.addItem("월세 금액", "rent")
@@ -409,7 +422,7 @@ class AppTabSetupMixin:
         self.stats_type_combo.currentIndexChanged.connect(self._on_stats_type_changed)
         self.stats_metric_combo.currentIndexChanged.connect(self._load_stats)
         lbl_area = QLabel("면적")
-        lbl_area.setStyleSheet("font-size: 12px; color: #888;")
+        lbl_area.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
         fl.addWidget(lbl_area)
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")

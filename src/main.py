@@ -56,10 +56,19 @@ def _configure_qt_font_dir() -> None:
 def _apply_default_app_font(app) -> None:
     from PyQt6.QtGui import QFont
 
-    font = QFont("Malgun Gothic", 10)
+    font = QFont("Pretendard", 10)
     if font.pointSize() <= 0 and font.pixelSize() <= 0:
         font.setPointSize(10)
     app.setFont(font)
+
+
+def _configure_high_dpi() -> None:
+    try:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QGuiApplication
+        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    except Exception:
+        pass
 
 
 def main():
@@ -87,8 +96,15 @@ def main():
     from PyQt6.QtWidgets import QApplication
     from src.ui.app import RealEstateApp
 
+    _configure_high_dpi()
     app = QApplication(sys.argv)
     _apply_default_app_font(app)
+    try:
+        from src.ui.fluent.theme import setup_app_theme as _setup_theme
+        from src.core.managers import settings as _settings
+        _setup_theme(app, _settings.get("theme", "dark"))
+    except Exception:
+        pass
 
     window = RealEstateApp()
     window.show()

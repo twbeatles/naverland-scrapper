@@ -19,9 +19,9 @@ def _generate_stylesheet(theme: str = "dark") -> str:
     dialog_label = "#e0e0e0" if is_dark else "#334155"
     checkbox_border = "rgba(255, 255, 255, 0.2)" if is_dark else "#cbd5e1"
     checkbox_bg = "transparent" if is_dark else "#ffffff"
-    start_gradient = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c['accent']}, stop:1 {c['accent_hover']})"
-    start_hover = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {c['accent_bright']}, stop:1 {c['accent']})"
-    progress_gradient = f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {c['accent']}, stop:1 {c['accent_hover'] if is_dark else c['accent_bright']})"
+    start_gradient = c['accent']
+    start_hover = c['accent_hover']
+    progress_gradient = c['accent']
     start_text = c["bg_primary"] if is_dark else "#ffffff"
     statusbar_border = f"rgba(245, 158, 11, 0.15)" if is_dark else c["border"]
 
@@ -95,11 +95,11 @@ QListWidget::item:selected {{
     color: {select_text};
 }}
 
-/* === Glassmorphism Card (GroupBox) === */
+/* === Section Group (GroupBox) === */
 QGroupBox {{
     background-color: {c['bg_card']};
     border: 1px solid {c['border_subtle']};
-    border-radius: 12px;
+    border-radius: 8px;
     margin-top: 0.8em;
     padding: 10px;
     padding-top: 22px;
@@ -153,7 +153,7 @@ QPushButton#startButton {{
     font-weight: 700;
     padding: 12px 24px;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
 }}
 QPushButton#startButton:hover {{
     background: {start_hover};
@@ -251,7 +251,7 @@ QTableWidget {{
     background-color: {c['bg_table']};
     gridline-color: {c['border_faint']};
     border: 1px solid {c['border_subtle']};
-    border-radius: 12px;
+    border-radius: 8px;
     selection-background-color: {c['select_bg']};
     selection-color: {select_text};
     alternate-background-color: {c['bg_table_alt']};
@@ -311,7 +311,7 @@ QScrollBar::handle:horizontal {{
 /* === Tab Widget === */
 QTabWidget::pane {{
     border: 1px solid {c['border_subtle']};
-    border-radius: 12px;
+    border-radius: 8px;
     background-color: {c['bg_tab_pane']};
     margin-top: -1px;
 }}
@@ -574,7 +574,7 @@ QFrame#articleCard QLabel {{
 QFrame#statCard {{
     background-color: {c['stat_card_bg']};
     border: 1px solid {c['border_subtle']};
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 16px;
 }}
 QLabel#statCardTitle {{
@@ -665,8 +665,7 @@ QLabel#filterBadgeOff {{
 
 /* === Semantic Button Roles === */
 QPushButton#primaryBtn {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {c['success_light']}, stop:1 {c['success']});
+    background-color: {c['success']};
     color: #ffffff;
     border: 1px solid {c['success_border']};
     border-radius: 7px;
@@ -676,8 +675,7 @@ QPushButton#primaryBtn {{
     min-height: 32px;
 }}
 QPushButton#primaryBtn:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {c['success_hover_light']}, stop:1 {c['success_hover']});
+    background-color: {c['success_hover']};
 }}
 QPushButton#primaryBtn:pressed {{
     background: {c['success_pressed']};
@@ -689,8 +687,7 @@ QPushButton#primaryBtn:disabled {{
 }}
 
 QPushButton#dangerBtn {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {c['error_light']}, stop:1 {c['error']});
+    background-color: {c['error']};
     color: #ffffff;
     border: 1px solid {c['error_border']};
     border-radius: 7px;
@@ -700,8 +697,7 @@ QPushButton#dangerBtn {{
     min-height: 32px;
 }}
 QPushButton#dangerBtn:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {c['error_hover_light']}, stop:1 {c['error_hover']});
+    background-color: {c['error_hover']};
 }}
 QPushButton#dangerBtn:pressed {{
     background: {c['error_pressed']};

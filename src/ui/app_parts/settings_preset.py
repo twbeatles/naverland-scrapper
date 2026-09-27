@@ -11,7 +11,7 @@ class AppSettingsPresetMixin:
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _toggle_theme(self: Any, theme=None):
-        if theme in ("dark", "light"):
+        if theme in ("dark", "light", "auto"):
             new_theme = theme
         else:
             new_theme = "light" if self.current_theme == "dark" else "dark"

@@ -86,6 +86,7 @@ class SettingsDialog(QDialog):
         self.combo_theme = QComboBox()
         self.combo_theme.addItem("어두운 테마", "dark")
         self.combo_theme.addItem("밝은 테마", "light")
+        self.combo_theme.addItem("시스템 연동", "auto")
         theme_layout.addWidget(QLabel("테마:"))
         theme_layout.addWidget(self.combo_theme)
         theme_layout.addStretch()
@@ -651,15 +652,15 @@ class ShortcutsDialog(QDialog):
 
         shortcuts = [
             ("▶ 크롤링 시작", SHORTCUTS["start_crawl"]),
-            ("⏹ 크롤링 중지", SHORTCUTS["stop_crawl"]),
-            ("💾 Excel 저장", SHORTCUTS["save_excel"]),
-            ("📄 CSV 저장", SHORTCUTS["save_csv"]),
-            ("🔄 새로고침", SHORTCUTS["refresh"]),
-            ("🔎 검색", SHORTCUTS["search"]),
-            ("⚙️ 설정", SHORTCUTS["settings"]),
-            ("🎨 테마 변경", SHORTCUTS["toggle_theme"]),
-            ("🧷 트레이 최소화", SHORTCUTS["minimize_tray"]),
-            ("❌ 종료", SHORTCUTS["quit"]),
+            ("크롤링 중지", SHORTCUTS["stop_crawl"]),
+            ("Excel 저장", SHORTCUTS["save_excel"]),
+            ("CSV 저장", SHORTCUTS["save_csv"]),
+            ("새로고침", SHORTCUTS["refresh"]),
+            ("검색", SHORTCUTS["search"]),
+            ("설정", SHORTCUTS["settings"]),
+            ("테마 변경", SHORTCUTS["toggle_theme"]),
+            ("트레이 최소화", SHORTCUTS["minimize_tray"]),
+            ("종료", SHORTCUTS["quit"]),
         ]
         table.setRowCount(len(shortcuts))
         for i, (desc, key) in enumerate(shortcuts):

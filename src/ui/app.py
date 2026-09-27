@@ -96,7 +96,7 @@ ui_logger = get_logger("UI")
 
 from src.utils.mixin_rebind import rebind_inherited_methods
 
-from src.ui.app_parts.tab_setup import AppTabSetupMixin
+from src.ui.app_parts.tab_setup import AppTabSetupMixin, _empty_state_qss, _secondary_label_qss  # noqa: F401
 from src.ui.app_parts.stats_schedule import AppStatsScheduleMixin
 from src.ui.app_parts.settings_preset import AppSettingsPresetMixin
 from src.ui.app_parts.db_maintenance import AppDatabaseMaintenanceMixin
