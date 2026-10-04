@@ -271,6 +271,18 @@ class AppSettingsPresetMixin:
         except Exception:
             pass
 
+    def _revert_favorite_key_visual(self: Any, key, is_fav):
+        # The originating card/table already applied the optimistic state;
+        # roll it back so the UI matches the DB on failure.
+        for tab_name in ("crawler_tab", "geo_tab"):
+            try:
+                tab = getattr(self, tab_name, None)
+                updater = getattr(tab, "_update_favorite_state_for_key", None)
+                if callable(updater):
+                    updater(key, not is_fav)
+            except Exception:
+                pass
+
     def _on_favorite_toggled(self: Any, article_id, complex_id, asset_type, is_fav):
         if not article_id or not complex_id:
             return
@@ -280,6 +292,10 @@ class AppSettingsPresetMixin:
         except Exception as e:
             # ISSUE-003: DB failure must not update memory/UI state.
             try:
+                self._revert_favorite_key_visual((asset_token, article_id, complex_id), is_fav)
+            except Exception:
+                pass
+            try:
                 ui_logger.warning(f"favorite toggle failed (exception), skip UI update: {e}")
             except Exception:
                 pass
@@ -288,6 +304,7 @@ class AppSettingsPresetMixin:
         if not saved:
             try:
                 ui_logger.warning("favorite toggle failed (db returned False), skip UI update")
+                self._revert_favorite_key_visual((asset_token, article_id, complex_id), is_fav)
             except Exception:
                 pass
             self._notify_favorite_failure()

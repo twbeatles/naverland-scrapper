@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 
 from src.core.services.map_geometry import viewport_bounds
 from src.core.services.response_capture import normalize_marker_payload
-from src.core.services.site_contract import build_single_markers_url
+from src.core.services.site_contract import build_cortars_url, build_single_markers_url
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403
@@ -49,6 +49,39 @@ class PlaywrightGeoMarkerMixin:
                     self.thread.emit_stats()
         return added
 
+    async def _resolve_cortar_no(
+        self,
+        request_context,
+        *,
+        lat: float,
+        lon: float,
+        zoom: int,
+    ) -> str:
+        """Resolve the map region code for marker queries (live 2026-10).
+
+        The bbox-only markers form answers ``[]``; the site sends ``cortarNo``
+        (single region object from ``/api/cortars``) alongside the bbox.
+        """
+        try:
+            url = build_cortars_url(zoom=zoom, center_lat=lat, center_lon=lon)
+            response = await request_context.get(
+                url,
+                headers={
+                    "accept": "application/json, text/plain, */*",
+                    "accept-language": "ko-KR,ko;q=0.9",
+                    "referer": "https://new.land.naver.com/complexes",
+                },
+                timeout=12000,
+            )
+            if int(getattr(response, "status", 0) or 0) >= 400:
+                return ""
+            payload = await response.json()
+        except Exception:
+            return ""
+        if isinstance(payload, dict):
+            return str(payload.get("cortarNo", "") or "").strip()
+        return ""
+
     async def _fetch_single_markers_api(
         self,
         discovered: dict[str, dict],
@@ -66,6 +99,11 @@ class PlaywrightGeoMarkerMixin:
             return 0
         bounds = viewport_bounds(lat, lon, zoom)
         include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
+        cortar_no = await self._resolve_cortar_no(request_context, lat=lat, lon=lon, zoom=zoom)
+        if cortar_no:
+            self.thread.stats["geo_marker_api_cortar_no_count"] = (
+                int(self.thread.stats.get("geo_marker_api_cortar_no_count", 0)) + 1
+            )
         url = build_single_markers_url(
             asset_type=asset_type,
             trade_type=trade_type,
@@ -75,6 +113,7 @@ class PlaywrightGeoMarkerMixin:
             top_lat=bounds["topLat"],
             bottom_lat=bounds["bottomLat"],
             include_pre=include_pre,
+            cortar_no=cortar_no,
         )
         self.thread.stats["geo_marker_api_attempt_count"] = (
             int(self.thread.stats.get("geo_marker_api_attempt_count", 0)) + 1

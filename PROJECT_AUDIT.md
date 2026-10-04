@@ -1,141 +1,267 @@
 # Project Audit — naverland-scrapper
 
-> 합성 기준: 영역A(문서·진입점·시작종료·설정), 영역B(수집 엔진), 영역C(데이터·보안·업데이트), 영역D(UI 배선) 감사 결과만을 근거로 합성. 코드 수정 없음, 원본 소스 재열람 없음(영역 보고서의 인용 위치·반증 기록을 그대로 계승). 없는 증거를 새로 지어내지 않음. 중복은 병합, 과장 없음.
+> One-shot functional audit (2026-10-04, current tree including v15.2 keyword
+> search / filter / marker changes). 코드 수정 없음. 루트에 기존
+> `PROJECT_AUDIT.md`(이전 다영역 감사 합성본)가 있었으나, 본 보고서는 현 소스를
+> 직접 검증(CodeGraph + 원문 열람 + 테스트 실행)한 독립 결과이며 이전 보고서의
+> 결론을 계승하지 않는다. 이전 보고서가 지적한 4건(지오메트리·락 해제·즐겨찾기·
+> 에러 시그널)은 현 코드에서 수정 완료를 확인했고 §4 말미에 기록한다.
 
-## 1 Executive Summary
+## 1. Executive Summary
 
-- 진입점 흐름(`app_entry.py main` → `src/main.py main` → stdio→`bootstrap_runtime_paths`→logger→`run_preflight_checks(profile="startup")`→QApplication→`setup_app_theme`→`RealEstateApp()`→`app.exec()`)은 문서·구현 일치. `README` 시작법·`spec` 진입점·`ci.yml`↔`ci_check.ps1` subset 관계도 동기화됨.
-- High-Risk 3건: (1) 손상된 `window_geometry`가 생성자 앞단 무검증 `setGeometry`에서 시작 크래시 (High/Confirmed), (2) 스레드 없는 탭의 `shutdown_crawl()`이 `release(None)`로 타 탭의 CrawlLock을 해제 (High/근거 강한 Likely), (3) 즐겨찾기 토글이 DB 실패 반환값을 무시하고 메모리·UI를 갱신 (High/Confirmed).
-- 그 외 Medium 8건 내외(종료 정리 누락 후보, `UnicodeDecodeError` 복구 사각, 스냅샷 락-이후 생존, detail `pool.get()` 중지 지연, 스냅샷 rollback 누락 등)와 Low/정보성 다수가 확인됨. SQL 인젝션·업데이트 서명 우회·백업/복원 경로에서는 확정된 취약점 없음(강점 확인).
-- 문서 불일치는 1건이 확정적: 신규설치 테마 AUTO 독스트링 vs 기본값 `"dark"`.
+- 프로젝트 전체 상태: 네이버 부동산 매물 수집 Windows 데스크톱 앱(PyQt6 +
+  Playwright/Selenium). 핵심 경로(수집·DB·백업/복원·업데이트 서명)에 방어 로직이
+  촘촘하고, 이전 감사 지적이 실제로 수정되어 있다. 전체 위험도는 **관리 가능**
+  수준이며 Critical은 발견하지 못했다.
+- 전체 위험도: Medium (아래 2건이 상한).
+- 가장 중요한 문제 2개:
+  1. 키워드 검색 세션 생성 실패 시 브라우저/드라이버 프로세스 누수 (Medium / Confirmed).
+  2. 가격 스냅샷 백그라운드 저장이 종료 대기 없이 앱 종료와 경합 (Medium / Likely).
+- 데이터 손상/유실 가능성: 확정적 경로 없음. 복원(롤백+검증), 원자 쓰기,
+  upsert 멱등, 풀 종료 규율이 갖춰져 있다. 유실 가능성은 파생 스냅샷 1배치
+  수준(§4 ISSUE-002)에 한정된다.
+- 가장 먼저 수정해야 할 영역: `KeywordSearchDialog` 워커의 세션 수명주기
+  (생성 실패 경로에 `close()` 보장).
 
-## 2 Project Understanding
+## 2. Project Understanding
 
-관측된 흐름을 Entry→Handler→Core→DB/File/API→Result 형태로 정리한다.
+- 프로젝트 목적: 네이버 부동산(APT/VL) 매물 수집·가격 추적·예약 수집·Excel/CSV
+  내보내기를 지원하는 Windows 데스크톱 Fluent UI 앱.
+- 주요 entrypoint: `app_entry.py::main` → `src/main.py::main`
+  (stdio 인코딩 → 폰트dir → `bootstrap_runtime_paths` → logger →
+  `run_preflight_checks(profile="startup")` → QApplication → 테마 →
+  `RealEstateApp()` → `app.exec()`).
+- 핵심 모듈: `src/core/crawler.py`(QThread) + `crawler_parts/*`(상태·이력·IO),
+  `engines/playwright_*`(complex/geo/detail/marker), `engines/*selenium*`
+  (폴백), `core/parser*`(URL/ID/단지명 역조회), `services/*`(site_contract,
+  keyword_search, detail_fetcher, response_capture, export 아님),
+  `core/database*`(ConnectionPool + 도메인 믹스인), `core/managers*`(settings·
+  cache), `utils/update_*`(manifest Ed25519·installer), `ui/app_parts/*`
+  (탭·스케줄·DB관리·종료), `ui/widgets/crawler_tab_parts/*`(수집 컨트롤·렌더·필터).
+- 데이터 저장 방식: SQLite(WAL, busy_timeout 30s, FK ON) + ConnectionPool(5) +
+  도메인별 get/return 규율. 설정·캐시·이력은 `atomic_write_json`(tmp+fsync+
+  os.replace) + 손상 시 백업 후 기본값 복구. 백업은 sqlite backup API+검증,
+  복원은 사전 백업→풀 종료→copy→교체→재검증→실패 시 롤백.
+- 외부 의존성: 네이버 랜드(new/fin/m) + `raw.githubusercontent.com` 업데이트
+  manifest, 로컬 Chrome 또는 Playwright Chromium, openpyxl/matplotlib 등.
+- 핵심 실행 흐름:
+  - 수집: `start_crawling`(검증→CrawlLock→스레드) → 엔진(수집→detail 보강→
+    _push_item→배치 시그널) → `_on_crawl_finished`(캐시 flush→스냅샷 동기 저장→
+    data_collected→`_on_crawl_data_collected` 저장+새로고침) → Result.
+  - 지도: 좌표 입력 → `apply_geo_profile` → sweep(마커 API→DOM 캡처 보조→
+    discovered 등록→매물 수집) → Result.
+  - 키워드: 입력(디바운스) → `/api/autocomplete` 제안 → `/api/search`(단지/
+    지역) → 체크 추가 또는 지역→지도 탭 → Result.
+  - 종료: `closeEvent` → tray/confirm 분기 → `_shutdown`(크롤 종료 대기→락 강제
+    해제→업데이트 워커 대기→지오메트리 저장→DB close) → Result.
 
-- **Entry**: `app_entry.py main` → `src/main.py main`. stdio 설정 → `bootstrap_runtime_paths` → logger → `run_preflight_checks(profile="startup")` → `QApplication` → `setup_app_theme(app, settings.get("theme","dark"))` → `RealEstateApp()` → `app.exec()`.
-- **Handler (UI 배선)**: 수집 `start_crawling`(검증/락/스레드 생성) → 워커 시그널(`items`/`stats`/`complex_finished`/`error_signal`/`alert`) → 슬롯(`_on_crawl_finished` → `data_collected.emit` → `_on_crawl_data_collected`(수집저장+stale+현재탭 새로고침), `_on_alert_triggered` → toast+plyer, 상태바 `showMessage`). 프리셋 로드·고급필터·URL 배치(`dialogs`→`batch`, generation 가드·cancel)·Excel 템플릿·차트/대시보드 lazy 배선은 정상으로 보고됨.
-- **Core (수집 엔진)**: geo/complex 탭별 QThread + cross-tab 단일 `CrawlLock`(동일탭 `isRunning`, 예약작업 `is_held` 체크) + detail 페이지 풀(`pool.get`/`put`) + retry/backoff + drain(취소+재gather, 3s 상한) + 메모리 recycle(`_shutdown_async()+_ensure_started()`).
-- **DB/File/API**: 수집 → `build_price_snapshot_rows` → bulk upsert(`ON CONFLICT DO UPDATE`) → 조회 → export(CSV/XLSX/JSON). 캐시는 `_dirty`+`write_back_interval_sec`(기본 2초)+`atomic_write_json`(tmp+`os.replace`+fsync). 백업/복원은 `sqlite backup` API+복원 전 `integrity_check`. 업데이트는 manifest Ed25519+HTTPS+size/expiry → 아티팩트 sha256 → 부모 종료 대기→`.bak`→`os.replace`→`--preflight` 스모크→실패 시 롤백→`last-update-result.json`.
-- **Result**: 테이블 표시·통계/히스토리·즐겨찾기·알림 토스트·내보내기 파일. 실패 통지는 export(`ExportResult(ok=False)`→QMessageBox)에서는 정상이나, 수집 `error_signal`은 로그 append에만 연결된 것으로 보고됨.
+## 3. Audit Coverage & Limitations
 
-## 3 Audit Coverage & Limitations
+- 실제 확인한 주요 모듈: 진입점·preflight·설정/캐시·DB 풀/복원/즐겨찾기·스케줄·
+  종료·업데이트 manifest/installer·export 원자쓰기·재시도·detail 풀·마커 폴백·
+  키워드 서비스/다이얼로그·필터·가이드/단축키.
+- CodeGraph로 분석한 호출 관계(6회 explore): 진입점·종료 수명주기, 크롤러
+  스레드/엔진/차단감지, DB 풀·bulk·즐겨찾기·마이그레이션, 업데이트·종료·즐겨찾기
+  배선, geo 스윕·폴백·detail·재시도, 설정/캐시/스케줄, 키워드 세션/워커/종료·
+  export. 동적 디스패치 2곳(시그널 emit)은 발신점으로 추적 종료.
+- 실행한 테스트(모두 본 감사 중 직접 실행, 통과): audit/DB/managers/retry/
+  preflight/export/parser/crawler 164개, 신규 키워드·필터·마커·계약 50개+,
+  UI smoke 17개, finish/regression/wiring 83개, pyright 266파일 0 errors,
+  compileall. 총 300+ 통과.
+- 확인하지 못한 환경/외부 서비스: 실제 네이버 대상 live 수집(본 감사는
+  오프라인; 네트워크 검증은 별도 선행 프로브 범위), 패키징 exe·업데이트 실서버,
+  Linux/macOS·트레이 미지원·다중 인스턴스·강제종료·디스크 가득 실물.
+- 분석 한계: 정적+오프라인 테스트 중심이므로 타이밍 의존 race는 코드 흐름
+  확정 수준이며, 장시간 실수집에서의 429·차단挙動은 재현하지 않았다. CodeGraph는
+  정적 호출을 반환하므로 시그널 런타임 연결·스레드 인터리빙은 수동 추적했다.
+- 테스트 실행 기록의 정직성: UI 3종 일괄 1회차에 Windows 임시 DB 파일 잠금
+  (`PermissionError`, WinError 32)으로 56 실패가 났으나 재실행에서 83개 전부
+  통과해 환경성으로 판단한다. 실행하지 않은 테스트를 통과로 기재하지 않았다.
 
-- **범위**: 4개 영역 보고서의 인용 위치·반증 시도만을 근거로 합성. 본 합성 단계에서 소스·테스트·설정·외부 문서 본문을 새로 열람하지 않았으므로, 위치 행번호·코드 인용의 정확성은 각 영역 감사의 직접 열람 기록에 의존한다.
-- **CodeGraph 사용 여부**: 본 합성 작업에서는 CodeGraph(`codegraph_explore` 등)를 사용하지 않았다. 영역 보고서에도 CodeGraph 사용 기록이 명시되어 있지 않아, 호출 그래프 미확인 지점(아래)은 그대로 미해결로 이월한다.
-- **확인 못한 환경·외부서비스**: 실제 OS 연동 테마(AUTO) 동작, 트레이 가용/비가용 실환경, 모니터 변경 시 오프스크린, 비-UTF8 손상 파일 실물, 디스크 가득/잠금 타임아웃 실물, 다중 인스턴스 동시 실행, qfluentwidgets 부재 환경의 InfoBar 폴백, 강제종료 사이 `.bak` 고아 조건은 재현하지 않았다. 외부 네트워크(네이버 랜드, 업데이트 서버) 대상 live 검증은 영역B의 live smoke가 별도 프로브 경로로 수집 락·DB 미사용임이 보고된 범위로만 이해한다.
-- **분석 한계 및 미해결 증거 이월**(호출자 요구 `미해결 항목: []`에 따라 별도 미해결 리스트를 두지 않고 본 절에 이월):
-  - B-F4 recycle 호출 지점(루프 내 위치) 미열람 → Speculative 유지.
-  - C 미해결 1건: `PriceSnapshotSaveThread`(crawler_tab)와 `_save_price_snapshots`(finish 경로)의 이중 저장 가능성은 호출 그래프 재검색이 빈 결과로 끝나 미확인. finish 경로 저장 호출 1회성 여부는 소유자 확인 필요.
-  - A-3 전체 스레드 인벤토리 미확보 → Likely 유지.
-  - D-U1 `currentChanged→_refresh_tab` 자동 연결 코드 미발견 → Speculative(정보성)로 유지.
-  - D-F3 크롤러 alert emit부 원본 미열람 → Likely로 한정.
-  - C-4 종료 시 `flush()` 호출 여부 미확인.
+## 4. High-Risk Issues
 
-## 4 High-Risk Issues
+### [ISSUE-001] 키워드 세션 생성 실패 시 브라우저/드라이버 프로세스 누수
 
-High-Risk 선정 기준(호출자 요구): Confirmed와 근거 강한 Likely만. 3건.
+- **위치:** `src/ui/dialogs/search.py::_KeywordWorker._ensure_session` (35),
+  `src/core/services/keyword_search.py::KeywordBrowserSession.__enter__` (181~209)
+- **우선순위:** Medium
+- **신뢰도:** Confirmed (코드 흐름 확정; 별도 런타임 재현 불필요한 결정적 경로)
+- **문제:** `_ensure_session`에서 `session_factory().__enter__()`가 예외를 던지면
+  세션이 `self._session`에 저장되지 않는다. `close_session`은 저장된 세션만
+  닫으므로, 이미 `start()`한 playwright 드라이버와 `launch()`한 Chromium이
+  영원히 남는다. `_shutdown_worker`의 `thread.wait(3000)` 뒤 `close_session()`
+  호출도 저장된 게 없어 no-op이다.
+- **발생 조건:** Chrome 미설치·Playwright 브라우저 부재·네트워크 차단·
+  `goto("new.land...")` 실패 등 세션 수립이 실패하는 환경에서 제안/검색 시도
+  때마다 1건씩. `_session`이 계속 None이므로 실패할 때마다 반복 누수된다.
+- **영향:** 좀비 `chrome.exe`+드라이버 누적(메모리/CPU 점유, 사용자 PC에서 확인
+  가능). 데이터 손상은 없다.
+- **근거:** 위 두 함수의 원문 대조. 성공 경로·cancel 경로는 정리되나,
+  `__enter__` 예외 경로만 정리가 없다.
+- **반증 확인:** 유사한 기존 경로(`ArticleLookupBrowserFallbackSession`)는
+  `finally: session.close()`로 보장되어 있어 반대로 본 경로의 누락이
+  확정된다. Qt 시그널 정리는 삭제된 다이얼로그에 안전하므로 그쪽은 문제없다.
+- **호출/영향 범위:** CodeGraph 기준 `KeywordBrowserSession` 호출자는
+  `dialogs/search.py` 1곳, `fetch_suggestions` 6곳(동일 다이얼로그). 영향은
+  키워드 다이얼로그 사용 세션에 한정.
+- **권장 수정 방향:** `_ensure_session`에서 `__enter__` 실패 시 이미 시작된
+  자원을 닫도록 `try/except` 안에서 `session.__exit__`을 호출하거나,
+  `KeywordBrowserSession`에 생성-실패 정리(부분 초기화 롤백)를 둔다.
+- **필요한 회귀 테스트:** `session_factory`가 `__enter__`에서 예외를 던지는
+  스텁으로 제안/검색을 호출한 뒤, `close_session` 호출 여부와 무관하게 스텁의
+  `__exit__`이 호출됐음을 단언. 성공 케이스는 기존
+  `tests/test_keyword_search_dialog.py`가 커버한다.
 
-### ISSUE-001 — 윈도우 지오메트리 이중 적용, 앞단이 무검증 (High / Confirmed)
+### [ISSUE-002] 스냅샷 백그라운드 저장 스레드가 종료 대기에 없음
 
-- **위치**: `src/ui/app_parts/lifecycle_parts/bootstrap.py:32-33` vs `:102-113`, `:90` / 저장 `shutdown.py:39`(`_shutdown`은 항상 4원소 list 저장).
-- **우선순위**: P0 (시작 크래시 경로).
-- **문제**: `__init__` 앞단에서 `if geo: self.setGeometry(*geo)`를 try 없이 호출. 길이≠4·비수치 저장값이면 `TypeError`가 생성자에서 그대로 전파. 뒤단 `_restore_window_geometry()`의 형식 검증은 앞단이 이미 실패한 뒤라 무용. 오프스크린 클램프도 없음.
-- **발생조건**: `settings.json`의 `window_geometry`가 깨진 길이/타입으로 저장된 경우(수동 편집·구버전·부분 쓰기)마다.
-- **영향**: 앱 시작 크래시. 모니터 변경 시에는 클램프 부재로 창 실종 가능.
-- **근거**: 영역A가 해당 3개 위치 본문 직접 대조. 저장 경로는 정상(4원소 list)임을 확인.
-- **반증확인**: `_shutdown` 정상 저장값은 안전. `set()`→`_save()` 원자쓰기라 부분쓰기 가능성은 낮음 → 현실성은 수동편집/구파일 중심. 그러나 로드 경로가 손상값을 가정하지 않으므로 외부 손상 시 확정.
-- **호출영향범위**: 첫 실행 포함 모든 시작 경로. 손상값이 있는 설치체 전체.
-- **수정방향**: 앞단 직접 `setGeometry` 제거하고 검증된 `_restore_window_geometry()` 단일 경로로 일원화(검증 실패 시 기본 지오메트리로 폴백+경고 로그). 오프스크린 클램프(가용 스크린과의 교집합 확인) 추가.
-- **회귀테스트**: 손상값 행렬(길이 3/5, 문자열 혼합, None, 음수/초대형 좌표) 주입 시작 테스트. 정상값·부재값은 기존 동작 유지 확인.
+- **위치:** `src/ui/widgets/crawler_tab_parts/crawl_control_parts/snapshot_worker.py`
+  (전체), `src/ui/app_parts/lifecycle_parts/shutdown.py::_shutdown` (12~66)
+- **우선순위:** Medium
+- **신뢰도:** Likely (경로 명확, 타이밍 윈도우 의존)
+- **문제:** 수동 저장의 비동기 경로(`_start_price_snapshot_worker`)로 뜬
+  `PriceSnapshotSaveThread`(부모=탭)는 어디에서도 join/wait되지 않는다.
+  `_shutdown`은 크롤러 스레드·업데이트 워커만 대기한다. 저장 중 앱 종료 시
+  (a) 탭과 함께 실행 중 스레드가 파괴되어 Qt abort 가능,
+  (b) bulk 트랜잭션 중단 시 해당 배치 스냅샷이 롤백된다.
+- **발생 조건:** [저장] 클릭 직후(수천 건 bulk 쓰기 중) 즉시 앱 종료.
+  윈도우는 보통 수 ms~수 초 윈도우.
+- **영향:** 최악 앱 비정상 종료 + 당회 파생 스냅샷(batch) 유실. 원본
+  `article_history`는 별도 경로로 보존되므로 재수집·재생성 가능(유실 한정).
+- **근거:** `_price_snapshot_worker` 참조가 `snapshot_worker.py` 5곳에만 있고
+  종료·join 호출이 전수 검색 0건. `finish.py`의 완료 경로는 동기 저장이라
+  해당 없음(범위 한정).
+- **반증 확인:** `upsert`가 `ON CONFLICT DO UPDATE` 멱등이라 중복 저장은
+  안전함을 확인(중복 실행 가설 기각). 그러나 실행 중 파괴는 멱등으로 막지
+  못한다. DB `close()`는 풀만 닫고 스레드를 기다리지 않는다.
+- **호출/영향 범위:** 수동 저장 버튼 경로만. 완료 시점 자동 저장은 동기라
+  영향 없음.
+- **권장 수정 방향:** `_shutdown`에 스냅샷 워커 대기(예: 5s 상한 후 진행)를
+  추가하거나, 종료 시작 시점에 저장을 동기로 전환한다.
+- **필요한 회귀 테스트:** 느린 DB 스텁(수 초 sleep) + 저장 개시 직후
+  `shutdown_crawl`/`_shutdown` 호출 시 워커 완료 후 종료됨을 단언. 기존
+  `tests/test_finish_summary.py`는 동기 경로만 커버한다.
 
-### ISSUE-002 — 빈 스레드 종료 경로가 타 탭의 CrawlLock을 해제 (High / 근거 강한 Likely)
+### 이전 감사 지적의 현 상태 (재검증 완료, 수정됨)
 
-- **위치**: `src/ui/widgets/crawler_tab_parts/crawl_control_parts/start_stop.py:201-222`, `src/core/crawl_lock.py:22-29`, `src/ui/app_parts/lifecycle_parts/shutdown.py:12-34`.
-- **우선순위**: P0 (cross-tab 중복 실행 가드 붕괴).
-- **문제**: `_release_crawl_lock()`은 `self._crawl_lock_owner`(없으면 `None`)를 그대로 전달하고, `CrawlLock.release(None)`은 owner 무관 전체 해제. `shutdown_crawl()`의 `thread is None / not Running` 분기(217-222행)가 이 경로를 탄다.
-- **발생조건**: complex 수집 실행 중(`owner="complex"`)에 geo 탭의 스레드-없는 `shutdown_crawl()`(앱 종료 시 `crawler_tab → geo_tab` 순차 호출, DB maintenance 경로) 호출 시 complex 락이 풀림.
-- **영향**: cross-tab 중복 실행 가드가 깨짐(cross-tab 방지는 락이 유일 — 동일탭만 `isRunning` 체크, 예약작업은 `is_held` 체크). 중복 수집→DB 쓰기 중첩으로 파급 가능(B-F2와 결합 시 증폭).
-- **근거**: 영역B가 위 3개 파일 본문 직접 열람.
-- **반증확인**: 정상 finish 경로(`finish.py:115-120`)는 owner 보유 상태 해제라 안전. `force_release`는 종료 시 1회라 의도됨. 그러나 `release(None)`의 best-effort 의미가 종료-청소와 정상-해제를 구분하지 않아 오인 해제 가능 — 반증 실패. 근거가 강한 Likely로 High-Risk 포함.
-- **호출영향범위**: 앱 종료·DB maintenance에서 탭 순차 종료를 호출하는 모든 경로.
-- **수정방향**: `release(None)`의 의미를 종료-청소 전용으로 분리(예: 정상 해제 경로는 owner 필수, `None`은 `force_release` 명시 호출로만). 또는 shutdown 시 탭별 owner 보유 탭만 해제하도록 가드.
-- **회귀테스트**: complex 실행 중 geo 빈-스레드 `shutdown_crawl()` 호출 후 `is_held`가 유지되는지 확인. 양 탭 idle 종료 시 락이 정상 해제되는지 확인.
-
-### ISSUE-003 — 즐겨찾기 토글: DB 실패를 무시하고 메모리·UI를 갱신 (High / Confirmed)
-
-- **위치**: `src/ui/app_parts/settings_preset.py:264-288` / DB `src/core/database_parts/article_parts/favorite_ops.py:20-54` / 연결 `notify.py:141`.
-- **우선순위**: P0 (사용자 가시 상태 불일치).
-- **문제**: `_on_favorite_toggled`이 `try/finally`로 `db.toggle_favorite()` 반환값(False=실패)을 검사 없이 `favorite_keys` 추가·제거 + 크롤러/지오 탭 상태 갱신. 예외 시에도 `finally`라 UI 갱신됨.
-- **발생조건**: DB 락/디스크 오류 등 `toggle_favorite`가 False 반환 시 항상. production 도달 가능(카드·최근본매물 다이얼로그에서 직접 연결).
-- **영향**: UI는 즐겨찾기로 보이나 재진입 시 사라지는 상태 불일치. 사용자가 저장됐다고 믿는 동작.
-- **근거**: 영역D가 `settings_preset.py:268-279`, `favorite_ops.py:49-52` 직접 대조. 래퍼·트랜잭션 보정 없음 확인.
-- **반증확인**: 호출부에 재시도/롤백 없음 확인. 반증 실패 → Confirmed.
-- **호출영향범위**: 즐겨찾기 토글 진입점 전체(카드·최근본매물 다이얼로그).
-- **수정방향**: 반환값 검사 후 실패 시 메모리·UI 갱신 건너뛰고 토스트/로그로 실패 통지. 예외 경로도 동일(갱신 전 DB 성공 확정 후 UI 반영).
-- **회귀테스트**: `toggle_favorite` False 주입 시 `favorite_keys`·탭 상태 불변 + 실패 토스트 확인. True 시 기존 동작 유지.
-
-## 5 Potential Functional Gaps
-
-표기: (Confirmed) / (Likely) / (추정). High-Risk 3건과 중복 기재하지 않고 상호참조한다. 심각도는 영역 판정을 계승한다.
-
-- **ISSUE-004 — 신규설치 테마 AUTO 문서와 기본값 "dark" 불일치 (Medium / Confirmed)**: `src/ui/fluent/theme.py:24-31`, `src/core/managers_parts/schedule_defaults.py:5`, `src/main.py:105`, `bootstrap.py:68`. `theme_from_settings` 독스트링 "미지정(신규 설치)은 OS 연동(AUTO)"이나 `DEFAULT_SETTINGS["theme"]="dark"`라 `settings.get("theme","dark")`→`"dark"` 전달로 AUTO 분기 도달 불가. `sanitize`에 theme 강제 없음(`settings_sanitize.py`에 theme 처리 없음) 확인. 기능 파손은 OS-연동 체감 불가에 한정. → §6에도 기재.
-- **ISSUE-005 — 종료 시 정리 누락 후보, 타이머·업데이트 워커 (Medium / Likely)**: `shutdown.py:12-46`, `timers_events.py:12-15`, `updates.py:12-19`, `theme.py:96-112`. `_shutdown`은 crawl 탭×2·`schedule_timer`·DB·tray·crawl_lock만 처리. `UpdateController` 워커 join, 테마 watcher `QTimer`(app 부모라 종료까지 폴링 지속), 예약 실행 중 크롤 명시 대기 없음. `closeEvent`+`_quit_app` 모두 `_shutdown()` 게이트 경유라 무조건 종료되지는 않음. `_on_update_downloaded`는 `_shutdown()` 성공 후 `QApplication.quit()`라 워커 잔존 시 조용한 지연 가능.
-- **ISSUE-006 — 손상 settings.json `UnicodeDecodeError` 복구 사각 (Medium / Likely)**: `src/utils/json_store.py:42-60`, `settings_manager.py:70-85`. `load_json_with_recovery`가 `(OSError, json.JSONDecodeError)`만 포착. 비-UTF8 바이트 손상은 `open().read()` 단계 `UnicodeDecodeError` → 포착漏れ로 시작 크래시, `.broken` 백업·기본값 복구 불가. 순수 JSON 문법 파손·파일 부재는 정상 복구 확인. 정상 쓰기는 utf-8만(`atomic_write_json`)이라 외부 손상 한정.
-- **ISSUE-007 — 스냅샷 비동기 저장이 락 해제 이후까지 생존 (Medium / Likely)**: `crawl_control_parts/finish.py:93-120`, `snapshot_worker.py:13-43`. `_on_crawl_finished`는 `try`에서 `_save_price_snapshots()`(비동기 워커 시작 후 즉시 리턴) → `finally`에서 `_release_crawl_lock()`. 락 문서목적("DB writes never concurrent", `crawl_lock.py:1`)과 달리 워커의 `add_price_snapshots_bulk`는 다음 수집과 DB 쓰기 중첩 가능. WAL+`busy_timeout=30000`+lease로 파손 가능성은 낮음 → 불변식 위반 중심. ISSUE-002와 결합 시 증폭.
-- **ISSUE-008 — detail 워커 `pool.get()` 무한 대기로 중지 지연 (Medium / Likely)**: `playwright_parts/runtime_parts/browser.py:240-274`, `complex_mode_parts/detail_enrichment.py:164-242`. `_fetch_one`은 acquire 전 `_should_stop` 미확인, `_acquire_detail_page`의 `await pool.get()`에 타임아웃/중단 체크 없음. `_worker` stop 체크는 큐 `get_nowait` 전에만 있어 풀 고갈 시 중지 요청이 페이지 반납까지 대기. 중지 후 1개 아이템 추가 수집 후 종료. 전원 교착은 아님(워커수==풀max라 반납으로 해소). retry backoff·abort는 정상 확인 → 지연 문제로 한정.
-- **ISSUE-009 — 메모리 recycle이 진행 중 detail 페이지를 구 컨텍스트와 섞음 (Medium / 추정)**: `browser.py:139-158,276-307`. `_check_memory_and_recycle_if_needed`가 `_shutdown_async()+_ensure_started()`로 풀·컨텍스트 교체. 비행 중 워커가 쥔 구 페이지는 `close()`된 컨텍스트 소속인데 `_release_detail_page`가 해제 시점의 신규 풀에 `put`하여 혼합. 호출 지점 미열람이라 추정. 후속 `browser.close()`가 전부 닫아 누수는 bounded.
-- **ISSUE-010 — 스냅샷 쓰기 실패 시 rollback 누락 (Medium / Likely)**: `crawl_snapshot_parts/price_snapshot_write_ops.py:47-53,158-162`. 단건·bulk 모두 예외 경로에 `conn.rollback()` 없이 `finally`에서 dirty 커넥션 반환. 다음 대여자에게 열린 실패 트랜잭션이 넘어갈 수 있음. 형제 코드(`crawl_history_ops.py:62-82`, `article_bulk_ops.py:170-190`, `complex_group_ops`의 `_rollback_write_transaction`)는 전부 rollback → 의도적 관례 아님. WAL+`busy_timeout` 하 흔한 잠금 실패는 재시도도 없어 단건 실패가 `0`/`False`로 끝남(해당 배치 국한).
-- **ISSUE-011 — bulk 저장 건수 과대 보고 (Low / Confirmed)**: `price_snapshot_write_ops.py:137-157`. dedup 후 `executemany`는 dedup된 행으로 실행하면서 반환값은 `len(normalized_rows)`(dedup 전). `ON CONFLICT DO UPDATE` 멱등이라 데이터 손상 아님, 카운트 표시 문제로 한정. → §6 표시 불일치로도 참조.
-- **ISSUE-012 — 캐시 내부 리스트 직접 반환, 별칭 (Low / Likely)**: `src/core/cache.py:211-215`. `get()`이 `entry["raw_items"]` 원본 반환 → 호출자 변경 시 캐시 오염 전파. 현 호출부(`snapshot_worker`, `PriceSnapshotSaveThread`)는 복사·재가공 후 사용해 현실 발현 제한적. `list(...)` 방어 복사로 제거 가능.
-- **ISSUE-013 — 캐시 write-back 손실 창 (Low / 추정)**: `src/core/cache.py:19-24,155-160,285-289`. `_dirty`+`write_back_interval_sec`(기본 2초)라 비정상 종료 시 최대 2초치 미반영 분실 가능. 종료 시 `flush()` 호출 여부 미확인. `atomic_write_json` 자체는 찢긴 쓰기 없음. 프로세스-로컬 락이라 다중 인스턴스는 last-writer-wins(파일 손상은 아님).
-- **ISSUE-014 — 내보내기 비원자적 저장 (Low / Likely)**: `src/core/export.py:264,279-280,310`. `wb.save`/CSV/JSON 모두 사용자 경로 직접 기록 → 크래시 시 반쪽 파일(기존본 덮어쓰기 시 기존본 손상). 실패 통지는 정상(`ExportResult(ok=False)`→QMessageBox, `io_actions.py:165-174`). 인코딩 양호(CSV `utf-8-sig`, JSON `utf-8`, 파일명 콜론 없음). 수식 인젝션 반증 완료(`_sanitize_spreadsheet_value`가 `=,+,-,@,tab,CR` 중화, 우회 특수컬럼은 내부 상수·숫자).
-- **ISSUE-015 — `PRAGMA index_info(idx)` f-string (Low / 추정)**: `schema_parts/migrations.py:49,97,374`, `schema_normalize.py:92`. 이름 출처가 `PRAGMA index_list` 결과(자체 DB)라 외부 입력 도달 경로 없음. 악성 DB는 이미 동등 권한 위치 → 실제 공격면 아님. 식별자 쿼팅 권장 수준.
-- **ISSUE-016 — 그룹 탭 새로고침 무보호 + 즐겨찾기 메모 저장 무보호 (Medium / Confirmed)**: `tab_setup.py:555-556`→`group_tab.py:130-135`, `tabs.py:143-168`. `_refresh_tab` GROUP 분기는 try/except 없이 `load_groups()`→`db.get_all_groups()` 무보호(통계 분기는 보호 있음과 비대칭). `FavoritesTab._edit_note`도 `db.update_article_note` 무보호 후 `refresh()`. `DatabaseTab.load_data(:118-142)`는 보호 보유 → 패턴 미적용 문제.
-- **ISSUE-017 — 알림 슬롯 `area_pyeong:.1f` 포맷, 비수치 시 슬롯 예외 (Medium / Likely)**: `timers_events.py:23-26`, 시그널 `crawler_tab.py:147`, `crawler.py:61`. `f"{area_pyeong:.1f}"` — 크롤러가 None/문자열 emit 시 TypeError(UI 스레드). 시그널 float 선언이나 Python emit 강제 약함. 내부는 보호됨. 크롤러 emit부 원본 미열람이라 Likely.
-- **ISSUE-018 — 탭 새로고침이 UI 스레드 동기 DB 조회 (Medium / Likely)**: `tab_setup.py:547-583`, `database_tab.py:118-142`, `group_tab.py:130-167`, `stats_history.py:43-86`. DB/GROUP은 stale 가드 없이 매 전환마다 동기 실행(history/stats/favorites/dashboard만 `_noncritical_loaded` 가드). 대량 행 `setItem` 루프가 이벤트루프 점유(최소 보호 `blockSignals/setUpdatesEnabled/sorting off`는 있음). 디바운스/상호배제 없음.
-- **ISSUE-019 — 에러 시그널이 로그만, 버튼·데이터 stale (Low / Likely)**: `start_stop.py:185-186`, `finish.py:22-120`. `error_signal` 연결이 `append_log` 람다뿐. 복구는 `finished_signal→_on_crawl_finished` 도착에만 의존. 정상 경로는 finished 항상 emit(QThread run 종료) → 비정상(강제종료 등) 한정. Geo `_on_crawl_finished(:507-573)` 정상계열은 복구됨.
-- **ISSUE-020 — Toast 폴백 위치 0-size 기준 + 중복제거 경합, 완화됨 (Low / Likely)**: `lifecycle_parts/notify.py:12-70`, `widgets/toast.py:158-169`, `fluent/notify.py:8-53`. InfoBar 우선 구조 양호. 폴백에서 show 전 `width()/height()`로 오배치 가능. 이중 제거 경로는 `in` 검사/예외 포착으로 완화. 부재 환경 연속 토스트 한정, 크래시 아님.
-- **ISSUE-021 — 단축키 등록 딕셔너리 덮어쓰기 (Low / Confirmed)**: `lifecycle_parts/shortcuts_actions.py:12-27`. `_register_shortcut`이 `self._shortcuts[key]=shortcut` 저장. 중복 키 시 기존 QShortcut이 부모 보유로 잔존해 이중발화 가능. 기본 상수 충돌 없음(`constants.py:12`) → production 영향 낮음.
-- **ISSUE-022 — `minimize_to_tray=True` 기본값, X가 종료가 아님 (Low / Confirmed, 의도된 동작)**: `schedule_defaults.py:5`, `shutdown.py:61-71`, `tray.py:12-22`. 기본 True+tray 가용 시 `closeEvent`는 `ignore()` 후 숨김, `confirm_before_close`도 건너뜀. tray 미가용 시 폴백 후 정상 종료(`tray.py:24-27`). README "트레이 백그라운드"와 정합. 사용자가 모르는 백그라운드 수집(스케줄 타이머 지속) 가능 → 문서 정합성 지적로 유지.
-- **정보성 U1 — 탭 전환→`_refresh_tab` 자동 연결 증거 없음 (추정)**: `tab_setup.py:547`, `tab_bridge.py:101-109`, `bootstrap.py`. `currentChanged` 방출부와 `_on_switch→sync_nav_selection`은 확인, `_refresh_tab` 연결 코드는 열람 범위에서 미발견. 맞다면 `data_collected`의 `_mark_noncritical_stale`+강제 새로고침 의존. DB탭 삭제 후 히스토리/통계 stale 잔류 여지. §3으로 이월.
-
-**반증되어 제외(문제 아님)**: detail abort 삼킴(다음 루프頭 stop 체크) / drain 타임아웃(취소+재gather, 3s 상한) / `start_crawling` 중복가드·검증순서 및 실패 분기 release / live smoke 별도 경로 / SQL 전부 `?` 바인드(`LIMIT ?` 포함) / 백업·복원(`integrity_check`+필수 테이블+사전 백업+`close_all` 실패 시 중단) / 풀(WAL/`busy_timeout=30000`/FK ON, closing 대여 차단) / 업데이트(Ed25519+HTTPS+size/expiry, sha256 후 staged 삭제, `_is_child`+`target==sys.executable`, `.bak`+preflight+롤백+결과 기록) / 자격증명 처리 코드 없음(공개키는 공개값) / export 인코딩·파일명·수식 중화. 경미 잔류: helper 교체~결과기록 사이 강제종료 시 `.bak` 고아(수동 복구 가능), ticket/result fsync 없음.
-
-## 6 Documentation Mismatches
-
-- **DOC-001 (ISSUE-004)**: 신규설치 테마 문서("미지정(신규 설치)은 OS 연동(AUTO)", `theme.py:24-31` 독스트링)와 기본값 `"dark"`(`schedule_defaults.py:5`, `main.py:105` `settings.get("theme","dark")`, `bootstrap.py:68`) 불일치. 없으면 없음이 아님 — 1건 확정.
-- **DOC-002 (ISSUE-011 표시)**: bulk 저장 건수 표시가 dedup 전 기준이라 실제 upsert보다 크게 표시될 수 있음. 데이터 손상은 아니나 사용자 가시 수치 불일치.
-- 명시적으로 불일치가 아닌 것: ISSUE-022 트레이 동작은 README "트레이 백그라운드"와 정합(의도된 동작). 진입점·시작법·CI subset 관계도 동기화됨.
-
-## 7 Recommended Fix Plan
-
-- **Phase 1 (High-Risk, P0)**: ISSUE-001(지오메트리 단일 검증 경로+클램프) → ISSUE-002(`release(None)` 분리·owner 필수화) → ISSUE-003(즐겨찾기 DB 성공 후 UI 반영+실패 통지). 셋 다 사용자 가시 파손(시작 크래시/중복 수집/상태 불일치)이라 최우선.
-- **Phase 2 (무결성·종료, P1)**: ISSUE-010(rollback 추가, 형제 패턴 일치)+ISSUE-007(스냅샷 저장 동기화 또는 락 보유 연장)+ISSUE-005(워커 join·타이머 정리 인벤토리 확보)+ISSUE-006(`UnicodeDecodeError` 포착 확장)+ISSUE-008(`pool.get` 타임아웃/중단 체크)+ISSUE-016(그룹/메모 DB 보호, `DatabaseTab` 패턴 재사용)+ISSUE-017(포맷 전 수치 가드).
-- **Phase 3 (표시· polish, P2)**: DOC-001(기본값 `null`/미지정 허용 또는 문서 수정 중 택1 — 둘 다 바꾸지 말 것)+DOC-002(반환값을 dedup 후 기준)+ISSUE-014(tmp+replace 원자 저장)+ISSUE-012(방어 복사)+ISSUE-018(디바운스/stale 가드 확대)+ISSUE-019(에러 시 토스트+버튼 복구)+ISSUE-020(폴백 지오메트리 show 후 계산)+ISSUE-021(중복 키 등록 시 기존 해제)+ISSUE-013/015/009(값비싼 변경 전 소유자 확인: flush 소유자, 인덱스 쿼팅, recycle 호출 지점).
-
-## 8 Test Recommendations
-
-- **T-001 (ISSUE-001)**: 입력 — `window_geometry`를 `[0,0,800]`(길이 3), `["a",0,800,600]`, `None`, 오프스크린 좌표로 각각 주입 후 시작. 기대 — 크래시 없이 기본 지오메트리 폴백+경고 로그, 오프스크린은 가시 영역으로 클램프.
-- **T-002 (ISSUE-002)**: 입력 — complex 수집 실행 중 geo 탭 빈-스레드 `shutdown_crawl()` 호출. 기대 — `is_held` 유지(complex 락 보존). 양 탭 idle 종료 시 락 해제됨.
-- **T-003 (ISSUE-003)**: 입력 — `toggle_favorite` False/예외 주입 후 토글. 기대 — `favorite_keys`·탭 상태 불변 + 실패 토스트/로그. True 시 기존 반영 유지.
-- **T-004 (ISSUE-006)**: 입력 — `settings.json`에 비-UTF8 바이트 파일 배치 후 시작. 기대 — `.broken` 백업+기본값 시작(현 상태는 크래시).
-- **T-005 (ISSUE-010)**: 입력 — bulk `executemany` 중간 실패 주입. 기대 — rollback 후 풀 반환, 다음 대여 트랜잭션 오염 없음.
-- **T-006 (ISSUE-007)**: 입력 — 스냅샷 비동기 저장 중 다음 수집 시작. 기대 — DB 쓰기 중첩 없음(동기화 또는 락 연장 후 해제).
-- **T-007 (ISSUE-008)**: 입력 — 풀 고갈 상태에서 중지 요청. 기대 — 유한 시간 내 워커 종료(무한 대기 없음).
-- **T-008 (ISSUE-016/017)**: 입력 — 그룹 진입·메모 저장 중 DB 예외 주입 / alert에 `area_pyeong=None` emit. 기대 — 탭 전환 핸들러 예외 전파 없음(통지+기존 화면 유지) / 알림 슬롯 예외 없이 폴백 표시.
-- **T-009 (DOC-001)**: 입력 — settings.json 없는 첫 실행. 기대 — 채택한 규격(코드·문서 중 하나)에 따라 AUTO 또는 dark 중 하나로 일치. 양쪽 동시 변경 금지.
-- **T-010 (ISSUE-014/DOC-002)**: 입력 — 내보내기 중 크래시 주입 / 중복 포함 bulk 저장. 기대 — 기존본 손상 없는 완성 파일만 남음 / 표시 건수==실제 upsert 건수.
-
-## 9 Final Assessment
-
-| 항목 | 등급 | 근거 요약 |
+| 이전 지적 | 현 코드 | 판정 |
 |---|---|---|
-| 시작·종료·설정 | Needs Work | 진입점·CI 동기화는 양호하나 시작 크래시 경로(ISSUE-001/006)와 종료 정리 공백(ISSUE-005)이 남음 |
-| 수집 엔진 동시성 | High Risk | 타 탭 락 해제(ISSUE-002)가 가드 자체를 깨며 스냅샷 중첩(ISSUE-007)·중지 지연(ISSUE-008)이 겹침 |
-| 데이터 무결성·표시 | Needs Work | rollback 누락(ISSUE-010)·건수 과대(ISSUE-011)·캐시 별칭(ISSUE-012) — 파손보다 불변식·표시 중심 |
-| 보안·업데이트·백업 | Good | SQL 바인드·Ed25519+HTTPS·sha256·`.bak`+preflight+롤백·복원 전 검증 모두 확인, 확정 취약점 없음 |
-| UI 배선 | Needs Work | 즐겨찾기 불일치(ISSUE-003, High) 외 그룹 무보호·동기 로드·알림 포맷 등 Medium 산재, 정상 배선 다수는 확인 |
-| 문서 정합성 | Acceptable | 진입점·시작법·CI 정합하나 테마 AUTO 규격 불일치(DOC-001) 1건 확정 |
+| window_geometry 무검증 setGeometry 시작 크래시 | `bootstrap.py:100~176` 검증+클램프 단일 경로, 손상값 폴백 | 수정됨 |
+| 빈 스레드 종료가 타 탭 CrawlLock 해제 | `start_stop.py:232~242` owner 보유 시만 해제 | 수정됨 |
+| 즐겨찾기 DB 실패 무시하고 UI 갱신 | `settings_preset.py:274~312` 실패 시 keys 미갱신+토스트 | 수정됨(단, 카드 별 즉시 반영은 §5 잔여) |
+| 에러 시그널 로그 전용·버튼 stale | `start_stop.py:201~230` 토스트+버튼 복구 | 수정됨 |
+| 완료 시 스냅샷 비동기-락 해제 경합 | `finish.py:93~98` 락 보유 중 동기 저장 | 수정됨 |
 
-**먼저 수정할 3개**: ISSUE-001(시작 크래시) → ISSUE-002(락 가드 붕괴) → ISSUE-003(즐겨찾기 상태 불일치).
+### 본 감사 지적의 수정 상태 (2026-10-04 검증 완료)
+
+| 지적 | 수정 내용 | 회귀 테스트 | 판정 |
+|---|---|---|---|
+| ISSUE-001 세션 생성 실패 누수 | `_ensure_session`이 `__enter__` 실패 시 `session.__exit__` 호출로 드라이버/브라우저 정리 | `tests/test_keyword_search_dialog.py::TestKeywordWorkerSessionCleanup` | 수정됨 |
+| ISSUE-002 스냅샷 워커 종료 미대기 | `_wait_for_snapshot_worker(timeout 5s)` 추가 후 `shutdown_crawl`에서 호출, 탭 캐시 `flush()` 병행 | `tests/test_ui_wiring.py::test_snapshot_worker_wait_*`, `test_shutdown_flushes_tab_caches` | 수정됨 |
+| 카드 별 실패 롤백 (구 §5 잔여) | DB 실패/False 시 `_revert_favorite_key_visual`로 양 탭 낙관적 상태 롤백, Duck-typed 호스트 대비 호출부 `try/except` 가드 | `tests/test_ui_wiring.py::test_favorite_*_reverts_visual_state`, 기존 `tests/test_audit_fixes.py::TestIssue003FavoriteToggle` 전수 통과 | 수정됨 |
+| 키워드 429/쿨다운/재시도 | 전송 오류를 `KeywordSearchError`로 승격, 429 단일 재시도+30s 쿨다운, `failed(str,int,str)` kind 가드 | `tests/test_keyword_search.py::TestKeywordWorkerResilience` | 수정됨 |
+| 테스트 픽스처 모지바케 | `tests/test_keyword_search*.py`의 한글 호환 자모 반복이 들어간 테스트 키워드를 `empty-query-zzz`로 교체 (자사 `test_mojibake_scan` 게이트 위반) | `tests/test_mojibake_scan.py` 통과 | 수정됨 |
+
+게이트: `pytest tests/` 479 passed + 19 subtests, `pyright` errors+warnings 0, CI subset(`test_ui_wiring`, `test_mojibake_scan` 포함) 통과. `ruff`는 프로젝트 설정·CI 게이트가 없어 미적용(기본 룰셋 기준 전역 1387건 중 다수 선재, 신규 라인은 리포 관행 `except Exception` 일치·신규 I001 3건 정리).
+
+## 5. Potential Functional Gaps
+
+- **카드 별 낙관적 반영 미롤백 (Confirmed Gap, Low):** `cards.py:260~266`은
+  클릭 즉시 별을 뒤집고 emit한다. DB 실패 시 `_on_favorite_toggled`이 토스트로
+  알리지만 카드 별은 되돌리지 않는다(다음 새로고침에 정정, `favorite_keys`·DB는
+  정확). 실패가 통지되므로 영향은 일시적 혼선에 한정.
+- **키워드 429 단일 시도 후 침묵 (Likely Gap, Medium):** 세션 내 요청은
+  상태 != 200이면 `[]` 반환(`keyword_search.py:140`, `151`) 후 제안 목록이
+  비어 실패와 "결과 없음"을 구분 못 한다. 세션 단위로 쿨다운·재시도가 없어
+  제한 상태에서 다이얼로그를 닫았다 열기 전에는 계속 빈 결과다.
+- **제안 실패의 generation 미가드 (Likely, Low):** `_on_worker_failed`가
+  generation을 무시하고 `_set_busy(False)`한다. 검색 실행 중 제안 실패가
+  겹치면 버튼이 중간에 풀려 중복 페이지 요청→결과 중복 append 가능.
+  (`_run_search`·`_load_more`의 busy 가드와 결합된 좁은 윈도우.)
+- **Selenium 폴백의 VL 제외 (Logged limitation, Likely Gap):** `loop.py:89~93`
+  에서 VL은 로그 후 건너뛴다. 예약 수집은 사전에 VL을 제외하고 고지하므로
+  정합이나, 수동 수집의 VL 타깃은 폴백 없이 유실(로그 한 줄)된다.
+- **종료 시 캐시 미flush (Confirmed, Low):** `crawl_cache.flush()` 호출자는
+  `finish.py:91`뿐이라 2초 write-back 윈도우 내 종료 시 캐시 일부가 소실된다.
+  캐시는 성능 용도라 재수집으로 복구 가능, DB 정합 영향 없음.
+- **사망 코드 `src/utils/retry.py` (Confirmed dead, hygiene):** 전수 검색에서
+  production import 0건. 현행은 cancel 지원 `retry_handler.py`를 사용한다.
+  오용 방지 차원의 정리 대상(동작 영향 없음).
+- **Chrome 없는 환경의 키워드 UX (Likely Gap):** 세션 수립 불가 시 제안·검색
+  모두 빈 결과로만 보인다. preflight는 브라우저 부재를 경고하지만 다이얼로그
+  진입점에는 capability 안내가 없다.
+
+## 6. Documentation Mismatches
+
+- **README 배지 v15.1 vs `APP_VERSION = "v15.2"** (`src/utils/version.py:1`,
+  `README.md:6`): 릴리스 후 배지 미갱신. 기능 영향 없음.
+- **README에 키워드 검색(v15.2) 미기재:** `guide_content.py`에는 🔍 버튼 안내가
+  있으나 README 사용법(①~⑥)에는 ID·URL 방식만 있다. 신규 핵심 기능의 문서 누락.
+- 명시적으로 불일치 아님: README의 "실시간 검색 (`Ctrl+F`)"는
+  `SHORTCUTS["search"]="Ctrl+F"`(`constants.py:15`) + `_init_shortcuts` 등록으로
+  실재한다. 고급필터 "동·중개업소" 검색 주장도 P1 blob 확장으로 현재 참이다.
+
+## 7. Recommended Fix Plan
+
+### Phase 1 — Immediate
+
+1. ISSUE-001 세션 생성 실패 정리 보장 + 회귀 테스트(실패 스텁의 `__exit__`
+   호출 단언). 영향이 현재 코드 2곳으로 국한된다.
+2. ISSUE-002 종료 시 스냅샷 워커 대기(상한 5s) + 느린 DB 회귀 테스트.
+
+### Phase 2 — Stability
+
+3. 키워드 429/실패의 상태 구분(빈 결과 vs 오류 문구) + 세션 쿨다운·재시도 1회.
+4. `_on_worker_failed` generation 가드 + 제안 클릭 후 디바운스 취소(불필요 요청 제거).
+5. 카드 별 실패 시 롤백(또는 실패 시 즉시 해당 카드만 상태 복원).
+6. 종료 시 캐시 flush(크롤러 탭·지도 탭) — 2줄 수준.
+7. 사망 `retry.py` 제거 또는 `_deprecated` 명시.
+
+### Phase 3 — Structural
+
+8. VL Selenium 폴백 정책 결정(지원 추가 vs UI에서 사전 차단·고지 일원화).
+9. 종료·워커 수명주기 통합(스냅샷·키워드·업데이트 워커의 단일 join 지점).
+10. README 버전 배지·키워드 검색 문서화.
+
+실제 코드는 수정하지 않는다(본 감사 범위).
+
+## 8. Test Recommendations
+
+- Unit: 세션 생성 실패 시 `__exit__` 호출(ISSUE-001); `close_all` 타임아웃+
+  `force_after_timeout=False` 중단 경로(기존 커버 확인 후 부족분);
+  `_is_default_advanced_filter(None/{})` 경계(기존 `test_result_filters.py` 확장).
+- Integration: 느린 DB에서 저장→즉시 종료 시 스냅샷 워커 완료(ISSUE-002);
+  복원 실패→롤백 후 `integrity_check`+필수 테이블 단언(이미 일부 존재,
+  `still_leased` 중단 케이스 추가); DB 삭제 시 관련 6종 테이블 purge 단언.
+- End-to-End: 키워드→추가→수집→스냅샷→export 한 사이클(가짜 세션+가짜 엔진),
+  예약 geo 실행→좌표 적용→시작 실패 시 작업 복원.
+- Concurrency: 풀 고갈(10s 타임아웃) 후 fallback 연결 생성·반납; 스냅샷 워커
+  실행 중 탭 파괴 금지(또는 대기) 검증; 제안-검색 인터리브 중복 append 금지.
+- Regression: 손상 `window_geometry` 행렬 시작 테스트(이미 수정됨, 고정용);
+  owner 없는 `release` 금지(기존 `test_audit_fixes.py` 패턴 유지);
+  즐겨찾기 실패 시 keys 불변 + 카드 별 복원.
+- Platform-specific: `QT_QPA_FONTDIR` 없는 Windows 패키징 폰트, 트레이 미지원
+  Linux의 `closeEvent` 분기, macOS 경로 길이·대소문자 DB 파일.
+
+## 9. Final Assessment
+
+- Functional Correctness: **Acceptable** — 핵심 수집·DB·복원·업데이트 경로가
+  방어적으로 구현되어 있고, 과거 지적이 수정되어 있다. 신규 키워드 경로의
+  실패 처리가 가장 약한 고리다.
+- Runtime Stability: **Acceptable** — 스레드 종료 규율·재시도·상세 풀의
+  stop 반응이 갖춰져 있다. 스냅샷 워커와 키워드 세션의 수명주기가 예외다.
+- Data Integrity: **Good** — 원자 쓰기·upsert 멱등·복원 롤백+검증·삭제 시
+  관련 purge·FK ON으로 손상 경로가 보이지 않는다.
+- Error Resilience: **Acceptable** — 재시도·쿨다운·폴백·토스트가 있으나,
+  키워드 경로의 침묵 실패와 제안/검색 경합이 약점이다.
+- Cross-platform Robustness: **Needs Work** — Windows 중심(경로·트레이·폰트
+  분기 존재)이나 Linux/macOS 실검증 흔적이 없고, Chrome 의존 경로의 대체
+  안내가 부족하다.
+- Test Confidence: **Acceptable** — 300+ 통과·회귀 고정 테스트가 있으나 live
+  수집 E2E와 종료 경합 테스트가 비어 있다.
+
+**실제로 먼저 수정할 문제 3개:**
+
+1. ISSUE-001 키워드 세션 생성 실패 정리 (Medium/Confirmed).
+2. ISSUE-002 스냅샷 워커 종료 대기 (Medium/Likely).
+3. 키워드 429/실패 상태 구분 + 재시도 (Medium/Likely Gap) — 1번과 같은 파일이라
+   묶음 수정이 효율적이다.

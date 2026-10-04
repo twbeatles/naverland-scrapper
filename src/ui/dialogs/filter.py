@@ -169,6 +169,9 @@ class AdvancedFilterDialog(QDialog):
         self.exclude_keywords = QLineEdit()
         self.exclude_keywords.setPlaceholderText("예: 반지하, 탑층")
         kg.addWidget(self.exclude_keywords)
+        self.include_all = QCheckBox("모든 포함 키워드를 만족해야 표시 (AND)")
+        self.include_all.setToolTip("끄면 포함 키워드 중 하나라도 있으면 표시합니다 (OR).")
+        kg.addWidget(self.include_all)
         layout.addWidget(keyword_group)
         
         # 버튼
@@ -196,6 +199,7 @@ class AdvancedFilterDialog(QDialog):
         self.only_price_change.setChecked(False)
         self.include_keywords.clear()
         self.exclude_keywords.clear()
+        self.include_all.setChecked(False)
         self._filters = None
     
     def _apply(self):
@@ -212,6 +216,7 @@ class AdvancedFilterDialog(QDialog):
             'only_price_change': self.only_price_change.isChecked(),
             'include_keywords': [k.strip() for k in self.include_keywords.text().split(',') if k.strip()],
             'exclude_keywords': [k.strip() for k in self.exclude_keywords.text().split(',') if k.strip()],
+            'include_mode': 'all' if self.include_all.isChecked() else 'any',
         }
         self._filters = filters
         self.filter_applied.emit(filters)
@@ -231,6 +236,7 @@ class AdvancedFilterDialog(QDialog):
             self.only_price_change.setChecked(bool(filters.get("only_price_change", False)))
             self.include_keywords.setText(", ".join(filters.get("include_keywords", [])))
             self.exclude_keywords.setText(", ".join(filters.get("exclude_keywords", [])))
+            self.include_all.setChecked(str(filters.get("include_mode", "any") or "any").lower() == "all")
         except Exception:
             pass
 

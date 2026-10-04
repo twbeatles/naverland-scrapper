@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -7,6 +8,20 @@ if TYPE_CHECKING:
 
 
 class CrawlerTabFiltersSearchMixin:
+    #: Payload keys scanned by include/exclude keyword filters. Core display
+    #: fields first; broker/address keys are matched when present.
+    KEYWORD_TEXT_KEYS = (
+        "단지명",
+        "타입/특징",
+        "층/방향",
+        "부동산상호",
+        "중개사이름",
+        "주소",
+        "법정동",
+        "동",
+        "건물명",
+    )
+
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
 
@@ -36,7 +51,9 @@ class CrawlerTabFiltersSearchMixin:
             self._row_payload_cache.append(payload)
 
     @staticmethod
-    def _is_default_advanced_filter(filters: dict) -> bool:
+    def _is_default_advanced_filter(filters: dict | None) -> bool:
+        if not filters:
+            return True
         defaults = {
             "price_min": 0,
             "price_max": 9999999,
@@ -48,15 +65,41 @@ class CrawlerTabFiltersSearchMixin:
             "only_new": False,
             "only_price_down": False,
             "only_price_change": False,
+            "include_mode": "any",
         }
         for key, val in defaults.items():
-            if filters.get(key) != val:
+            if filters.get(key, val if key == "include_mode" else None) != val:
                 return False
         if filters.get("include_keywords"):
             return False
         if filters.get("exclude_keywords"):
             return False
         return True
+
+    @staticmethod
+    def _normalize_search_text(text: str) -> str:
+        """Lowercase text with all whitespace removed (spacing-tolerant match)."""
+        return re.sub(r"\s+", "", str(text or "").lower())
+
+    def _keyword_text_blob(self: Any, d) -> str:
+        parts = []
+        if isinstance(d, dict):
+            for key in CrawlerTabFiltersSearchMixin.KEYWORD_TEXT_KEYS:
+                value = str(d.get(key, "") or "").strip()
+                if value:
+                    parts.append(value)
+        return " ".join(parts).lower()
+
+    @staticmethod
+    def _match_keyword(keyword: str, text_blob: str) -> bool:
+        """Raw substring match, plus spacing-insensitive fallback."""
+        keyword = str(keyword or "").lower()
+        if not keyword:
+            return True
+        if keyword in text_blob:
+            return True
+        return CrawlerTabFiltersSearchMixin._normalize_search_text(keyword) in \
+            CrawlerTabFiltersSearchMixin._normalize_search_text(text_blob)
 
     @staticmethod
     def _floor_category(floor_text: str):
@@ -119,18 +162,17 @@ class CrawlerTabFiltersSearchMixin:
         if f.get("only_price_change") and price_change == 0:
             return False
 
-        text_blob = " ".join(
-            [
-                str(d.get("단지명", "")),
-                str(d.get("타입/특징", "")),
-                str(d.get("층/방향", "")),
-            ]
-        ).lower()
-        include_keywords = [k.lower() for k in f.get("include_keywords", [])]
-        exclude_keywords = [k.lower() for k in f.get("exclude_keywords", [])]
-        if include_keywords and not any(k in text_blob for k in include_keywords):
-            return False
-        if exclude_keywords and any(k in text_blob for k in exclude_keywords):
+        text_blob = self._keyword_text_blob(d)
+        include_keywords = [k for k in f.get("include_keywords", []) if str(k).strip()]
+        exclude_keywords = [k for k in f.get("exclude_keywords", []) if str(k).strip()]
+        include_mode = str(f.get("include_mode", "any") or "any").lower()
+        if include_keywords:
+            matched = [k for k in include_keywords if self._match_keyword(k, text_blob)]
+            if include_mode == "all" and len(matched) != len(include_keywords):
+                return False
+            if include_mode != "all" and not matched:
+                return False
+        if exclude_keywords and any(self._match_keyword(k, text_blob) for k in exclude_keywords):
             return False
         return True
 
@@ -226,4 +268,3 @@ class CrawlerTabFiltersSearchMixin:
         self.result_table.sortItems(col, order)
         self._rebuild_row_search_cache_from_table()
         self._filter_results(self._pending_search_text)
-

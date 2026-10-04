@@ -22,6 +22,7 @@ from src.ui.widgets.cards import CardViewWidget
 from src.ui.dialogs import (
     MultiSelectDialog,
     URLBatchDialog,
+    KeywordSearchDialog,
     RecentSearchDialog,
     ExcelTemplateDialog,
     AdvancedFilterDialog,

@@ -88,6 +88,21 @@ class CrawlerTabStartStopMixin:
             self.status_message.emit("VL 대상은 Playwright complex 모드로 실행해주세요.")
             return False
 
+        if (
+            engine_name == "playwright"
+            and bool(settings.get("fallback_engine_enabled", True))
+            and unsupported_selenium_targets
+        ):
+            skipped = ", ".join(
+                f"{name} ({cid})" for name, cid, _ in unsupported_selenium_targets[:5]
+            )
+            self.append_log(
+                "ℹ️ VL 대상은 Playwright로 수집되며, Selenium 폴백 전환 시 제외됩니다: "
+                + skipped,
+                20,
+            )
+            self.status_message.emit("VL 대상은 Selenium 폴백에서 제외됩니다.")
+
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.btn_save.setEnabled(False)
@@ -248,6 +263,14 @@ class CrawlerTabStartStopMixin:
             self.btn_stop.setEnabled(False)
 
     def shutdown_crawl(self: Any, timeout_ms: int = 8000) -> bool:
+        # Snapshot bulk writes must settle before the tab (and its DB pool)
+        # goes away; bounded so shutdown can never hang on them.
+        try:
+            waiter = getattr(self, "_wait_for_snapshot_worker", None)
+            if callable(waiter):
+                waiter()
+        except Exception:
+            pass
         thread = self.crawler_thread
         if not thread:
             self._release_crawl_lock()

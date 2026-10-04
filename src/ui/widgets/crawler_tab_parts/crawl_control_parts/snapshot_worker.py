@@ -42,6 +42,32 @@ class CrawlerTabSnapshotWorkerMixin:
         self.append_log("📊 가격 스냅샷 저장을 백그라운드에서 진행합니다.", 10)
         return 0
 
+    def _wait_for_snapshot_worker(self: Any, timeout_ms: int = 5000) -> bool:
+        # ISSUE-002: never destroy the tab while a snapshot bulk write is in
+        # flight (Qt aborts on running-thread destruction, batch rolls back).
+        worker = getattr(self, "_price_snapshot_worker", None)
+        if worker is None:
+            return True
+        try:
+            if not worker.isRunning():
+                return True
+        except Exception:
+            return True
+        try:
+            wait_ms = max(100, int(timeout_ms))
+        except (TypeError, ValueError):
+            wait_ms = 5000
+        try:
+            finished = bool(worker.wait(wait_ms))
+        except Exception:
+            return True
+        if not finished:
+            try:
+                self.append_log(f"⚠️ 스냅샷 저장 종료 대기 타임아웃 ({wait_ms}ms)", 30)
+            except Exception:
+                pass
+        return finished
+
     def _on_price_snapshot_saved(self: Any, saved: int):
         self.append_log(f"📊 가격 스냅샷 {int(saved or 0)}건 저장", 10)
 

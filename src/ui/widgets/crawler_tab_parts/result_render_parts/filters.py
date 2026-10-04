@@ -51,7 +51,13 @@ class CrawlerTabFilterRenderMixin:
     def _apply_current_filter_to_row(self: Any, row):
         text_lower = (self._pending_search_text or "").lower()
         searchable = self._row_search_cache[row] if row < len(self._row_search_cache) else ""
-        hidden_by_text = bool(text_lower) and text_lower not in searchable
+        text_norm = self._normalize_search_text(self._pending_search_text or "")
+        searchable_norm = self._normalize_search_text(searchable)
+        hidden_by_text = (
+            bool(text_lower)
+            and text_lower not in searchable
+            and (not text_norm or text_norm not in searchable_norm)
+        )
         hidden_by_advanced = False
         payload = self._row_payload_cache[row] if row < len(self._row_payload_cache) else None
         if self._advanced_filters and payload is not None:

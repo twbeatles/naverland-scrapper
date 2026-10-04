@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPalette, QPen
 from PyQt6.QtWidgets import (
@@ -284,6 +286,7 @@ class CardViewWidget(QScrollArea):
         self._cards = []
         self._all_data = []
         self._search_text_cache = []
+        self._search_text_norm_cache = []
         self._filtered_data = []
         self._filter_text = ""
         self._card_width = 280
@@ -343,6 +346,10 @@ class CardViewWidget(QScrollArea):
             self._apply_filter(reset_view=True)
 
     @staticmethod
+    def _normalize_search_text(text: str) -> str:
+        return re.sub(r"\s+", "", str(text or "").lower())
+
+    @staticmethod
     def _build_search_text(article: dict) -> str:
         if not isinstance(article, dict):
             return ""
@@ -360,6 +367,7 @@ class CardViewWidget(QScrollArea):
     def set_data(self, articles: list):
         self._all_data = list(articles) if articles else []
         self._search_text_cache = [self._build_search_text(a) for a in self._all_data]
+        self._search_text_norm_cache = [self._normalize_search_text(t) for t in self._search_text_cache]
         self._apply_filter(reset_view=True)
 
     def append_data(self, articles: list):
@@ -368,6 +376,7 @@ class CardViewWidget(QScrollArea):
         new_items = list(articles)
         self._all_data.extend(new_items)
         self._search_text_cache.extend(self._build_search_text(a) for a in new_items)
+        self._search_text_norm_cache.extend(self._normalize_search_text(t) for t in self._search_text_cache[-len(new_items):])
 
         if self._filter_text:
             self._apply_filter(reset_view=True)
@@ -423,9 +432,16 @@ class CardViewWidget(QScrollArea):
 
     def _apply_filter(self, reset_view=False):
         text = (self._filter_text or "").lower()
+        text_norm = self._normalize_search_text(self._filter_text or "")
+        norm_cache = list(getattr(self, "_search_text_norm_cache", None) or [])
+        if len(norm_cache) != len(self._search_text_cache):
+            norm_cache = [self._normalize_search_text(t) for t in self._search_text_cache]
+            self._search_text_norm_cache = norm_cache
         if text:
             self._filtered_data = [
-                d for d, searchable in zip(self._all_data, self._search_text_cache) if text in searchable
+                d
+                for d, searchable, searchable_norm in zip(self._all_data, self._search_text_cache, norm_cache)
+                if text in searchable or (bool(text_norm) and text_norm in searchable_norm)
             ]
         else:
             self._filtered_data = list(self._all_data)

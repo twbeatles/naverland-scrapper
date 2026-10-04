@@ -227,12 +227,14 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                 self._qt_app.processEvents()
 
     def test_dialogs_instantiation(self):
-        from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog
+        from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog, KeywordSearchDialog
 
         d1 = URLBatchDialog()
         d2 = AdvancedFilterDialog()
+        d3 = KeywordSearchDialog()
         d1.deleteLater()
         d2.deleteLater()
+        d3.deleteLater()
         self._qt_app.processEvents()
 
     def test_url_batch_dialog_unverified_defaults_unchecked(self):

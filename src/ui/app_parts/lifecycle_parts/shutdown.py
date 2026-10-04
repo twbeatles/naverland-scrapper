@@ -58,6 +58,14 @@ class AppLifecycleShutdownMixin:
                 ui_logger.debug(f"업데이트 워커 대기 무시: {update_exc}")
         settings.set("window_geometry", [self.x(), self.y(), self.width(), self.height()])
         try:
+            for _tab_name in ("crawler_tab", "geo_tab"):
+                try:
+                    _tab = getattr(self, _tab_name, None)
+                    _cache = getattr(_tab, "crawl_cache", None)
+                    if _cache is not None and hasattr(_cache, "flush"):
+                        _cache.flush()
+                except Exception as cache_exc:
+                    ui_logger.debug(f"캐시 flush 무시: {cache_exc}")
             self.db.close()
         except Exception as e:
             ui_logger.debug(f"DB 종료 중 오류 (무시): {e}")

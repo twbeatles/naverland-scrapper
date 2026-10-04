@@ -128,6 +128,44 @@ class CrawlerTabDialogOpsMixin:
             urls = dlg.get_urls()
             self._add_complexes_from_url(urls)
 
+    def _show_keyword_search_dialog(self: Any):
+        dlg = KeywordSearchDialog(self)
+        dlg.complexes_added.connect(self._add_keyword_complexes)
+        dlg.region_chosen.connect(self._open_keyword_region)
+        dlg.exec()
+
+    def _add_keyword_complexes(self: Any, complexes):
+        added = 0
+        for item in complexes or []:
+            if isinstance(item, dict):
+                name = item.get("name", "")
+                cid = item.get("cid", item.get("complex_id", ""))
+                asset_type = item.get("asset_type", "APT")
+            elif isinstance(item, (list, tuple)) and len(item) >= 3:
+                name, cid, asset_type = item[0], item[1], item[2]
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                name, cid, asset_type = item[0], item[1], "APT"
+            else:
+                continue
+            if self._add_row(name, cid, asset_type):
+                added += 1
+        if added:
+            self.status_message.emit(f"{added}개 단지 등록 완료")
+
+    def _open_keyword_region(self: Any, region):
+        region = dict(region or {})
+        handler = getattr(self, "region_open_handler", None)
+        if callable(handler):
+            handler(region)
+            return
+        name = str(region.get("name", "") or "")
+        lat, lon = region.get("latitude"), region.get("longitude")
+        QMessageBox.information(
+            self,
+            "지역 선택됨",
+            f"{name}\n중심 좌표: {lat}, {lon}",
+        )
+
     def _open_complex_url(self: Any):
         row = self.table_list.currentRow()
         if row < 0:

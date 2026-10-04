@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PyQt6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.1-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.3-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
@@ -135,6 +135,7 @@ python app_entry.py
 
 #### ① 단지 추가하기
 - **단지 ID 직접 입력**: 상단 입력창에 단지 식별 번호(예: `3833`)를 입력하고 **[추가]**를 누릅니다.
+- **키워드 검색 (v15.2 ⭐)**: 단지 ID를 모르면 입력 행의 **🔍 버튼**을 눌러 단지명·지역명(예: `래미안`, `반포자이`)으로 검색하세요. 네이버 검색 결과에서 단지를 체크해 목록에 추가하거나, 지역 후보를 골라 **지도로 찾기** 중심 좌표로 보낼 수 있습니다.
 - **URL 일괄 등록 (강력 추천 ⭐)**:
   - **[URL]** 버튼을 클릭하면 `URL 일괄 등록` 대화상자가 열립니다.
   - 네이버 부동산 URL 또는 단지 ID를 한 줄에 하나씩 여러 개 붙여넣습니다.

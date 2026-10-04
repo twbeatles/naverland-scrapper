@@ -25,6 +25,7 @@ class CrawlerTabLayoutSetupMixin:
         parent=None,
         maintenance_guard=None,
         article_open_handler=None,
+        region_open_handler=None,
     ):
         base_init: Any = super().__init__
         base_init(parent)
@@ -33,6 +34,7 @@ class CrawlerTabLayoutSetupMixin:
         self.current_theme = theme
         self._maintenance_guard = maintenance_guard
         self.article_open_handler = article_open_handler
+        self.region_open_handler = region_open_handler
         self.crawler_thread: Any | None = None
         self.crawl_cache: Any | None = None
         self.collected_data: list[ResultRow] = []

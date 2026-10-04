@@ -272,12 +272,19 @@ class CrawlerTabControlSetupMixin:
         btn_add.setToolTip("단지를 목록에 추가합니다. (Enter 키도 동작)")
         btn_add.setFixedWidth(38)
         btn_add.clicked.connect(self._add_complex)
+        btn_keyword = QPushButton()
+        btn_keyword.setIcon(FIF.SEARCH.icon())
+        btn_keyword.setObjectName("iconButton")
+        btn_keyword.setToolTip("키워드로 단지를 검색해 목록에 추가합니다. (예: 래미안, 반포자이)")
+        btn_keyword.setFixedWidth(38)
+        btn_keyword.clicked.connect(self._show_keyword_search_dialog)
         # Enter 키로도 추가 가능
         self.input_id.returnPressed.connect(self._add_complex)
         input_layout.addWidget(self.input_name, 2)
         input_layout.addWidget(self.input_id, 1)
         input_layout.addWidget(self.combo_manual_asset)
         input_layout.addWidget(btn_add)
+        input_layout.addWidget(btn_keyword)
         cl.addLayout(input_layout)
         
         # ── 목록 ──

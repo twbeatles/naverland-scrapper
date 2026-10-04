@@ -70,6 +70,83 @@ class TestSiteContract(unittest.TestCase):
         )
         self.assertFalse(is_fin_html_dead_url("https://new.land.naver.com/complexes/3833", "매물"))
 
+    def test_autocomplete_url_encodes_keyword(self):
+        from src.core.services.site_contract import build_autocomplete_url
+
+        url = build_autocomplete_url("래미안")
+        self.assertIn("/api/autocomplete", url)
+        qs = parse_qs(urlparse(url).query)
+        self.assertEqual(qs.get("keyword"), ["래미안"])
+
+    def test_search_url_has_page(self):
+        from src.core.services.site_contract import build_search_url
+
+        url = build_search_url("반포자이", page=2)
+        qs = parse_qs(urlparse(url).query)
+        self.assertEqual(qs.get("keyword"), ["반포자이"])
+        self.assertEqual(qs.get("page"), ["2"])
+
+    def test_cortars_url(self):
+        from src.core.services.site_contract import build_cortars_url
+
+        url = build_cortars_url(zoom=16, center_lat=37.5, center_lon=127.0)
+        self.assertIn("/api/cortars", url)
+        qs = parse_qs(urlparse(url).query)
+        self.assertEqual(qs.get("zoom"), ["16"])
+        self.assertEqual(qs.get("centerLat"), ["37.5"])
+        self.assertEqual(qs.get("centerLon"), ["127.0"])
+
+    def test_single_markers_url_cortar_no(self):
+        bounds = viewport_bounds(37.55, 126.98, 15)
+        url = build_single_markers_url(
+            asset_type="APT",
+            trade_type="매매",
+            zoom=15,
+            left_lon=bounds["leftLon"],
+            right_lon=bounds["rightLon"],
+            top_lat=bounds["topLat"],
+            bottom_lat=bounds["bottomLat"],
+            cortar_no="4113510300",
+        )
+        qs = parse_qs(urlparse(url).query)
+        self.assertEqual(qs.get("cortarNo"), ["4113510300"])
+        self.assertEqual(qs.get("tradeType"), ["A1"])
+
+    def test_single_markers_url_without_cortar_no_omits_key(self):
+        bounds = viewport_bounds(37.55, 126.98, 15)
+        url = build_single_markers_url(
+            asset_type="APT",
+            trade_type="매매",
+            zoom=15,
+            left_lon=bounds["leftLon"],
+            right_lon=bounds["rightLon"],
+            top_lat=bounds["topLat"],
+            bottom_lat=bounds["bottomLat"],
+        )
+        self.assertNotIn("cortarNo", url)
+
+    def test_single_markers_url_live_param_parity(self):
+        bounds = viewport_bounds(37.55, 126.98, 15)
+        url = build_single_markers_url(
+            asset_type="APT",
+            trade_type="매매",
+            zoom=15,
+            left_lon=bounds["leftLon"],
+            right_lon=bounds["rightLon"],
+            top_lat=bounds["topLat"],
+            bottom_lat=bounds["bottomLat"],
+            cortar_no="4113510300",
+        )
+        for key in (
+            "oldBuildYears",
+            "recentlyBuildYears",
+            "minHouseHoldCount",
+            "maxHouseHoldCount",
+            "minMaintenanceCost",
+            "maxMaintenanceCost",
+        ):
+            self.assertIn(key, url)
+
     def test_single_markers_url_uses_trade_type_singular(self):
         bounds = viewport_bounds(37.55, 126.98, 15)
         url = build_single_markers_url(

@@ -125,6 +125,52 @@ class AppLifecycleNotifyMixin:
             ui_logger.debug(f"최근 본 매물 기록 실패 (무시): {e}")
         webbrowser.open(get_article_url(complex_id, article_id, asset_type))
 
+    def _open_geo_region(self: Any, region: dict) -> None:
+        """키워드 검색에서 고른 지역을 지도 탭 중심으로 설정한다."""
+        region = dict(region or {})
+        name = str(region.get("name", "") or "")
+        raw_lat = region.get("latitude")
+        raw_lon = region.get("longitude")
+        if raw_lat is None or raw_lon is None:
+            self.status_bar.showMessage("⏸ 지역 좌표가 없어 지도 탭으로 이동할 수 없습니다.")
+            return
+        try:
+            lat = float(raw_lat)
+            lon = float(raw_lon)
+        except (TypeError, ValueError):
+            self.status_bar.showMessage("⏸ 지역 좌표가 올바르지 않습니다.")
+            return
+        if not (33.0 <= lat <= 39.5 and 124.0 <= lon <= 132.1):
+            self.status_bar.showMessage("⏸ 유효 범위를 벗어난 지역 좌표입니다.")
+            return
+        geo_tab = getattr(self, "geo_tab", None)
+        if geo_tab is None:
+            self.status_bar.showMessage("⏸ 지도 탭을 찾을 수 없습니다.")
+            return
+        try:
+            zoom = int(settings.get("geo_default_zoom", 15) or 15)
+            rings = int(settings.get("geo_grid_rings", 1) or 0)
+            step_px = int(settings.get("geo_grid_step_px", 480) or 480)
+            dwell_ms = int(settings.get("geo_sweep_dwell_ms", 600) or 600)
+            asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
+        except (TypeError, ValueError):
+            zoom, rings, step_px, dwell_ms, asset_types = 15, 1, 480, 600, ["APT", "VL"]
+        geo_tab.apply_geo_profile(
+            lat=lat,
+            lon=lon,
+            zoom=max(12, min(18, zoom)),
+            rings=max(0, rings),
+            step_px=step_px,
+            dwell_ms=dwell_ms,
+            asset_types=asset_types,
+            persist_last=True,
+        )
+        try:
+            self.tabs.setCurrentWidget(geo_tab)
+        except Exception as e:
+            ui_logger.debug(f"지도 탭 전환 실패 (무시): {e}")
+        self.status_bar.showMessage(f"🗺 '{name or '선택 지역'}' 중심으로 지도 탭을 설정했습니다.")
+
     def _show_recently_viewed_dialog(self: Any):
         """최근 본 매물 다이얼로그 (v13.0)"""
         dlg = QDialog(self)

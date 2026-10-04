@@ -4,4 +4,4 @@ from .filter import AdvancedFilterDialog, MultiSelectDialog
 from .batch import URLBatchDialog
 from .excel import ExcelTemplateDialog
 from .common import AboutDialog
-from .search import RecentSearchDialog
+from .search import KeywordSearchDialog, RecentSearchDialog

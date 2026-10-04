@@ -1,5 +1,11 @@
 # Update History
 
+## 2026-10-04: 감사 지적 수정 + 키워드 검색 고도화 (v15.3)
+
+- 키워드 단지 검색 고도화: 자동완성/검색 페이지네이션, 429 단일 재시도+30s 쿨다운, 실패 generation 가드, 지역 선택 → 지도로 찾기 중심 좌표 연동, cortarNo 기반 단일 마커 조회
+- 감사 수정: 키워드 세션 생성 실패 시 드라이버/브라우저 정리(ISSUE-001), 스냅샷 워커 종료 대기 5s+캐시 flush(ISSUE-002), 카드 별 실패 시 양 탭 롤백, 사망 `retry.py` 제거·VL 사전 안내
+- 회귀 테스트: `tests/test_keyword_search*.py`, `tests/test_result_filters.py`, `tests/test_geo_markers_cortar.py`, 스냅샷 대기·캐시 flush·별 롤백 (전체 479 passed + 19 subtests, Pyright 0)
+
 ## 2026-09-27: PROJECT_AUDIT.md 지적 전체 수정 (P1-P3, v15.2)
 
 - P0 3건: 손상 geometry 검증 단일 경로 + 오프스크린 클램프, CrawlLock release(None) 분리, 즐겨찾기 DB 실패 시 UI 미반영 + 실패 통지

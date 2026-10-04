@@ -165,6 +165,7 @@ class AppTabSetupMixin:
             theme=self.current_theme,
             maintenance_guard=lambda: self._maintenance_mode,
             article_open_handler=self._open_article_and_track,
+            region_open_handler=self._open_geo_region,
         )
         tab.card_view.favorite_toggled.connect(self._on_favorite_toggled)
         tab.favorite_keys_provider = lambda: set(self.favorite_keys)

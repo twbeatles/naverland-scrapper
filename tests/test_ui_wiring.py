@@ -2529,6 +2529,115 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
+    def test_favorite_toggle_failure_reverts_optimistic_visual(self):
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        try:
+            with (
+                patch.object(app.db, "toggle_favorite", return_value=False),
+                patch.object(
+                    app.crawler_tab, "_update_favorite_state_for_key", wraps=app.crawler_tab._update_favorite_state_for_key
+                ) as crawler_visual,
+                patch.object(
+                    app.geo_tab, "_update_favorite_state_for_key", wraps=app.geo_tab._update_favorite_state_for_key
+                ) as geo_visual,
+            ):
+                app._on_favorite_toggled("AUDIT-FAV-1", "990011", "APT", True)
+
+            key = ("APT", "AUDIT-FAV-1", "990011")
+            self.assertNotIn(key, app.favorite_keys)
+            crawler_visual.assert_called_with(key, False)
+            geo_visual.assert_called_with(key, False)
+        finally:
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
+    def test_snapshot_worker_wait_settles_running_thread(self):
+        import time as _time
+        import types as _types
+
+        from PyQt6.QtCore import QThread
+
+        from src.ui.widgets.crawler_tab_parts.crawl_control_parts.snapshot_worker import (
+            CrawlerTabSnapshotWorkerMixin,
+        )
+
+        class _SlowThread(QThread):
+            def run(self):
+                _time.sleep(0.3)
+
+        idle = _types.SimpleNamespace(_price_snapshot_worker=None)
+        self.assertTrue(CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(idle, 500))
+
+        worker = _SlowThread()
+        worker.start()
+        try:
+            running = _types.SimpleNamespace(_price_snapshot_worker=worker)
+            self.assertTrue(
+                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(running, 2000))
+            self.assertFalse(worker.isRunning())
+        finally:
+            worker.wait(2000)
+
+    def test_snapshot_worker_wait_timeout_is_bounded(self):
+        import time as _time
+        import types as _types
+
+        from PyQt6.QtCore import QThread
+
+        from src.ui.widgets.crawler_tab_parts.crawl_control_parts.snapshot_worker import (
+            CrawlerTabSnapshotWorkerMixin,
+        )
+
+        class _SlowThread(QThread):
+            def run(self):
+                _time.sleep(2.0)
+
+        logged = []
+        worker = _SlowThread()
+        worker.start()
+        try:
+            stub = _types.SimpleNamespace(
+                _price_snapshot_worker=worker,
+                append_log=lambda *args: logged.append(args),
+            )
+            start = _time.monotonic()
+            self.assertFalse(
+                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(stub, 100))
+            self.assertLess(_time.monotonic() - start, 1.5)
+            self.assertTrue(any("타임아웃" in str(args) for args in logged))
+        finally:
+            worker.wait(5000)
+
+    def test_shutdown_flushes_tab_caches(self):
+        from unittest.mock import Mock
+
+        from src.ui.app import RealEstateApp
+
+        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            app = RealEstateApp()
+
+        try:
+            app.crawler_tab.crawl_cache = Mock()
+            app.geo_tab.crawl_cache = Mock()
+            self.assertTrue(app._shutdown())
+            app.crawler_tab.crawl_cache.flush.assert_called_once_with()
+            app.geo_tab.crawl_cache.flush.assert_called_once_with()
+        finally:
+            if hasattr(app, "schedule_timer") and app.schedule_timer:
+                app.schedule_timer.stop()
+            if hasattr(app, "db") and app.db:
+                app.db.close()
+            app.deleteLater()
+            self._qt_app.processEvents()
+
     def test_hidden_tabs_refresh_only_when_opened_after_collection(self):
         from src.ui.app import RealEstateApp
 

@@ -6,6 +6,13 @@
   front-api endpoints still exist but need a valid session.
 - Map UI trade filter query key is ``b`` (not ``tradeTypes``).
 - Marker API uses ``tradeType`` (singular) and ``realEstateType``.
+
+2026-10-04 live probe notes:
+- Keyword flow: ``/api/autocomplete`` (suggestions, no IDs) then
+  ``/api/search`` (complexes with ``complexNo`` + regions with ``cortarNo``).
+  Both need a browser session (cookie-less HTTP answers 429).
+- ``single-markers/2.0`` bbox-only form returns ``[]``; the site always sends
+  ``cortarNo`` (resolved via ``/api/cortars``) alongside the bbox.
 """
 
 from __future__ import annotations
@@ -118,6 +125,40 @@ def build_complex_overview_url(complex_id: str, *, asset_type: str = "APT") -> s
     return f"{COMPLEX_OVERVIEW_API}/{cid}"
 
 
+def build_autocomplete_url(keyword: str) -> str:
+    """Keyword suggestion endpoint (live 2026-10: ``/api/autocomplete``).
+
+    Returns display strings with ``<strong class='text_input'>`` highlight;
+    no IDs — resolve via :func:`build_search_url`.
+    """
+    params = {"keyword": str(keyword or "")}
+    return f"{HOST_NEW}/api/autocomplete?" + urlencode(params)
+
+
+def build_search_url(keyword: str, *, page: int = 1) -> str:
+    """Keyword to complex/region resolver (live 2026-10: ``/api/search``).
+
+    Response top-level keys: ``complexes`` (items carry ``complexNo``),
+    ``regions`` (items carry ``cortarNo`` plus center lat/lon),
+    ``isMoreData`` for pagination. Keys may be absent when nothing matches.
+    """
+    params = {"keyword": str(keyword or ""), "page": str(max(1, int(page or 1)))}
+    return f"{HOST_NEW}/api/search?" + urlencode(params)
+
+
+def build_cortars_url(*, zoom: int, center_lat: float, center_lon: float) -> str:
+    """Region lookup for map sweeps (live 2026-10: ``/api/cortars``).
+
+    Returns a single region object with ``cortarNo`` (plus center lat/lon).
+    """
+    params = {
+        "zoom": str(int(zoom or 15)),
+        "centerLat": str(center_lat),
+        "centerLon": str(center_lon),
+    }
+    return f"{HOST_NEW}/api/cortars?" + urlencode(params)
+
+
 def build_single_markers_url(
     *,
     asset_type: str,
@@ -128,35 +169,51 @@ def build_single_markers_url(
     top_lat: float,
     bottom_lat: float,
     include_pre: bool = False,
+    cortar_no: str = "",
 ) -> str:
-    """Build complexes/houses single-markers/2.0 URL (live 2026-08)."""
+    """Build complexes/houses single-markers/2.0 URL.
+
+    Live 2026-10: the bbox-only form answers ``[]``; the site always sends
+    ``cortarNo`` (resolved via :func:`build_cortars_url`) alongside the bbox.
+    """
     is_vl = str(asset_type or "").strip().upper() == "VL"
     base = SINGLE_MARKERS_HOUSE if is_vl else SINGLE_MARKERS_COMPLEX
-    params = {
-        "zoom": str(int(zoom or 15)),
-        "priceType": "RETAIL",
-        "markerId": "",
-        "markerType": "",
-        "selectedComplexNo": "",
-        "selectedComplexBuildingNo": "",
-        "fakeComplexMarker": "",
-        "realEstateType": article_api_real_estate_type(asset_type, include_pre=include_pre),
-        "tradeType": trade_type_to_code(trade_type),
-        "tag": "::::::::",
-        "rentPriceMin": "0",
-        "rentPriceMax": "900000000",
-        "priceMin": "0",
-        "priceMax": "900000000",
-        "areaMin": "0",
-        "areaMax": "900000000",
-        "showArticle": "false",
-        "sameAddressGroup": "false",
-        "directions": "",
-        "leftLon": str(left_lon),
-        "rightLon": str(right_lon),
-        "topLat": str(top_lat),
-        "bottomLat": str(bottom_lat),
-    }
+    params: dict[str, str] = {}
+    if str(cortar_no or "").strip():
+        params["cortarNo"] = str(cortar_no or "").strip()
+    params.update(
+        {
+            "zoom": str(int(zoom or 15)),
+            "priceType": "RETAIL",
+            "markerId": "",
+            "markerType": "",
+            "selectedComplexNo": "",
+            "selectedComplexBuildingNo": "",
+            "fakeComplexMarker": "",
+            "realEstateType": article_api_real_estate_type(asset_type, include_pre=include_pre),
+            "tradeType": trade_type_to_code(trade_type),
+            "tag": "::::::::",
+            "rentPriceMin": "0",
+            "rentPriceMax": "900000000",
+            "priceMin": "0",
+            "priceMax": "900000000",
+            "areaMin": "0",
+            "areaMax": "900000000",
+            "oldBuildYears": "",
+            "recentlyBuildYears": "",
+            "minHouseHoldCount": "",
+            "maxHouseHoldCount": "",
+            "showArticle": "false",
+            "sameAddressGroup": "false",
+            "minMaintenanceCost": "",
+            "maxMaintenanceCost": "",
+            "directions": "",
+            "leftLon": str(left_lon),
+            "rightLon": str(right_lon),
+            "topLat": str(top_lat),
+            "bottomLat": str(bottom_lat),
+        }
+    )
     return f"{base}?" + urlencode(params)
 
 
