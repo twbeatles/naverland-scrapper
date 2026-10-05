@@ -110,11 +110,10 @@ class AppStatsScheduleRunMixin:
         )
         lock_held = get_crawl_lock().is_held()
         if crawler_running or geo_running or lock_held:
-            owner = get_crawl_lock().owner() or "busy"
             self._remember_schedule_skip(
                 active_slot,
                 "busy",
-                f"⏸ 예약 작업 건너뜀: 다른 수집이 이미 실행 중입니다. ({owner})",
+                "다른 수집이 진행 중이라 이번 예약 수집은 건너뛰었습니다.",
             )
             return False
 
@@ -129,7 +128,7 @@ class AppStatsScheduleRunMixin:
                 self._remember_schedule_skip(
                     active_slot,
                     "missing_geo_asset_type",
-                    "⏸ 예약 Geo 작업 중단: 최소 하나의 자산 유형(APT 또는 VL)을 선택해주세요.",
+                    "예약 수집을 시작하지 못했습니다. 「예약 수집」에서 주택 종류를 하나 이상 선택해 주세요.",
                 )
                 return False
             self.tabs.setCurrentWidget(self.geo_tab)
@@ -145,15 +144,13 @@ class AppStatsScheduleRunMixin:
             )
             if self.geo_tab.start_crawling():
                 self._mark_schedule_run_started(config, active_slot)
-                self.status_bar.showMessage(
-                    f"⏰ 예약 Geo 작업 시작: {self.geo_tab.spin_lat.value():.6f}, {self.geo_tab.spin_lon.value():.6f}"
-                )
+                self.status_bar.showMessage("예약한 지도 범위 수집을 시작했습니다.")
                 return True
             return False
 
         gid = config.get("group_id", self.schedule_group_combo.currentData())
         if gid is None:
-            self._remember_schedule_skip(active_slot, "missing_group", "⏸ 예약 작업 중단: 선택된 그룹이 없습니다.")
+            self._remember_schedule_skip(active_slot, "missing_group", "예약 수집을 시작하지 못했습니다. 「예약 수집」에서 수집할 묶음을 골라 주세요.")
             return False
 
         previous_rows, previous_current_row = self._snapshot_crawler_tasks()
@@ -172,8 +169,8 @@ class AppStatsScheduleRunMixin:
             if self.crawler_tab.add_task(name, cid, asset_token):
                 loaded_count += 1
         if excluded_vl > 0:
-            msg = f"Selenium complex 모드는 APT만 지원하여 VL {excluded_vl}개를 제외했습니다."
-            self.crawler_tab.append_log(f"ℹ️ {msg}", 20)
+            msg = f"보조 엔진(Selenium)은 아파트만 수집할 수 있어 빌라 {excluded_vl}곳은 건너뛰었습니다."
+            self.crawler_tab.append_log(msg, 20)
             self.status_bar.showMessage(msg)
             ui_logger.info(f"예약 작업 필터링: group={gid}, excluded_vl={excluded_vl}")
         if loaded_count <= 0:
@@ -181,12 +178,12 @@ class AppStatsScheduleRunMixin:
             self._remember_schedule_skip(
                 active_slot,
                 "no_target",
-                "⏸ 예약 작업 중단: 실행 가능한 대상이 없습니다.",
+                "예약 수집을 시작하지 못했습니다. 고른 묶음에 수집할 단지가 없습니다.",
             )
             return False
         if self.crawler_tab.start_crawling():
             self._mark_schedule_run_started(config, active_slot)
-            self.status_bar.showMessage(f"⏰ 예약 작업 시작: 그룹 {gid}")
+            self.status_bar.showMessage("예약한 단지 묶음 수집을 시작했습니다.")
             return True
         self._restore_crawler_tasks(previous_rows, previous_current_row)
         return False

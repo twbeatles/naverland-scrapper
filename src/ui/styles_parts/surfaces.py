@@ -46,18 +46,20 @@ def apply_theme_surfaces(root: QWidget, theme: str) -> None:
         f"color: {colors['text_primary']};"
         f"border: 1px solid {colors['border_subtle']};"
         f"border-radius: 8px;"
-        f"margin-top: 0.8em;"
-        f"padding: 10px;"
-        f"padding-top: 22px;"
+        f"margin-top: 0px;"
+        f"padding: 12px;"
+        f"padding-top: 38px;"
         f"font-weight: 600;"
         f"}}"
         f"QGroupBox::title {{"
-        f"subcontrol-origin: margin;"
+        f"subcontrol-origin: padding;"
         f"subcontrol-position: top left;"
-        f"padding: 4px 12px;"
-        f"color: {colors['accent']};"
+        f"left: 12px;"
+        f"top: 10px;"
+        f"padding: 0px;"
+        f"color: {colors['text_primary']};"
         f"background: transparent;"
-        f"font-weight: 700;"
+        f"font-weight: 600;"
         f"}}"
     )
     for box in root.findChildren(QGroupBox):
@@ -92,7 +94,7 @@ def apply_theme_surfaces(root: QWidget, theme: str) -> None:
 
     for frame in root.findChildren(QFrame):
         name = frame.objectName()
-        if name in {"articleCard", "summaryCard", "statCard"}:
+        if name in {"articleCard", "summaryCard", "statCard", "sectionCard"}:
             _fill_widget(frame, card)
 
     for scroll in root.findChildren(QScrollArea):

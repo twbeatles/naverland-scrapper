@@ -288,7 +288,7 @@ class TestUIWiring(unittest.TestCase):
             tab.start_crawling()
 
             self.assertIs(tab.crawler_thread, running_thread)
-            self.assertIn("이미 크롤링이 실행 중", tab.log_browser.toPlainText())
+            self.assertIn("이미 수집이 진행 중", tab.log_browser.toPlainText())
 
             db.close()
             tab.deleteLater()
@@ -457,7 +457,7 @@ class TestUIWiring(unittest.TestCase):
                 tab.start_crawling()
 
             self.assertIsNone(tab.crawler_thread)
-            self.assertIn("유지보수 모드", tab.log_browser.toPlainText())
+            self.assertIn("데이터 복원 작업 중", tab.log_browser.toPlainText())
             mock_warning.assert_not_called()
 
             db.close()
@@ -713,7 +713,7 @@ class TestUIWiring(unittest.TestCase):
             app._run_scheduled()
 
         self.assertEqual(app.crawler_tab.table_list.rowCount(), 0)
-        self.assertIn("Selenium complex 모드는 APT만 지원", app.crawler_tab.log_browser.toPlainText())
+        self.assertIn("보조 엔진(Selenium)은 아파트만 수집", app.crawler_tab.log_browser.toPlainText())
         mock_start.assert_not_called()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -1461,17 +1461,17 @@ class TestUIWiring(unittest.TestCase):
             dialog = AlertSettingDialog(db=db)
 
             combo_texts = [dialog.combo_complex.itemText(i) for i in range(dialog.combo_complex.count())]
-            self.assertIn("APT단지 (APT:31001)", combo_texts)
-            self.assertIn("VL단지 (VL:31001)", combo_texts)
+            self.assertIn("APT단지  ·  아파트", combo_texts)
+            self.assertIn("VL단지  ·  빌라", combo_texts)
 
-            dialog.combo_complex.setCurrentIndex(combo_texts.index("APT단지 (APT:31001)"))
+            dialog.combo_complex.setCurrentIndex(combo_texts.index("APT단지  ·  아파트"))
             dialog.check_common_scope.setChecked(True)
             dialog._add()
 
             rows = db.get_all_alert_settings()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["asset_type"], "ALL")
-            self.assertEqual(_table_text(dialog.table, 0, 1), "공통")
+            self.assertEqual(_table_text(dialog.table, 0, 1), "전체")
 
             dialog.deleteLater()
             db.close()
@@ -1493,7 +1493,7 @@ class TestUIWiring(unittest.TestCase):
             self.assertEqual(_table_text(tab.table_list, 0, 2), "APT")
             self.assertEqual(_table_text(tab.table_list, 1, 0), "빌라단지")
             self.assertEqual(_table_text(tab.table_list, 1, 2), "VL")
-            self.assertIn("중복 스킵", tab.log_browser.toPlainText())
+            self.assertIn("이미 목록에 있는 단지", tab.log_browser.toPlainText())
 
             tab._append_task_row("레거시중복", "12345", "APT")
             self.assertEqual(tab.table_list.rowCount(), 3)
@@ -1539,7 +1539,7 @@ class TestUIWiring(unittest.TestCase):
             ):
                 self.assertFalse(tab.start_crawling())
 
-            self.assertIn("VL", tab.log_browser.toPlainText())
+            self.assertIn("빌라", tab.log_browser.toPlainText())
 
             db.close()
             tab.deleteLater()
@@ -2009,7 +2009,7 @@ class TestUIWiring(unittest.TestCase):
             tab = CrawlerTab(db)
             tab.input_name.setText("빌라단지")
             tab.input_id.setText("34567")
-            tab.combo_manual_asset.setCurrentText("VL")
+            tab.combo_manual_asset.setCurrentIndex(tab.combo_manual_asset.findData("VL"))
 
             with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
                 tab._add_complex()
@@ -2612,7 +2612,7 @@ class TestUIWiring(unittest.TestCase):
             self.assertFalse(
                 CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(stub, 100))
             self.assertLess(_time.monotonic() - start, 1.5)
-            self.assertTrue(any("타임아웃" in str(args) for args in logged))
+            self.assertTrue(any("제때 끝나지 않았습니다" in str(args) for args in logged))
         finally:
             worker.wait(5000)
 

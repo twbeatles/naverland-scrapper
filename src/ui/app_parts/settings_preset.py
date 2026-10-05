@@ -6,6 +6,12 @@ if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
 
 
+def _theme_label(token) -> str:
+    from src.utils.ui_labels import theme_label
+
+    return theme_label(token)
+
+
 class AppSettingsPresetMixin:
     if TYPE_CHECKING:
         def __getattr__(self: Any, name: str) -> Any: ...
@@ -41,7 +47,7 @@ class AppSettingsPresetMixin:
             self.action_theme_light.setChecked(new_theme == "light")
         
         settings.set("theme", new_theme)
-        self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")
+        self.show_toast(f"{_theme_label(new_theme)}로 바꿨습니다.")
     
     def _show_settings(self: Any):
         dlg = SettingsDialog(self)
@@ -89,7 +95,7 @@ class AppSettingsPresetMixin:
             if hasattr(self, 'action_theme_light'):
                 self.action_theme_light.setChecked(new_theme == "light")
             
-            self.show_toast(f"테마가 {new_theme} 모드로 변경되었습니다")
+            self.show_toast(f"{_theme_label(new_theme)}로 바꿨습니다.")
             
             # 위젯 테마 업데이트
             if hasattr(self, 'crawler_tab'):
@@ -112,7 +118,7 @@ class AppSettingsPresetMixin:
             self.dashboard_widget.refresh()
     
     def _save_preset(self: Any):
-        name, ok = QInputDialog.getText(self, "필터 저장", "프리셋 이름:")
+        name, ok = QInputDialog.getText(self, "지금 조건 저장", "이 조건에 붙일 이름:")
         if ok and name:
             ct = self.crawler_tab
             config = {
@@ -135,7 +141,7 @@ class AppSettingsPresetMixin:
                 }
             }
             if self.preset_manager.save_preset(name, config):
-                self.show_toast(f"프리셋 '{name}' 저장 완료")
+                self.show_toast(f"조건 '{name}'을(를) 저장했습니다.", toast_type="success")
     
     def _load_preset(self: Any):
         dialog = PresetDialog(self, self.preset_manager)
@@ -173,7 +179,7 @@ class AppSettingsPresetMixin:
             ct.spin_monthly_rent_max.setValue(
                 p.get("monthly_rent_max", p.get("monthly_max", 5000))
             )
-            self.show_toast("프리셋을 불러왔습니다")
+            self.show_toast("저장한 조건을 불러왔습니다.")
     
     def _show_alert_settings(self: Any):
         AlertSettingDialog(self, self.db).exec()
@@ -184,7 +190,7 @@ class AppSettingsPresetMixin:
             self.crawler_tab.open_advanced_filter_dialog()
             return
         ui_logger.warning("CrawlerTab unavailable for advanced filter dialog.")
-        self.status_bar.showMessage("고급 필터를 열 수 없습니다.")
+        self.status_bar.showMessage("상세 필터를 열 수 없습니다.")
 
     def _apply_advanced_filter(self: Any):
         self._show_advanced_filter()
@@ -267,7 +273,7 @@ class AppSettingsPresetMixin:
         except Exception:
             pass
         try:
-            self.status_bar.showMessage("⚠️ 즐겨찾기 저장 실패")
+            self.status_bar.showMessage("즐겨찾기를 저장하지 못했습니다.")
         except Exception:
             pass
 

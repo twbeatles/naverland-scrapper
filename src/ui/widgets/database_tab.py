@@ -35,64 +35,80 @@ class DatabaseTab(QWidget):
         self._init_ui()
 
     def _init_ui(self):
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.widgets.components import build_page_header, install_token_labels
+        from src.utils.ui_labels import asset_label
+
         layout = QVBoxLayout(self)
-        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM, SPACE_SM as _SM, SPACE_XS as _XS
-        layout.setContentsMargins(_PM, _GG, _PM, _GG)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SM)
+        layout.addWidget(
+            build_page_header(
+                "내 단지",
+                "저장해 둔 단지 목록입니다. 수집할 때 「불러오기」로 바로 가져올 수 있습니다.",
+            )
+        )
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(_XS)
-        self.btn_refresh_db = QPushButton("새로고침")
-        self.btn_refresh_db.setObjectName("primaryBtn")
-        self.btn_refresh_db.setToolTip("데이터베이스에서 단지 목록을 다시 불러옵니다.")
-        self.btn_refresh_db.clicked.connect(self.load_data)
+        self.search_bar = SearchBar("단지 이름, 번호, 메모로 찾기")
+        self.search_bar.search_changed.connect(self._filter_table)
+        button_layout.addWidget(self.search_bar, 1)
+
+        btn_memo = QPushButton("메모 고치기")
+        btn_memo.setObjectName("secondaryBtn")
+        btn_memo.setToolTip("고른 단지에 메모를 남깁니다.")
+        btn_memo.clicked.connect(self._edit_memo)
         self.btn_delete_db = QPushButton("삭제")
         self.btn_delete_db.setObjectName("dangerBtn")
-        self.btn_delete_db.setToolTip("선택한 단지와 해당 매물 데이터를 데이터베이스에서 삭제합니다.")
-        self.btn_delete_db.clicked.connect(self._delete_complex)
+        self.btn_delete_db.setToolTip("고른 단지를 「내 단지」에서 지웁니다. 여러 줄을 한꺼번에 고를 수 있습니다.")
+        self.btn_delete_db.clicked.connect(self._delete_selected)
+        self.btn_refresh_db = QPushButton("새로고침")
+        self.btn_refresh_db.setObjectName("secondaryBtn")
+        self.btn_refresh_db.setToolTip("목록을 다시 불러옵니다. (F5)")
+        self.btn_refresh_db.clicked.connect(self.load_data)
 
-        btn_delete_multi = QPushButton("다중 삭제")
-        btn_delete_multi.setObjectName("dangerBtn")
-        btn_delete_multi.clicked.connect(self._delete_complexes_multi)
-        btn_memo = QPushButton("메모 수정")
-        btn_memo.setObjectName("secondaryBtn")
-        btn_memo.clicked.connect(self._edit_memo)
-
+        # Legacy attribute names kept for callers/tests.
         self.btn_delete = self.btn_delete_db
-        self.btn_delete_multi = btn_delete_multi
+        self.btn_delete_multi = self.btn_delete_db
         self.btn_memo = btn_memo
 
-        button_layout.addWidget(self.btn_refresh_db)
-        button_layout.addWidget(self.btn_delete_db)
-        button_layout.addWidget(btn_delete_multi)
         button_layout.addWidget(btn_memo)
-        button_layout.addStretch()
+        button_layout.addWidget(self.btn_delete_db)
+        button_layout.addWidget(self.btn_refresh_db)
         layout.addLayout(button_layout)
-
-        self.search_bar = SearchBar("단지 검색...")
-        self.search_bar.search_changed.connect(self._filter_table)
-        layout.addWidget(self.search_bar)
 
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "자산", "단지명", "단지ID", "메모"])
+        self.table.setHorizontalHeaderLabels(["ID", "종류", "단지 이름", "단지 번호", "메모"])
         self.table.setColumnHidden(self.COL_ID, True)
         table_header = self.table.horizontalHeader()
         if table_header is not None:
             table_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setToolTip("두 번 누르면 네이버 부동산 단지 페이지를 엽니다.")
         self.table.doubleClicked.connect(self._open_complex_url)
+        install_token_labels(self.table, self.COL_ASSET, asset_label)
         layout.addWidget(self.table, 1)
 
         self.empty_label = EmptyStateWidget(
-            icon="DOCUMENT",
-            title="등록된 단지가 없습니다",
-            description="「매물 수집」에서 단지를 추가하거나 DB로 저장해 주세요.",
+            icon="LIBRARY",
+            title="저장한 단지가 없습니다",
+            description="「매물 수집」에서 단지를 추가한 뒤 「내 단지에 저장」을 누르면 여기에 모입니다.",
         )
         self.empty_label.hide()
-        layout.addWidget(self.empty_label)
+        layout.addWidget(self.empty_label, 1)
 
         self.table.itemSelectionChanged.connect(self._update_action_state)
+
+    def _delete_selected(self):
+        rows = {item.row() for item in self.table.selectedItems()}
+        if len(rows) > 1:
+            self._delete_complexes_multi()
+        else:
+            self._delete_complex()
 
     def _normalize_complex_row(self, row):
         try:
@@ -144,22 +160,22 @@ class DatabaseTab(QWidget):
     def _update_empty_state(self, count):
         is_empty = count == 0
         self.empty_label.setVisible(is_empty)
-        self.table.setEnabled(not is_empty)
+        self.table.setVisible(not is_empty)
+        self.search_bar.setEnabled(not is_empty)
 
     def _update_action_state(self):
         has_selection = self.table.currentRow() >= 0
         has_rows = self.table.rowCount() > 0
-        self.btn_delete.setEnabled(has_selection)
-        self.btn_delete_multi.setEnabled(has_rows)
-        self.btn_memo.setEnabled(has_selection)
+        self.btn_delete.setEnabled(has_rows and has_selection)
+        self.btn_memo.setEnabled(has_rows and has_selection)
 
     def _confirm_delete(self, *, title: str, text: str) -> tuple[bool, bool]:
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Icon.Warning)
         msg.setWindowTitle(title)
         msg.setText(text)
-        msg.setInformativeText("기본값은 단지/그룹매핑만 삭제이며, 이력 삭제는 선택 옵션입니다.")
-        purge_check = QCheckBox("관련 이력까지 삭제")
+        msg.setInformativeText("단지와 묶음 연결만 지웁니다. 그동안 쌓인 가격 기록까지 지우려면 아래를 체크해 주세요.")
+        purge_check = QCheckBox("가격 기록·수집 기록도 함께 지우기")
         purge_check.setChecked(False)
         msg.setCheckBox(purge_check)
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
@@ -185,8 +201,8 @@ class DatabaseTab(QWidget):
         complex_id = cid_item.text() if cid_item else ""
 
         ok, purge_related = self._confirm_delete(
-            title="삭제 확인",
-            text=f"{name} ({asset_type}:{complex_id}) 단지를 삭제하시겠습니까?",
+            title="단지 삭제",
+            text=f"'{name}'을(를) 「내 단지」에서 지울까요?",
         )
         if not ok:
             return
@@ -197,7 +213,7 @@ class DatabaseTab(QWidget):
     def _delete_complexes_multi(self):
         rows = sorted(set(item.row() for item in self.table.selectedItems()))
         if not rows:
-            QMessageBox.information(self, "안내", "삭제할 행을 먼저 선택해 주세요.")
+            QMessageBox.information(self, "단지를 골라 주세요", "지울 단지를 먼저 골라 주세요.")
             return
 
         ids = []
@@ -214,15 +230,17 @@ class DatabaseTab(QWidget):
             return
 
         ok, purge_related = self._confirm_delete(
-            title="다중 삭제 확인",
-            text=f"선택된 {len(ids)}개 단지를 삭제하시겠습니까?",
+            title="단지 삭제",
+            text=f"고른 단지 {len(ids)}곳을 「내 단지」에서 지울까요?",
         )
         if not ok:
             return
 
         cnt = self.db.delete_complexes_bulk(ids, purge_related=purge_related)
-        QMessageBox.information(self, "삭제 완료", f"{cnt}개 단지 삭제")
         self.load_data()
+        show_toast = getattr(self.window(), "show_toast", None)
+        if callable(show_toast):
+            show_toast(f"단지 {cnt}곳을 지웠습니다.", toast_type="success")
 
     def _edit_memo(self):
         row = self.table.currentRow()
@@ -236,7 +254,7 @@ class DatabaseTab(QWidget):
 
         db_id = int(db_id_item.text())
         old = old_item.text() if old_item else ""
-        new, ok = QInputDialog.getText(self, "메모 수정", "메모:", text=old)
+        new, ok = QInputDialog.getText(self, "메모 고치기", "이 단지에 남길 메모", text=old)
         if ok:
             self.db.update_complex_memo(db_id, new)
             self.load_data()

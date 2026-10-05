@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.fluent.design_tokens import tint as _tint
 from src.ui.styles import COLORS
 from src.ui.widgets.components import EmptyStateWidget
 from src.utils.constants import TRADE_COLORS
@@ -57,7 +58,7 @@ class ArticleCard(QFrame):
         palette = COLORS[theme_key]
         surface = palette.get("card_bg", "#1e1e2e" if self.is_dark else "#ffffff")
         hover_bg = palette.get("card_bg_hover", surface)
-        border = palette.get("card_border", f"{fg_color}40")
+        border = palette.get("card_border", _tint(fg_color, 0.25))
         hover_border = palette.get("card_border_hover", fg_color)
         text_primary = palette["text_primary"]
         style_key = (surface, border, hover_border, fg_color, hover_bg, text_primary)
@@ -122,7 +123,7 @@ class ArticleCard(QFrame):
         type_style = self._TYPE_STYLE_CACHE.get(fg_color)
         if type_style is None:
             type_style = (
-                f"color: {fg_color}; background-color: {fg_color}22; padding: 4px 10px; "
+                f"color: {fg_color}; background-color: {_tint(fg_color, 0.14)}; padding: 4px 10px; "
                 "border-radius: 999px; font-weight: 700; font-size: 11px;"
             )
             self._TYPE_STYLE_CACHE[fg_color] = type_style

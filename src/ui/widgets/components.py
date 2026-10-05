@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import (
-    QWidget, QLabel, QHBoxLayout, QVBoxLayout, QLineEdit, QSlider, QPushButton, QProgressBar, QFrame, QTableWidgetItem
+    QWidget, QLabel, QHBoxLayout, QVBoxLayout, QLineEdit, QSlider, QPushButton, QProgressBar, QFrame,
+    QTableWidgetItem, QStyledItemDelegate
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor, QColor
@@ -27,6 +28,34 @@ class EmptyStateWidget(QWidget):
         self.icon_widget = self._make_icon(icon)
         layout.addWidget(self.icon_widget, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("emptyStateTitle")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.title_label)
+
+        self.desc_label = QLabel(description)
+        self.desc_label.setObjectName("emptyStateDesc")
+        self.desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setMinimumWidth(360)
+        self.desc_label.setVisible(bool(description))
+        layout.addWidget(self.desc_label)
+
+        self.action_button = None
+        if action_text:
+            action_btn = QPushButton(action_text)
+            action_btn.setObjectName("secondaryBtn")
+            action_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            action_btn.clicked.connect(self.action_clicked.emit)
+            action_btn.setMinimumWidth(140)
+            layout.addWidget(action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.action_button = action_btn
+
+    def set_text(self, title: str, description: str = "") -> None:
+        self.title_label.setText(title)
+        self.desc_label.setText(description)
+        self.desc_label.setVisible(bool(description))
+
     @classmethod
     def _resolve_icon(cls, icon):
         """Accept a FluentIcon member; map legacy emoji strings for compatibility."""
@@ -47,36 +76,33 @@ class EmptyStateWidget(QWidget):
             from qfluentwidgets import IconWidget
 
             widget = IconWidget(resolved)
-            widget.setFixedSize(48, 48)
+            widget.setFixedSize(40, 40)
             return widget
         except Exception:
             fallback = QLabel("")
             fallback.setObjectName("emptyStateIcon")
             return fallback
 
-        title_label = QLabel(title)
-        title_label.setObjectName("emptyStateTitle")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
 
-        if description:
-            desc_label = QLabel(description)
-            desc_label.setObjectName("emptyStateDesc")
-            desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            desc_label.setWordWrap(True)
-            layout.addWidget(desc_label)
+class TokenLabelDelegate(QStyledItemDelegate):
+    """셀 값(내부 토큰)은 그대로 두고 화면 표시만 쉬운 말로 바꾼다."""
 
-        if action_text:
-            try:
-                from qfluentwidgets import PushButton as FluentPushButton
+    def __init__(self, mapper, parent=None):
+        super().__init__(parent)
+        self._mapper = mapper
 
-                action_btn = FluentPushButton(action_text)
-            except Exception:
-                action_btn = QPushButton(action_text)
-            action_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-            action_btn.clicked.connect(self.action_clicked.emit)
-            action_btn.setMaximumWidth(200)
-            layout.addWidget(action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+    def displayText(self, value, locale):
+        try:
+            return str(self._mapper(value))
+        except Exception:
+            return str(value)
+
+
+def install_token_labels(table, column: int, mapper) -> None:
+    """``table``의 한 열에 토큰→표시 이름 delegate를 단다 (데이터는 불변)."""
+    table.setItemDelegateForColumn(column, TokenLabelDelegate(mapper, table))
+
+
 class SearchBar(QWidget):
     search_changed = pyqtSignal(str)
 
@@ -121,37 +147,46 @@ class SpeedSlider(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
         header = QHBoxLayout()
-        header.addWidget(QLabel("속도"))
+        header.setSpacing(8)
         self.label = QLabel("보통")
         self.label.setObjectName("speedLabel")
         self.label.setStyleSheet("font-weight: 600;")
         header.addWidget(self.label)
-        self.desc_label = QLabel("(권장)")
-        self.desc_label.setObjectName("speedDesc")
-        self.desc_label.setStyleSheet("font-size: 11px;")
+        self.desc_label = QLabel("")
+        self.desc_label.setObjectName("fieldLabel")
         header.addWidget(self.desc_label)
         header.addStretch()
         layout.addLayout(header)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 3)
+        self.slider.setPageStep(1)
         self.slider.setValue(1)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.slider.valueChanged.connect(self._on_change)
-        self.slider.setToolTip("수집 속도를 조절합니다. 느릴수록 차단 위험이 낮습니다.")
+        self.slider.setToolTip("천천히 수집할수록 네이버에서 접속이 막힐 위험이 줄어듭니다.")
         layout.addWidget(self.slider)
-    def _on_change(self, val):
-        speed = self.SPEEDS[val]
+        self._refresh_text(self.SPEEDS[1])
+
+    def _refresh_text(self, speed):
         self.label.setText(speed)
         desc = CRAWL_SPEED_PRESETS.get(speed, {}).get("desc", "")
-        self.desc_label.setText(f"({desc})")
+        self.desc_label.setText(desc)
+
+    def _on_change(self, val):
+        speed = self.SPEEDS[val]
+        self._refresh_text(speed)
         self.speed_changed.emit(speed)
+
     def current_speed(self): return self.SPEEDS[self.slider.value()]
     def set_speed(self, speed):
         if speed in self.SPEEDS: self.slider.setValue(self.SPEEDS.index(speed))
 
 class ProgressWidget(QWidget):
     """진행 상태 위젯 - 예상 시간 표시"""
+    IDLE_TEXT = "수집을 시작하면 진행 상황이 여기에 표시됩니다."
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -160,22 +195,22 @@ class ProgressWidget(QWidget):
         
         # 상태 표시줄
         status_layout = QHBoxLayout()
-        self.status_label = QLabel("대기 중...")
+        self.status_label = QLabel(self.IDLE_TEXT)
         self.status_label.setObjectName("progressStatus")
-        self.status_label.setStyleSheet("font-weight: bold;")
+        self.status_label.setStyleSheet("font-weight: 600;")
         status_layout.addWidget(self.status_label)
         
         self.time_label = QLabel("")
         self.time_label.setObjectName("progressTime")
-        self.time_label.setStyleSheet("font-size: 12px;")
-        status_layout.addWidget(self.time_label)
+        self.time_label.setObjectName("fieldLabel")
         status_layout.addStretch()
+        status_layout.addWidget(self.time_label)
         layout.addLayout(status_layout)
         
         # 프로그레스바
         self.progress_bar = QProgressBar()
         self.progress_bar.setTextVisible(True)
-        self.progress_bar.setMinimumHeight(25)
+        self.progress_bar.setFixedHeight(18)
         layout.addWidget(self.progress_bar)
     
     def update_progress(self, percent, current_name, remaining_seconds):
@@ -185,20 +220,20 @@ class ProgressWidget(QWidget):
         if remaining_seconds > 0:
             mins, secs = divmod(remaining_seconds, 60)
             if mins > 0:
-                self.time_label.setText(f"예상 남은 시간: {mins}분 {secs}초")
+                self.time_label.setText(f"약 {mins}분 {secs}초 남음")
             else:
-                self.time_label.setText(f"예상 남은 시간: {secs}초")
+                self.time_label.setText(f"약 {secs}초 남음")
         else:
             self.time_label.setText("")
     
     def reset(self):
         self.progress_bar.setValue(0)
-        self.status_label.setText("대기 중...")
+        self.status_label.setText(self.IDLE_TEXT)
         self.time_label.setText("")
     
     def complete(self):
         self.progress_bar.setValue(100)
-        self.status_label.setText("완료")
+        self.status_label.setText("수집을 마쳤습니다.")
         self.time_label.setText("")
 
 class ColoredTableWidgetItem(QTableWidgetItem):
@@ -226,7 +261,7 @@ class SummaryCard(QFrame):
 
         c = COLORS[theme]
 
-        self.total_widget = self._create_stat_widget("총 수집", "0건", c["accent"])
+        self.total_widget = self._create_stat_widget("전체", "0건", c["accent"])
         layout.addWidget(self.total_widget)
 
         self.trade_widget = self._create_stat_widget("매매", "0건", c["trade_매매"])
@@ -247,13 +282,13 @@ class SummaryCard(QFrame):
         self.new_widget = self._create_stat_widget("신규", "0건", c["warning"])
         layout.addWidget(self.new_widget)
 
-        self.price_up_widget = self._create_stat_widget("상승", "0건", c["error"])
+        self.price_up_widget = self._create_stat_widget("가격 상승", "0건", c["error"])
         layout.addWidget(self.price_up_widget)
 
-        self.price_down_widget = self._create_stat_widget("하락", "0건", c["success"])
+        self.price_down_widget = self._create_stat_widget("가격 하락", "0건", c["success"])
         layout.addWidget(self.price_down_widget)
 
-        self.filtered_widget = self._create_stat_widget("제외", "0건", c["text_secondary"])
+        self.filtered_widget = self._create_stat_widget("조건 제외", "0건", c["text_secondary"])
         layout.addWidget(self.filtered_widget)
 
         layout.addStretch()
@@ -327,3 +362,20 @@ class SortableTableWidgetItem(QTableWidgetItem):
             return val1 < val2
         except (ValueError, IndexError):
             return super().__lt__(other)
+
+
+def build_page_header(title: str, subtitle: str = "") -> QWidget:
+    """모든 화면 상단에 같은 모양으로 쓰는 제목 + 한 줄 설명."""
+    header = QWidget()
+    box = QVBoxLayout(header)
+    box.setContentsMargins(0, 0, 0, 4)
+    box.setSpacing(2)
+    title_label = QLabel(title)
+    title_label.setObjectName("pageTitle")
+    box.addWidget(title_label)
+    if subtitle:
+        sub = QLabel(subtitle)
+        sub.setObjectName("pageSubtitle")
+        sub.setWordWrap(True)
+        box.addWidget(sub)
+    return header

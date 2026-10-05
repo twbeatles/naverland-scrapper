@@ -13,6 +13,8 @@ class CrawlerTabTaskOpsMixin:
     @staticmethod
     def _normalize_task_asset_type(asset_type) -> str:
         token = str(asset_type or "APT").strip().upper()
+        # Display labels (아파트/빌라) are accepted too so UI text can stay friendly.
+        token = {"아파트": "APT", "빌라": "VL", "빌라·연립": "VL"}.get(token, token)
         return token if token in {"APT", "VL"} else "APT"
 
     def _add_complex(self: Any):
@@ -21,12 +23,13 @@ class CrawlerTabTaskOpsMixin:
         if not cid:
             return
         if not self._complex_id_regex.match(cid).hasMatch():
-            QMessageBox.warning(self, "입력 오류", "단지 ID는 숫자만 입력할 수 있습니다.")
+            QMessageBox.warning(self, "입력 확인", "단지 번호는 숫자만 입력할 수 있습니다.")
             self.input_id.setFocus()
             self.input_id.selectAll()
             return
+        combo = getattr(self, "combo_manual_asset", None)
         asset_type = self._normalize_task_asset_type(
-            self.combo_manual_asset.currentText() if hasattr(self, "combo_manual_asset") else "APT"
+            (combo.currentData() or combo.currentText()) if combo is not None else "APT"
         )
         self._add_row(name, cid, asset_type)
         self.input_name.clear()
@@ -65,8 +68,8 @@ class CrawlerTabTaskOpsMixin:
             kept_item = self.table_list.item(existing_row, 0)
             kept_name = kept_item.text().strip() if kept_item else ""
         display_name = kept_name or self._normalize_task_name(name, cid)
-        message = f"중복 스킵: {display_name} ({asset_token}:{cid})"
-        self.append_log(message, 10)
+        message = f"이미 목록에 있는 단지입니다: {display_name}"
+        self.append_log(message, 20)
         self.status_message.emit(message)
 
     def add_task(self: Any, name, cid, asset_type="APT", *, log_duplicate=True):
@@ -131,7 +134,7 @@ class CrawlerTabTaskOpsMixin:
             for name, cid, asset_type in deduped:
                 self._append_task_row(name, cid, asset_type)
         if removed > 0:
-            message = f"중복 스킵: {removed}개 작업을 정리했습니다."
+            message = f"목록에서 겹치는 단지 {removed}곳을 정리했습니다."
             self.append_log(message, 20)
             self.status_message.emit(message)
         return deduped
@@ -140,8 +143,11 @@ class CrawlerTabTaskOpsMixin:
         self.table_list.setRowCount(0)
 
     def _delete_complex(self: Any):
-        row = self.table_list.currentRow()
-        if row >= 0:
+        rows = sorted({idx.row() for idx in self.table_list.selectedIndexes()}, reverse=True)
+        if not rows:
+            row = self.table_list.currentRow()
+            rows = [row] if row >= 0 else []
+        for row in rows:
             self.table_list.removeRow(row)
 
     def _clear_list(self: Any):
@@ -152,6 +158,9 @@ class CrawlerTabTaskOpsMixin:
         existing_count = 0
         failed_count = 0
         total = self.table_list.rowCount()
+        if total <= 0:
+            self.status_message.emit("저장할 단지가 없습니다. 먼저 목록에 단지를 추가해 주세요.")
+            return
         for r in range(total):
             name = self.table_list.item(r, 0).text()
             cid = self.table_list.item(r, 1).text()
@@ -164,11 +173,19 @@ class CrawlerTabTaskOpsMixin:
                 existing_count += 1
             else:
                 failed_count += 1
-        QMessageBox.information(
-            self,
-            "저장 완료",
-            f"신규 저장: {inserted_count}개\n기존 존재: {existing_count}개\n실패: {failed_count}개",
-        )
+        parts = [f"새로 저장 {inserted_count}곳"]
+        if existing_count:
+            parts.append(f"이미 있던 단지 {existing_count}곳")
+        if failed_count:
+            parts.append(f"저장 실패 {failed_count}곳")
+        summary = "「내 단지」에 저장했습니다. (" + ", ".join(parts) + ")"
+        if failed_count:
+            QMessageBox.warning(self, "일부 저장 실패", summary)
+        else:
+            self.status_message.emit(summary)
+            show_toast = getattr(self.window(), "show_toast", None)
+            if callable(show_toast):
+                show_toast(summary, toast_type="success")
 
     def _add_complexes_from_url(self: Any, urls):
         from src.core.parser import NaverURLParser
@@ -180,4 +197,4 @@ class CrawlerTabTaskOpsMixin:
             asset_type = self._normalize_task_asset_type(parsed.get("asset_type", "APT"))
             if cid and self._add_row(f"단지_{cid}", cid, asset_type):
                 count += 1
-        self.status_message.emit(f"{count}개 URL 등록 완료")
+        self.status_message.emit(f"주소에서 단지 {count}곳을 추가했습니다.")

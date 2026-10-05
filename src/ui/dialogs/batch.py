@@ -109,7 +109,7 @@ class _NameLookupWorker(QObject):
                             f"매물_{article_id}",
                             False,
                             asset_type,
-                            "⚠️ 단지 역조회 실패",
+                            "단지를 찾지 못함",
                         )
                         processed += 1
                         continue
@@ -126,7 +126,7 @@ class _NameLookupWorker(QObject):
                     name = f"단지_{cid}"
 
                 is_verified = not str(name).startswith("단지_")
-                status = "✅ 확인됨" if is_verified else "⚠️ 이름 미확인"
+                status = "확인됨" if is_verified else "이름 미확인"
                 self.progress.emit(idx, total, str(cid), str(name), bool(is_verified), asset_type, status)
                 processed += 1
         finally:
@@ -145,7 +145,7 @@ class URLBatchDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("🔗 URL 일괄 등록")
+        self.setWindowTitle("네이버 부동산 주소로 단지 추가")
         self.setMinimumSize(600, 500)
         self._selected_complexes = []
         self._worker_thread = None
@@ -159,10 +159,11 @@ class URLBatchDialog(QDialog):
         layout = QVBoxLayout(self)
 
         info = QLabel(
-            "네이버 부동산 URL 또는 단지 ID를 붙여넣으세요.\n"
-            "여러 개를 한 번에 입력할 수 있습니다 (한 줄에 하나씩)."
+            "네이버 부동산에서 단지나 매물 페이지의 주소를 복사해 붙여 넣으세요.\n"
+            "한 줄에 하나씩, 여러 개를 한꺼번에 넣을 수 있습니다. 단지 번호만 적어도 됩니다."
         )
-        info.setStyleSheet("color: #888; padding: 10px;")
+        info.setObjectName("hintLabel")
+        info.setWordWrap(True)
         layout.addWidget(info)
 
         self.input_text = QTextBrowser()
@@ -180,9 +181,11 @@ class URLBatchDialog(QDialog):
         layout.addWidget(self.input_text, 2)
 
         parse_row = QHBoxLayout()
-        self.btn_parse = QPushButton("🔍 URL 분석")
+        self.btn_parse = QPushButton("단지 확인하기")
+        self.btn_parse.setObjectName("primaryBtn")
         self.btn_parse.clicked.connect(self._parse_urls)
-        self.btn_cancel = QPushButton("⏹ 취소")
+        self.btn_cancel = QPushButton("확인 멈추기")
+        self.btn_cancel.setObjectName("secondaryBtn")
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel_lookup)
         parse_row.addWidget(self.btn_parse)
@@ -192,7 +195,7 @@ class URLBatchDialog(QDialog):
 
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(4)
-        self.result_table.setHorizontalHeaderLabels(["✓", "단지 ID", "단지명", "상태"])
+        self.result_table.setHorizontalHeaderLabels(["", "단지 번호", "단지 이름", "확인 결과"])
         batch_header = self.result_table.horizontalHeader()
         if batch_header is not None:
             batch_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -206,8 +209,10 @@ class URLBatchDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         self.btn_select_all = QPushButton("전체 선택")
+        self.btn_select_all.setObjectName("secondaryBtn")
         self.btn_select_all.clicked.connect(self._select_all)
-        self.btn_add = QPushButton("📥 선택 항목 추가")
+        self.btn_add = QPushButton("체크한 단지 추가")
+        self.btn_add.setObjectName("primaryBtn")
         self.btn_add.clicked.connect(self._add_selected)
         btn_layout.addWidget(self.btn_select_all)
         btn_layout.addStretch()
@@ -285,16 +290,16 @@ class URLBatchDialog(QDialog):
 
         text = self.input_text.toPlainText()
         if not text.strip():
-            QMessageBox.warning(self, "입력 필요", "URL 또는 단지 ID를 입력하세요.")
+            QMessageBox.warning(self, "주소를 붙여 넣어 주세요", "네이버 부동산 주소나 단지 번호를 입력해 주세요.")
             return
 
         results = NaverURLParser.extract_from_text(text)
         if not results:
-            QMessageBox.warning(self, "파싱 실패", "유효한 URL이나 단지 ID를 찾지 못했습니다.")
+            QMessageBox.warning(self, "단지를 찾지 못했습니다", "입력한 내용에서 단지를 찾지 못했습니다.\n네이버 부동산 단지·매물 페이지의 주소인지 확인해 주세요.")
             return
 
         self._prepare_rows(results)
-        self.status_label.setText(f"🔍 {len(results)}개 단지 발견, 이름 조회 시작")
+        self.status_label.setText(f"단지 {len(results)}곳을 찾았습니다. 이름을 확인하는 중…")
         self._set_parsing_state(True)
         self._start_lookup_worker(results)
 
@@ -302,7 +307,7 @@ class URLBatchDialog(QDialog):
         if self._worker:
             self._worker.cancel()
         self.btn_cancel.setEnabled(False)
-        self.status_label.setText("⏹ 취소 요청됨... 현재 조회를 마무리하는 중")
+        self.status_label.setText("확인을 멈추는 중입니다…")
 
     def _on_lookup_progress_for_generation(self, generation, *args):
         if generation != self._lookup_generation:
@@ -325,9 +330,9 @@ class URLBatchDialog(QDialog):
         if row < len(self._parsed_entries):
             self._parsed_entries[row]["complex_id"] = str(cid or "")
             self._parsed_entries[row]["asset_type"] = asset_token
-        status_text = str(status or ("✅ 확인됨" if is_verified else "⚠️ 이름 미확인"))
+        status_text = str(status or ("확인됨" if is_verified else "이름 미확인"))
         self.result_table.setItem(row, 3, QTableWidgetItem(f"{status_text} ({asset_token})"))
-        self.status_label.setText(f"🔍 이름 조회 중... ({row + 1}/{total})")
+        self.status_label.setText(f"이름을 확인하는 중… ({row + 1}/{total})")
         QApplication.processEvents()
 
     def _on_lookup_finished_for_generation(self, generation, *args):
@@ -340,9 +345,9 @@ class URLBatchDialog(QDialog):
         self._set_parsing_state(False)
         total = self.result_table.rowCount()
         if cancelled:
-            self.status_label.setText(f"⏹ 조회 취소됨 ({processed}/{total})")
+            self.status_label.setText(f"확인을 멈췄습니다. ({processed}/{total})")
         else:
-            self.status_label.setText(f"✅ {processed}개 단지 분석 완료")
+            self.status_label.setText(f"단지 {processed}곳을 확인했습니다. 추가할 단지를 체크해 주세요.")
         self._cleanup_worker(wait=False)
 
     def _cleanup_worker(self, wait: bool):

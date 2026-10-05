@@ -74,9 +74,9 @@ COLORS = {
         "slider_handle_pressed": "#d97706",
         "slider_sub_page": "rgba(245, 158, 11, 0.5)",
         # EmptyState
-        "empty_icon_color": "#555",
-        "empty_title_color": "#888",
-        "empty_desc_color": "#666",
+        "empty_icon_color": "#6b6b80",
+        "empty_title_color": "#d4d4e0",
+        "empty_desc_color": "#9a9ab0",
         # SummaryCard
         "summary_bg": "#1e1e28",
         "summary_separator": "rgba(255, 255, 255, 0.08)",
@@ -164,8 +164,8 @@ COLORS = {
         "slider_sub_page": "rgba(14, 165, 233, 0.5)",
         # EmptyState
         "empty_icon_color": "#94a3b8",
-        "empty_title_color": "#64748b",
-        "empty_desc_color": "#94a3b8",
+        "empty_title_color": "#334155",
+        "empty_desc_color": "#64748b",
         # SummaryCard
         "summary_bg": "#ffffff",
         "summary_separator": "#e2e8f0",

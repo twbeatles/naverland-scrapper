@@ -19,11 +19,14 @@ class MultiSelectDialog(QDialog):
         # 상단 버튼
         btn_layout = QHBoxLayout()
         btn_all = QPushButton("전체 선택")
+        btn_all.setObjectName("secondaryBtn")
         btn_all.clicked.connect(self._select_all)
         btn_none = QPushButton("전체 해제")
+        btn_none.setObjectName("secondaryBtn")
         btn_none.clicked.connect(self._deselect_all)
         btn_layout.addWidget(btn_all)
         btn_layout.addWidget(btn_none)
+        btn_layout.addStretch()
         layout.addLayout(btn_layout)
         
         # 리스트
@@ -86,7 +89,7 @@ class AdvancedFilterDialog(QDialog):
     
     def __init__(self, parent=None, current_filters=None):
         super().__init__(parent)
-        self.setWindowTitle("🔍 고급 필터")
+        self.setWindowTitle("결과 상세 필터")
         self.setMinimumWidth(450)
         self._filters = None
         self._setup_ui()
@@ -97,7 +100,7 @@ class AdvancedFilterDialog(QDialog):
         layout = QVBoxLayout(self)
         
         # 가격 필터
-        price_group = QGroupBox("💰 가격 필터")
+        price_group = QGroupBox("가격")
         pg = QGridLayout(price_group)
         pg.addWidget(QLabel("최소 가격:"), 0, 0)
         self.price_min = QSpinBox()
@@ -115,7 +118,7 @@ class AdvancedFilterDialog(QDialog):
         layout.addWidget(price_group)
         
         # 면적 필터
-        area_group = QGroupBox("📐 면적 필터")
+        area_group = QGroupBox("면적")
         ag = QGridLayout(area_group)
         ag.addWidget(QLabel("최소 면적:"), 0, 0)
         self.area_min = QDoubleSpinBox()
@@ -132,7 +135,7 @@ class AdvancedFilterDialog(QDialog):
         layout.addWidget(area_group)
         
         # 층수 필터
-        floor_group = QGroupBox("🏢 층수 필터")
+        floor_group = QGroupBox("층")
         fg = QHBoxLayout(floor_group)
         self.floor_low = QCheckBox("저층")
         self.floor_mid = QCheckBox("중층")
@@ -147,11 +150,11 @@ class AdvancedFilterDialog(QDialog):
         layout.addWidget(floor_group)
         
         # 특수 필터
-        special_group = QGroupBox("⭐ 특수 필터")
+        special_group = QGroupBox("이런 매물만 보기")
         sg = QHBoxLayout(special_group)
-        self.only_new = QCheckBox("🆕 신규 매물만")
-        self.only_price_down = QCheckBox("📉 가격 하락만")
-        self.only_price_change = QCheckBox("📊 가격 변동만")
+        self.only_new = QCheckBox("새로 나온 매물")
+        self.only_price_down = QCheckBox("가격이 내린 매물")
+        self.only_price_change = QCheckBox("가격이 바뀐 매물")
         sg.addWidget(self.only_new)
         sg.addWidget(self.only_price_down)
         sg.addWidget(self.only_price_change)
@@ -159,26 +162,28 @@ class AdvancedFilterDialog(QDialog):
         layout.addWidget(special_group)
         
         # 키워드 필터
-        keyword_group = QGroupBox("🔤 키워드 필터")
+        keyword_group = QGroupBox("단어로 거르기")
         kg = QVBoxLayout(keyword_group)
-        kg.addWidget(QLabel("포함 키워드 (쉼표로 구분):"))
+        kg.addWidget(QLabel("이 단어가 들어간 매물만 (쉼표로 구분)"))
         self.include_keywords = QLineEdit()
         self.include_keywords.setPlaceholderText("예: 급매, 역세권, 올수리")
         kg.addWidget(self.include_keywords)
-        kg.addWidget(QLabel("제외 키워드 (쉼표로 구분):"))
+        kg.addWidget(QLabel("이 단어가 들어간 매물은 빼기 (쉼표로 구분)"))
         self.exclude_keywords = QLineEdit()
         self.exclude_keywords.setPlaceholderText("예: 반지하, 탑층")
         kg.addWidget(self.exclude_keywords)
-        self.include_all = QCheckBox("모든 포함 키워드를 만족해야 표시 (AND)")
-        self.include_all.setToolTip("끄면 포함 키워드 중 하나라도 있으면 표시합니다 (OR).")
+        self.include_all = QCheckBox("적은 단어가 모두 들어간 매물만 보기")
+        self.include_all.setToolTip("끄면 적은 단어 중 하나만 들어 있어도 보여 줍니다.")
         kg.addWidget(self.include_all)
         layout.addWidget(keyword_group)
         
         # 버튼
         btn_layout = QHBoxLayout()
-        btn_reset = QPushButton("초기화")
+        btn_reset = QPushButton("처음 상태로")
+        btn_reset.setObjectName("secondaryBtn")
         btn_reset.clicked.connect(self._reset)
         btn_apply = QPushButton("적용")
+        btn_apply.setObjectName("primaryBtn")
         btn_apply.clicked.connect(self._apply)
         btn_apply.setDefault(True)
         btn_layout.addWidget(btn_reset)

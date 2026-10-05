@@ -113,7 +113,7 @@ class AppLifecycleNotifyMixin:
             str(payload.get("자산유형", payload.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
         )
         if not complex_id or not article_id:
-            self.status_bar.showMessage("⏸ 매물 링크를 열 수 없습니다.")
+            self.status_bar.showMessage("이 매물은 주소 정보가 없어 열 수 없습니다.")
             return
 
         payload["단지ID"] = complex_id
@@ -132,20 +132,20 @@ class AppLifecycleNotifyMixin:
         raw_lat = region.get("latitude")
         raw_lon = region.get("longitude")
         if raw_lat is None or raw_lon is None:
-            self.status_bar.showMessage("⏸ 지역 좌표가 없어 지도 탭으로 이동할 수 없습니다.")
+            self.status_bar.showMessage("이 지역은 위치 정보가 없어 지도로 열 수 없습니다.")
             return
         try:
             lat = float(raw_lat)
             lon = float(raw_lon)
         except (TypeError, ValueError):
-            self.status_bar.showMessage("⏸ 지역 좌표가 올바르지 않습니다.")
+            self.status_bar.showMessage("이 지역의 위치 정보가 올바르지 않습니다.")
             return
         if not (33.0 <= lat <= 39.5 and 124.0 <= lon <= 132.1):
-            self.status_bar.showMessage("⏸ 유효 범위를 벗어난 지역 좌표입니다.")
+            self.status_bar.showMessage("이 지역의 위치가 국내 범위를 벗어나 사용할 수 없습니다.")
             return
         geo_tab = getattr(self, "geo_tab", None)
         if geo_tab is None:
-            self.status_bar.showMessage("⏸ 지도 탭을 찾을 수 없습니다.")
+            self.status_bar.showMessage("「지도로 찾기」 화면을 열 수 없습니다.")
             return
         try:
             zoom = int(settings.get("geo_default_zoom", 15) or 15)
@@ -164,17 +164,18 @@ class AppLifecycleNotifyMixin:
             dwell_ms=dwell_ms,
             asset_types=asset_types,
             persist_last=True,
+            region_name=name,
         )
         try:
             self.tabs.setCurrentWidget(geo_tab)
         except Exception as e:
             ui_logger.debug(f"지도 탭 전환 실패 (무시): {e}")
-        self.status_bar.showMessage(f"🗺 '{name or '선택 지역'}' 중심으로 지도 탭을 설정했습니다.")
+        self.status_bar.showMessage(f"「지도로 찾기」의 탐색 위치를 '{name or '선택한 지역'}'(으)로 정했습니다. 「탐색 시작」을 눌러 주세요.")
 
     def _show_recently_viewed_dialog(self: Any):
         """최근 본 매물 다이얼로그 (v13.0)"""
         dlg = QDialog(self)
-        dlg.setWindowTitle("🕐 최근 본 매물")
+        dlg.setWindowTitle("최근 본 매물")
         dlg.resize(900, 600)
         
         layout = QVBoxLayout(dlg)

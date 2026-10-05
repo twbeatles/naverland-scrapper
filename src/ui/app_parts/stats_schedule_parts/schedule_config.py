@@ -38,8 +38,8 @@ class AppStatsScheduleConfigMixin:
             str(config.get("mode", "complex") or "complex") == "geo_sweep"
             and not self._normalize_geo_asset_types(config["geo"].get("asset_types", []), default_to_all=False)
         ):
-            QMessageBox.warning(self, "경고", "최소 하나의 자산 유형(APT 또는 VL)을 선택해주세요.")
-            self.status_bar.showMessage("예약 Geo 설정 저장 중단: 최소 하나의 자산 유형을 선택해주세요.")
+            QMessageBox.warning(self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.")
+            self.status_bar.showMessage("예약 설정을 저장하지 않았습니다. 주택 종류를 하나 이상 선택해 주세요.")
             return settings.get("schedule_config", {}) or {}
         settings.update(
             {

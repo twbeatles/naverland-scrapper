@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QTimer
 
+from src.utils.ui_labels import asset_label
 from src.core.services.keyword_search import (
     KeywordBrowserSession,
     KeywordSearchError,
@@ -41,7 +42,7 @@ class _KeywordWorker(QObject):
         remaining = self._cooldown_until - _time.monotonic()
         if remaining <= 0:
             return ""
-        return f"요청 제한으로 {int(remaining) + 1}초 후 다시 시도해주세요. (429)"
+        return f"요청이 많아 잠시 쉬는 중입니다. {int(remaining) + 1}초 뒤에 다시 시도해 주세요."
 
     def _note_rate_limit(self):
         import time as _time
@@ -150,8 +151,10 @@ class KeywordSearchDialog(QDialog):
     request_suggest = pyqtSignal(str, int)
     request_search = pyqtSignal(str, int, int, bool)
 
-    def __init__(self, parent=None, session_factory=None):
+    def __init__(self, parent=None, session_factory=None, mode="complex"):
         super().__init__(parent)
+        # mode="region": 지도 탐색 위치를 고르는 용도 (지역 목록만 보여 준다).
+        self._mode = "region" if str(mode or "").lower() == "region" else "complex"
         self._session_factory = session_factory
         self._worker_thread = None
         self._worker = None
@@ -164,12 +167,16 @@ class KeywordSearchDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setWindowTitle("🔍 키워드 단지 검색")
+        self.setWindowTitle("지역 찾기" if self._mode == "region" else "단지 찾기")
         self.setMinimumSize(560, 600)
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        hint = QLabel("단지명·지역명으로 검색하면 네이버 검색 결과에서 단지를 골라 추가합니다.")
+        hint = QLabel(
+            "동·구 이름을 검색한 뒤 목록에서 탐색할 지역을 골라 주세요."
+            if self._mode == "region"
+            else "단지 이름이나 지역 이름으로 검색한 뒤, 수집할 단지를 체크해 추가하세요."
+        )
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -177,14 +184,18 @@ class KeywordSearchDialog(QDialog):
         search_row = QHBoxLayout()
         search_row.setSpacing(6)
         self.input_keyword = QLineEdit()
-        self.input_keyword.setPlaceholderText("예: 래미안 퍼스티지, 반포자이, e편한세상")
-        self.input_keyword.setToolTip("2글자 이상 입력하면 제안이 표시됩니다.")
+        self.input_keyword.setPlaceholderText(
+            "예: 반포동, 분당구, 해운대"
+            if self._mode == "region"
+            else "예: 래미안 퍼스티지, 반포자이, 반포동"
+        )
+        self.input_keyword.setToolTip("두 글자 이상 입력하면 추천 검색어가 나타납니다.")
         self.input_keyword.returnPressed.connect(self._run_search)
         self.input_keyword.textChanged.connect(self._on_keyword_text_changed)
         search_row.addWidget(self.input_keyword, 1)
         self.btn_search = QPushButton("검색")
         self.btn_search.setObjectName("primaryBtn")
-        self.btn_search.setToolTip("네이버에서 키워드를 검색합니다. (Enter)")
+        self.btn_search.setToolTip("네이버 부동산에서 검색합니다. (Enter)")
         self.btn_search.clicked.connect(self._run_search)
         search_row.addWidget(self.btn_search)
         layout.addLayout(search_row)
@@ -192,7 +203,7 @@ class KeywordSearchDialog(QDialog):
         self.suggest_list = QListWidget()
         self.suggest_list.setMaximumHeight(120)
         self.suggest_list.setAlternatingRowColors(True)
-        self.suggest_list.setToolTip("제안을 클릭하면 바로 검색합니다.")
+        self.suggest_list.setToolTip("추천 검색어를 누르면 바로 검색합니다.")
         self.suggest_list.itemClicked.connect(self._on_suggest_clicked)
         self.suggest_list.hide()
         layout.addWidget(self.suggest_list)
@@ -225,15 +236,16 @@ class KeywordSearchDialog(QDialog):
         region_layout.setContentsMargins(0, 4, 0, 0)
         region_layout.addWidget(self.region_list)
         region_btns = QHBoxLayout()
-        self.btn_region_map = QPushButton("🗺 선택 지역을 지도 탭에서 보기")
+        self.btn_region_map = QPushButton("이 지역 주변을 「지도로 찾기」로 탐색")
         self.btn_region_map.setObjectName("secondaryBtn")
-        self.btn_region_map.setToolTip("지역 중심 좌표를 지도 탭에 설정합니다.")
+        self.btn_region_map.setToolTip("고른 지역을 「지도로 찾기」 화면의 탐색 위치로 정합니다.")
         self.btn_region_map.clicked.connect(self._emit_region)
         region_btns.addWidget(self.btn_region_map)
         region_btns.addStretch()
         region_layout.addLayout(region_btns)
         self.tabs.addTab(region_page, "지역")
         layout.addWidget(self.tabs, 1)
+        self.region_list.itemDoubleClicked.connect(lambda *_: self._emit_region())
 
         self.status_label = QLabel("검색어를 입력하세요.")
         self.status_label.setObjectName("hintLabel")
@@ -242,7 +254,7 @@ class KeywordSearchDialog(QDialog):
         bottom = QHBoxLayout()
         self.btn_more = QPushButton("더 보기")
         self.btn_more.setObjectName("secondaryBtn")
-        self.btn_more.setToolTip("다음 페이지 결과를 이어서 불러옵니다.")
+        self.btn_more.setToolTip("검색 결과를 더 불러옵니다.")
         self.btn_more.clicked.connect(self._load_more)
         self.btn_more.setEnabled(False)
         bottom.addWidget(self.btn_more)
@@ -251,12 +263,24 @@ class KeywordSearchDialog(QDialog):
         self.btn_close.setObjectName("secondaryBtn")
         self.btn_close.clicked.connect(self.reject)
         bottom.addWidget(self.btn_close)
-        self.btn_add = QPushButton("📥 선택 단지 추가")
+        self.btn_add = QPushButton("체크한 단지 추가")
         self.btn_add.setObjectName("primaryBtn")
         self.btn_add.setToolTip("체크한 단지를 수집 목록에 추가합니다.")
         self.btn_add.clicked.connect(self._emit_complexes)
         bottom.addWidget(self.btn_add)
         layout.addLayout(bottom)
+
+        if self._mode == "region":
+            self.tabs.setTabVisible(0, False)
+            self.tabs.setCurrentIndex(1)
+            self.btn_add.hide()
+            self.btn_region_map.setText("이 지역으로 정하기")
+            self.btn_region_map.setObjectName("primaryBtn")
+            region_style = self.btn_region_map.style()
+            if region_style is not None:
+                region_style.unpolish(self.btn_region_map)
+                region_style.polish(self.btn_region_map)
+            self.btn_region_map.setToolTip("고른 지역을 탐색 위치로 정합니다. (두 번 눌러도 됩니다)")
 
         self._suggest_timer = QTimer(self)
         self._suggest_timer.setSingleShot(True)
@@ -343,7 +367,7 @@ class KeywordSearchDialog(QDialog):
     def _run_search(self):
         keyword = self.input_keyword.text().strip()
         if not keyword:
-            QMessageBox.warning(self, "입력 필요", "검색어를 입력하세요.")
+            QMessageBox.warning(self, "검색어를 입력해 주세요", "찾을 이름을 입력해 주세요.")
             return
         if self._busy:
             return
@@ -354,13 +378,13 @@ class KeywordSearchDialog(QDialog):
         self._has_more = False
         self.complex_list.clear()
         self.region_list.clear()
-        self._set_busy(True, f"🔍 '{keyword}' 검색 중...")
+        self._set_busy(True, f"'{keyword}' 검색 중...")
         self.request_search.emit(keyword, 1, self._search_generation, False)
 
     def _load_more(self):
         if self._busy or not self._has_more or not self._keyword:
             return
-        self._set_busy(True, f"🔍 '{self._keyword}' {self._next_page}페이지 불러오는 중...")
+        self._set_busy(True, f"'{self._keyword}' {self._next_page}페이지 불러오는 중...")
         self.request_search.emit(self._keyword, self._next_page, self._search_generation, True)
 
     def _set_busy(self, busy: bool, status: str = ""):
@@ -382,7 +406,7 @@ class KeywordSearchDialog(QDialog):
             name = str(item.get("name", "") or f"단지_{cid}")
             address = str(item.get("address", "") or "")
             asset = str(item.get("asset_type", "APT") or "APT")
-            text = f"{name}  [{asset}:{cid}]" + (f"\n{address}" if address else "")
+            text = f"{name}  ·  {asset_label(asset)}" + (f"\n{address}" if address else "")
             row = QListWidgetItem(text)
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             row.setCheckState(Qt.CheckState.Unchecked)
@@ -394,22 +418,30 @@ class KeywordSearchDialog(QDialog):
             row.setData(Qt.ItemDataRole.UserRole, dict(item))
             lat, lon = item.get("latitude"), item.get("longitude")
             if lat is not None and lon is not None:
-                row.setToolTip(f"중심 좌표: {lat}, {lon}")
+                row.setToolTip("이 지역을 탐색 위치로 쓸 수 있습니다.")
+            else:
+                row.setToolTip("위치 정보가 없는 지역입니다.")
             self.region_list.addItem(row)
         self._has_more = bool(result.get("is_more_data"))
         if self._has_more:
             self._next_page += 1
         n_complex = self.complex_list.count()
         n_region = self.region_list.count()
-        self.tabs.setTabText(0, f"단지({n_complex})")
-        self.tabs.setTabText(1, f"지역({n_region})")
+        self.tabs.setTabText(0, f"단지 {n_complex}")
+        self.tabs.setTabText(1, f"지역 {n_region}")
+        if self._mode != "region" and n_complex == 0 and n_region > 0:
+            self.tabs.setCurrentIndex(1)
         self._set_busy(False)
         if n_complex == 0 and n_region == 0:
-            self.status_label.setText(f"'{self._keyword}' 결과가 없습니다. 다른 키워드로 검색해 보세요.")
+            self.status_label.setText(f"'{self._keyword}' 결과가 없습니다. 다른 이름으로 검색해 보세요.")
         else:
             self.status_label.setText(
-                f"'{self._keyword}' 단지 {n_complex}개 · 지역 {n_region}개"
-                + (" · 더 보기 가능" if self._has_more else "")
+                (
+                    f"'{self._keyword}' 지역 {n_region}곳"
+                    if self._mode == "region"
+                    else f"'{self._keyword}' 단지 {n_complex}곳 · 지역 {n_region}곳"
+                )
+                + (" · 「더 보기」로 더 불러올 수 있습니다" if self._has_more else "")
             )
 
     @pyqtSlot(str, int, str)
@@ -418,11 +450,11 @@ class KeywordSearchDialog(QDialog):
             if generation != self._search_generation:
                 return
             self._set_busy(False)
-            self.status_label.setText(f"⚠️ 검색 실패: {message or '알 수 없는 오류'}")
+            self.status_label.setText(f"검색하지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
             return
         if generation != self._generation or self._busy:
             return
-        self.status_label.setText(f"⚠️ 제안 조회 실패: {message or '알 수 없는 오류'}")
+        self.status_label.setText(f"추천 검색어를 불러오지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
 
     def _set_all_checked(self, checked: bool):
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
@@ -445,7 +477,7 @@ class KeywordSearchDialog(QDialog):
     def _emit_complexes(self):
         selected = self.checked_complexes()
         if not selected:
-            QMessageBox.information(self, "선택 없음", "추가할 단지를 체크하세요.")
+            QMessageBox.information(self, "단지를 체크해 주세요", "목록에서 추가할 단지를 체크해 주세요.")
             return
         self.complexes_added.emit(selected)
         self.accept()
@@ -453,7 +485,7 @@ class KeywordSearchDialog(QDialog):
     def _emit_region(self):
         item = self.region_list.currentItem()
         if item is None:
-            QMessageBox.information(self, "선택 없음", "지역 탭에서 지역을 선택하세요.")
+            QMessageBox.information(self, "지역을 골라 주세요", "「지역」 목록에서 지역을 하나 골라 주세요.")
             return
         self.region_chosen.emit(dict(item.data(Qt.ItemDataRole.UserRole) or {}))
         self.accept()
@@ -468,7 +500,7 @@ class RecentSearchDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        self.setWindowTitle("🕐 최근 검색 기록")
+        self.setWindowTitle("최근 수집 조건")
         self.setMinimumSize(500, 400)
         layout = QVBoxLayout(self)
 
@@ -478,9 +510,11 @@ class RecentSearchDialog(QDialog):
         layout.addWidget(self.list)
 
         btn_layout = QHBoxLayout()
-        btn_load = QPushButton("📂 불러오기")
+        btn_load = QPushButton("불러오기")
+        btn_load.setObjectName("primaryBtn")
         btn_load.clicked.connect(self._load)
-        btn_clear = QPushButton("🗑️ 기록 지우기")
+        btn_clear = QPushButton("기록 지우기")
+        btn_clear.setObjectName("secondaryBtn")
         btn_clear.clicked.connect(self._clear)
         btn_layout.addWidget(btn_load)
         btn_layout.addWidget(btn_clear)
@@ -496,7 +530,7 @@ class RecentSearchDialog(QDialog):
                 complexes = h.get('complexes', [])
                 types = h.get('trade_types', [])
                 timestamp = h.get('timestamp', '')
-                text = f"[{timestamp}] {len(complexes)}개 단지 - {', '.join(types)}"
+                text = f"{timestamp}  ·  단지 {len(complexes)}곳  ·  {', '.join(types)}"
                 item = QListWidgetItem(text)
                 item.setData(Qt.ItemDataRole.UserRole, h)
                 self.list.addItem(item)

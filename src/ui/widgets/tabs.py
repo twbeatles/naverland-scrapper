@@ -22,67 +22,73 @@ class FavoritesTab(QWidget):
         self._setup_ui()
     
     def _setup_ui(self):
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.widgets.components import build_page_header
+
         layout = QVBoxLayout(self)
-        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM, SPACE_XS as _XS
-        layout.setContentsMargins(_PM, _GG, _PM, _GG)
-        layout.setSpacing(_XS)
-        
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_SM)
+
         header = QHBoxLayout()
-        title = QLabel("즐겨찾기")
-        from src.ui.fluent.design_tokens import FONT_PAGE_TITLE as _PT
-        title.setStyleSheet(f"font-size: {_PT}px; font-weight: 600;")
-        header.addWidget(title)
-        header.addStretch()
-        
+        header.addWidget(
+            build_page_header("즐겨찾기", "눈여겨볼 매물을 모아 두고 메모를 남길 수 있습니다."), 1
+        )
         refresh_btn = QPushButton("새로고침")
         refresh_btn.setObjectName("secondaryBtn")
+        refresh_btn.setToolTip("목록을 다시 불러옵니다. (F5)")
         refresh_btn.clicked.connect(self.refresh)
-        header.addWidget(refresh_btn)
-        
+        header.addWidget(refresh_btn, 0, Qt.AlignmentFlag.AlignBottom)
         layout.addLayout(header)
-        
+
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "단지명", "거래유형", "가격", "면적", "층/방향", "메모", "추가일"
+            "단지 이름", "거래 종류", "가격", "면적", "층/방향", "메모", "담은 날"
         ])
         favorites_header = self.table.horizontalHeader()
         if favorites_header is not None:
-            favorites_header.setStretchLastSection(True)
+            favorites_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setToolTip("두 번 누르면 네이버 부동산 매물 페이지를 엽니다.")
         self.table.itemSelectionChanged.connect(self._update_action_state)
+        self.table.doubleClicked.connect(lambda *_: self._open_article())
         layout.addWidget(self.table, 1)
 
         self.empty_label = EmptyStateWidget(
             icon="HEART",
-            title="즐겨찾기 매물이 없습니다",
-            description="결과 카드·표에서 별 아이콘을 눌러 추가하세요.",
+            title="즐겨찾기한 매물이 없습니다",
+            description="수집 결과를 「카드로 보기」로 바꾼 뒤 카드의 별(☆)을 누르면 여기에 담깁니다.",
         )
         self.empty_label.hide()
-        layout.addWidget(self.empty_label)
-        
+        layout.addWidget(self.empty_label, 1)
+
         btn_layout = QHBoxLayout()
-        
-        self.note_btn = QPushButton("메모 편집")
+        btn_layout.setSpacing(_XS)
+
+        self.note_btn = QPushButton("메모 고치기")
         self.note_btn.setObjectName("secondaryBtn")
         self.note_btn.clicked.connect(self._edit_note)
         btn_layout.addWidget(self.note_btn)
-        
-        self.remove_btn = QPushButton("즐겨찾기 해제")
-        self.remove_btn.setObjectName("dangerBtn")
+
+        self.remove_btn = QPushButton("즐겨찾기에서 빼기")
+        self.remove_btn.setObjectName("secondaryBtn")
         self.remove_btn.clicked.connect(self._remove_favorite)
         btn_layout.addWidget(self.remove_btn)
-        
+
         btn_layout.addStretch()
-        
-        self.open_btn = QPushButton("매물 페이지 열기")
+
+        self.open_btn = QPushButton("네이버 부동산에서 보기")
         self.open_btn.setObjectName("primaryBtn")
         self.open_btn.clicked.connect(self._open_article)
         btn_layout.addWidget(self.open_btn)
-        
-        layout.addLayout(btn_layout)
-    
+
+        self.action_row = QWidget()
+        self.action_row.setLayout(btn_layout)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.action_row)
+
     def set_theme(self, theme: str):
         """테마 변경"""
         self._theme = theme
@@ -138,7 +144,8 @@ class FavoritesTab(QWidget):
     def _update_empty_state(self, count):
         is_empty = count == 0
         self.empty_label.setVisible(is_empty)
-        self.table.setEnabled(not is_empty)
+        self.table.setVisible(not is_empty)
+        self.action_row.setVisible(not is_empty)
     
     def _edit_note(self):
         """메모 편집"""
@@ -155,7 +162,7 @@ class FavoritesTab(QWidget):
             return
         
         note, ok = QInputDialog.getText(
-            self, "메모 편집", "메모:", 
+            self, "메모 고치기", "이 매물에 남길 메모", 
             text=item_data.get("note", "")
         )
         if ok:

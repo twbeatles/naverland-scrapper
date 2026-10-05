@@ -11,7 +11,7 @@ class ExcelTemplateDialog(QDialog):
     
     def __init__(self, parent=None, current_template=None):
         super().__init__(parent)
-        self.setWindowTitle("📊 엑셀 템플릿 설정")
+        self.setWindowTitle("엑셀에 담을 항목")
         self.setMinimumSize(400, 500)
         self._columns, self._order = self._normalize_template(current_template)
         self._setup_ui()
@@ -19,7 +19,9 @@ class ExcelTemplateDialog(QDialog):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         
-        info = QLabel("내보낼 컬럼을 선택하고 순서를 조정하세요:")
+        info = QLabel("엑셀·CSV에 담을 항목을 체크하세요. 끌어서 옮기면 순서가 바뀝니다.")
+        info.setObjectName("hintLabel")
+        info.setWordWrap(True)
         layout.addWidget(info)
         
         # 컬럼 목록
@@ -36,9 +38,11 @@ class ExcelTemplateDialog(QDialog):
         
         # 순서 조정 버튼
         order_layout = QHBoxLayout()
-        btn_up = QPushButton("⬆️ 위로")
+        btn_up = QPushButton("위로")
+        btn_up.setObjectName("secondaryBtn")
         btn_up.clicked.connect(self._move_up)
-        btn_down = QPushButton("⬇️ 아래로")
+        btn_down = QPushButton("아래로")
+        btn_down.setObjectName("secondaryBtn")
         btn_down.clicked.connect(self._move_down)
         order_layout.addWidget(btn_up)
         order_layout.addWidget(btn_down)
@@ -48,10 +52,13 @@ class ExcelTemplateDialog(QDialog):
         # 전체 선택/해제
         select_layout = QHBoxLayout()
         btn_all = QPushButton("전체 선택")
+        btn_all.setObjectName("secondaryBtn")
         btn_all.clicked.connect(lambda: self._set_all(True))
         btn_none = QPushButton("전체 해제")
+        btn_none.setObjectName("secondaryBtn")
         btn_none.clicked.connect(lambda: self._set_all(False))
-        btn_reset = QPushButton("기본값")
+        btn_reset = QPushButton("처음 상태로")
+        btn_reset.setObjectName("secondaryBtn")
         btn_reset.clicked.connect(self._reset)
         select_layout.addWidget(btn_all)
         select_layout.addWidget(btn_none)
@@ -60,7 +67,8 @@ class ExcelTemplateDialog(QDialog):
         layout.addLayout(select_layout)
         
         # 저장 버튼
-        btn_save = QPushButton("💾 저장")
+        btn_save = QPushButton("저장")
+        btn_save.setObjectName("primaryBtn")
         btn_save.clicked.connect(self._save)
         layout.addWidget(btn_save)
     

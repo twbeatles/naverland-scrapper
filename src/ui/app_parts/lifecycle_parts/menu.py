@@ -14,10 +14,9 @@ class AppLifecycleMenuMixin:
         
         # 파일 메뉴
         file_menu = menubar.addMenu("파일")
-        file_menu.setIcon(FIF.FOLDER.icon())
-        self.action_backup_db = file_menu.addAction("DB 백업", self._backup_db)
+        self.action_backup_db = file_menu.addAction("데이터 백업…", self._backup_db)
         self.action_backup_db.setIcon(FIF.SAVE.icon())
-        self.action_restore_db = file_menu.addAction("DB 복원", self._restore_db)
+        self.action_restore_db = file_menu.addAction("백업에서 복원…", self._restore_db)
         self.action_restore_db.setIcon(FIF.FOLDER.icon())
         file_menu.addSeparator()
         self.action_settings = file_menu.addAction("설정", self._show_settings)
@@ -27,7 +26,6 @@ class AppLifecycleMenuMixin:
         
         # 보기 메뉴 (v13.0)
         view_menu = menubar.addMenu("보기")
-        view_menu.setIcon(FIF.VIEW.icon())
         self.action_recently_viewed = view_menu.addAction("최근 본 매물", self._show_recently_viewed_dialog)
         self.action_recently_viewed.setIcon(FIF.HISTORY.icon())
         view_menu.addSeparator()
@@ -35,43 +33,40 @@ class AppLifecycleMenuMixin:
         # 테마 메뉴
         theme_menu = view_menu.addMenu("테마")
         theme_menu.setIcon(FIF.PALETTE.icon())
-        self.action_theme_dark = QAction("다크 모드", self)
+        self.action_theme_dark = QAction("어두운 테마", self)
         self.action_theme_dark.setCheckable(True)
         self.action_theme_dark.setChecked(self.current_theme == "dark")
         self.action_theme_dark.triggered.connect(lambda: self._toggle_theme("dark"))
         theme_menu.addAction(self.action_theme_dark)
         
-        self.action_theme_light = QAction("라이트 모드", self)
+        self.action_theme_light = QAction("밝은 테마", self)
         self.action_theme_light.setCheckable(True)
         self.action_theme_light.setChecked(self.current_theme == "light")
         self.action_theme_light.triggered.connect(lambda: self._toggle_theme("light"))
         theme_menu.addAction(self.action_theme_light)
         
         # 필터 메뉴
-        filter_menu = menubar.addMenu("필터")
-        filter_menu.setIcon(FIF.FILTER.icon())
-        self.action_save_preset = filter_menu.addAction("현재 필터 저장", self._save_preset)
+        filter_menu = menubar.addMenu("수집 조건")
+        self.action_save_preset = filter_menu.addAction("지금 조건 저장…", self._save_preset)
         self.action_save_preset.setIcon(FIF.SAVE.icon())
-        self.action_load_preset = filter_menu.addAction("필터 불러오기", self._load_preset)
+        self.action_load_preset = filter_menu.addAction("저장한 조건 불러오기…", self._load_preset)
         self.action_load_preset.setIcon(FIF.FOLDER.icon())
         filter_menu.addSeparator()
-        self.action_advanced_filter = filter_menu.addAction("고급 결과 필터", self._show_advanced_filter)
+        self.action_advanced_filter = filter_menu.addAction("결과 상세 필터…", self._show_advanced_filter)
         self.action_advanced_filter.setIcon(FIF.FILTER.icon())
-        self.action_clear_advanced_filter = filter_menu.addAction("고급 필터 해제", self._clear_advanced_filter)
+        self.action_clear_advanced_filter = filter_menu.addAction("결과 상세 필터 풀기", self._clear_advanced_filter)
         self.action_clear_advanced_filter.setIcon(FIF.CLOSE.icon())
         
         # 알림 메뉴
         alert_menu = menubar.addMenu("알림")
-        alert_menu.setIcon(FIF.RINGER.icon())
-        self.action_alert_settings = alert_menu.addAction("알림 설정", self._show_alert_settings)
+        self.action_alert_settings = alert_menu.addAction("가격 알림 설정…", self._show_alert_settings)
         self.action_alert_settings.setIcon(FIF.SETTING.icon())
         
         # 도움말 메뉴
         help_menu = menubar.addMenu("도움말")
-        help_menu.setIcon(FIF.HELP.icon())
         self.action_shortcuts = help_menu.addAction("단축키", self._show_shortcuts)
         self.action_shortcuts.setIcon(FIF.INFO.icon())
-        self.action_about = help_menu.addAction("정보", self._show_about)
+        self.action_about = help_menu.addAction("프로그램 정보", self._show_about)
         self.action_about.setIcon(FIF.INFO.icon())
 
     def _show_shortcuts(self: Any):

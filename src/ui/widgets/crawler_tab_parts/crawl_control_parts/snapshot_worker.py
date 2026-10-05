@@ -20,7 +20,7 @@ class CrawlerTabSnapshotWorkerMixin:
 
         rows = build_price_snapshot_rows(items)
         saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
-        self.append_log(f"📊 가격 스냅샷 {saved}건 저장", 10)
+        self.append_log(f"가격 변화 기록 {saved}건을 저장했습니다.", 10)
         return int(saved or 0)
 
     def _start_price_snapshot_worker(self: Any, items):
@@ -28,7 +28,7 @@ class CrawlerTabSnapshotWorkerMixin:
         if worker is not None:
             try:
                 if worker.isRunning():
-                    self.append_log("⏳ 가격 스냅샷 저장이 이미 진행 중입니다.", 10)
+                    self.append_log("가격 변화 기록을 이미 저장하는 중입니다.", 10)
                     return 0
             except Exception:
                 pass
@@ -39,7 +39,7 @@ class CrawlerTabSnapshotWorkerMixin:
         worker.failed_signal.connect(self._on_price_snapshot_failed)
         worker.finished.connect(lambda: setattr(self, "_price_snapshot_worker", None))
         worker.start()
-        self.append_log("📊 가격 스냅샷 저장을 백그라운드에서 진행합니다.", 10)
+        self.append_log("가격 변화 기록을 저장하는 중입니다.", 10)
         return 0
 
     def _wait_for_snapshot_worker(self: Any, timeout_ms: int = 5000) -> bool:
@@ -63,13 +63,13 @@ class CrawlerTabSnapshotWorkerMixin:
             return True
         if not finished:
             try:
-                self.append_log(f"⚠️ 스냅샷 저장 종료 대기 타임아웃 ({wait_ms}ms)", 30)
+                self.append_log("가격 변화 기록 저장이 제때 끝나지 않았습니다.", 30)
             except Exception:
                 pass
         return finished
 
     def _on_price_snapshot_saved(self: Any, saved: int):
-        self.append_log(f"📊 가격 스냅샷 {int(saved or 0)}건 저장", 10)
+        self.append_log(f"가격 변화 기록 {int(saved or 0)}건을 저장했습니다.", 10)
 
     def _on_price_snapshot_failed(self: Any, message: str):
-        self.append_log(f"⚠️ 가격 스냅샷 저장 실패: {message}", 30)
+        self.append_log(f"가격 변화 기록을 저장하지 못했습니다: {message}", 30)

@@ -49,7 +49,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         self.assertIn("화면 안내", guide_html)
         self.assertIn("메뉴 안내", guide_html)
         self.assertIn("매물 수집", guide_html)
-        self.assertIn("DB 백업", guide_html)
+        self.assertIn("데이터 백업", guide_html)
 
         if hasattr(w, "schedule_timer") and w.schedule_timer:
             w.schedule_timer.stop()
@@ -451,7 +451,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             status_item = dlg.result_table.item(0, 3)
             self.assertIsNotNone(status_item)
             assert status_item is not None
-            self.assertIn("역조회 실패", status_item.text())
+            self.assertIn("단지를 찾지 못함", status_item.text())
             mock_fetch_name.assert_not_called()
 
             dlg.deleteLater()

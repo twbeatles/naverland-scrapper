@@ -79,17 +79,15 @@ class DashboardWidget(QWidget):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(0, 0, 0, 0)
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
         layout.setSpacing(_SM)
         
         from src.ui.fluent.design_tokens import FONT_PAGE_TITLE as _PT
-        title = QLabel("분석 대시보드")
-        title.setStyleSheet(
-            f"font-size: {_PT}px; font-weight: 600; padding: 6px 0 2px 0;"
-        )
+        title = QLabel("대시보드")
+        title.setObjectName("pageTitle")
         layout.addWidget(title)
-        subtitle = QLabel("최근 수집 결과 기준 요약입니다. 상세 시세는 「가격 통계」에서 확인하세요.")
+        subtitle = QLabel("방금 수집한 결과를 한눈에 요약합니다. 날짜별 가격 흐름은 「가격 통계」에서 볼 수 있습니다.")
         subtitle.setObjectName("hintLabel")
         subtitle.setWordWrap(True)
         self._subtitle = subtitle
@@ -102,11 +100,11 @@ class DashboardWidget(QWidget):
         self.cards_layout.setSpacing(12)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.total_card = self._create_stat_card("총 매물", "0", "#3b82f6")
+        self.total_card = self._create_stat_card("전체 매물", "0", "#3b82f6")
         self.new_card = self._create_stat_card("신규", "0", "#22c55e")
         self.up_card = self._create_stat_card("가격 상승", "0", "#ef4444")
         self.down_card = self._create_stat_card("가격 하락", "0", "#10b981")
-        self.disappeared_card = self._create_stat_card("소멸", "0", "#6b7280")
+        self.disappeared_card = self._create_stat_card("사라진 매물", "0", "#6b7280")
         
         self._stat_cards = [
             self.total_card, self.new_card, self.up_card, self.down_card, self.disappeared_card
@@ -118,36 +116,36 @@ class DashboardWidget(QWidget):
         charts_layout = QHBoxLayout()
         charts_layout.setSpacing(12)
         
-        self.trade_chart_frame = QGroupBox("거래유형별 분포")
+        self.trade_chart_frame = QGroupBox("거래 종류별 매물 수")
         self._trade_chart_layout = QVBoxLayout(self.trade_chart_frame)
-        self._trade_placeholder = QLabel("데이터 수집 후 차트가 표시됩니다.")
+        self._trade_placeholder = QLabel("수집하면 그래프가 나타납니다.")
         self._trade_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._trade_chart_layout.addWidget(self._trade_placeholder)
         charts_layout.addWidget(self.trade_chart_frame)
         
-        self.price_chart_frame = QGroupBox("가격대별 분포")
+        self.price_chart_frame = QGroupBox("가격대별 매물 수")
         self._price_chart_layout = QVBoxLayout(self.price_chart_frame)
-        self._price_placeholder = QLabel("데이터 수집 후 차트가 표시됩니다.")
+        self._price_placeholder = QLabel("수집하면 그래프가 나타납니다.")
         self._price_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._price_chart_layout.addWidget(self._price_placeholder)
         charts_layout.addWidget(self.price_chart_frame)
         
         layout.addLayout(charts_layout)
         
-        self.trend_frame = QGroupBox("시세 트렌드")
+        self.trend_frame = QGroupBox("한눈에 보기")
         trend_layout = QVBoxLayout(self.trend_frame)
-        self.trend_label = QLabel("데이터 수집 후 트렌드 정보가 표시됩니다.")
+        self.trend_label = QLabel("수집하면 요약이 나타납니다.")
         self.trend_label.setWordWrap(True)
         trend_layout.addWidget(self.trend_label)
         layout.addWidget(self.trend_frame)
         self.trend_frame.setVisible(bool(settings.get("show_trend_analysis", True)))
 
         self.empty_label = EmptyStateWidget(
-            icon="DOCUMENT",
-            title="아직 수집된 데이터가 없습니다",
-            description="「매물 수집」을 실행한 뒤 이 화면에서 요약을 확인하세요.",
+            icon="PIE_SINGLE",
+            title="아직 요약할 매물이 없습니다",
+            description="「매물 수집」이나 「지도로 찾기」에서 수집하면 이 화면에 요약이 나타납니다.",
         )
-        layout.addWidget(self.empty_label)
+        layout.addWidget(self.empty_label, 1)
         self.empty_label.hide()
         
         layout.addStretch()
@@ -158,9 +156,9 @@ class DashboardWidget(QWidget):
     def _ensure_chart_canvases(self):
         if not MATPLOTLIB_AVAILABLE or Figure is None or FigureCanvas is None:
             if self._trade_placeholder is not None:
-                self._trade_placeholder.setText("Matplotlib 필요")
+                self._trade_placeholder.setText("그래프 구성요소가 없어 표시할 수 없습니다.")
             if self._price_placeholder is not None:
-                self._price_placeholder.setText("Matplotlib 필요")
+                self._price_placeholder.setText("그래프 구성요소가 없어 표시할 수 없습니다.")
             return False
         if self.trade_canvas is not None and self.price_canvas is not None:
             return True
@@ -262,7 +260,7 @@ class DashboardWidget(QWidget):
         except Exception as e:
             logger.debug(f"소멸 매물 개수 조회 실패 (무시): {e}")
             disappeared = 0
-            self._emit_warning("대시보드 소멸 통계를 불러오지 못했습니다.")
+            self._emit_warning("사라진 매물 수를 불러오지 못했습니다.")
 
         self._disappeared_cache_value = disappeared
         self._disappeared_cache_revision = self._data_revision
@@ -339,7 +337,7 @@ class DashboardWidget(QWidget):
         self._last_price_chart_sig = None
         self._clear_chart(self.trade_figure, self.trade_canvas, self._trade_placeholder, "데이터가 없습니다.")
         self._clear_chart(self.price_figure, self.price_canvas, self._price_placeholder, "데이터가 없습니다.")
-        self.trend_label.setText("총 매물 0건\n신규 0건 · 상승 0건 · 하락 0건 · 소멸 0건\n최다 거래유형: 없음")
+        self.trend_label.setText("총 매물 0건\n신규 0건 · 상승 0건 · 하락 0건 · 사라짐 0건\n가장 많은 거래 종류: 없음")
 
     @staticmethod
     def _dominant_trade_type(trade_counts: dict) -> str:
@@ -360,15 +358,19 @@ class DashboardWidget(QWidget):
             f"신규 {int(stats.get('new_count', 0) or 0)}건 · "
             f"상승 {int(stats.get('price_up', 0) or 0)}건 · "
             f"하락 {int(stats.get('price_down', 0) or 0)}건 · "
-            f"소멸 {int(disappeared_count or 0)}건\n"
-            f"최다 거래유형: {self._dominant_trade_type(stats.get('trade_counts', {}))}"
+            f"사라짐 {int(disappeared_count or 0)}건\n"
+            f"가장 많은 거래 종류: {self._dominant_trade_type(stats.get('trade_counts', {}))}"
         )
     
     def refresh(self):
         """대시보드 새로고침"""
         show_trend = bool(settings.get("show_trend_analysis", True))
-        self.trend_frame.setVisible(show_trend)
-        if not self._data:
+        has_data = bool(self._data)
+        # 비어 있을 때는 0으로 가득한 카드 대신 안내만 보여 준다.
+        for body in (self.cards_container, self.trade_chart_frame, self.price_chart_frame):
+            body.setVisible(has_data)
+        self.trend_frame.setVisible(show_trend and has_data)
+        if not has_data:
             self._clear_dashboard()
             self.empty_label.show()
             return

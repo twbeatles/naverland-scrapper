@@ -18,14 +18,14 @@ class AppLifecycleShutdownMixin:
             if not ok:
                 self._is_shutting_down = False
                 ui_logger.warning("크롤링 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
-                self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 앱 종료를 시도하세요.")
+                self.status_bar.showMessage("수집이 아직 멈추지 않았습니다. 잠시 후 다시 종료해 주세요.")
                 return False
         if hasattr(self, "geo_tab"):
             ok = self.geo_tab.shutdown_crawl(timeout_ms=8000)
             if not ok:
                 self._is_shutting_down = False
                 ui_logger.warning("지도 탐색 스레드 종료 타임아웃으로 앱 종료를 중단합니다.")
-                self.status_bar.showMessage("⚠️ 지도 탐색 종료 후 다시 앱 종료를 시도하세요.")
+                self.status_bar.showMessage("지도 탐색이 아직 멈추지 않았습니다. 잠시 후 다시 종료해 주세요.")
                 return False
         # Ensure process-wide crawl mutex never sticks after forced exit paths.
         try:
@@ -75,13 +75,13 @@ class AppLifecycleShutdownMixin:
 
     def _quit_app(self: Any, skip_confirm=False):
         if not skip_confirm and settings.get("confirm_before_close"):
-            if QMessageBox.question(self, "종료", "정말 종료하시겠습니까?") != QMessageBox.StandardButton.Yes:
+            if QMessageBox.question(self, "종료", "프로그램을 종료할까요?\n진행 중인 수집이 있으면 멈춥니다.") != QMessageBox.StandardButton.Yes:
                 return
         if not self._shutdown():
             QMessageBox.warning(
                 self,
-                "종료 중단",
-                "크롤링 스레드가 아직 종료되지 않아 앱 종료를 중단했습니다.\n잠시 후 다시 시도해주세요.",
+                "아직 종료할 수 없습니다",
+                "진행 중인 수집이 아직 멈추지 않았습니다.\n잠시 후 다시 종료해 주세요.",
             )
             return
         QApplication.quit()
@@ -117,9 +117,9 @@ class AppLifecycleShutdownMixin:
         if not asked_confirmation:
             QMessageBox.warning(
                 self,
-                "종료 중단",
-                "크롤링 스레드가 아직 종료되지 않아 창 닫기를 취소했습니다.\n잠시 후 다시 시도해주세요.",
+                "아직 닫을 수 없습니다",
+                "진행 중인 수집이 아직 멈추지 않았습니다.\n잠시 후 다시 닫아 주세요.",
             )
         else:
-            self.status_bar.showMessage("⚠️ 크롤링 종료 후 다시 창 닫기를 시도하세요.")
+            self.status_bar.showMessage("수집이 아직 멈추지 않았습니다. 잠시 후 다시 닫아 주세요.")
         event.ignore()

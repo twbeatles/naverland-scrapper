@@ -13,14 +13,19 @@ class CrawlerTabDialogOpsMixin:
     def _show_db_load_dialog(self: Any):
         complexes = self.db.get_all_complexes()
         if not complexes:
-            QMessageBox.information(self, "알림", "저장된 단지가 없습니다.")
+            QMessageBox.information(self, "내 단지가 비어 있습니다", "아직 저장한 단지가 없습니다.\n단지를 추가한 뒤 「내 단지에 저장」을 눌러 두면 다음부터 여기서 불러올 수 있습니다.")
             return
         db_complexes = []
         for _, name, asset_type, cid, _ in complexes:
             asset_token = self._normalize_task_asset_type(asset_type)
             db_complexes.append((str(name or ""), str(cid or ""), asset_token))
-        items = [(f"{name} ({asset_type}:{cid})", (name, cid, asset_type)) for name, cid, asset_type in db_complexes]
-        dlg = MultiSelectDialog("DB에서 불러오기", items, self)
+        from src.utils.ui_labels import asset_label
+
+        items = [
+            (f"{name}  ·  {asset_label(asset_type)}", (name, cid, asset_type))
+            for name, cid, asset_type in db_complexes
+        ]
+        dlg = MultiSelectDialog("내 단지에서 고르기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             for item in dlg.selected_items():
                 if isinstance(item, (list, tuple)) and len(item) >= 3:
@@ -34,10 +39,10 @@ class CrawlerTabDialogOpsMixin:
     def _show_group_load_dialog(self: Any):
         groups = self.db.get_all_groups()
         if not groups:
-            QMessageBox.information(self, "알림", "저장된 그룹이 없습니다.")
+            QMessageBox.information(self, "단지 묶음이 없습니다", "아직 만든 묶음이 없습니다.\n왼쪽 메뉴 「단지 묶음」에서 자주 보는 단지를 묶어 둘 수 있습니다.")
             return
         items = [(name, gid) for gid, name, _ in groups]
-        dlg = MultiSelectDialog("그룹에서 불러오기", items, self)
+        dlg = MultiSelectDialog("단지 묶음 불러오기", items, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             for gid in dlg.selected_items():
                 for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
@@ -101,7 +106,7 @@ class CrawlerTabDialogOpsMixin:
                     int(monthly.get("rent_max", monthly.get("max", self.spin_monthly_rent_max.value())) or 0)
                 )
         except Exception as e:
-            QMessageBox.critical(self, "오류", f"최근 검색 기록을 불러오는 중 오류가 발생했습니다:\n{e}")
+            QMessageBox.critical(self, "불러오지 못했습니다", f"최근 수집 조건을 불러오는 중 문제가 생겼습니다.\n{e}")
             logger.error(f"Recent search load failed: {e}")
 
     def _show_url_batch_dialog(self: Any):
@@ -123,7 +128,7 @@ class CrawlerTabDialogOpsMixin:
                         continue
                     if self._add_row(name, cid, asset_type):
                         added += 1
-                self.status_message.emit(f"{added}개 URL 등록 완료")
+                self.status_message.emit(f"주소에서 단지 {added}곳을 추가했습니다.")
                 return
             urls = dlg.get_urls()
             self._add_complexes_from_url(urls)
@@ -150,7 +155,7 @@ class CrawlerTabDialogOpsMixin:
             if self._add_row(name, cid, asset_type):
                 added += 1
         if added:
-            self.status_message.emit(f"{added}개 단지 등록 완료")
+            self.status_message.emit(f"단지 {added}곳을 목록에 추가했습니다.")
 
     def _open_keyword_region(self: Any, region):
         region = dict(region or {})

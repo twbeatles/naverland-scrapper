@@ -12,7 +12,7 @@ class AppDatabaseMaintenanceMixin:
 
     def _shutdown_active_crawlers_for_maintenance(self: Any, timeout_ms: int = 8000) -> tuple[bool, str]:
         targets = [
-            ("크롤링", getattr(self, "crawler_tab", None)),
+            ("매물 수집", getattr(self, "crawler_tab", None)),
             ("지도 탐색", getattr(self, "geo_tab", None)),
         ]
         for label, tab in targets:
@@ -72,7 +72,7 @@ class AppDatabaseMaintenanceMixin:
                 target.setEnabled(False)
             except Exception:
                 continue
-        self.status_bar.showMessage(f"🛠️ 유지보수 모드: {self._maintenance_reason}")
+        self.status_bar.showMessage(f"{self._maintenance_reason} 작업 중입니다. 끝날 때까지 잠시 기다려 주세요.")
 
     def _exit_maintenance_mode(self: Any):
         if not self._maintenance_mode:
@@ -87,25 +87,26 @@ class AppDatabaseMaintenanceMixin:
         self._maintenance_reason = ""
     
     def _backup_db(self: Any):
-        path, _ = QFileDialog.getSaveFileName(self, "DB 백업", f"backup_{DateTimeHelper.file_timestamp()}.db", "Database (*.db)")
+        path, _ = QFileDialog.getSaveFileName(self, "데이터 백업", f"backup_{DateTimeHelper.file_timestamp()}.db", "백업 파일 (*.db)")
         if path:
             if self.db.backup_database(Path(path)):
-                QMessageBox.information(self, "백업 완료", f"DB 백업 완료!\n{path}")
+                QMessageBox.information(self, "백업 완료", f"데이터를 백업했습니다.\n{path}")
             else:
-                QMessageBox.critical(self, "실패", "DB 백업에 실패했습니다.")
+                QMessageBox.critical(self, "백업하지 못했습니다", "데이터를 백업하지 못했습니다. 저장 위치를 바꿔 다시 시도해 주세요.")
 
     def _restore_db(self: Any):
         """DB 복원 - 유지보수 모드 + 안전한 UI 처리"""
-        path, _ = QFileDialog.getOpenFileName(self, "DB 복원", "", "Database (*.db)")
+        path, _ = QFileDialog.getOpenFileName(self, "백업에서 복원", "", "백업 파일 (*.db)")
         if not path:
             return
         
         # 확인 대화상자
         reply = QMessageBox.question(
-            self, "DB 복원 확인",
-            f"현재 DB를 선택한 파일로 교체합니다.\n\n"
-            f"복원 파일: {path}\n\n"
-            f"계속하시겠습니까?",
+            self, "백업에서 복원",
+            f"지금 저장된 단지·기록·즐겨찾기가 모두 이 백업 파일의 내용으로 바뀝니다.\n"
+            f"되돌릴 수 없으니, 필요하면 먼저 「데이터 백업」을 해 두세요.\n\n"
+            f"복원할 파일: {path}\n\n"
+            f"복원할까요?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
@@ -118,7 +119,7 @@ class AppDatabaseMaintenanceMixin:
             and self.schedule_timer.isActive()
         )
 
-        self._enter_maintenance_mode("DB 복원")
+        self._enter_maintenance_mode("데이터 복원")
         QApplication.processEvents()
         try:
             if hasattr(self, "schedule_timer") and self.schedule_timer:
@@ -126,23 +127,23 @@ class AppDatabaseMaintenanceMixin:
 
             ok, failed_label = self._shutdown_active_crawlers_for_maintenance(timeout_ms=8000)
             if not ok:
-                self.status_bar.showMessage(f"⚠️ {failed_label} 종료 후 다시 DB 복원을 시도하세요.")
+                self.status_bar.showMessage(f"{failed_label}을(를) 멈춘 뒤 다시 복원해 주세요.")
                 QMessageBox.warning(
                     self,
-                    "복원 중단",
-                    f"진행 중인 {failed_label} 작업을 안전하게 종료하지 못해 DB 복원을 중단했습니다.",
+                    "복원하지 않았습니다",
+                    f"진행 중인 {failed_label}을(를) 멈추지 못해 복원하지 않았습니다. 수집을 중지한 뒤 다시 시도해 주세요.",
                 )
                 ui_logger.warning(f"DB 복원 중단: {failed_label} 스레드 종료 실패")
                 return
 
-            self.status_bar.showMessage("🔄 DB 복원 중...")
+            self.status_bar.showMessage("데이터를 복원하고 있습니다…")
             QApplication.processEvents()
             ui_logger.info(f"DB 복원 시작: {path}")
 
             if not self.db.restore_database(Path(path)):
-                self.status_bar.showMessage("❌ DB 복원 실패")
+                self.status_bar.showMessage("데이터를 복원하지 못했습니다.")
                 detail = str(getattr(self.db, "_last_restore_error", "") or "").strip()
-                message = "DB 복원에 실패했습니다.\n콘솔 로그를 확인하세요."
+                message = "데이터를 복원하지 못했습니다.\n백업 파일이 올바른지 확인해 주세요. 기존 데이터는 그대로입니다."
                 if detail:
                     message = f"{message}\n\n{detail}"
                 QMessageBox.critical(self, "복원 실패", message)
@@ -160,14 +161,14 @@ class AppDatabaseMaintenanceMixin:
             if group_tab is not None:
                 group_tab.load_groups()
             self._refresh_tab(self.tabs.currentIndex())
-            self.status_bar.showMessage("✅ DB 복원 완료!")
-            QMessageBox.information(self, "복원 완료", "DB 복원이 완료되었습니다!")
+            self.status_bar.showMessage("데이터를 복원했습니다.")
+            QMessageBox.information(self, "복원 완료", "백업 파일의 내용으로 복원했습니다.")
             ui_logger.info("DB 복원 완료")
 
         except Exception as e:
             ui_logger.exception(f"DB 복원 중 예외: {e}")
-            self.status_bar.showMessage("❌ DB 복원 중 오류 발생")
-            QMessageBox.critical(self, "오류", f"DB 복원 중 오류가 발생했습니다:\n{e}")
+            self.status_bar.showMessage("데이터를 복원하지 못했습니다.")
+            QMessageBox.critical(self, "복원하지 못했습니다", f"데이터를 복원하는 중 문제가 생겼습니다.\n{e}")
         finally:
             self._exit_maintenance_mode()
             if (

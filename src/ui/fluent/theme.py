@@ -7,6 +7,9 @@ PyQt6 바인딩은 유지한다 (DESKTOP_UI_DESIGN_RULES §1.1).
 
 from __future__ import annotations
 
+from PyQt6.QtCore import QEvent, QObject
+from PyQt6.QtWidgets import QDialog
+
 from typing import Any
 
 from qfluentwidgets import Theme, isDarkTheme, setTheme, setThemeColor
@@ -183,3 +186,38 @@ def is_dark_theme(theme_name: str | None) -> bool:
         return darkdetect.theme() != "Light"
     except Exception:
         return True
+
+
+class DialogThemer(QObject):
+    """앱 스타일시트 밖(메인 창 직속)에서 열리는 QDialog에도 도메인 QSS를 입힌다.
+
+    도메인 QSS는 Fluent 네비게이션을 깨지 않도록 콘텐츠 스택에만 걸려 있어서,
+    메인 창을 부모로 여는 설정·알림·단축키 대화창은 기본(밝은) 모양으로 떴다.
+    """
+
+    def __init__(self, sheet_provider, parent=None):
+        super().__init__(parent)
+        self._sheet_provider = sheet_provider
+
+    def eventFilter(self, a0, a1):
+        try:
+            if a1 is not None and a1.type() == QEvent.Type.Polish and isinstance(a0, QDialog):
+                self._apply(a0)
+        except Exception:
+            pass
+        return False
+
+    def _apply(self, dialog) -> None:
+        module = type(dialog).__module__ or ""
+        if module.startswith("qfluentwidgets"):
+            return
+        if dialog.styleSheet():
+            return
+        parent = dialog.parentWidget()
+        while parent is not None:
+            if parent.objectName() == "domainContent":
+                return  # 이미 상속받는다
+            parent = parent.parentWidget()
+        sheet = str(self._sheet_provider() or "")
+        if sheet:
+            dialog.setStyleSheet(sheet)

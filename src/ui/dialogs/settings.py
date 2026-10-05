@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 from src.core.managers import settings
 from src.utils.constants import CRAWL_SPEED_PRESETS, SHORTCUTS
 from src.utils.result_columns import RESULT_EXTRA_COLUMN_DEFS
-from src.utils.ui_labels import SETTINGS_TAB_ADVANCED, SETTINGS_TAB_BASIC
+from src.utils.ui_labels import SETTINGS_TAB_ADVANCED, SETTINGS_TAB_BASIC, asset_label
 
 
 def _scroll_wrap(widget: QWidget) -> QScrollArea:
@@ -36,14 +36,39 @@ def _scroll_wrap(widget: QWidget) -> QScrollArea:
     area.setWidgetResizable(True)
     area.setFrameShape(QScrollArea.Shape.NoFrame)
     area.setWidget(widget)
+    # 스크롤 영역이 기본(밝은) 바탕을 칠하지 않도록 한다 — 대화창 테마 색을 그대로 쓴다.
+    area.setStyleSheet("QScrollArea { background: transparent; }")
+    viewport = area.viewport()
+    if viewport is not None:
+        viewport.setAutoFillBackground(False)
+    widget.setAutoFillBackground(False)
     return area
+
+
+def _foldable(title: str, group: QGroupBox, layout) -> QPushButton:
+    """고급 탭 밀도 줄이기: 잘 안 쓰는 묶음은 제목 한 줄로 접어 둔다."""
+    button = QPushButton()
+    button.setObjectName("disclosureBtn")
+    button.setCheckable(True)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def _sync(checked: bool):
+        button.setText(("▾  " if checked else "▸  ") + title)
+        group.setVisible(bool(checked))
+
+    # 제목은 접는 버튼이 대신하므로 그룹 상단의 제목 자리를 줄인다.
+    group.setStyleSheet("QGroupBox { padding-top: 12px; }")
+    button.toggled.connect(_sync)
+    _sync(False)
+    layout.addWidget(button)
+    layout.addWidget(group)
+    return button
 
 
 def _hint(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setWordWrap(True)
     lbl.setObjectName("hintLabel")
-    lbl.setStyleSheet("color: #888; font-size: 11px;")
     return lbl
 
 
@@ -58,7 +83,7 @@ class SettingsDialog(QDialog):
 
     def _setup_ui(self):
         self.setWindowTitle("설정")
-        self.setMinimumSize(560, 520)
+        self.setMinimumSize(620, 600)
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
@@ -70,6 +95,14 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok_button is not None:
+            ok_button.setText("저장")
+            ok_button.setObjectName("primaryBtn")
+        cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button is not None:
+            cancel_button.setText("취소")
+            cancel_button.setObjectName("secondaryBtn")
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
@@ -81,13 +114,13 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(page)
         layout.setSpacing(12)
 
-        theme_group = QGroupBox("화면")
+        theme_group = QGroupBox("화면 테마")
         theme_layout = QHBoxLayout()
         self.combo_theme = QComboBox()
         self.combo_theme.addItem("어두운 테마", "dark")
         self.combo_theme.addItem("밝은 테마", "light")
-        self.combo_theme.addItem("시스템 연동", "auto")
-        theme_layout.addWidget(QLabel("테마:"))
+        self.combo_theme.addItem("윈도우 설정 따르기", "auto")
+        theme_layout.addWidget(QLabel("테마"))
         theme_layout.addWidget(self.combo_theme)
         theme_layout.addStretch()
         theme_group.setLayout(theme_layout)
@@ -95,31 +128,31 @@ class SettingsDialog(QDialog):
 
         system_group = QGroupBox("앱 동작")
         system_layout = QVBoxLayout()
-        self.check_tray = QCheckBox("창을 닫을 때 트레이로 최소화")
-        self.check_notify = QCheckBox("알림 메시지 표시")
+        self.check_tray = QCheckBox("창을 닫아도 끄지 않고 작업 표시줄 알림 영역(트레이)에 두기")
+        self.check_notify = QCheckBox("가격 알림을 윈도우 알림으로 받기")
         self.check_confirm = QCheckBox("종료 전 확인 창 띄우기")
-        self.check_sound = QCheckBox("수집 완료 시 알림음")
+        self.check_sound = QCheckBox("수집이 끝나면 소리로 알리기")
         for w in (self.check_tray, self.check_notify, self.check_confirm, self.check_sound):
             system_layout.addWidget(w)
         system_group.setLayout(system_layout)
         layout.addWidget(system_group)
 
-        crawl_group = QGroupBox("수집 (일상)")
+        crawl_group = QGroupBox("수집")
         crawl_layout = QGridLayout()
         self.combo_speed = QComboBox()
         self.combo_speed.addItems(list(CRAWL_SPEED_PRESETS.keys()))
-        crawl_layout.addWidget(QLabel("수집 속도:"), 0, 0)
+        crawl_layout.addWidget(QLabel("수집 속도"), 0, 0)
         crawl_layout.addWidget(self.combo_speed, 0, 1)
         crawl_layout.addWidget(
-            _hint("너무 빠르면 차단될 수 있습니다. 보통을 권장합니다."), 1, 0, 1, 2
+            _hint("너무 빠르면 네이버에서 잠시 접속을 막을 수 있습니다. 보통을 권장합니다."), 1, 0, 1, 2
         )
 
         self.check_include_pre = QCheckBox("분양권 매물도 함께 수집")
         self.check_include_pre.setToolTip("켜면 목록 건수가 늘 수 있습니다.")
         crawl_layout.addWidget(self.check_include_pre, 2, 0, 1, 2)
 
-        self.check_detail_enrichment = QCheckBox("중개사·기전세 등 상세 정보 가져오기")
-        self.check_detail_enrichment.setToolTip("끄면 수집이 훨씬 가벼워집니다.")
+        self.check_detail_enrichment = QCheckBox("중개소·기존 전세금 등 상세 정보도 가져오기")
+        self.check_detail_enrichment.setToolTip("끄면 수집이 훨씬 빨라지지만 중개소·전화·기존 전세금 칸이 비게 됩니다.")
         crawl_layout.addWidget(self.check_detail_enrichment, 3, 0, 1, 2)
 
         self.check_compact_duplicates = QCheckBox("같은 매물은 하나로 묶어 보기")
@@ -134,7 +167,7 @@ class SettingsDialog(QDialog):
         self.combo_sort_col.addItems(["가격", "면적", "단지명", "거래유형"])
         self.combo_sort_order = QComboBox()
         self.combo_sort_order.addItems(["낮은 순 / 가나다 순", "높은 순 / 역순"])
-        sort_row.addWidget(QLabel("기본 정렬:"))
+        sort_row.addWidget(QLabel("기본 정렬"))
         sort_row.addWidget(self.combo_sort_col)
         sort_row.addWidget(self.combo_sort_order)
         sort_row.addStretch()
@@ -151,7 +184,7 @@ class SettingsDialog(QDialog):
         display_group.setLayout(display_layout)
         layout.addWidget(display_group)
 
-        geo_group = QGroupBox("지도 탐색 (기본)")
+        geo_group = QGroupBox("지도로 찾기 기본값")
         geo_layout = QGridLayout()
         self.spin_geo_zoom = QSpinBox()
         self.spin_geo_zoom.setRange(12, 18)
@@ -160,7 +193,7 @@ class SettingsDialog(QDialog):
         self.spin_geo_rings.setToolTip("0이면 현재 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다.")
         geo_layout.addWidget(QLabel("지도 확대 단계"), 0, 0)
         geo_layout.addWidget(self.spin_geo_zoom, 0, 1)
-        geo_layout.addWidget(QLabel("탐색 범위(칸 수)"), 1, 0)
+        geo_layout.addWidget(QLabel("주변까지 넓히기(단계)"), 1, 0)
         geo_layout.addWidget(self.spin_geo_rings, 1, 1)
         self.check_geo_asset_apt = QCheckBox("아파트")
         self.check_geo_asset_vl = QCheckBox("빌라·연립")
@@ -168,13 +201,13 @@ class SettingsDialog(QDialog):
         asset_row.addWidget(self.check_geo_asset_apt)
         asset_row.addWidget(self.check_geo_asset_vl)
         asset_row.addStretch()
-        geo_layout.addWidget(QLabel("찾을 주택 종류:"), 2, 0)
+        geo_layout.addWidget(QLabel("찾을 주택 종류"), 2, 0)
         geo_layout.addLayout(asset_row, 2, 1)
         geo_group.setLayout(geo_layout)
         layout.addWidget(geo_group)
 
         layout.addWidget(
-            _hint("엔진·타임아웃·워커 등 세부 항목은 「고급」 탭에 있습니다.")
+            _hint("수집이 자주 실패할 때 조정하는 세부 항목은 「고급」 탭에 있습니다. 평소에는 건드리지 않아도 됩니다.")
         )
         layout.addStretch()
         return page
@@ -185,13 +218,18 @@ class SettingsDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setSpacing(12)
+        layout.addWidget(
+            _hint(
+                "수집이 자주 실패하거나 느릴 때만 조정하세요. 잘 모르겠다면 그대로 두는 것이 가장 안전합니다."
+            )
+        )
 
-        engine_group = QGroupBox("수집 엔진 · 재시도")
+        engine_group = QGroupBox("수집 엔진 · 다시 시도")
         engine_layout = QGridLayout()
         self.combo_engine = QComboBox()
-        self.combo_engine.addItem("Playwright (권장)", "playwright")
-        self.combo_engine.addItem("Selenium (보조)", "selenium")
-        engine_layout.addWidget(QLabel("수집 엔진:"), 0, 0)
+        self.combo_engine.addItem("기본 엔진 (Playwright, 권장)", "playwright")
+        self.combo_engine.addItem("보조 엔진 (Selenium, 아파트만)", "selenium")
+        engine_layout.addWidget(QLabel("수집 엔진"), 0, 0)
         engine_layout.addWidget(self.combo_engine, 0, 1)
 
         self.check_retry_on_error = QCheckBox("실패 시 자동으로 다시 시도")
@@ -199,34 +237,34 @@ class SettingsDialog(QDialog):
             lambda checked: self.spin_max_retry_count.setEnabled(bool(checked))
         )
         engine_layout.addWidget(self.check_retry_on_error, 1, 0, 1, 2)
-        engine_layout.addWidget(QLabel("다시 시도 횟수:"), 2, 0)
+        engine_layout.addWidget(QLabel("다시 시도 횟수"), 2, 0)
         self.spin_max_retry_count = QSpinBox()
         self.spin_max_retry_count.setRange(0, 10)
         engine_layout.addWidget(self.spin_max_retry_count, 2, 1)
-        self.check_fallback_engine = QCheckBox("Playwright 실패 시 Selenium으로 이어 수집")
+        self.check_fallback_engine = QCheckBox("기본 엔진이 실패하면 보조 엔진으로 이어서 수집")
         engine_layout.addWidget(self.check_fallback_engine, 3, 0, 1, 2)
         engine_group.setLayout(engine_layout)
         layout.addWidget(engine_group)
 
-        detail_group = QGroupBox("상세 · 목록 조회")
+        detail_group = QGroupBox("")
         detail_layout = QGridLayout()
-        self.check_detail_front_api = QCheckBox("상세 정보 보완 조회 사용")
+        self.check_detail_front_api = QCheckBox("상세 페이지가 비어 있으면 다른 경로로 보충하기")
         self.check_detail_front_api.setToolTip(
             "상세 페이지가 비어 있어도 중개 정보를 보충합니다."
         )
         detail_layout.addWidget(self.check_detail_front_api, 0, 0, 1, 2)
-        self.check_detail_front_api_only = QCheckBox("상세 HTML 건너뛰고 API만 조회")
+        self.check_detail_front_api_only = QCheckBox("상세 페이지를 열지 않고 빠른 경로만 쓰기")
         self.check_detail_front_api_only.setToolTip(
-            "fin.land 상세 페이지가 404이거나 느릴 때 권장합니다. "
-            "HTML 없이 front-api만 호출해 전화·중개 정보를 보충합니다."
+            "상세 페이지가 열리지 않거나 너무 느릴 때 켜 보세요. "
+            "페이지를 열지 않고 전화·중개 정보만 가져옵니다."
         )
         detail_layout.addWidget(self.check_detail_front_api_only, 1, 0, 1, 2)
-        detail_layout.addWidget(QLabel("단지마다 상세 조회 한도:"), 2, 0)
+        detail_layout.addWidget(QLabel("단지마다 상세 정보를 가져올 매물 수"), 2, 0)
         self.spin_detail_max = QSpinBox()
         self.spin_detail_max.setRange(0, 500)
         self.spin_detail_max.setSpecialValueText("제한 없음")
         detail_layout.addWidget(self.spin_detail_max, 2, 1)
-        detail_layout.addWidget(QLabel("목록 페이지 사이 대기(ms):"), 3, 0)
+        detail_layout.addWidget(QLabel("목록 한 장 넘길 때마다 대기 (ms)"), 3, 0)
         self.spin_article_page_delay = QSpinBox()
         self.spin_article_page_delay.setRange(0, 2000)
         self.spin_article_page_delay.setSingleStep(50)
@@ -234,9 +272,9 @@ class SettingsDialog(QDialog):
         self.check_article_api_fast_path = QCheckBox("빠른 목록 조회 사용 (권장)")
         detail_layout.addWidget(self.check_article_api_fast_path, 4, 0, 1, 2)
         detail_group.setLayout(detail_layout)
-        layout.addWidget(detail_group)
+        _foldable("상세 정보 가져오는 방식", detail_group, layout)
 
-        perf_group = QGroupBox("속도 · 안정 (전문가)")
+        perf_group = QGroupBox("")
         perf_layout = QGridLayout()
         self.spin_history_batch = QSpinBox()
         self.spin_history_batch.setRange(20, 5000)
@@ -250,8 +288,8 @@ class SettingsDialog(QDialog):
         self.spin_playwright_workers = QSpinBox()
         self.spin_playwright_workers.setRange(1, 16)
         self.spin_playwright_workers.setToolTip("동시에 띄우는 상세 페이지 수입니다. 낮을수록 가볍습니다 (권장 2~4).")
-        self.check_playwright_headless = QCheckBox("브라우저 창 숨기고 수집 (백그라운드)")
-        self.check_block_heavy_resources = QCheckBox("이미지·글꼴 등 무거운 리소스 불러오지 않기")
+        self.check_playwright_headless = QCheckBox("수집용 브라우저 창을 화면에 띄우지 않기")
+        self.check_block_heavy_resources = QCheckBox("이미지·글꼴은 불러오지 않아 더 빠르게 수집")
         self.spin_playwright_drain_timeout = QSpinBox()
         self.spin_playwright_drain_timeout.setRange(100, 20000)
         self.spin_playwright_drain_timeout.setSingleStep(100)
@@ -266,14 +304,14 @@ class SettingsDialog(QDialog):
         self.spin_article_response_wait.setSingleStep(100)
 
         rows = [
-            (0, "가격 이력 일괄 저장 크기:", self.spin_history_batch),
-            (1, "결과 검색 반응 지연(ms):", self.spin_filter_debounce),
-            (2, "로그 최대 줄 수:", self.spin_max_log_lines),
-            (3, "상세 정보 동시 조회 수:", self.spin_playwright_workers),
-            (6, "응답 대기 제한(ms):", self.spin_playwright_drain_timeout),
-            (7, "페이지 이동 제한 시간(ms):", self.spin_playwright_navigation_timeout),
-            (8, "빠른 목록 조회 제한 시간(ms):", self.spin_article_api_timeout),
-            (9, "목록 응답 조기 종료 대기(ms):", self.spin_article_response_wait),
+            (0, "가격 기록을 한 번에 저장하는 건수", self.spin_history_batch),
+            (1, "결과 검색이 반응하기까지 대기 (ms)", self.spin_filter_debounce),
+            (2, "진행 기록 최대 줄 수", self.spin_max_log_lines),
+            (3, "상세 정보를 동시에 가져오는 수", self.spin_playwright_workers),
+            (6, "응답을 기다리는 최대 시간 (ms)", self.spin_playwright_drain_timeout),
+            (7, "페이지가 열리기를 기다리는 최대 시간 (ms)", self.spin_playwright_navigation_timeout),
+            (8, "빠른 목록 조회를 기다리는 최대 시간 (ms)", self.spin_article_api_timeout),
+            (9, "목록 응답이 없을 때 넘어가기까지 대기 (ms)", self.spin_article_response_wait),
         ]
         for row, label, widget in rows:
             perf_layout.addWidget(QLabel(label), row, 0)
@@ -281,9 +319,9 @@ class SettingsDialog(QDialog):
         perf_layout.addWidget(self.check_playwright_headless, 4, 0, 1, 2)
         perf_layout.addWidget(self.check_block_heavy_resources, 5, 0, 1, 2)
         perf_group.setLayout(perf_layout)
-        layout.addWidget(perf_group)
+        _foldable("속도와 안정성 세부값 (문제 해결용)", perf_group, layout)
 
-        geo_adv = QGroupBox("지도 탐색 (세부)")
+        geo_adv = QGroupBox("")
         geo_layout = QGridLayout()
         self.spin_geo_step = QSpinBox()
         self.spin_geo_step.setRange(120, 1600)
@@ -292,34 +330,33 @@ class SettingsDialog(QDialog):
         self.spin_geo_dwell.setRange(100, 5000)
         self.spin_geo_dwell.setSingleStep(100)
         self.check_geo_incomplete_safety_mode = QCheckBox(
-            "탐색이 끊기면 자동 저장·이력 반영 보류"
+            "탐색이 중간에 끊기면 그 결과를 가격 기록에 반영하지 않기 (권장)"
         )
-        geo_layout.addWidget(QLabel("칸 간격(px):"), 0, 0)
+        geo_layout.addWidget(QLabel("지도 이동 간격"), 0, 0)
         geo_layout.addWidget(self.spin_geo_step, 0, 1)
-        geo_layout.addWidget(QLabel("칸마다 머무는 시간(ms):"), 1, 0)
+        geo_layout.addWidget(QLabel("옮길 때마다 대기 (ms)"), 1, 0)
         geo_layout.addWidget(self.spin_geo_dwell, 1, 1)
         geo_layout.addWidget(self.check_geo_incomplete_safety_mode, 2, 0, 1, 2)
         geo_layout.addWidget(
-            _hint("오피스텔은 앱을 가볍게 유지하기 위해 아직 포함하지 않습니다."),
+            _hint("오피스텔은 아직 지원하지 않습니다."),
             3,
             0,
             1,
             2,
         )
         geo_adv.setLayout(geo_layout)
-        layout.addWidget(geo_adv)
+        _foldable("지도로 찾기 세부값", geo_adv, layout)
 
-        extra_group = QGroupBox("표에 더 보여줄 항목 (기본 숨김)")
+        extra_group = QGroupBox("결과 표에 더 보여 줄 항목")
         extra_layout = QVBoxLayout()
         extra_layout.addWidget(
             _hint(
-                "체크한 항목만 결과 표에 나타납니다. DB에는 넣지 않고 화면·엑셀 내보내기에만 씁니다."
+                "체크한 항목이 결과 표에 추가로 나타납니다."
             )
         )
         self._extra_column_checks = {}
         for defn in RESULT_EXTRA_COLUMN_DEFS:
             cb = QCheckBox(str(defn["header"]))
-            cb.setToolTip(f"필드: {defn['key']}")
             self._extra_column_checks[defn["id"]] = cb
             extra_layout.addWidget(cb)
         extra_group.setLayout(extra_layout)
@@ -425,7 +462,7 @@ class SettingsDialog(QDialog):
             asset_types.append("VL")
         if not asset_types:
             QMessageBox.warning(
-                self, "경고", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요."
+                self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요."
             )
             return
 
@@ -492,34 +529,34 @@ class AlertSettingDialog(QDialog):
     def _format_alert_scope(asset_type):
         scope = str(asset_type or "ALL").strip().upper() or "ALL"
         if scope == "ALL":
-            return "공통"
-        return scope
+            return "전체"
+        return asset_label(scope)
 
     def _setup_ui(self):
-        self.setWindowTitle("🔔 알림 설정")
+        self.setWindowTitle("가격 알림 설정")
         self.setMinimumSize(650, 550)
         layout = QVBoxLayout(self)
 
-        add_group = QGroupBox("➕ 알림 추가")
+        add_group = QGroupBox("새 알림 만들기")
         add_layout = QGridLayout()
-        add_layout.addWidget(QLabel("단지:"), 0, 0)
+        add_layout.addWidget(QLabel("단지"), 0, 0)
         self.combo_complex = QComboBox()
         for _, name, asset_type, cid, _ in (self.db.get_all_complexes() if self.db else []):
             asset_token = str(asset_type or "APT").strip().upper() or "APT"
             self.combo_complex.addItem(
-                f"{name} ({asset_token}:{cid})",
+                f"{name}  ·  {asset_label(asset_token)}",
                 {"cid": str(cid or ""), "name": str(name or ""), "asset_type": asset_token},
             )
         add_layout.addWidget(self.combo_complex, 0, 1, 1, 3)
 
-        add_layout.addWidget(QLabel("유형:"), 1, 0)
+        add_layout.addWidget(QLabel("거래 종류"), 1, 0)
         self.combo_type = QComboBox()
         self.combo_type.addItems(["매매", "전세", "월세"])
         add_layout.addWidget(self.combo_type, 1, 1)
-        self.check_common_scope = QCheckBox("공통 적용(APT/VL)")
+        self.check_common_scope = QCheckBox("주택 종류와 상관없이 알림")
         add_layout.addWidget(self.check_common_scope, 1, 2, 1, 2)
 
-        add_layout.addWidget(QLabel("면적(평):"), 2, 0)
+        add_layout.addWidget(QLabel("면적 (평)"), 2, 0)
         self.spin_area_min = QDoubleSpinBox()
         self.spin_area_min.setRange(0, 200)
         add_layout.addWidget(self.spin_area_min, 2, 1)
@@ -529,7 +566,7 @@ class AlertSettingDialog(QDialog):
         self.spin_area_max.setValue(100)
         add_layout.addWidget(self.spin_area_max, 2, 3)
 
-        add_layout.addWidget(QLabel("가격(만원):"), 3, 0)
+        add_layout.addWidget(QLabel("가격 (만원)"), 3, 0)
         self.spin_price_min = QSpinBox()
         self.spin_price_min.setRange(0, 999999)
         self.spin_price_min.setSingleStep(1000)
@@ -541,16 +578,17 @@ class AlertSettingDialog(QDialog):
         self.spin_price_max.setSingleStep(1000)
         add_layout.addWidget(self.spin_price_max, 3, 3)
 
-        btn_add = QPushButton("➕ 추가")
+        btn_add = QPushButton("이 조건으로 알림 만들기")
+        btn_add.setObjectName("primaryBtn")
         btn_add.clicked.connect(self._add)
         add_layout.addWidget(btn_add, 4, 0, 1, 4)
         add_group.setLayout(add_layout)
         layout.addWidget(add_group)
 
-        layout.addWidget(QLabel("설정된 알림:"))
+        layout.addWidget(QLabel("만들어 둔 알림 (수집할 때 조건에 맞는 매물이 나오면 알려 줍니다)"))
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["단지", "자산 범위", "유형", "면적", "가격", "활성", "삭제"])
+        self.table.setHorizontalHeaderLabels(["단지", "주택 종류", "거래 종류", "면적", "가격", "켜기", "삭제"])
         alert_header = self.table.horizontalHeader()
         if alert_header is not None:
             alert_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -607,7 +645,7 @@ class AlertSettingDialog(QDialog):
         ) in self.db.get_all_alert_settings():
             row = self.table.rowCount()
             self.table.insertRow(row)
-            self.table.setItem(row, 0, QTableWidgetItem(f"{name or cid} ({cid})"))
+            self.table.setItem(row, 0, QTableWidgetItem(str(name or cid)))
             self.table.setItem(row, 1, QTableWidgetItem(self._format_alert_scope(asset_type)))
             self.table.setItem(row, 2, QTableWidgetItem(tt))
             self.table.setItem(row, 3, QTableWidgetItem(f"{amin}~{amax}평"))
@@ -621,7 +659,7 @@ class AlertSettingDialog(QDialog):
                     )
                 )
             self.table.setCellWidget(row, 5, check)
-            btn = QPushButton("🗑️ 삭제")
+            btn = QPushButton("삭제")
             btn.clicked.connect(lambda _, a=aid: self._delete(a))
             self.table.setCellWidget(row, 6, btn)
 
@@ -634,7 +672,7 @@ class AlertSettingDialog(QDialog):
 class ShortcutsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("⌨️ 단축키")
+        self.setWindowTitle("단축키")
         self.setMinimumSize(450, 400)
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -651,15 +689,15 @@ class ShortcutsDialog(QDialog):
             shortcuts_vheader.setDefaultSectionSize(38)
 
         shortcuts = [
-            ("▶ 크롤링 시작", SHORTCUTS["start_crawl"]),
-            ("크롤링 중지", SHORTCUTS["stop_crawl"]),
-            ("Excel 저장", SHORTCUTS["save_excel"]),
-            ("CSV 저장", SHORTCUTS["save_csv"]),
+            ("수집 시작", SHORTCUTS["start_crawl"]),
+            ("수집 중지", SHORTCUTS["stop_crawl"]),
+            ("엑셀로 저장", SHORTCUTS["save_excel"]),
+            ("CSV로 저장", SHORTCUTS["save_csv"]),
             ("새로고침", SHORTCUTS["refresh"]),
-            ("검색", SHORTCUTS["search"]),
+            ("결과에서 찾기", SHORTCUTS["search"]),
             ("설정", SHORTCUTS["settings"]),
-            ("테마 변경", SHORTCUTS["toggle_theme"]),
-            ("트레이 최소화", SHORTCUTS["minimize_tray"]),
+            ("어두운/밝은 테마 바꾸기", SHORTCUTS["toggle_theme"]),
+            ("트레이로 숨기기", SHORTCUTS["minimize_tray"]),
             ("종료", SHORTCUTS["quit"]),
         ]
         table.setRowCount(len(shortcuts))

@@ -18,7 +18,12 @@ class AppLifecycleTimersEventsMixin:
         self.collected_data = list(data) if data else []
         self._mark_noncritical_stale("history", "stats", "favorites", "dashboard")
         self._refresh_tab(self.tabs.currentIndex())
-        self.status_bar.showMessage(f"✅ 수집 결과 반영 완료 ({len(self.collected_data)}건)")
+        count = len(self.collected_data)
+        self.status_bar.showMessage(
+            f"수집을 마쳤습니다. 매물 {count}건 · 「결과 저장」으로 파일에 담을 수 있습니다."
+            if count
+            else "수집을 마쳤지만 조건에 맞는 매물이 없습니다."
+        )
 
     def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
         try:
@@ -27,12 +32,12 @@ class AppLifecycleTimersEventsMixin:
             fallback = "" if area_pyeong is None else str(area_pyeong).strip()
             area_text = f"{fallback}평" if fallback else "평형 미상"
         message = f"{complex_name} {trade_type} {price_text} ({area_text})"
-        self.show_toast(f"🔔 조건 매물 발견: {message}")
-        self.show_notification("조건 매물 알림", message)
+        self.show_toast(f"알림 조건에 맞는 매물: {message}")
+        self.show_notification("가격 알림", message)
 
     def _on_dashboard_warning(self: Any, message: str):
         text = str(message or "").strip()
         if not text:
             return
         ui_logger.warning(f"Dashboard warning: {text}")
-        self.status_bar.showMessage(f"⚠️ {text}")
+        self.status_bar.showMessage(f"{text}")

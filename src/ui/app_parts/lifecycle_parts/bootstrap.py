@@ -211,6 +211,9 @@ class AppLifecycleBootstrapMixin:
             pass
 
         sheet = get_stylesheet(_key)
+        # 메인 창에서 여는 대화창(설정·알림 등)도 같은 테마를 입는다.
+        self._domain_sheet = sheet
+        self._install_dialog_themer()
         stack = getattr(self, "stackedWidget", None)
         if stack is not None:
             stack.setObjectName("domainContent")
@@ -233,6 +236,20 @@ class AppLifecycleBootstrapMixin:
                 self._refresh_guide_theme(_key)
             except Exception:
                 pass
+
+    def _install_dialog_themer(self: Any):
+        if getattr(self, "_dialog_themer", None) is not None:
+            return
+        try:
+            from src.ui.fluent.theme import DialogThemer
+
+            app = QApplication.instance()
+            if app is None:
+                return
+            self._dialog_themer = DialogThemer(lambda: getattr(self, "_domain_sheet", ""), self)
+            app.installEventFilter(self._dialog_themer)
+        except Exception:
+            self._dialog_themer = None
 
     def _mark_noncritical_stale(self: Any, *names: str):
         for name in names:

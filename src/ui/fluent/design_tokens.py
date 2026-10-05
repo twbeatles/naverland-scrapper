@@ -82,3 +82,19 @@ def secondary_text_color(theme_name: str | None) -> str:
     if _resolve_theme_key(theme_name) == "light":
         return TEXT_SECONDARY_LIGHT
     return TEXT_SECONDARY_DARK
+
+
+def tint(hex_color: str, alpha: float) -> str:
+    """``#rrggbb`` + 투명도 → Qt가 올바로 읽는 ``rgba(r, g, b, a)`` 문자열.
+
+    Qt는 8자리 hex를 ``#AARRGGBB``로 해석하므로 ``#rrggbb22`` 식의 웹 표기는
+    전혀 다른 색(어두운 불투명 블록)이 된다. 옅은 배경색은 반드시 이 함수를 쓴다.
+    """
+    text = str(hex_color or "").strip().lstrip("#")
+    if len(text) == 3:
+        text = "".join(ch * 2 for ch in text)
+    try:
+        r, g, b = int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+    except (ValueError, IndexError):
+        return str(hex_color)
+    return f"rgba({r}, {g}, {b}, {max(0.0, min(1.0, float(alpha))):.2f})"

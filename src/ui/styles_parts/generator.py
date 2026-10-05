@@ -1,6 +1,40 @@
 from src.ui.styles_parts.colors import COLORS
 
 
+_CHECK_ICON_CACHE: dict[str, str] = {}
+
+
+def _check_icon_path(color: str) -> str:
+    """체크 표시 SVG를 임시 폴더에 만들어 QSS ``url()``로 쓸 경로를 돌려준다.
+
+    QSS는 indicator 안에 글리프를 직접 그릴 수 없어 이미지 파일이 필요하다.
+    만들지 못하면 빈 문자열을 돌려주고, 그 경우 체크는 색 채움으로만 보인다.
+    """
+    cached = _CHECK_ICON_CACHE.get(color)
+    if cached is not None:
+        return cached
+    path = ""
+    try:
+        import tempfile
+        from pathlib import Path
+
+        folder = Path(tempfile.gettempdir()) / "naverland-scrapper-ui"
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / f"check_{color.lstrip('#')}.svg"
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">'
+            f'<path d="M4.5 10.5l3.5 3.5 7.5-8" fill="none" stroke="{color}" stroke-width="2.4"'
+            ' stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        )
+        if not target.exists() or target.read_text(encoding="utf-8") != svg:
+            target.write_text(svg, encoding="utf-8")
+        path = target.as_posix()
+    except Exception:
+        path = ""
+    _CHECK_ICON_CACHE[color] = path
+    return path
+
+
 def _generate_stylesheet(theme: str = "dark") -> str:
     """색상 토큰 기반 동적 스타일시트 생성"""
     c = COLORS[theme]
@@ -19,6 +53,8 @@ def _generate_stylesheet(theme: str = "dark") -> str:
     dialog_label = "#e0e0e0" if is_dark else "#334155"
     checkbox_border = "rgba(255, 255, 255, 0.2)" if is_dark else "#cbd5e1"
     checkbox_bg = "transparent" if is_dark else "#ffffff"
+    # 어두운 테마의 강조색(호박색) 위에는 짙은 체크, 밝은 테마의 파란색 위에는 흰 체크.
+    check_icon = _check_icon_path("#1a1a26" if is_dark else "#ffffff")
     start_gradient = c['accent']
     start_hover = c['accent_hover']
     progress_gradient = c['accent']
@@ -100,21 +136,22 @@ QGroupBox {{
     background-color: {c['bg_card']};
     border: 1px solid {c['border_subtle']};
     border-radius: 8px;
-    margin-top: 0.8em;
-    padding: 10px;
-    padding-top: 22px;
+    margin-top: 0px;
+    padding: 12px;
+    padding-top: 38px;
     font-weight: 600;
     font-size: 13px;
 }}
 QGroupBox::title {{
-    subcontrol-origin: margin;
+    subcontrol-origin: padding;
     subcontrol-position: top left;
-    padding: 4px 12px;
-    color: {c['accent']};
+    left: 12px;
+    top: 10px;
+    padding: 0px;
+    color: {c['text_primary']};
     background: transparent;
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.2px;
+    font-weight: 600;
+    font-size: 13px;
 }}
 
 /* === Buttons === */
@@ -369,6 +406,11 @@ QCheckBox::indicator {{
 QCheckBox::indicator:checked {{
     background-color: {c['accent']};
     border-color: {c['accent']};
+    image: url({check_icon});
+}}
+QCheckBox::indicator:disabled {{
+    border-color: {c['border_faint']};
+    background: {c['bg_disabled']};
 }}
 QCheckBox::indicator:hover {{
     border-color: {c['accent']};
@@ -472,7 +514,7 @@ QDialog {{
     background-color: {c['bg_primary']};
 }}
 QDialog QGroupBox {{
-    margin-top: 1.5em;
+    margin-top: 0px;
 }}
 QDialog QDialogButtonBox QPushButton {{
     min-width: 90px;
@@ -601,9 +643,8 @@ QLabel#sectionHeader {{
 
 /* === Hint / Helper Label (v15.1) === */
 QLabel#hintLabel {{
-    font-size: 11px;
+    font-size: 12px;
     color: {c['text_secondary']};
-    font-style: italic;
     line-height: 1.5;
 }}
 
@@ -688,20 +729,22 @@ QPushButton#primaryBtn:disabled {{
 }}
 
 QPushButton#dangerBtn {{
-    background-color: {c['error']};
-    color: #ffffff;
+    background-color: transparent;
+    color: {c['error_light']};
     border: 1px solid {c['error_border']};
     border-radius: 7px;
-    padding: 7px 18px;
-    font-weight: 700;
-    font-size: 13px;
-    min-height: 32px;
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 12px;
+    min-height: 28px;
 }}
 QPushButton#dangerBtn:hover {{
-    background-color: {c['error_hover']};
+    background-color: {c['error_bg']};
+    border-color: {c['error_light']};
 }}
 QPushButton#dangerBtn:pressed {{
-    background: {c['error_pressed']};
+    background: {c['error']};
+    color: #ffffff;
 }}
 QPushButton#dangerBtn:disabled {{
     background: {c['bg_disabled']};
@@ -710,9 +753,9 @@ QPushButton#dangerBtn:disabled {{
 }}
 
 QPushButton#secondaryBtn {{
-    background: {c['accent_bg']};
-    color: {c['accent_bright']};
-    border: 1px solid {c['accent_bg_hover']};
+    background: {c['hover_light']};
+    color: {c['text_primary']};
+    border: 1px solid {c['border']};
     border-radius: 7px;
     padding: 6px 14px;
     font-weight: 600;
@@ -724,12 +767,84 @@ QPushButton#secondaryBtn:hover {{
     border-color: {c['accent']};
 }}
 QPushButton#secondaryBtn:pressed {{
-    background: {c['accent_pressed']};
-    color: #ffffff;
+    background: {c['accent_bg_strong']};
+}}
+QPushButton#secondaryBtn:checked {{
+    background: {c['hover_light']};
+    border-color: {c['border']};
+    color: {c['text_primary']};
+}}
+QPushButton#secondaryBtn::menu-indicator {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 8px;
 }}
 QPushButton#secondaryBtn:disabled {{
     background: {c['bg_disabled']};
     color: {c['text_disabled']};
     border-color: transparent;
+}}
+
+/* === UX refresh: page header / section text / disclosure === */
+QLabel#pageTitle {{
+    font-size: 20px;
+    font-weight: 600;
+    color: {c['text_primary']};
+    background: transparent;
+}}
+QLabel#pageSubtitle {{
+    font-size: 12px;
+    color: {c['text_secondary']};
+    background: transparent;
+}}
+QLabel#fieldLabel {{
+    font-size: 12px;
+    color: {c['text_secondary']};
+    background: transparent;
+}}
+QLabel#countBadge {{
+    font-size: 12px;
+    font-weight: 600;
+    color: {c['accent']};
+    background: transparent;
+}}
+QLabel#listPlaceholder {{
+    font-size: 12px;
+    color: {c['text_secondary']};
+    background: transparent;
+    border: 1px dashed {c['border']};
+    border-radius: 8px;
+    padding: 16px 12px;
+}}
+QPushButton#disclosureBtn {{
+    background: transparent;
+    color: {c['text_primary']};
+    border: none;
+    border-radius: 6px;
+    padding: 6px 4px;
+    font-weight: 600;
+    font-size: 13px;
+    text-align: left;
+    min-height: 24px;
+}}
+QPushButton#disclosureBtn:hover {{
+    background: {c['hover_light']};
+}}
+QPushButton#disclosureBtn:checked {{
+    background: transparent;
+    color: {c['text_primary']};
+}}
+QWidget#actionBar {{
+    background-color: {c['bg_card']};
+    border: 1px solid {c['border_subtle']};
+    border-radius: 8px;
+}}
+QFrame#sectionCard {{
+    background-color: {c['bg_card']};
+    border: 1px solid {c['border_subtle']};
+    border-radius: 8px;
+}}
+QFrame#sectionCard QLabel {{
+    background: transparent;
 }}
 """

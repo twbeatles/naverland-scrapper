@@ -13,15 +13,13 @@ class CrawlerTabFilterRenderMixin:
     def _update_advanced_filter_badge(self: Any):
         active = bool(self._advanced_filters)
         if hasattr(self, "lbl_advanced_filter"):
-            if active:
-                self.lbl_advanced_filter.setText("고급필터: ON")
-                self.lbl_advanced_filter.setStyleSheet("color: #10b981; font-weight: 700;")
-            else:
-                self.lbl_advanced_filter.setText("고급필터: OFF")
-                self.lbl_advanced_filter.setStyleSheet(f"color: {secondary_text_color(getattr(self, 'current_theme', None))};")
-        status_action = getattr(self, "_result_more_filter_status_action", None)
-        if status_action is not None:
-            status_action.setText("필터 상태: ON" if active else "필터 상태: OFF")
+            self.lbl_advanced_filter.setText("상세 필터로 일부 매물만 보고 있습니다." if active else "")
+        notice = getattr(self, "filter_notice", None)
+        if notice is not None:
+            notice.setVisible(active)
+        more_btn = getattr(self, "btn_result_more", None)
+        if more_btn is not None:
+            more_btn.setText("정렬·필터 (적용 중)" if active else "정렬·필터")
 
     def _apply_advanced_filter_items(self: Any, items):
         if not items:
@@ -44,9 +42,9 @@ class CrawlerTabFilterRenderMixin:
         self._update_advanced_filter_badge()
         self._rebuild_result_views_from_collected_data()
         if self._advanced_filters:
-            self.status_message.emit("고급 필터 적용됨")
+            self.status_message.emit("상세 필터를 적용했습니다.")
         else:
-            self.status_message.emit("고급 필터 해제됨")
+            self.status_message.emit("상세 필터를 풀었습니다.")
 
     def _apply_current_filter_to_row(self: Any, row):
         text_lower = (self._pending_search_text or "").lower()

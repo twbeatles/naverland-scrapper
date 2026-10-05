@@ -355,7 +355,7 @@ class TestKeywordWorkerResilience(unittest.TestCase):
             # Second request never reaches the network; cooldown message instead.
             self.assertEqual(state["calls"], first_calls)
             self.assertEqual(len(failed), 2)
-            self.assertIn("429", failed[1][0])
+            self.assertIn("잠시 쉬는 중", failed[1][0])
         finally:
             worker.deleteLater()
 

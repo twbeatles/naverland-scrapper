@@ -105,15 +105,19 @@ class CrawlerTabIOActionsMixin:
 
     def show_save_menu(self: Any):
         menu = QMenu(self)
-        menu.addAction("화면 기준 Excel 저장", lambda: self.save_excel("visible"))
-        menu.addAction("화면 기준 CSV 저장", lambda: self.save_csv("visible"))
-        menu.addAction("화면 기준 JSON 저장", lambda: self.save_json("visible"))
+        menu.addAction("엑셀로 저장 (지금 보이는 목록)", lambda: self.save_excel("visible"))
+        other_visible = menu.addMenu("다른 형식으로 저장 (지금 보이는 목록)")
+        if other_visible is not None:
+            other_visible.addAction("CSV 파일", lambda: self.save_csv("visible"))
+            other_visible.addAction("JSON 파일", lambda: self.save_json("visible"))
         menu.addSeparator()
-        menu.addAction("원본 Excel 저장", lambda: self.save_excel("raw"))
-        menu.addAction("원본 CSV 저장", lambda: self.save_csv("raw"))
-        menu.addAction("원본 JSON 저장", lambda: self.save_json("raw"))
+        raw_menu = menu.addMenu("수집한 전체 원본 저장 (묶기·필터 적용 안 함)")
+        if raw_menu is not None:
+            raw_menu.addAction("엑셀 파일", lambda: self.save_excel("raw"))
+            raw_menu.addAction("CSV 파일", lambda: self.save_csv("raw"))
+            raw_menu.addAction("JSON 파일", lambda: self.save_json("raw"))
         menu.addSeparator()
-        menu.addAction("엑셀 템플릿 설정", self._show_excel_template_dialog)
+        menu.addAction("엑셀에 담을 항목 고르기…", self._show_excel_template_dialog)
         menu.exec(self.btn_save.mapToGlobal(self.btn_save.rect().bottomLeft()))
 
     def _save_with_export_scope(self: Any, kind: str, scope: str = "visible"):
@@ -122,9 +126,9 @@ class CrawlerTabIOActionsMixin:
 
         items = self._export_items_for_scope(scope)
         scope_key = str(scope or "visible").lower()
-        scope_label = "화면 기준" if scope_key != "raw" else "원본"
+        scope_label = "지금 보이는 목록" if scope_key != "raw" else "전체 원본"
         if not items:
-            QMessageBox.information(self, "저장", f"{scope_label}으로 저장할 데이터가 없습니다.")
+            QMessageBox.information(self, "저장할 매물이 없습니다", "먼저 매물을 수집해 주세요.")
             return
 
         suffix_map = {
@@ -135,7 +139,7 @@ class CrawlerTabIOActionsMixin:
         suffix, filter_text = suffix_map[kind]
         path, _ = QFileDialog.getSaveFileName(
             self,
-            f"{scope_label} {kind.upper()} 저장",
+            f"{scope_label} 저장",
             f"부동산_{scope_key}_{DateTimeHelper.file_timestamp()}.{suffix}",
             filter_text,
         )
@@ -165,15 +169,21 @@ class CrawlerTabIOActionsMixin:
             ok = bool(getattr(result, "ok", result))
             error = str(getattr(result, "error", "") or getattr(exporter, "last_error", "") or "")
             if ok:
-                QMessageBox.information(self, "저장 완료", f"{scope_label} {kind.upper()} 저장 완료\n{path}")
+                message = f"매물 {len(items)}건을 저장했습니다."
+                self.status_message.emit(f"{message} ({path})")
+                show_toast = getattr(self.window(), "show_toast", None)
+                if callable(show_toast):
+                    show_toast(message, toast_type="success")
+                else:
+                    QMessageBox.information(self, "저장 완료", f"{message}\n{path}")
                 return
 
             if not error:
-                error = f"{kind.upper()} 저장 결과가 실패로 반환되었습니다."
-            QMessageBox.critical(self, "저장 실패", f"{kind.upper()} 저장에 실패했습니다.\n{error}")
+                error = "파일을 저장하지 못했습니다."
+            QMessageBox.critical(self, "저장하지 못했습니다", f"파일을 저장하지 못했습니다. 파일이 다른 프로그램에서 열려 있지 않은지 확인해 주세요.\n\n{error}")
             logger.error(f"{kind.upper()} save failed ({scope_key}): {error}")
         except Exception as exc:
-            QMessageBox.critical(self, "저장 실패", f"{kind.upper()} 저장 중 오류가 발생했습니다.\n{exc}")
+            QMessageBox.critical(self, "저장하지 못했습니다", f"파일을 저장하는 중 문제가 생겼습니다.\n\n{exc}")
             logger.error(f"{kind.upper()} save error ({scope_key}): {exc}")
 
     def save_excel(self: Any, scope: str = "visible"):

@@ -234,120 +234,144 @@ class AppTabSetupMixin:
 
     
     def _setup_schedule_tab(self: Any):
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.widgets.components import build_page_header
+        from src.utils.ui_labels import SCHEDULE_MODE_LABELS
+
         self.schedule_tab = QWidget()
         layout = QVBoxLayout(self.schedule_tab)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_SM)
+        layout.addWidget(
+            build_page_header(
+                "예약 수집",
+                "매일 정한 시간에 자동으로 수집합니다. 앱이 켜져 있어야 하며, 창을 닫아 트레이에 두어도 됩니다.",
+            )
+        )
 
-        sg = QGroupBox("예약 수집")
-        sl = QVBoxLayout()
-        sl.setSpacing(10)
+        def _label(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setObjectName("fieldLabel")
+            return lbl
 
-        self.check_schedule = QCheckBox("예약 실행 켜기")
-        self.check_schedule.setToolTip("설정한 시간에 현재 예약 설정으로 자동 실행합니다.")
-        sl.addWidget(self.check_schedule)
+        sg = QGroupBox("자동 수집 설정")
+        form = QGridLayout()
+        form.setHorizontalSpacing(_SM)
+        form.setVerticalSpacing(_SM)
+        form.setColumnStretch(2, 1)
 
-        tl = QHBoxLayout()
-        lbl_time = QLabel("실행 시간")
-        lbl_time.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        tl.addWidget(lbl_time)
+        self.check_schedule = QCheckBox("매일 자동으로 수집하기")
+        self.check_schedule.setToolTip("켜 두면 아래에 정한 시간마다 자동으로 수집을 시작합니다.")
+        form.addWidget(self.check_schedule, 0, 0, 1, 3)
+
+        form.addWidget(_label("시작 시간"), 1, 0)
         self.time_edit = QTimeEdit()
         self.time_edit.setTime(QTime(9, 0))
-        self.time_edit.setToolTip("크롤링을 시작할 시간을 설정합니다.")
-        tl.addWidget(self.time_edit)
-        tl.addStretch()
-        sl.addLayout(tl)
+        self.time_edit.setMinimumWidth(140)
+        self.time_edit.setToolTip("매일 이 시간에 수집을 시작합니다.")
+        form.addWidget(self.time_edit, 1, 1)
 
-        ml = QHBoxLayout()
-        lbl_mode = QLabel("실행 모드")
-        lbl_mode.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        ml.addWidget(lbl_mode)
+        form.addWidget(_label("수집 방법"), 2, 0)
         self.schedule_mode_combo = QComboBox()
-        self.schedule_mode_combo.addItem("complex", "complex")
-        self.schedule_mode_combo.addItem("geo_sweep", "geo_sweep")
-        self.schedule_mode_combo.setToolTip("예약 실행 시 사용할 수집 모드를 선택합니다.")
-        ml.addWidget(self.schedule_mode_combo)
-        ml.addStretch()
-        sl.addLayout(ml)
+        self.schedule_mode_combo.addItem(SCHEDULE_MODE_LABELS["complex"], "complex")
+        self.schedule_mode_combo.addItem(SCHEDULE_MODE_LABELS["geo_sweep"], "geo_sweep")
+        self.schedule_mode_combo.setMinimumWidth(200)
+        self.schedule_mode_combo.setToolTip(
+            "단지 묶음 수집: 미리 묶어 둔 단지들을 수집합니다.\n"
+            "지도 범위 수집: 정한 위치 주변을 지도로 훑어 수집합니다."
+        )
+        form.addWidget(self.schedule_mode_combo, 2, 1)
+        sg.setLayout(form)
 
         self.schedule_group_widget = QWidget()
         gl = QHBoxLayout(self.schedule_group_widget)
         gl.setContentsMargins(0, 0, 0, 0)
-        lbl_grp = QLabel("대상 그룹")
-        lbl_grp.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        gl.addWidget(lbl_grp)
+        gl.setSpacing(_SM)
+        gl.addWidget(_label("수집할 묶음"))
         self.schedule_group_combo = QComboBox()
-        self.schedule_group_combo.setToolTip("예약 크롤링을 실행할 단지 그룹을 선택합니다.")
-        gl.addWidget(self.schedule_group_combo, 1)
-        gl.addStretch()
-        sl.addWidget(self.schedule_group_widget)
+        self.schedule_group_combo.setMinimumWidth(200)
+        self.schedule_group_combo.setToolTip("예약 시간에 수집할 단지 묶음을 고릅니다.")
+        gl.addWidget(self.schedule_group_combo)
+        gl.addStretch(1)
+        form.addWidget(self.schedule_group_widget, 3, 0, 1, 3)
 
         self.schedule_geo_widget = QWidget()
         geo_layout = QGridLayout(self.schedule_geo_widget)
         geo_layout.setContentsMargins(0, 0, 0, 0)
-        geo_layout.setHorizontalSpacing(8)
-        geo_layout.setVerticalSpacing(6)
-        geo_layout.addWidget(QLabel("위도"), 0, 0)
+        geo_layout.setHorizontalSpacing(_SM)
+        geo_layout.setVerticalSpacing(_XS)
+        geo_layout.setColumnStretch(4, 1)
+
+        self.btn_schedule_geo_copy = QPushButton("「지도로 찾기」에서 정한 위치 가져오기")
+        self.btn_schedule_geo_copy.setObjectName("secondaryBtn")
+        self.btn_schedule_geo_copy.setToolTip(
+            "「지도로 찾기」 화면에서 지역을 고른 뒤 누르면 그 위치와 범위를 그대로 가져옵니다."
+        )
+        self.btn_schedule_geo_copy.clicked.connect(self._copy_geo_tab_to_schedule)
+        geo_layout.addWidget(self.btn_schedule_geo_copy, 0, 0, 1, 4)
+
+        geo_layout.addWidget(_label("위도"), 1, 0)
         self.schedule_geo_lat = QDoubleSpinBox()
         self.schedule_geo_lat.setRange(33.0, 39.5)
         self.schedule_geo_lat.setDecimals(6)
         self.schedule_geo_lat.setValue(37.5608)
-        geo_layout.addWidget(self.schedule_geo_lat, 0, 1)
-        geo_layout.addWidget(QLabel("경도"), 1, 0)
+        geo_layout.addWidget(self.schedule_geo_lat, 1, 1)
+        geo_layout.addWidget(_label("경도"), 1, 2)
         self.schedule_geo_lon = QDoubleSpinBox()
         self.schedule_geo_lon.setRange(124.0, 132.1)
         self.schedule_geo_lon.setDecimals(6)
         self.schedule_geo_lon.setValue(126.9888)
-        geo_layout.addWidget(self.schedule_geo_lon, 1, 1)
-        geo_layout.addWidget(QLabel("줌"), 0, 2)
-        self.schedule_geo_zoom = QSpinBox()
-        self.schedule_geo_zoom.setRange(12, 18)
-        self.schedule_geo_zoom.setValue(15)
-        geo_layout.addWidget(self.schedule_geo_zoom, 0, 3)
-        geo_layout.addWidget(QLabel("링 수"), 1, 2)
+        geo_layout.addWidget(self.schedule_geo_lon, 1, 3)
+
+        geo_layout.addWidget(_label("주변까지 넓히기"), 2, 0)
         self.schedule_geo_rings = QSpinBox()
         self.schedule_geo_rings.setRange(0, 6)
         self.schedule_geo_rings.setValue(1)
-        geo_layout.addWidget(self.schedule_geo_rings, 1, 3)
-        geo_layout.addWidget(QLabel("간격(px)"), 2, 0)
+        self.schedule_geo_rings.setSuffix(" 단계")
+        self.schedule_geo_rings.setToolTip("0단계는 정한 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다.")
+        geo_layout.addWidget(self.schedule_geo_rings, 2, 1)
+        geo_layout.addWidget(_label("지도 확대 단계"), 2, 2)
+        self.schedule_geo_zoom = QSpinBox()
+        self.schedule_geo_zoom.setRange(12, 18)
+        self.schedule_geo_zoom.setValue(15)
+        geo_layout.addWidget(self.schedule_geo_zoom, 2, 3)
+
+        geo_layout.addWidget(_label("지도 이동 간격"), 3, 0)
         self.schedule_geo_step = QSpinBox()
         self.schedule_geo_step.setRange(120, 1600)
         self.schedule_geo_step.setSingleStep(40)
         self.schedule_geo_step.setValue(480)
-        geo_layout.addWidget(self.schedule_geo_step, 2, 1)
-        geo_layout.addWidget(QLabel("대기(ms)"), 2, 2)
+        self.schedule_geo_step.setToolTip("기본값을 권장합니다.")
+        geo_layout.addWidget(self.schedule_geo_step, 3, 1)
+        geo_layout.addWidget(_label("옮길 때마다 대기"), 3, 2)
         self.schedule_geo_dwell = QSpinBox()
         self.schedule_geo_dwell.setRange(100, 5000)
         self.schedule_geo_dwell.setSingleStep(100)
         self.schedule_geo_dwell.setValue(600)
-        geo_layout.addWidget(self.schedule_geo_dwell, 2, 3)
-        geo_layout.addWidget(QLabel("자산"), 3, 0)
+        self.schedule_geo_dwell.setSuffix(" ms")
+        self.schedule_geo_dwell.setToolTip("기본값을 권장합니다. (1000ms = 1초)")
+        geo_layout.addWidget(self.schedule_geo_dwell, 3, 3)
+
+        geo_layout.addWidget(_label("주택 종류"), 4, 0)
         asset_row = QHBoxLayout()
-        self.schedule_geo_asset_apt = QCheckBox("APT")
-        self.schedule_geo_asset_vl = QCheckBox("VL")
+        self.schedule_geo_asset_apt = QCheckBox("아파트")
+        self.schedule_geo_asset_vl = QCheckBox("빌라·연립")
         self.schedule_geo_asset_apt.setChecked(True)
         self.schedule_geo_asset_vl.setChecked(True)
         asset_row.addWidget(self.schedule_geo_asset_apt)
         asset_row.addWidget(self.schedule_geo_asset_vl)
         asset_row.addStretch()
-        geo_layout.addLayout(asset_row, 3, 1, 1, 3)
-        geo_hint = QLabel("geo_sweep 예약은 좌표와 세부 geo 프로필을 함께 저장해 실행합니다.")
-        geo_hint.setObjectName("hintLabel")
-        geo_layout.addWidget(geo_hint, 4, 0, 1, 4)
-        sl.addWidget(self.schedule_geo_widget)
+        geo_layout.addLayout(asset_row, 4, 1, 1, 3)
+        form.addWidget(self.schedule_geo_widget, 4, 0, 1, 3)
 
-        hint = QLabel("💡 complex는 그룹을, geo_sweep는 지도 중심 좌표를 사용합니다.")
-        hint.setObjectName("hintLabel")
-        sl.addWidget(hint)
-
-        sg.setLayout(sl)
         layout.addWidget(sg)
 
         self.schedule_empty_label = QLabel(
-            "예약할 묶음이 없습니다.\n좌측 네비 「단지 묶음」에서 먼저 만들어 주세요."
+            "아직 단지 묶음이 없어 예약할 수 없습니다.\n"
+            "왼쪽 메뉴 「단지 묶음」에서 자주 보는 단지를 먼저 묶어 주세요."
         )
+        self.schedule_empty_label.setObjectName("listPlaceholder")
         self.schedule_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.schedule_empty_label.setStyleSheet(_empty_state_qss(getattr(self, "current_theme", None), padding=20))
         self.schedule_empty_label.hide()
         layout.addWidget(self.schedule_empty_label)
         layout.addStretch()
@@ -366,83 +390,147 @@ class AppTabSetupMixin:
         self.schedule_geo_dwell.valueChanged.connect(self._save_schedule_config)
         self.schedule_geo_asset_apt.toggled.connect(self._save_schedule_config)
         self.schedule_geo_asset_vl.toggled.connect(self._save_schedule_config)
-    
+
+    def _copy_geo_tab_to_schedule(self: Any):
+        """「지도로 찾기」에서 정한 위치·범위를 예약 설정으로 한 번에 옮긴다."""
+        geo_tab = getattr(self, "geo_tab", None)
+        if geo_tab is None:
+            return
+        previous_hydrating = bool(getattr(self, "_schedule_hydrating", False))
+        self._schedule_hydrating = True
+        try:
+            self.schedule_geo_lat.setValue(float(geo_tab.spin_lat.value()))
+            self.schedule_geo_lon.setValue(float(geo_tab.spin_lon.value()))
+            self.schedule_geo_zoom.setValue(int(geo_tab.spin_zoom.value()))
+            self.schedule_geo_rings.setValue(int(geo_tab.spin_rings.value()))
+            self.schedule_geo_step.setValue(int(geo_tab.spin_step.value()))
+            self.schedule_geo_dwell.setValue(int(geo_tab.spin_dwell.value()))
+            apt = bool(geo_tab.check_asset_apt.isChecked())
+            vl = bool(geo_tab.check_asset_vl.isChecked())
+            if apt or vl:
+                self.schedule_geo_asset_apt.setChecked(apt)
+                self.schedule_geo_asset_vl.setChecked(vl)
+        finally:
+            self._schedule_hydrating = previous_hydrating
+        self._save_schedule_config()
+        place = str(getattr(geo_tab, "_geo_place_name", "") or "").strip()
+        self.show_toast(
+            f"'{place}' 위치를 예약 설정으로 가져왔습니다." if place else "지도 위치를 예약 설정으로 가져왔습니다.",
+            toast_type="success",
+        )
+
     def _setup_history_tab(self: Any):
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.widgets.components import EmptyStateWidget, build_page_header, install_token_labels
+        from src.utils.ui_labels import asset_label, crawl_mode_label, history_status_label
+
         self.history_tab = QWidget()
         layout = QVBoxLayout(self.history_tab)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_SM)
 
         bl = QHBoxLayout()
+        bl.addWidget(build_page_header("수집 기록", "언제 어떤 단지를 수집했고 매물이 몇 건이었는지 보여 줍니다."), 1)
         btn_rf = QPushButton("새로고침")
         btn_rf.setObjectName("secondaryBtn")
-        btn_rf.setToolTip("수집 이력을 다시 불러옵니다.")
+        btn_rf.setToolTip("수집 기록을 다시 불러옵니다. (F5)")
         btn_rf.clicked.connect(self._load_history)
-        bl.addWidget(btn_rf)
-        bl.addStretch()
+        bl.addWidget(btn_rf, 0, Qt.AlignmentFlag.AlignBottom)
         layout.addLayout(bl)
 
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(9)
         self.history_table.setHorizontalHeaderLabels(
-            ["단지명", "단지ID", "자산", "엔진", "모드", "상태", "거래유형", "수집건수", "수집시각"]
+            ["단지 이름", "단지 번호", "종류", "엔진", "수집 방식", "결과", "거래 종류", "매물 수", "수집 시각"]
         )
         history_header = self.history_table.horizontalHeader()
         if history_header is not None:
             history_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
-        layout.addWidget(self.history_table)
+        self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        # 내부 값(APT, complex, success …)은 그대로 두고 화면에만 쉬운 말로 보여 준다.
+        install_token_labels(self.history_table, 2, asset_label)
+        install_token_labels(self.history_table, 4, crawl_mode_label)
+        install_token_labels(self.history_table, 5, history_status_label)
+        self.history_table.setColumnHidden(3, True)  # 엔진은 문제 진단용이라 숨긴다
+        layout.addWidget(self.history_table, 1)
 
-        self.history_empty_label = QLabel(
-            "수집 기록이 없습니다.\n「매물 수집」에서 수집을 실행해 보세요."
+        self.history_empty_label = EmptyStateWidget(
+            icon="HISTORY",
+            title="아직 수집 기록이 없습니다",
+            description="「매물 수집」이나 「지도로 찾기」에서 수집하면 여기에 기록이 쌓입니다.",
         )
-        self.history_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.history_empty_label.setStyleSheet(_empty_state_qss(getattr(self, "current_theme", None), padding=40))
-        layout.addWidget(self.history_empty_label)
+        layout.addWidget(self.history_empty_label, 1)
         self.history_empty_label.hide()
+        history_model = self.history_table.model()
+        if history_model is not None:
+            history_model.rowsInserted.connect(lambda *_: self._update_history_empty_state())
+            history_model.rowsRemoved.connect(lambda *_: self._update_history_empty_state())
+            history_model.modelReset.connect(lambda *_: self._update_history_empty_state())
+        self._update_history_empty_state()
 
         prepare_page(self.history_tab, ROUTE_HISTORY)
         self.tabs.addTab(self.history_tab, TAB_HISTORY)
-    
+
+    def _update_history_empty_state(self: Any):
+        table = getattr(self, "history_table", None)
+        empty = getattr(self, "history_empty_label", None)
+        if table is None or empty is None:
+            return
+        has_rows = int(table.rowCount() or 0) > 0
+        empty.setVisible(not has_rows)
+        table.setVisible(has_rows)
+
     def _setup_stats_tab(self: Any):
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.widgets.components import build_page_header
+
         self.stats_tab = QWidget()
         layout = QVBoxLayout(self.stats_tab)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_SM)
+        layout.addWidget(
+            build_page_header(
+                "가격 통계",
+                "수집할 때마다 쌓인 기록으로 단지별 최저·최고·평균 가격의 흐름을 봅니다.",
+            )
+        )
+
+        def _label(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setObjectName("fieldLabel")
+            return lbl
 
         fl = QHBoxLayout()
-        fl.setSpacing(8)
-        lbl_cplx = QLabel("단지")
-        lbl_cplx.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        fl.addWidget(lbl_cplx)
+        fl.setSpacing(_XS)
+        fl.addWidget(_label("단지"))
         self.stats_complex_combo = QComboBox()
-        self.stats_complex_combo.setToolTip("통계를 볼 단지를 선택합니다.")
+        self.stats_complex_combo.setMinimumWidth(220)
+        self.stats_complex_combo.setToolTip("가격 흐름을 볼 단지를 고릅니다.")
         fl.addWidget(self.stats_complex_combo)
-        lbl_type = QLabel("유형")
-        lbl_type.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        fl.addWidget(lbl_type)
+        fl.addSpacing(_XS)
+        fl.addWidget(_label("거래 종류"))
         self.stats_type_combo = QComboBox()
         self.stats_type_combo.addItems(["전체", "매매", "전세", "월세"])
         fl.addWidget(self.stats_type_combo)
-        self.stats_metric_label = QLabel("지표")
-        self.stats_metric_label.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
+        self.stats_metric_label = _label("기준")
         fl.addWidget(self.stats_metric_label)
         self.stats_metric_combo = QComboBox()
         self.stats_metric_combo.addItem("월세 금액", "rent")
         self.stats_metric_combo.addItem("보증금", "deposit")
-        self.stats_metric_combo.setToolTip("월세 통계에서 표시할 가격 지표를 선택합니다.")
+        self.stats_metric_combo.setToolTip("월세는 매달 내는 금액과 보증금 중 무엇을 기준으로 볼지 고릅니다.")
         fl.addWidget(self.stats_metric_combo)
         self.stats_type_combo.currentIndexChanged.connect(self._on_stats_type_changed)
         self.stats_metric_combo.currentIndexChanged.connect(self._load_stats)
-        lbl_area = QLabel("면적")
-        lbl_area.setStyleSheet(_secondary_label_qss(getattr(self, "current_theme", None)))
-        fl.addWidget(lbl_area)
+        fl.addSpacing(_XS)
+        fl.addWidget(_label("면적"))
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")
         fl.addWidget(self.stats_pyeong_combo)
-        btn_load = QPushButton("조회")
+        btn_load = QPushButton("보기")
         btn_load.setObjectName("primaryBtn")
-        btn_load.setToolTip("선택한 조건으로 가격 시세 데이터를 불러옵니다.")
+        btn_load.setToolTip("고른 조건으로 가격 기록을 불러옵니다.")
         btn_load.clicked.connect(self._load_stats)
         fl.addWidget(btn_load)
         fl.addStretch()
@@ -452,30 +540,35 @@ class AppTabSetupMixin:
 
         self.stats_table = QTableWidget()
         self.stats_table.setColumnCount(6)
-        self.stats_table.setHorizontalHeaderLabels(["날짜", "유형", "평형", "최저가", "최고가", "평균가"])
+        self.stats_table.setHorizontalHeaderLabels(["날짜", "거래 종류", "평형", "최저가", "최고가", "평균가"])
         stats_header = self.stats_table.horizontalHeader()
         if stats_header is not None:
             stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.stats_table.setAlternatingRowColors(True)
-        
+        self.stats_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+
         # v10.0: Chart Integration
         self.stats_splitter = QSplitter(Qt.Orientation.Vertical)
         self.stats_splitter.addWidget(self.stats_table)
         self.chart_widget = None
-        self.chart_placeholder = QLabel("차트는 통계 조회 시 로드됩니다.")
+        self.chart_placeholder = QLabel(
+            "단지를 고르고 「보기」를 누르면 가격 흐름 그래프가 여기에 나타납니다.\n"
+            "같은 단지를 여러 날 수집할수록 흐름이 또렷해집니다."
+        )
+        self.chart_placeholder.setObjectName("listPlaceholder")
         self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.stats_splitter.addWidget(self.chart_placeholder)
         self.stats_splitter.setSizes([320, 280])
-        layout.addWidget(self.stats_splitter)
+        layout.addWidget(self.stats_splitter, 1)
         prepare_page(self.stats_tab, ROUTE_STATS)
         self.tabs.addTab(self.stats_tab, TAB_STATS)
-    
+
     def _setup_dashboard_tab(self: Any):
         self.dashboard_tab = QWidget()
         self.dashboard_layout = QVBoxLayout(self.dashboard_tab)
-        self.dashboard_layout.setContentsMargins(12, 12, 12, 12)
+        self.dashboard_layout.setContentsMargins(0, 0, 0, 0)
         self.dashboard_widget = None
-        self.dashboard_placeholder = QLabel("대시보드는 첫 진입 시 로드됩니다.")
+        self.dashboard_placeholder = QLabel("요약 화면을 준비하고 있습니다…")
         self.dashboard_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dashboard_placeholder.setObjectName("hintLabel")
         self.dashboard_layout.addWidget(self.dashboard_placeholder)
@@ -491,10 +584,19 @@ class AppTabSetupMixin:
 
         tab = QWidget()
         self.guide_tab = tab
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.widgets.components import build_page_header
+
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_SM)
+        layout.addWidget(build_page_header("가이드", "처음 쓰는 분을 위한 사용 방법과 화면 안내입니다."))
         browser = QTextBrowser()
         browser.setObjectName("guideBrowser")
+        browser.setFrameShape(QFrame.Shape.NoFrame)
+        guide_doc = browser.document()
+        if guide_doc is not None:
+            guide_doc.setDocumentMargin(0)
         browser.setOpenExternalLinks(True)
         self.guide_browser = browser
         theme = str(getattr(self, "current_theme", "dark") or "dark")
@@ -574,7 +676,7 @@ class AppTabSetupMixin:
                 self._ensure_group_tab().load_groups()
             except Exception as e:
                 ui_logger.exception(f"그룹 탭 로드 실패: {e}")
-                self.status_bar.showMessage("⚠️ 그룹 탭 로드 중 오류가 발생했습니다.")
+                self.status_bar.showMessage("단지 묶음을 불러오지 못했습니다.")
         elif index == self.TAB_HISTORY:
             if not force and self._noncritical_loaded.get("history", False):
                 return
@@ -589,7 +691,7 @@ class AppTabSetupMixin:
                 self._mark_noncritical_loaded("stats")
             except Exception as e:
                 ui_logger.exception(f"통계 탭 로드 실패: {e}")
-                self.status_bar.showMessage("⚠️ 통계 탭 로드 중 오류가 발생했습니다.")
+                self.status_bar.showMessage("가격 통계를 불러오지 못했습니다.")
         elif index == self.TAB_DASHBOARD:
             if not force and self._noncritical_loaded.get("dashboard", False):
                 return

@@ -81,103 +81,79 @@ class CrawlerTabLayoutSetupMixin:
         self._load_state()
 
     def _init_ui(self: Any):
+        from src.ui.fluent.design_tokens import SPACE_SM, SPACE_XS
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # Left Panel (Controls)
+
+        # Left panel: scrollable setup sections + an always-visible action bar.
+        left_w = QWidget()
+        left_w.setMinimumWidth(340)
+        left_outer = QVBoxLayout(left_w)
+        left_outer.setContentsMargins(0, 0, SPACE_XS, 0)
+        left_outer.setSpacing(SPACE_XS)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(320)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         scroll_content = QWidget()
         left = QVBoxLayout(scroll_content)
-        left.setContentsMargins(8, 8, 8, 8)
-        left.setSpacing(8)
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(SPACE_SM)
 
-        self.controls_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.controls_splitter.setChildrenCollapsible(True)
-        self.controls_splitter.setHandleWidth(6)
-
-        def _section(setup_fn):
-            section = QWidget()
-            section_layout = QVBoxLayout(section)
-            section_layout.setContentsMargins(0, 0, 0, 0)
-            section_layout.setSpacing(0)
-            setup_fn(section_layout)
-            section_layout.addStretch(1)
-            return section
-
-        # Primary path: trade types → complex list → run. Filters/speed are secondary.
-        self.controls_splitter.addWidget(_section(self._setup_options_group))
-        self.controls_splitter.addWidget(_section(self._setup_complex_list_group))
-        self.controls_splitter.addWidget(_section(self._setup_action_group))
-        self.controls_splitter.addWidget(_section(self._setup_filter_group))
-        self.controls_splitter.addWidget(_section(self._setup_speed_group))
-        left.addWidget(self.controls_splitter, 1)
+        # Primary path top to bottom: what to collect → trade kinds → optional conditions.
+        self._setup_complex_list_group(left)
+        self._setup_options_group(left)
+        self._setup_filter_group(left)
+        left.addStretch(0)
 
         scroll.setWidget(scroll_content)
-        self.main_splitter.addWidget(scroll)
-        
+        left_outer.addWidget(scroll, 1)
+        self._setup_action_group(left_outer)
+        self.main_splitter.addWidget(left_w)
+
         # Right Panel (Results)
         right_w = QWidget()
         right = QVBoxLayout(right_w)
-        right.setContentsMargins(8, 8, 8, 8)
-        right.setSpacing(8)
-        
+        right.setContentsMargins(SPACE_XS, 0, 0, 0)
+        right.setSpacing(SPACE_XS)
+
         self.summary_card = SummaryCard(theme=self.current_theme)
         right.addWidget(self.summary_card)
-        
+
         self._setup_result_area(right)
-        
+
         self.main_splitter.addWidget(right_w)
         self.main_splitter.setChildrenCollapsible(False)
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
-        self.main_splitter.setSizes([440, 880])
+        self.main_splitter.setSizes(self.MAIN_SPLITTER_DEFAULT)
         self.main_splitter.splitterMoved.connect(lambda *_: self._queue_splitter_state_save())
-        self.controls_splitter.splitterMoved.connect(lambda *_: self._queue_splitter_state_save())
         layout.addWidget(self.main_splitter)
+
+    MAIN_SPLITTER_DEFAULT = [400, 880]
 
     def _queue_splitter_state_save(self: Any):
         self._splitter_save_timer.start()
 
     def _save_splitter_state(self: Any):
-        if not hasattr(self, "main_splitter") or not hasattr(self, "controls_splitter"):
+        if not hasattr(self, "main_splitter"):
             return
-        settings.update(
-            {
-                "crawler_main_splitter_sizes": list(self.main_splitter.sizes()),
-                "crawler_controls_splitter_sizes": list(self.controls_splitter.sizes()),
-            }
-        )
+        settings.update({"crawler_main_splitter_sizes": list(self.main_splitter.sizes())})
 
     def _restore_splitter_state(self: Any):
-        main_default = [520, 880]
-        control_count = int(getattr(self.controls_splitter, "count", lambda: 0)())
-        control_default = [170, 300, 340, 140, 120]
-        if control_count != len(control_default):
-            control_default = [1 for _ in range(max(control_count, 1))]
-
+        main_default = list(self.MAIN_SPLITTER_DEFAULT)
         main_sizes = settings.get("crawler_main_splitter_sizes", main_default) or main_default
-        control_sizes = settings.get("crawler_controls_splitter_sizes", control_default) or control_default
         try:
             main_values = [max(1, int(v)) for v in main_sizes]
         except (TypeError, ValueError):
             main_values = main_default
-        try:
-            control_values = [max(1, int(v)) for v in control_sizes]
-        except (TypeError, ValueError):
-            control_values = control_default
-
         if len(main_values) != 2:
             main_values = main_default
-        if len(control_values) != control_count:
-            control_values = control_default
-
         self.main_splitter.setSizes(main_values)
-        self.controls_splitter.setSizes(control_values)
 
     def _load_state(self: Any):
         # Load any persisted state if needed

@@ -71,10 +71,8 @@ class TestGeoTabWiring(unittest.TestCase):
             geo_config = thread.geo_config
             assert geo_config is not None
             self.assertAlmostEqual(geo_config.lat, 37.55)
-            self.assertIn(
-                "Geo 모드는 Playwright 전용이며 Selenium fallback은 지원하지 않습니다.",
-                tab.log_browser.toPlainText(),
-            )
+            # 엔진 관련 기술 경고는 더 이상 진행 기록에 매번 찍지 않는다.
+            self.assertNotIn("Selenium", tab.log_browser.toPlainText())
 
             db.close()
             tab.deleteLater()
@@ -231,9 +229,14 @@ class TestGeoTabWiring(unittest.TestCase):
                 }
             )
 
-            self.assertTrue(any("Geo 발견 4 / 중복제거 2 / drain대기 7 / drain타임아웃 1" in m for m in messages))
-            self.assertTrue(any("marker전환 2/3 실패 1" in m for m in messages))
-            self.assertTrue(any("marker방법 text:매물" in m for m in messages))
+            # 상태 표시줄에는 쉬운 말만, 기술 진단 수치는 last_diagnostic_text(툴팁)에 남는다.
+            self.assertTrue(any("지도 탐색 중 · 단지 4곳 발견" in m for m in messages))
+            self.assertFalse(any("drain" in m or "marker" in m for m in messages))
+            diagnostics = tab.last_diagnostic_text
+            self.assertIn("Geo 발견 4 / 중복제거 2 / drain대기 7 / drain타임아웃 1", diagnostics)
+            self.assertIn("marker전환 2/3 / marker실패 1", diagnostics)
+            self.assertIn("marker방법 text:매물", diagnostics)
+            self.assertEqual(tab.progress_widget.toolTip(), diagnostics)
             db.close()
             tab.deleteLater()
             self._qt_app.processEvents()
@@ -464,10 +467,11 @@ class TestGeoTabWiring(unittest.TestCase):
             tab._on_crawl_finished([])
 
             text = tab.log_browser.toPlainText()
-            self.assertIn("Geo 요약: 발견 11, 중복제거 3, drain대기 19, drain timeout 2", text)
+            self.assertIn("진단(지도) 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2", text)
             self.assertIn("marker전환 4/5, marker실패 1, marker방법 selector:button", text)
-            self.assertTrue(any("Geo 완료: 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2" in m for m in messages))
-            self.assertTrue(any("marker전환 4/5, marker실패 1, marker방법 selector:button" in m for m in messages))
+            self.assertTrue(any("지도 탐색을 마쳤습니다. 단지 11곳" in m for m in messages))
+            self.assertFalse(any("drain" in m or "marker" in m for m in messages))
+            self.assertIn("Geo 완료: 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2", tab.last_diagnostic_text)
 
             db.close()
             tab.deleteLater()

@@ -29,6 +29,16 @@ class CrawlerTabResultLoggingMixin:
         if getattr(self, "_log_max_block_count", None) != max_lines:
             doc.setMaximumBlockCount(max_lines)
             self._log_max_block_count = max_lines
-        self.log_browser.append(f'<span style="color:{color}">{msg}</span>')
+        line = f'<span style="color:{color}">{msg}</span>'
+        self.log_browser.append(line)
         sb = self.log_browser.verticalScrollBar()
         sb.setValue(sb.maximum())
+        # 요약 보기에는 진단용(level 10) 줄을 싣지 않는다.
+        summary = getattr(self, "log_summary", None)
+        if summary is not None and level >= 20:
+            if getattr(self, "_log_summary_max_block_count", None) != max_lines:
+                summary.document().setMaximumBlockCount(max_lines)
+                self._log_summary_max_block_count = max_lines
+            summary.append(line)
+            summary_sb = summary.verticalScrollBar()
+            summary_sb.setValue(summary_sb.maximum())

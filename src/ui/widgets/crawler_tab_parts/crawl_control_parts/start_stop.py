@@ -19,16 +19,18 @@ class CrawlerTabStartStopMixin:
         )
 
         if self.crawler_thread and self.crawler_thread.isRunning():
-            self.append_log("⚠️ 이미 크롤링이 실행 중입니다.", 30)
-            self.status_message.emit("이미 크롤링이 실행 중입니다.")
+            self.append_log("이미 수집이 진행 중입니다.", 30)
+            self.status_message.emit("이미 수집이 진행 중입니다.")
             return False
 
         crawl_lock = get_crawl_lock()
         lock_owner = "complex"
         if not crawl_lock.try_acquire(lock_owner):
-            other = crawl_lock.owner() or "다른 작업"
+            from src.utils.ui_labels import crawl_owner_label
+
+            other = crawl_owner_label(crawl_lock.owner())
             self.append_log(
-                f"⚠️ 다른 수집이 진행 중이라 시작할 수 없습니다. (실행 중: {other})",
+                f"다른 수집이 진행 중이라 시작할 수 없습니다. (진행 중: {other})",
                 30,
             )
             self.status_message.emit("다른 수집이 끝나야 시작할 수 있습니다.")
@@ -42,21 +44,29 @@ class CrawlerTabStartStopMixin:
         if in_maintenance:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            self.append_log("⛔ 유지보수 모드에서는 크롤링을 시작할 수 없습니다.", 30)
-            self.status_message.emit("유지보수 모드에서는 크롤링이 차단됩니다.")
+            self.append_log("데이터 복원 작업 중에는 수집을 시작할 수 없습니다.", 30)
+            self.status_message.emit("데이터 복원 작업이 끝난 뒤 다시 시도해 주세요.")
             return False
 
         if self.table_list.rowCount() == 0:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
+            QMessageBox.warning(
+                self,
+                "단지를 먼저 추가해 주세요",
+                "수집할 단지가 없습니다.\n「단지 찾기」로 단지를 검색해 목록에 추가해 주세요.",
+            )
             return False
         
         target_list = self._normalize_task_table()
         if not target_list:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "경고", "크롤링할 단지를 추가해주세요.")
+            QMessageBox.warning(
+                self,
+                "단지를 먼저 추가해 주세요",
+                "수집할 단지가 없습니다.\n「단지 찾기」로 단지를 검색해 목록에 추가해 주세요.",
+            )
             return False
              
         trade_types = []
@@ -67,7 +77,7 @@ class CrawlerTabStartStopMixin:
         if not trade_types:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "경고", "최소 하나의 거래 유형을 선택해주세요.")
+            QMessageBox.warning(self, "거래 종류를 선택해 주세요", "매매·전세·월세 중 하나 이상을 선택해 주세요.")
             return False
 
         engine_name = str(settings.get("crawl_engine", "playwright") or "playwright").strip().lower() or "playwright"
@@ -81,11 +91,12 @@ class CrawlerTabStartStopMixin:
             self._crawl_lock_owner = None
             QMessageBox.warning(
                 self,
-                "경고",
-                "Selenium complex 모드는 현재 APT만 지원합니다. VL 대상은 Playwright 엔진으로 실행해주세요.",
+                "빌라는 기본 엔진에서만 수집할 수 있습니다",
+                "지금 선택된 보조 엔진(Selenium)은 아파트만 수집할 수 있습니다.\n"
+                "설정 → 고급에서 수집 엔진을 기본(Playwright)으로 바꾸거나, 목록에서 빌라를 빼 주세요.",
             )
-            self.append_log("⚠️ Selenium complex 모드는 VL 대상을 지원하지 않아 시작을 중단했습니다.", 30)
-            self.status_message.emit("VL 대상은 Playwright complex 모드로 실행해주세요.")
+            self.append_log("보조 엔진(Selenium)은 빌라를 수집할 수 없어 시작하지 않았습니다.", 30)
+            self.status_message.emit("빌라는 기본 엔진(Playwright)에서만 수집할 수 있습니다.")
             return False
 
         if (
@@ -97,16 +108,16 @@ class CrawlerTabStartStopMixin:
                 f"{name} ({cid})" for name, cid, _ in unsupported_selenium_targets[:5]
             )
             self.append_log(
-                "ℹ️ VL 대상은 Playwright로 수집되며, Selenium 폴백 전환 시 제외됩니다: "
+                "참고: 기본 엔진이 실패해 보조 엔진으로 넘어가면 빌라는 건너뜁니다: "
                 + skipped,
-                20,
+                10,
             )
-            self.status_message.emit("VL 대상은 Selenium 폴백에서 제외됩니다.")
 
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.btn_save.setEnabled(False)
         self.log_browser.clear()
+        self.log_summary.clear()
         self.progress_widget.reset()
         self.summary_card.reset()
         self.collected_data = []
@@ -115,6 +126,7 @@ class CrawlerTabStartStopMixin:
         self.card_view.set_data([])
         self.grouped_rows = {}
         self._last_complex_status_stats = None
+        self._crawl_finished_once = False
 
         area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
         price_filter = {
@@ -207,22 +219,25 @@ class CrawlerTabStartStopMixin:
             self.crawler_thread = None
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
-            self.append_log(f"❌ 크롤링 스레드 시작 실패: {exc}", 40)
+            self.append_log(f"수집을 시작하지 못했습니다: {exc}", 40)
             return False
         
+        self._update_result_empty_state()
+        self.progress_widget.status_label.setText("수집을 준비하고 있습니다…")
+        self.status_message.emit(f"단지 {len(target_list)}곳의 매물 수집을 시작했습니다.")
         self.crawling_started.emit()
         return True
 
     def _on_crawl_error(self: Any, message) -> None:
         # ISSUE-019: 에러 시그널이 로그에만 머물러 버튼이 stale 상태로 남던
         # 문제를 수정 — 로그+상태바/토스트 알림, 스레드 사망 시 버튼 복구.
-        text = f"❌ 크롤링 오류: {message}"
+        text = f"수집 중 문제가 생겼습니다: {message}"
         try:
             self.append_log(text, 40)
         except Exception:
             pass
         try:
-            self.status_message.emit(str(message or "크롤링 중 오류가 발생했습니다."))
+            self.status_message.emit(str(message or "수집 중 문제가 생겼습니다."))
         except Exception:
             pass
         try:
@@ -259,7 +274,8 @@ class CrawlerTabStartStopMixin:
     def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():
             self.crawler_thread.stop()
-            self.append_log("🛑 중지 요청 중...", 30)
+            self.append_log("수집을 멈추는 중입니다. 잠시만 기다려 주세요…", 30)
+            self.status_message.emit("수집을 멈추는 중입니다…")
             self.btn_stop.setEnabled(False)
 
     def shutdown_crawl(self: Any, timeout_ms: int = 8000) -> bool:
@@ -292,5 +308,5 @@ class CrawlerTabStartStopMixin:
             self.crawler_thread = None
             self._release_crawl_lock()
             return True
-        self.append_log(f"⚠️ 크롤링 종료 대기 타임아웃 ({wait_ms}ms)", 30)
+        self.append_log("수집이 제때 멈추지 않았습니다. 잠시 후 다시 시도해 주세요.", 30)
         return False
