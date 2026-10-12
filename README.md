@@ -365,6 +365,12 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 
 - **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.11/3.14. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
 - **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1` (`.venv-ci`가 있으면 자동으로 격리 환경 사용)
+- **테스트는 격리 환경 필수**: 전역 Python의 사용자 site-packages(`%APPDATA%\Python\...`) 에 `PySide6-Fluent-Widgets`가 있으면 `qfluentwidgets`가 PySide6 변종으로 잡혀 UI 테스트가 대량으로 실패합니다(`TypeError: ... 'PySide6.QtGui.QIcon'`, `NavigationInterface ... PySide6 ...`). 전역을 고치지 말고 격리 환경으로 실행하세요.
+  ```powershell
+  powershell -File scripts/setup_build_env.ps1   # .venv-ci 생성/동기화(최초 1회)
+  powershell -File scripts/ci_check.ps1          # .venv-ci가 있으면 자동 사용
+  ```
+- **워크플로 작성 규칙**: 릴리스 검사는 격리 모드(`python -I`)로 실행되며, `-I`는 현재 폴더를 `sys.path`에서 제외합니다. `src`를 임포트하는 인라인 스니펫은 반드시 `sys.path.insert(0, '.')`를 먼저 넣으세요(2026-10-12 v15.5 Release 실패의 원인). `tests/test_release_workflow.py`가 이를 강제합니다.
 - **릴리스**: `.github/workflows/release.yml` — 태그 `v*` 또는 수동 실행. `softprops/action-gh-release@v3`로 EXE와 서명 매니페스트를 GitHub Releases에 올리고 `updates/latest.json`을 `main`에 커밋
 - **앱 자동 업데이트 키·검증 절차**: [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md)
 - **의존성**: 주간 Dependabot 버전 PR은 쓰지 않습니다. pip 하한은 `requirements.txt`, Actions 메이저는 워크플로 파일에서 직접 올립니다.

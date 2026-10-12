@@ -1,5 +1,11 @@
 # Update History
 
+## 2026-10-12: Release v15.5 실패 수정 + 재발방지 회귀 테스트
+
+- Release 워크플로(`v15.5` 태그)의 Qt 바인딩 검사가 `python -I` 격리 모드에서 `ModuleNotFoundError: No module named 'src'`로 실패. `-I`는 cwd를 `sys.path`에서 제외하므로 `sys.path.insert(0, '.')` 추가, 재실행 성공.
+- 재발방지: `tests/test_release_workflow.py` 신규 — `release.yml`·`scripts/setup_build_env.ps1`·`scripts/build_local.ps1`의 모든 `-I -c` 스니펫이 `src` 임포트 전 `sys.path`를 넣는지 검사 + 릴리스 바인딩 검사 원문을 `-I` 서브프로세스로 실행. CI 서브셋(ci.yml·ci_check.ps1)에 등록.
+- 로컬 테스트는 격리 환경(`.venv-ci`) 필수 — 전역 사용자 site-packages의 `PySide6-Fluent-Widgets`가 `qfluentwidgets`를 덮으면 UI 테스트 대량 실패. 상세는 README 「GitHub CI 및 릴리스」 참고.
+
 ## 2026-10-12: 입력 검증 · 수집 중 상태 · 완료 요약 보강 + 격리 빌드 환경 (UI/UX, v15.5)
 
 - 빌드 안전성: 전역 Python의 `PySide6-Fluent-Widgets`가 `qfluentwidgets`를 덮어써 빌드·테스트가 오염되던 문제를 격리 환경으로 해결. `scripts/setup_build_env.ps1`(`.venv-ci` 생성·Qt 바인딩 검증), `scripts/build_local.ps1`(테스트→PyInstaller→frozen preflight), `scripts/ci_check.ps1`은 `.venv-ci`가 있으면 자동 사용. 릴리스 워크플로는 `PYTHONNOUSERSITE=1` + 바인딩 검사 단계 추가

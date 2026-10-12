@@ -84,6 +84,7 @@ jobs:
           tests/test_fluent_theme.py
           tests/test_requirements_pins.py
           tests/test_crawl_preflight.py
+          tests/test_release_workflow.py
 
       - name: Preflight check
         run: python -m src.utils.preflight

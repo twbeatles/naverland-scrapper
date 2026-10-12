@@ -61,7 +61,8 @@ Write-Host "== Pytest (CI subset) =="
   tests/test_preflight.py `
   tests/test_fluent_theme.py `
   tests/test_requirements_pins.py `
-  tests/test_crawl_preflight.py
+  tests/test_crawl_preflight.py `
+  tests/test_release_workflow.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Preflight =="
