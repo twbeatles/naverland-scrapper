@@ -17,13 +17,45 @@ class CrawlerTabTaskOpsMixin:
         token = {"아파트": "APT", "빌라": "VL", "빌라·연립": "VL"}.get(token, token)
         return token if token in {"APT", "VL"} else "APT"
 
+    def _parse_manual_complex_text(self: Any, text):
+        """붙여넣은 네이버 부동산 주소에서 (단지 번호, 주택 종류)를 읽는다. 못 읽으면 ("", "")."""
+        from src.core.parser import NaverURLParser
+
+        raw = str(text or "").strip()
+        if not raw or raw.isdigit():
+            return "", ""
+        try:
+            parsed = NaverURLParser.parse_url_info(raw)
+        except Exception:
+            return "", ""
+        cid = str(parsed.get("complex_id", "") or "").strip()
+        if not cid.isdigit():
+            return "", ""
+        return cid, str(parsed.get("asset_type", "") or "").strip().upper()
+
+    def _on_manual_id_text_changed(self: Any, text):
+        cid, asset_type = self._parse_manual_complex_text(text)
+        if not cid:
+            return
+        if asset_type in {"APT", "VL"}:
+            index = self.combo_manual_asset.findData(asset_type)
+            if index >= 0:
+                self.combo_manual_asset.setCurrentIndex(index)
+        self.input_id.setText(cid)
+        self.status_message.emit(f"주소에서 단지 번호 {cid}을(를) 읽었습니다. 추가 버튼을 눌러 주세요.")
+
     def _add_complex(self: Any):
         name = self.input_name.text().strip()
         cid = self.input_id.text().strip()
         if not cid:
             return
         if not self._complex_id_regex.match(cid).hasMatch():
-            QMessageBox.warning(self, "입력 확인", "단지 번호는 숫자만 입력할 수 있습니다.")
+            QMessageBox.warning(
+                self,
+                "입력 확인",
+                "단지 번호(숫자)나 네이버 부동산 단지 주소를 입력해 주세요.\n"
+                "예: 12345 또는 land.naver.com/complexes/12345",
+            )
             self.input_id.setFocus()
             self.input_id.selectAll()
             return
@@ -151,6 +183,19 @@ class CrawlerTabTaskOpsMixin:
             self.table_list.removeRow(row)
 
     def _clear_list(self: Any):
+        count = int(self.table_list.rowCount() or 0)
+        # 한 곳뿐이면 다시 넣기 쉬우므로 묻지 않는다.
+        if count >= 2:
+            answer = QMessageBox.question(
+                self,
+                "목록을 비울까요?",
+                f"수집할 단지 {count}곳을 목록에서 모두 뺍니다.\n"
+                "「내 단지」에 저장해 둔 단지와 수집 기록은 지워지지 않습니다.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
         self.table_list.setRowCount(0)
 
     def _save_to_db(self: Any):
@@ -191,10 +236,16 @@ class CrawlerTabTaskOpsMixin:
         from src.core.parser import NaverURLParser
 
         count = 0
+        unreadable = 0
         for url in urls:
             parsed = NaverURLParser.parse_url_info(str(url or ""))
             cid = str(parsed.get("complex_id", "") or "").strip()
             asset_type = self._normalize_task_asset_type(parsed.get("asset_type", "APT"))
-            if cid and self._add_row(f"단지_{cid}", cid, asset_type):
+            if not cid:
+                unreadable += 1
+            elif self._add_row(f"단지_{cid}", cid, asset_type):
                 count += 1
-        self.status_message.emit(f"주소에서 단지 {count}곳을 추가했습니다.")
+        message = f"주소에서 단지 {count}곳을 추가했습니다."
+        if unreadable:
+            message += f" 단지 번호를 찾지 못한 주소 {unreadable}개는 건너뛰었습니다."
+        self.status_message.emit(message)

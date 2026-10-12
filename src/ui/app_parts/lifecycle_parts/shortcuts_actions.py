@@ -49,7 +49,8 @@ class AppLifecycleShortcutsActionsMixin:
     def _start_crawling(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
-            self.crawler_tab.start_crawling()
+            # 단축키도 버튼과 같은 확인 절차를 거친다.
+            self.crawler_tab.request_start()
 
     def _stop_crawling(self: Any):
         if hasattr(self, "crawler_tab"):

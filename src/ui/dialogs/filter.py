@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QGridLayout, QLabel, QSpinBox, 
     QDoubleSpinBox, QHBoxLayout, QCheckBox, QLineEdit, QPushButton, 
-    QListWidget, QAbstractItemView, QListWidgetItem, QDialogButtonBox
+    QListWidget, QAbstractItemView, QListWidgetItem, QDialogButtonBox, QMessageBox
 )
 from PyQt6.QtCore import pyqtSignal
 
@@ -115,6 +115,12 @@ class AdvancedFilterDialog(QDialog):
         self.price_max.setSuffix(" 만원")
         self.price_max.setSpecialValueText("제한 없음")
         pg.addWidget(self.price_max, 0, 3)
+        self.price_hint = QLabel("")
+        self.price_hint.setObjectName("hintLabel")
+        pg.addWidget(self.price_hint, 1, 0, 1, 4)
+        self.price_min.valueChanged.connect(self._refresh_price_hint)
+        self.price_max.valueChanged.connect(self._refresh_price_hint)
+        self._refresh_price_hint()
         layout.addWidget(price_group)
         
         # 면적 필터
@@ -131,6 +137,7 @@ class AdvancedFilterDialog(QDialog):
         self.area_max.setRange(0, 500)
         self.area_max.setValue(500)
         self.area_max.setSuffix(" 평")
+        self.area_max.setSpecialValueText("제한 없음")
         ag.addWidget(self.area_max, 0, 3)
         layout.addWidget(area_group)
         
@@ -191,6 +198,15 @@ class AdvancedFilterDialog(QDialog):
         btn_layout.addWidget(btn_apply)
         layout.addLayout(btn_layout)
     
+    def _refresh_price_hint(self, *_args):
+        from src.utils.helpers import PriceConverter
+
+        low = self.price_min.value()
+        high = self.price_max.value()
+        low_text = PriceConverter.to_string(low) if low else "제한 없음"
+        high_text = PriceConverter.to_string(high) if 0 < high < self.price_max.maximum() else "제한 없음"
+        self.price_hint.setText(f"{low_text} ~ {high_text}  (10,000만원 = 1억)")
+
     def _reset(self):
         self.price_min.setValue(0)
         self.price_max.setValue(9999999)
@@ -208,11 +224,26 @@ class AdvancedFilterDialog(QDialog):
         self._filters = None
     
     def _apply(self):
+        # 최대 칸의 0은 화면에 「제한 없음」으로 보이므로 실제로도 제한 없이 다룬다.
+        price_max = self.price_max.value() or self.price_max.maximum()
+        area_max = self.area_max.value() or self.area_max.maximum()
+        wrong = []
+        if self.price_min.value() > price_max:
+            wrong.append("가격")
+        if self.area_min.value() > area_max:
+            wrong.append("면적")
+        if wrong:
+            QMessageBox.warning(
+                self,
+                "범위를 확인해 주세요",
+                f"{', '.join(wrong)}의 최소 값이 최대 값보다 큽니다. 이대로는 보이는 매물이 없습니다.",
+            )
+            return
         filters = {
             'price_min': self.price_min.value(),
-            'price_max': self.price_max.value(),
+            'price_max': price_max,
             'area_min': self.area_min.value(),
-            'area_max': self.area_max.value(),
+            'area_max': area_max,
             'floor_low': self.floor_low.isChecked(),
             'floor_mid': self.floor_mid.isChecked(),
             'floor_high': self.floor_high.isChecked(),

@@ -250,6 +250,8 @@ class CrawlerTabFiltersSearchMixin:
             "면적": self.COL_AREA,
             "거래유형": self.COL_TRADE,
             "거래": self.COL_TRADE,
+            "평당가": self.COL_PYEONG_PRICE,
+            "신규": self.COL_NEW,
         }
         is_asc = "↑" in criterion
         key = criterion.split(" ")[0]

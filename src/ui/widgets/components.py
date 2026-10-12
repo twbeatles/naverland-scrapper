@@ -291,6 +291,16 @@ class SummaryCard(QFrame):
         self.filtered_widget = self._create_stat_widget("조건 제외", "0건", c["text_secondary"])
         layout.addWidget(self.filtered_widget)
 
+        # 숫자가 무엇을 센 것인지 헷갈리지 않게 설명을 단다.
+        self.total_widget.setToolTip("이번 수집에서 조건에 맞아 담은 매물 수입니다.")
+        self.new_widget.setToolTip("지난 수집에는 없다가 이번에 새로 나온 매물 수입니다.")
+        self.price_up_widget.setToolTip("지난 수집보다 가격이 오른 매물 수입니다.")
+        self.price_down_widget.setToolTip("지난 수집보다 가격이 내린 매물 수입니다.")
+        self.filtered_widget.setToolTip(
+            "「조건·속도 설정」에서 정한 면적·가격 범위에 맞지 않아 담지 않은 매물 수입니다.\n"
+            "이 숫자가 크면 조건이 너무 좁은지 확인해 보세요."
+        )
+
         layout.addStretch()
 
     def set_theme(self, theme):
@@ -361,6 +371,18 @@ class SortableTableWidgetItem(QTableWidgetItem):
             val2 = float(other.text().replace(",", "").replace("만", "").replace("억", "").replace("평", "").split()[0])
             return val1 < val2
         except (ValueError, IndexError):
+            return super().__lt__(other)
+
+
+class NumericSortTableWidgetItem(QTableWidgetItem):
+    """보이는 글자("3억 5,000만/평")와 상관없이 UserRole에 넣은 숫자로 정렬한다."""
+
+    def __lt__(self, other):
+        try:
+            return float(self.data(Qt.ItemDataRole.UserRole) or 0) < float(
+                other.data(Qt.ItemDataRole.UserRole) or 0
+            )
+        except (TypeError, ValueError):
             return super().__lt__(other)
 
 

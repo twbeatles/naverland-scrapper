@@ -839,6 +839,24 @@ QWidget#actionBar {{
     border: 1px solid {c['border_subtle']};
     border-radius: 8px;
 }}
+QFrame#runSummary {{
+    background-color: {c['bg_card']};
+    border: 1px solid {c['border_subtle']};
+    border-left: 3px solid {c['accent']};
+    border-radius: 8px;
+}}
+QLabel#runSummaryTitle {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {c['text_primary']};
+    background: transparent;
+}}
+QLabel#errorLabel {{
+    font-size: 12px;
+    font-weight: 600;
+    color: {c['error']};
+    background: transparent;
+}}
 QFrame#sectionCard {{
     background-color: {c['bg_card']};
     border: 1px solid {c['border_subtle']};

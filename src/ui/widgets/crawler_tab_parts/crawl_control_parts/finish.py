@@ -20,7 +20,9 @@ class CrawlerTabFinishMixin:
         return ", ".join(parts[:8])
 
     @staticmethod
-    def _finish_status_text(count: int) -> str:
+    def _finish_status_text(count: int, stopped: bool = False) -> str:
+        if stopped:
+            return f"수집을 중지했습니다. 그때까지 모은 매물 {count}건은 그대로 남아 있습니다."
         if count > 0:
             return f"수집을 마쳤습니다. 매물 {count}건 · 「결과 저장」으로 파일에 담을 수 있습니다."
         return "수집을 마쳤지만 조건에 맞는 매물이 없습니다."
@@ -34,11 +36,19 @@ class CrawlerTabFinishMixin:
             except (TypeError, ValueError, AttributeError):
                 final_stats = {}
         try:
+            stopped = bool(getattr(self, "_stop_requested", False))
             self.btn_save.setEnabled(True)
-            self.progress_widget.complete()
+            if stopped:
+                # 중간에 멈춘 수집을 100% 완료처럼 보이게 하지 않는다.
+                self.progress_widget.status_label.setText("수집을 중지했습니다.")
+                self.progress_widget.time_label.setText("")
+                self.append_log(f"수집을 중지했습니다. 그때까지 매물 {len(data)}건을 모았습니다.", 30)
+            else:
+                self.progress_widget.complete()
+                self.append_log(f"수집을 마쳤습니다. 매물 {len(data)}건을 찾았습니다.")
             self._crawl_finished_once = True
-            self.append_log(f"수집을 마쳤습니다. 매물 {len(data)}건을 찾았습니다.")
-            self.status_message.emit(self._finish_status_text(len(data)))
+            self.status_message.emit(self._finish_status_text(len(data), stopped))
+            self._show_run_summary(len(data), final_stats, stopped=stopped)
             if final_stats:
                 detail_skip = int(final_stats.get("detail_fetch_skipped_count", 0) or 0)
                 detail_cap = int(final_stats.get("detail_cap_truncated", 0) or 0)
@@ -127,6 +137,8 @@ class CrawlerTabFinishMixin:
             self.crawler_thread = None
             if hasattr(self, "_release_crawl_lock"):
                 self._release_crawl_lock()
+            if hasattr(self, "_set_inputs_locked"):
+                self._set_inputs_locked(False)
             if hasattr(self, "_update_result_empty_state"):
                 self._update_result_empty_state()
 

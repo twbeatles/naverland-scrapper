@@ -16,4 +16,6 @@ python -c "import base64; from cryptography.hazmat.primitives import serializati
 
 The release workflow (`.github/workflows/release.yml`) runs on GitHub-hosted `windows-latest` with `actions/checkout@v7`, `actions/setup-python@v7` (Python 3.14, pip cache), and `softprops/action-gh-release@v3`. It builds a one-file EXE, uploads it with the signed manifest to GitHub Releases, and commits that manifest to `updates/latest.json` on `main`. The running application first shuts down active collection, then starts a copied helper. The helper waits for exit, replaces the EXE, runs `--preflight`, rolls back on failure, and restarts only a validated build.
 
+Local builds should use the isolated `.venv-ci` (`scripts/setup_build_env.ps1`, then `scripts/build_local.ps1 -OneFile`) so packages in the global or user site (for example `PySide6-Fluent-Widgets`, which overwrites `qfluentwidgets`) cannot leak into the EXE. The release workflow runs on a clean runner with `PYTHONNOUSERSITE=1` and fails early if `qfluentwidgets` is not the PyQt6 variant.
+
 Weekly Dependabot version-update PRs are disabled (no `.github/dependabot.yml`). Bump pip floors in `requirements.txt` and action majors in the workflow files when needed. GitHub Dependabot security alerts can still be used independently.

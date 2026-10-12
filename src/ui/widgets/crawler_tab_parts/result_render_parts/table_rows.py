@@ -304,7 +304,12 @@ class CrawlerTabTableRowRenderMixin:
         self.result_table.setItem(row, self.COL_AREA, area_item)
 
         pyeong_price_text = str(data.get("평당가_표시", "-"))
-        self.result_table.setItem(row, self.COL_PYEONG_PRICE, QTableWidgetItem(pyeong_price_text))
+        pyeong_item = NumericSortTableWidgetItem(pyeong_price_text)
+        try:
+            pyeong_item.setData(Qt.ItemDataRole.UserRole, float(data.get("평당가", 0) or 0))
+        except (TypeError, ValueError):
+            pyeong_item.setData(Qt.ItemDataRole.UserRole, 0.0)
+        self.result_table.setItem(row, self.COL_PYEONG_PRICE, pyeong_item)
         floor_text = str(data.get("층/방향", ""))
         self.result_table.setItem(row, self.COL_FLOOR, QTableWidgetItem(floor_text))
         feature_text = str(data.get("타입/특징", ""))

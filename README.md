@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PyQt6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.4-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.5-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
@@ -92,6 +92,8 @@ playwright install chromium
 > 만약 오류가 발생하면 아래 명령으로 재설치하세요:  
 > `python -m pip uninstall -y PySide6-Fluent-Widgets`  
 > `python -m pip install --force-reinstall "PyQt6-Fluent-Widgets>=1.11.0"`
+>
+> 전역 Python을 건드리고 싶지 않다면 **격리 환경**을 쓰세요: `powershell -File scripts/setup_build_env.ps1` 이 `.venv-ci`를 만들어 빌드·검증에 전용으로 사용합니다. (`PYTHONNOUSERSITE=1`로 `%APPDATA%\Python` 사용자 패키지도 차단)
 
 ---
 
@@ -331,9 +333,16 @@ python -m pytest -q
 Python이 설치되지 않은 환경에서도 배포 및 실행이 가능한 단독 패키지를 빌드할 수 있습니다 (`naverland-scrapper.spec` 사용).
 
 ```powershell
-# 기본 onedir 빌드 (dist/naverland/ 생성)
-python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
+# 권장: 격리 환경(.venv-ci)에서 테스트 → 빌드 → 실행 파일 점검까지 한 번에
+powershell -File scripts/build_local.ps1              # onedir  (dist/naverland/)
+powershell -File scripts/build_local.ps1 -OneFile     # onefile (dist/naverland_onefile.exe)
+powershell -File scripts/build_local.ps1 -OneFile -Slim   # Chromium 번들 제외
+
+# 직접 실행하려면 (격리 환경의 Python 사용)
+.venv-ci\Scripts\python.exe -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ```
+
+> 전역 Python에 `PySide6-Fluent-Widgets`가 설치돼 있으면 spec이 빌드를 중단합니다(실행 시 `No module named 'PySide6'` 방지). `build_local.ps1`은 전역 환경과 무관하게 `.venv-ci`만 사용합니다. 처음부터 다시 만들려면 `scripts/setup_build_env.ps1 -Recreate`.
 
 #### 빌드 커스터마이징 환경 변수
 | 환경 변수 | 기본값 | 설명 |
@@ -355,7 +364,7 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ## 🔁 GitHub CI 및 릴리스
 
 - **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.11/3.14. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
-- **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1`
+- **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1` (`.venv-ci`가 있으면 자동으로 격리 환경 사용)
 - **릴리스**: `.github/workflows/release.yml` — 태그 `v*` 또는 수동 실행. `softprops/action-gh-release@v3`로 EXE와 서명 매니페스트를 GitHub Releases에 올리고 `updates/latest.json`을 `main`에 커밋
 - **앱 자동 업데이트 키·검증 절차**: [docs/RELEASE_UPDATES.md](docs/RELEASE_UPDATES.md)
 - **의존성**: 주간 Dependabot 버전 PR은 쓰지 않습니다. pip 하한은 `requirements.txt`, Actions 메이저는 워크플로 파일에서 직접 올립니다.

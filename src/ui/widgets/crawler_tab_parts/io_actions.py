@@ -169,6 +169,7 @@ class CrawlerTabIOActionsMixin:
             ok = bool(getattr(result, "ok", result))
             error = str(getattr(result, "error", "") or getattr(exporter, "last_error", "") or "")
             if ok:
+                self._results_exported = True
                 message = f"매물 {len(items)}건을 저장했습니다."
                 self.status_message.emit(f"{message} ({path})")
                 show_toast = getattr(self.window(), "show_toast", None)

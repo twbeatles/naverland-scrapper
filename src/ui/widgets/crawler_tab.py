@@ -16,7 +16,8 @@ from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url, g
 from src.core.services.price_snapshots import build_price_snapshot_rows
 from src.core.managers import settings
 from src.ui.widgets.components import (
-    SearchBar, SpeedSlider, ProgressWidget, SummaryCard, SortableTableWidgetItem
+    SearchBar, SpeedSlider, ProgressWidget, SummaryCard, SortableTableWidgetItem,
+    NumericSortTableWidgetItem,
 )
 from src.ui.widgets.cards import CardViewWidget
 from src.ui.dialogs import (

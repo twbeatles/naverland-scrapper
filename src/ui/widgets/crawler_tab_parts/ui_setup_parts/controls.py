@@ -101,6 +101,10 @@ class CrawlerTabControlSetupMixin:
         area_input.addWidget(self._field_label("~"))
         area_input.addWidget(self.spin_area_max, 1)
         wrap_layout.addLayout(area_input)
+        self.lbl_area_hint = QLabel("")
+        self.lbl_area_hint.setObjectName("hintLabel")
+        self.lbl_area_hint.setContentsMargins(24, 0, 0, 0)
+        wrap_layout.addWidget(self.lbl_area_hint)
 
         # 가격
         self.check_price_filter = QCheckBox("가격 범위 지정")
@@ -156,14 +160,48 @@ class CrawlerTabControlSetupMixin:
         self.spin_monthly_max = self.spin_monthly_rent_max
 
         wrap_layout.addLayout(price_grid)
+        self.lbl_price_hint = QLabel("")
+        self.lbl_price_hint.setObjectName("hintLabel")
+        self.lbl_price_hint.setWordWrap(True)
+        self.lbl_price_hint.setContentsMargins(24, 0, 0, 0)
+        wrap_layout.addWidget(self.lbl_price_hint)
+        self.lbl_filter_error = QLabel("")
+        self.lbl_filter_error.setObjectName("errorLabel")
+        self.lbl_filter_error.setWordWrap(True)
+        wrap_layout.addWidget(self.lbl_filter_error)
         self._setup_speed_group(wrap_layout)
         wrap.setLayout(wrap_layout)
 
         toggle = self._make_disclosure("조건·속도 설정 (선택)", wrap, expanded=False)
         layout.addWidget(toggle)
+        # 접어 두어도 지금 어떤 조건이 걸려 있는지 한 줄로 보여 준다.
+        self.lbl_filter_summary = QLabel("")
+        self.lbl_filter_summary.setObjectName("hintLabel")
+        self.lbl_filter_summary.setWordWrap(True)
+        self.lbl_filter_summary.setContentsMargins(24, 0, 0, 0)
+        layout.addWidget(self.lbl_filter_summary)
         layout.addWidget(wrap)
         self.filter_panel = wrap
         self.btn_filter_toggle = toggle
+
+        toggle.toggled.connect(self._refresh_filter_feedback)
+        self.speed_slider.speed_changed.connect(self._refresh_filter_feedback)
+        for check in (self.check_trade, self.check_jeonse, self.check_monthly):
+            check.toggled.connect(self._refresh_filter_feedback)
+        for spin in (
+            self.spin_area_min,
+            self.spin_area_max,
+            self.spin_trade_min,
+            self.spin_trade_max,
+            self.spin_jeonse_min,
+            self.spin_jeonse_max,
+            self.spin_monthly_deposit_min,
+            self.spin_monthly_deposit_max,
+            self.spin_monthly_rent_min,
+            self.spin_monthly_rent_max,
+        ):
+            spin.valueChanged.connect(self._refresh_filter_feedback)
+        self._refresh_filter_feedback()
 
     # ── 3. 수집할 단지 ───────────────────────────────────────────────
     def _setup_complex_list_group(self: Any, layout):
@@ -204,13 +242,14 @@ class CrawlerTabControlSetupMixin:
         self.input_name.setPlaceholderText("단지 이름 (선택)")
         self.input_name.setToolTip("목록에 표시할 이름입니다. 비워 두면 번호로 표시합니다.")
         self.input_id = QLineEdit()
-        self.input_id.setPlaceholderText("단지 번호")
+        self.input_id.setPlaceholderText("단지 번호 또는 주소")
         self.input_id.setToolTip(
             "네이버 부동산 단지 주소에 들어 있는 숫자입니다.\n"
-            "예: land.naver.com/complexes/12345 → 12345"
+            "예: land.naver.com/complexes/12345 → 12345\n"
+            "주소를 통째로 붙여넣어도 번호와 주택 종류를 알아서 읽습니다."
         )
         self._complex_id_regex = QRegularExpression(r"^\d+$")
-        self.input_id.setValidator(QRegularExpressionValidator(self._complex_id_regex, self))
+        self.input_id.textChanged.connect(self._on_manual_id_text_changed)
         self.combo_manual_asset = QComboBox()
         self.combo_manual_asset.addItem("아파트", "APT")
         self.combo_manual_asset.addItem("빌라", "VL")
@@ -222,6 +261,7 @@ class CrawlerTabControlSetupMixin:
         btn_add.setToolTip("목록에 추가합니다. (Enter 키도 됩니다)")
         btn_add.setFixedWidth(38)
         btn_add.clicked.connect(self._add_complex)
+        self.btn_manual_add = btn_add
         self.input_id.returnPressed.connect(self._add_complex)
         input_layout.addWidget(self.input_name, 3)
         input_layout.addWidget(self.input_id, 2)
@@ -313,13 +353,17 @@ class CrawlerTabControlSetupMixin:
         label = getattr(self, "lbl_list_count", None)
         if label is not None:
             label.setText(f"{count}곳" if has_rows else "")
-        for name in ("btn_list_save", "btn_list_clear"):
-            btn = getattr(self, name, None)
-            if btn is not None:
-                btn.setEnabled(has_rows)
+        # 수집 중에는 목록을 바꿔도 반영되지 않으므로 빼기·비우기를 막는다.
+        editable = has_rows and not getattr(self, "_inputs_locked", False)
+        btn_save = getattr(self, "btn_list_save", None)
+        if btn_save is not None:
+            btn_save.setEnabled(has_rows)
+        btn_clear = getattr(self, "btn_list_clear", None)
+        if btn_clear is not None:
+            btn_clear.setEnabled(editable)
         btn_delete = getattr(self, "btn_list_delete", None)
         if btn_delete is not None:
-            btn_delete.setEnabled(has_rows and table.currentRow() >= 0)
+            btn_delete.setEnabled(editable and table.currentRow() >= 0)
 
     # ── 수집 속도 (조건 영역 안에 들어간다) ───────────────────────────
     def _setup_speed_group(self: Any, layout):
@@ -359,7 +403,7 @@ class CrawlerTabControlSetupMixin:
         self.btn_start.setObjectName("primaryBtn")
         self.btn_start.setMinimumHeight(40)
         self.btn_start.setToolTip("목록에 있는 단지의 매물을 수집합니다. (Ctrl+R)")
-        self.btn_start.clicked.connect(self.start_crawling)
+        self.btn_start.clicked.connect(self.request_start)
 
         self.btn_stop = QPushButton("중지")
         self.btn_stop.setObjectName("dangerBtn")
@@ -395,19 +439,11 @@ class CrawlerTabControlSetupMixin:
             self._reveal_filter_panel()
         self.spin_area_min.setEnabled(enabled)
         self.spin_area_max.setEnabled(enabled)
+        self._refresh_filter_feedback()
 
     def _toggle_price_filter(self: Any, state):
         enabled = state == Qt.CheckState.Checked.value
         if enabled:
             self._reveal_filter_panel()
-        for w in [
-            self.spin_trade_min,
-            self.spin_trade_max,
-            self.spin_jeonse_min,
-            self.spin_jeonse_max,
-            self.spin_monthly_deposit_min,
-            self.spin_monthly_deposit_max,
-            self.spin_monthly_rent_min,
-            self.spin_monthly_rent_max,
-        ]:
-            w.setEnabled(enabled)
+        # 가격 칸은 고른 거래 종류에 한해 켜진다 (_refresh_filter_feedback).
+        self._refresh_filter_feedback()

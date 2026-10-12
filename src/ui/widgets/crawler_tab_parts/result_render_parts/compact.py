@@ -75,7 +75,18 @@ class CrawlerTabCompactRenderMixin:
             return self._area_float(data.get("면적(평)", 0))
         if sort_key in ("거래", "거래유형"):
             return str(data.get("거래유형", "") or "")
+        if sort_key == "평당가":
+            return self._pyeong_price_number(data)
+        if sort_key == "신규":
+            return int(bool(data.get("is_new") or data.get("신규여부")))
         return str(data.get("단지명", "") or "")
+
+    @staticmethod
+    def _pyeong_price_number(data) -> float:
+        try:
+            return float(data.get("평당가", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _find_compact_insert_index(self: Any, data):
         target = self._compact_sort_value(data)
@@ -182,6 +193,8 @@ class CrawlerTabCompactRenderMixin:
             rows.sort(key=lambda d: self._area_float(d.get("면적(평)", 0)), reverse=not is_asc)
         elif sort_key in ("거래", "거래유형"):
             rows.sort(key=lambda d: str(d.get("거래유형", "")), reverse=not is_asc)
+        elif sort_key in ("평당가", "신규"):
+            rows.sort(key=self._compact_sort_value, reverse=not is_asc)
         else:
             rows.sort(key=lambda d: str(d.get("단지명", "")), reverse=not is_asc)
 

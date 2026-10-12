@@ -27,6 +27,9 @@ class CrawlerTabResultAreaSetupMixin:
         ("단지 이름 역순", "단지명 ↓"),
         ("거래 종류순", "거래유형 ↑"),
         ("거래 종류 역순", "거래유형 ↓"),
+        ("평당가 낮은 순", "평당가 ↑"),
+        ("평당가 높은 순", "평당가 ↓"),
+        ("새로 나온 매물 먼저", "신규 ↓"),
     )
 
     def _setup_result_area(self: Any, layout):
@@ -88,13 +91,20 @@ class CrawlerTabResultAreaSetupMixin:
 
         more_menu = QMenu(self.btn_result_more)
         sort_menu = more_menu.addMenu("정렬")
+        # 지금 어떤 순서로 보고 있는지 메뉴에 체크로 표시한다.
+        self._sort_menu_actions = {}
         if sort_menu is not None:
             for label, criterion in self.SORT_MENU_LABELS:
                 act = sort_menu.addAction(label)
                 if act is not None:
+                    act.setCheckable(True)
                     act.triggered.connect(
                         lambda _=False, t=criterion: self.combo_sort.setCurrentText(t)
                     )
+                    self._sort_menu_actions[criterion] = act
+            sort_menu.aboutToShow.connect(self._sync_sort_menu_checks)
+        self.combo_sort.currentTextChanged.connect(self._sync_sort_menu_checks)
+        self._sync_sort_menu_checks()
 
         more_menu.addAction("상세 필터…", self.open_advanced_filter_dialog)
         self._clear_filter_menu_action = more_menu.addAction(
@@ -141,6 +151,31 @@ class CrawlerTabResultAreaSetupMixin:
         self.filter_notice.setVisible(False)
         layout.addWidget(self.filter_notice)
 
+        # 수집이 끝나면 결과 위에 한눈에 보는 요약을 띄운다.
+        self.run_summary = QFrame()
+        self.run_summary.setObjectName("runSummary")
+        self.run_summary.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        summary_layout = QHBoxLayout(self.run_summary)
+        summary_layout.setContentsMargins(12, 8, 8, 8)
+        summary_layout.setSpacing(8)
+        summary_text = QVBoxLayout()
+        summary_text.setSpacing(2)
+        self.lbl_run_summary = QLabel("")
+        self.lbl_run_summary.setObjectName("runSummaryTitle")
+        self.lbl_run_summary.setWordWrap(True)
+        self.lbl_run_summary_notes = QLabel("")
+        self.lbl_run_summary_notes.setObjectName("hintLabel")
+        self.lbl_run_summary_notes.setWordWrap(True)
+        summary_text.addWidget(self.lbl_run_summary)
+        summary_text.addWidget(self.lbl_run_summary_notes)
+        summary_layout.addLayout(summary_text, 1)
+        btn_summary_close = QPushButton("닫기")
+        btn_summary_close.setObjectName("secondaryBtn")
+        btn_summary_close.clicked.connect(self._hide_run_summary)
+        summary_layout.addWidget(btn_summary_close, 0, Qt.AlignmentFlag.AlignTop)
+        self.run_summary.setVisible(False)
+        layout.addWidget(self.run_summary)
+
         # Result Tabs
         result_tabs = QTabWidget()
         self.result_tabs = result_tabs
@@ -152,7 +187,7 @@ class CrawlerTabResultAreaSetupMixin:
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(int(getattr(self, "RESULT_COLUMN_COUNT", 25)))
         self.result_table.setHorizontalHeaderLabels([
-            "단지명", "거래", "가격", "면적", "평당가", "층/방향", "특징",
+            "단지 이름", "거래 종류", "가격", "면적", "평당가", "층/방향", "특징",
             "같은 매물", "신규", "가격 변동", "종류", "기존 전세금", "갭 금액", "갭 비율",
             "수집 시각", "링크", "URL", "가격(숫자)",
             "확인일", "동", "타입명", "동일주소", "정보제공", "중개소", "전화",
@@ -228,6 +263,11 @@ class CrawlerTabResultAreaSetupMixin:
             result_model.rowsRemoved.connect(lambda *_: self._update_result_empty_state())
             result_model.modelReset.connect(lambda *_: self._update_result_empty_state())
         self._update_result_empty_state()
+
+    def _sync_sort_menu_checks(self: Any, *_args):
+        current = str(self.combo_sort.currentText() or "")
+        for criterion, action in (getattr(self, "_sort_menu_actions", None) or {}).items():
+            action.setChecked(criterion == current)
 
     #: (제목, 설명) — 서브클래스(지도 탐색)가 첫 안내 문구를 바꿀 수 있다.
     RESULT_EMPTY_INITIAL = (

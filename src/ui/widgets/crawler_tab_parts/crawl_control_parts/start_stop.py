@@ -23,17 +23,18 @@ class CrawlerTabStartStopMixin:
             self.status_message.emit("이미 수집이 진행 중입니다.")
             return False
 
+        if not self._validate_filter_ranges():
+            return False
+
         crawl_lock = get_crawl_lock()
         lock_owner = "complex"
         if not crawl_lock.try_acquire(lock_owner):
             from src.utils.ui_labels import crawl_owner_label
 
             other = crawl_owner_label(crawl_lock.owner())
-            self.append_log(
-                f"다른 수집이 진행 중이라 시작할 수 없습니다. (진행 중: {other})",
-                30,
+            self._notify_start_blocked(
+                f"「{other}」에서 수집이 진행 중입니다. 그 수집이 끝나거나 중지된 뒤에 시작할 수 있습니다."
             )
-            self.status_message.emit("다른 수집이 끝나야 시작할 수 있습니다.")
             return False
         self._crawl_lock_owner = lock_owner
 
@@ -44,8 +45,9 @@ class CrawlerTabStartStopMixin:
         if in_maintenance:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            self.append_log("데이터 복원 작업 중에는 수집을 시작할 수 없습니다.", 30)
-            self.status_message.emit("데이터 복원 작업이 끝난 뒤 다시 시도해 주세요.")
+            self._notify_start_blocked(
+                "데이터 복원 작업 중에는 수집을 시작할 수 없습니다. 복원이 끝난 뒤 다시 시도해 주세요."
+            )
             return False
 
         if self.table_list.rowCount() == 0:
@@ -127,6 +129,7 @@ class CrawlerTabStartStopMixin:
         self.grouped_rows = {}
         self._last_complex_status_stats = None
         self._crawl_finished_once = False
+        self._begin_crawl_session()
 
         area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
         price_filter = {
@@ -219,6 +222,7 @@ class CrawlerTabStartStopMixin:
             self.crawler_thread = None
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
+            self._set_inputs_locked(False)
             self.append_log(f"수집을 시작하지 못했습니다: {exc}", 40)
             return False
         
@@ -258,6 +262,10 @@ class CrawlerTabStartStopMixin:
                     getattr(self, name).setEnabled(enabled)
                 except Exception:
                     pass
+            try:
+                self._set_inputs_locked(False)
+            except Exception:
+                pass
 
     def _release_crawl_lock(self: Any) -> None:
         from src.core.crawl_lock import get_crawl_lock
@@ -273,6 +281,7 @@ class CrawlerTabStartStopMixin:
 
     def stop_crawling(self: Any):
         if self.crawler_thread and self.crawler_thread.isRunning():
+            self._stop_requested = True
             self.crawler_thread.stop()
             self.append_log("수집을 멈추는 중입니다. 잠시만 기다려 주세요…", 30)
             self.status_message.emit("수집을 멈추는 중입니다…")

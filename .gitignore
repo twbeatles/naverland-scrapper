@@ -85,6 +85,7 @@ ehthumbs.db
 !.env.example
 venv/
 .venv/
+.venv-ci/
 env/
 
 # AI Agent Docs & Directories (not part of product source)

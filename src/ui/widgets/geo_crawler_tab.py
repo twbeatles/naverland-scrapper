@@ -60,6 +60,16 @@ class GeoCrawlerTab(CrawlerTab):
         "왼쪽에서 위치를 정한 뒤 「탐색 시작」을 눌러 주세요.",
     )
 
+    LOCKABLE_INPUT_NAMES = CrawlerTab.LOCKABLE_INPUT_NAMES + (
+        "btn_find_region",
+        "spin_rings",
+        "check_asset_apt",
+        "check_asset_vl",
+        "geo_adv_panel",
+    )
+
+    DEFAULT_GEO_CENTER = (37.5608, 126.9888)
+
     DISCOVERED_STATUS_LABELS = {
         "inserted": "새로 찾음",
         "existing": "기존",
@@ -104,6 +114,10 @@ class GeoCrawlerTab(CrawlerTab):
         )
         grid.addWidget(self._field_label("주변까지 넓히기"), 0, 0)
         grid.addWidget(self.spin_rings, 0, 1)
+        self.lbl_geo_range = QLabel("")
+        self.lbl_geo_range.setObjectName("hintLabel")
+        self.lbl_geo_range.setWordWrap(True)
+        grid.addWidget(self.lbl_geo_range, 1, 1)
 
         asset_layout = QHBoxLayout()
         self.check_asset_apt = QCheckBox("아파트")
@@ -116,8 +130,8 @@ class GeoCrawlerTab(CrawlerTab):
         asset_layout.addWidget(self.check_asset_apt)
         asset_layout.addWidget(self.check_asset_vl)
         asset_layout.addStretch()
-        grid.addWidget(self._field_label("주택 종류"), 1, 0)
-        grid.addLayout(asset_layout, 1, 1)
+        grid.addWidget(self._field_label("주택 종류"), 2, 0)
+        grid.addLayout(asset_layout, 2, 1)
         outer.addLayout(grid)
 
         # 2) 좌표·세부 값 (기본 접힘)
@@ -172,6 +186,7 @@ class GeoCrawlerTab(CrawlerTab):
         save_defaults.clicked.connect(self._on_save_geo_defaults_clicked)
         adv_grid.addWidget(save_defaults, 5, 0, 1, 2)
 
+        self.geo_adv_panel = adv
         self.btn_geo_adv_toggle = self._make_disclosure("좌표 직접 입력·세부 설정", adv, expanded=False)
         outer.addWidget(self.btn_geo_adv_toggle)
         outer.addWidget(adv)
@@ -221,6 +236,38 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_lat.valueChanged.connect(self._on_geo_coordinates_edited)
         self.spin_lon.valueChanged.connect(self._on_geo_coordinates_edited)
         self._refresh_geo_place_label()
+        self.spin_rings.valueChanged.connect(self._refresh_geo_range_label)
+        self._refresh_geo_range_label()
+
+    def _refresh_geo_range_label(self, *_args):
+        """「N단계」가 실제로 지도를 몇 화면 훑는지 알려 준다."""
+        rings = max(0, int(self.spin_rings.value()))
+        screens = (2 * rings + 1) ** 2
+        if rings == 0:
+            text = "지도 1화면 · 정한 위치만 봅니다."
+        else:
+            text = f"지도 {screens}화면 · 단계를 올릴수록 훨씬 오래 걸립니다."
+        self.lbl_geo_range.setText(text)
+
+    def _is_default_geo_center(self) -> bool:
+        lat, lon = self.DEFAULT_GEO_CENTER
+        return abs(self.spin_lat.value() - lat) < 1e-6 and abs(self.spin_lon.value() - lon) < 1e-6
+
+    def _confirm_start(self) -> bool:
+        if not super()._confirm_start():
+            return False
+        if self._is_crawl_running() or self._geo_place_name or not self._is_default_geo_center():
+            return True
+        # 위치를 한 번도 고르지 않은 채 시작하면 엉뚱한 지역을 훑게 된다.
+        answer = QMessageBox.question(
+            self,
+            "탐색할 위치를 정하지 않았습니다",
+            "아직 위치를 고르지 않아 기본 위치(서울 중구) 주변을 탐색합니다.\n"
+            "이대로 시작할까요? 다른 곳을 보려면 「지역 찾기」로 먼저 위치를 정해 주세요.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _setup_action_group(self, layout):
         super()._setup_action_group(layout)
@@ -243,7 +290,7 @@ class GeoCrawlerTab(CrawlerTab):
         name = str(getattr(self, "_geo_place_name", "") or "").strip()
         if name:
             label.setText(f"{name} 주변을 탐색합니다.")
-        elif abs(self.spin_lat.value() - 37.5608) < 1e-6 and abs(self.spin_lon.value() - 126.9888) < 1e-6:
+        elif self._is_default_geo_center():
             label.setText("기본 위치(서울 중구) 주변을 탐색합니다. 「지역 찾기」로 원하는 곳을 고르세요.")
         else:
             label.setText(
@@ -386,10 +433,14 @@ class GeoCrawlerTab(CrawlerTab):
         from src.core.crawl_lock import get_crawl_lock
 
         if self._maintenance_guard and self._maintenance_guard():
-            self.status_message.emit("데이터 복원 작업이 끝난 뒤 다시 시도해 주세요.")
+            self._notify_start_blocked(
+                "데이터 복원 작업 중에는 탐색을 시작할 수 없습니다. 복원이 끝난 뒤 다시 시도해 주세요."
+            )
             return False
         if self.crawler_thread and self.crawler_thread.isRunning():
             QMessageBox.information(self, "이미 탐색 중입니다", "지도 탐색이 이미 진행 중입니다.")
+            return False
+        if not self._validate_filter_ranges():
             return False
 
         crawl_lock = get_crawl_lock()
@@ -399,11 +450,9 @@ class GeoCrawlerTab(CrawlerTab):
 
             other = crawl_owner_label(crawl_lock.owner())
             # Avoid modal dialogs here — they block headless/automated runs.
-            self.append_log(
-                f"다른 수집이 진행 중이라 지도 탐색을 시작할 수 없습니다. (진행 중: {other})",
-                30,
+            self._notify_start_blocked(
+                f"「{other}」에서 수집이 진행 중입니다. 그 수집이 끝나거나 중지된 뒤에 시작할 수 있습니다."
             )
-            self.status_message.emit("다른 수집이 끝나야 시작할 수 있습니다.")
             return False
         self._crawl_lock_owner = lock_owner
 
@@ -451,6 +500,7 @@ class GeoCrawlerTab(CrawlerTab):
         self._discovered_row_map = {}
         self._last_geo_status_stats = None
         self._crawl_finished_once = False
+        self._begin_crawl_session()
 
         area_filter = {
             "enabled": self.check_area_filter.isChecked(),
@@ -550,6 +600,7 @@ class GeoCrawlerTab(CrawlerTab):
             self.crawler_thread = None
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
+            self._set_inputs_locked(False)
             self.append_log(f"지도 탐색을 시작하지 못했습니다: {exc}", 40)
             return False
         self._update_result_empty_state()
@@ -657,8 +708,9 @@ class GeoCrawlerTab(CrawlerTab):
             item_count = len(data or [])
         except TypeError:
             item_count = 0
+        finish_word = "중지했습니다" if getattr(self, "_stop_requested", False) else "마쳤습니다"
         self.status_message.emit(
-            f"지도 탐색을 마쳤습니다. 단지 {discovered}곳 · 매물 {item_count}건"
+            f"지도 탐색을 {finish_word}. 단지 {discovered}곳 · 매물 {item_count}건"
         )
 
         if bool(final_stats.get("geo_incomplete", False)):

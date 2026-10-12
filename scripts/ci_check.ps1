@@ -8,6 +8,18 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
+# 격리 환경(.venv-ci, scripts/setup_build_env.ps1)이 있으면 그것만 쓴다.
+# 전역 Python의 PySide6-Fluent-Widgets 등이 qfluentwidgets를 덮어써 검사가 오염되는 것을 막는다.
+$venvPython = Join-Path (Get-Location) ".venv-ci\Scripts\python.exe"
+if (Test-Path $venvPython) {
+  $py = $venvPython
+  $env:PYTHONNOUSERSITE = "1"
+  Write-Host "Using isolated env: $py"
+} else {
+  $py = "python"
+  Write-Host "격리 환경(.venv-ci)이 없습니다. 'powershell -File scripts/setup_build_env.ps1' 로 만들면 전역 환경과 분리됩니다." -ForegroundColor Yellow
+}
+
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK = "1"
@@ -15,7 +27,7 @@ $env:NAVERLAND_SKIP_PLAYWRIGHT_TESTS = "1"
 $env:QT_QPA_PLATFORM = if ($env:QT_QPA_PLATFORM) { $env:QT_QPA_PLATFORM } else { "offscreen" }
 
 Write-Host "== Syntax check =="
-python -m compileall -q app_entry.py src tests
+& $py -m compileall -q app_entry.py src tests
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Pyright =="
@@ -26,7 +38,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "== Pytest (CI subset) =="
-python -m pytest -q `
+& $py -m pytest -q `
   tests/test_parser_module.py `
   tests/test_app_entry.py `
   tests/test_main_paths.py `
@@ -48,11 +60,12 @@ python -m pytest -q `
   tests/test_mojibake_scan.py `
   tests/test_preflight.py `
   tests/test_fluent_theme.py `
-  tests/test_requirements_pins.py
+  tests/test_requirements_pins.py `
+  tests/test_crawl_preflight.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Preflight =="
-python -m src.utils.preflight
+& $py -m src.utils.preflight
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "CI check passed."

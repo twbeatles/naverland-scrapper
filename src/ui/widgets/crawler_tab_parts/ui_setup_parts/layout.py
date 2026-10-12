@@ -111,6 +111,14 @@ class CrawlerTabLayoutSetupMixin:
         left.addStretch(0)
 
         scroll.setWidget(scroll_content)
+        self.lbl_inputs_locked = QLabel(
+            "수집 중에는 설정을 바꿀 수 없습니다. 바꾸려면 먼저 「중지」를 눌러 주세요."
+        )
+        self.lbl_inputs_locked.setObjectName("hintLabel")
+        self.lbl_inputs_locked.setWordWrap(True)
+        self.lbl_inputs_locked.setContentsMargins(SPACE_SM, SPACE_XS, SPACE_SM, 0)
+        self.lbl_inputs_locked.setVisible(False)
+        left_outer.addWidget(self.lbl_inputs_locked)
         left_outer.addWidget(scroll, 1)
         self._setup_action_group(left_outer)
         self.main_splitter.addWidget(left_w)
