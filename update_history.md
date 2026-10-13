@@ -1,5 +1,9 @@
 # Update History
 
+## 2026-10-13: CI Python 3.15 단일화
+
+- CI 매트릭스(3.11/3.14/3.15) 제거, `ci.yml`·`release.yml` 모두 Python 3.15 단일. README 설명 동기화.
+
 ## 2026-10-13: 의존성 전면 업그레이드 + CI Python 3.15
 
 - pip index versions 확인 결과 12개 의존성이 이미 최신이라 하한 핀 4종만 상향: playwright>=1.63.0, selenium>=4.51.0, matplotlib>=3.11.2, cryptography>=50.0.2. 나머지 8종은 변경 없음.

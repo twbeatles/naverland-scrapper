@@ -363,7 +363,7 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 
 ## 🔁 GitHub CI 및 릴리스
 
-- **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.11/3.14/3.15. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
+- **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.15 단일. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
 - **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1` (`.venv-ci`가 있으면 자동으로 격리 환경 사용)
 - **테스트는 격리 환경 필수**: 전역 Python의 사용자 site-packages(`%APPDATA%\Python\...`) 에 `PySide6-Fluent-Widgets`가 있으면 `qfluentwidgets`가 PySide6 변종으로 잡혀 UI 테스트가 대량으로 실패합니다(`TypeError: ... 'PySide6.QtGui.QIcon'`, `NavigationInterface ... PySide6 ...`). 전역을 고치지 말고 격리 환경으로 실행하세요.
   ```powershell
