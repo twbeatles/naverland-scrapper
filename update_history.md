@@ -1,5 +1,12 @@
 # Update History
 
+## 2026-10-13: 의존성 전면 업그레이드 + CI Python 3.15
+
+- pip index versions 확인 결과 12개 의존성이 이미 최신이라 하한 핀 4종만 상향: playwright>=1.63.0, selenium>=4.51.0, matplotlib>=3.11.2, cryptography>=50.0.2. 나머지 8종은 변경 없음.
+- CI 매트릭스에 Python 3.15 추가(3.11/3.14/3.15), 릴리스 워크플로우는 3.14 → 3.15. README GitHub CI 및 릴리스 설명 동기화.
+- 검증(.venv-ci, Python 3.15.0): 핀·CI동기화·릴리스 가드 통과, compileall 정상, Pyright 0 errors, CI 서브셋 269 passed, 전체 447 passed·1 skipped, preflight 정상.
+- 주의: Playwright 브라우저 바이너리는 미갱신이라 실크롤링 전 playwright install chromium 동기화 필요.
+
 ## 2026-10-12: Release v15.5 실패 수정 + 재발방지 회귀 테스트
 
 - Release 워크플로(`v15.5` 태그)의 Qt 바인딩 검사가 `python -I` 격리 모드에서 `ModuleNotFoundError: No module named 'src'`로 실패. `-I`는 cwd를 `sys.path`에서 제외하므로 `sys.path.insert(0, '.')` 추가, 재실행 성공.
