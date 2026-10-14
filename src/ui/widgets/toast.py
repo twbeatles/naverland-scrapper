@@ -182,4 +182,5 @@ class ToastWidget(QWidget):
         """클릭 시 즉시 닫기"""
         if a0 is not None and a0.button() == Qt.MouseButton.LeftButton:
             self.fade_out()
-        super().mousePressEvent(a0)
+        if a0 is not None:
+            super().mousePressEvent(a0)

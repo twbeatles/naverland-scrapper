@@ -41,13 +41,15 @@ class StatCard(QFrame):
         layout.setContentsMargins(_GG, _SM, _GG, _SM)
         layout.setSpacing(_XS)
 
-        self._title_label = QLabel(title)
-        self._title_label.setObjectName("statCardTitle")
-        layout.addWidget(self._title_label)
+        title_label = QLabel(title)
+        title_label.setObjectName("statCardTitle")
+        layout.addWidget(title_label)
+        self._title_label = title_label
 
-        self._value_label = QLabel(value)
-        self._value_label.setObjectName("statCardValue")
-        layout.addWidget(self._value_label)
+        value_label = QLabel(value)
+        value_label.setObjectName("statCardValue")
+        layout.addWidget(value_label)
+        self._value_label = value_label
         layout.addStretch(1)
         self._apply_style()
 

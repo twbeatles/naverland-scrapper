@@ -564,6 +564,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             })
             total_value = tab.summary_card.total_widget.findChild(QLabel, "value")
             self.assertIsNotNone(total_value)
+            assert total_value is not None
             self.assertEqual(total_value.text(), "2건")
 
             db.close()
