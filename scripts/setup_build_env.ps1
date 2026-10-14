@@ -42,7 +42,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "== Verifying Qt binding =="
-& $venvPython -I -c "import sys; sys.path.insert(0, '.'); from src.utils.preflight import find_qfluentwidgets_binding_mismatch as f; e = f(); print(e or 'qfluentwidgets: PyQt6 OK'); sys.exit(1 if e else 0)"
+& $venvPython -I -c "import sys; sys.path.insert(0, '.'); from src.utils.preflight import find_qfluentwidgets_binding_mismatch as f; e = f(); print(e or 'qfluentwidgets: PySide6 OK'); sys.exit(1 if e else 0)"
 if ($LASTEXITCODE -ne 0) {
   Write-Host "qfluentwidgets 바인딩이 맞지 않습니다. -Recreate 로 다시 만들어 주세요." -ForegroundColor Red
   exit $LASTEXITCODE
