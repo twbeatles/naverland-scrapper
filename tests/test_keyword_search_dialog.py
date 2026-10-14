@@ -88,11 +88,11 @@ def _make_factory(bodies, sessions):
     return _factory
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PyQt6") is None, "PyQt6 missing")
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
 class TestKeywordSearchDialog(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -135,7 +135,7 @@ class TestKeywordSearchDialog(unittest.TestCase):
             dlg.deleteLater()
 
     def test_checked_complexes_emitted(self):
-        from PyQt6.QtCore import Qt
+        from PySide6.QtCore import Qt
 
         from src.ui.dialogs.search import KeywordSearchDialog
 
@@ -203,13 +203,13 @@ class TestKeywordSearchDialog(unittest.TestCase):
             dlg.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PyQt6") is None, "PyQt6 missing")
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
 class TestKeywordWorkerSessionCleanup(unittest.TestCase):
     """ISSUE-001: failed __enter__ must still release acquired resources."""
 
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -270,13 +270,13 @@ class TestKeywordWorkerSessionCleanup(unittest.TestCase):
             worker.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PyQt6") is None, "PyQt6 missing")
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
 class TestKeywordWorkerResilience(unittest.TestCase):
     """Retry-once, cooldown, and generation guards (audit §5)."""
 
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 

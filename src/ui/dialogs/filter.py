@@ -1,9 +1,9 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QGridLayout, QLabel, QSpinBox, 
     QDoubleSpinBox, QHBoxLayout, QCheckBox, QLineEdit, QPushButton, 
     QListWidget, QAbstractItemView, QListWidgetItem, QDialogButtonBox, QMessageBox
 )
-from PyQt6.QtCore import pyqtSignal
+from PySide6.QtCore import Signal
 
 class MultiSelectDialog(QDialog):
     def __init__(self, title, items, parent=None):
@@ -85,7 +85,7 @@ class MultiSelectDialog(QDialog):
 
 class AdvancedFilterDialog(QDialog):
     """고급 결과 필터 다이얼로그 (v7.3)"""
-    filter_applied = pyqtSignal(dict)
+    filter_applied = Signal(dict)
     
     def __init__(self, parent=None, current_filters=None):
         super().__init__(parent)

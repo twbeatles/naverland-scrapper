@@ -5,7 +5,7 @@ import sys
 import threading
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from src.utils.update_installer import download_verified_artifact, launch_update_helper
 from src.utils.update_manifest import NoUpdateAvailableError, ReleaseManifest, download_release_manifest, verify_release_manifest
@@ -13,10 +13,10 @@ from src.utils.version import APP_VERSION, UPDATE_MANIFEST_URL, UPDATE_PUBLIC_KE
 
 
 class UpdateController(QObject):
-    update_available = pyqtSignal(object)
-    no_update = pyqtSignal()
-    failed = pyqtSignal(str)
-    downloaded = pyqtSignal(object, object)
+    update_available = Signal(object)
+    no_update = Signal()
+    failed = Signal(str)
+    downloaded = Signal(object, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QStackedWidget, QWidget
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QStackedWidget, QWidget
 
 
 class TabCompatBridge(QObject):
@@ -15,7 +15,7 @@ class TabCompatBridge(QObject):
     and ``currentChanged``. The real chrome is Fluent ``NavigationInterface``.
     """
 
-    currentChanged = pyqtSignal(int)
+    currentChanged = Signal(int)
 
     def __init__(
         self,

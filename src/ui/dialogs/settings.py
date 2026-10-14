@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
@@ -73,7 +73,7 @@ def _hint(text: str) -> QLabel:
 
 
 class SettingsDialog(QDialog):
-    settings_changed = pyqtSignal(dict)
+    settings_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)

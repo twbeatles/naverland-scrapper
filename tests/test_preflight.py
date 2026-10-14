@@ -283,34 +283,34 @@ class TestPreflight(unittest.TestCase):
             )
             self.assertEqual(inspect_qfluentwidgets_binding(init_path), "PyQt6")
 
-    def test_find_qfluentwidgets_binding_mismatch_reports_pyside6(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            init_path = Path(tmp) / "__init__.py"
-            init_path.write_text(
-                '"""PySide6-Fluent-Widgets based on PySide6."""\n',
-                encoding="utf-8",
-            )
-            message = find_qfluentwidgets_binding_mismatch(init_path=init_path)
-            self.assertIn("PyQt6", message)
-            self.assertIn("PySide6", message)
-
-    def test_find_qfluentwidgets_binding_mismatch_accepts_pyqt6(self):
+    def test_find_qfluentwidgets_binding_mismatch_reports_pyqt6(self):
         with tempfile.TemporaryDirectory() as tmp:
             init_path = Path(tmp) / "__init__.py"
             init_path.write_text(
                 '"""PyQt6-Fluent-Widgets based on PyQt6."""\n',
                 encoding="utf-8",
             )
+            message = find_qfluentwidgets_binding_mismatch(init_path=init_path)
+            self.assertIn("PyQt6", message)
+            self.assertIn("PySide6", message)
+
+    def test_find_qfluentwidgets_binding_mismatch_accepts_pyside6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init_path = Path(tmp) / "__init__.py"
+            init_path.write_text(
+                '"""PySide6-Fluent-Widgets based on PySide6."""\n',
+                encoding="utf-8",
+            )
             self.assertEqual(find_qfluentwidgets_binding_mismatch(init_path=init_path), "")
 
-    def test_run_preflight_checks_fails_on_pyside6_qfluentwidgets(self):
+    def test_run_preflight_checks_fails_on_pyqt6_qfluentwidgets(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             data_dir = base / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
             init_path = base / "qfluentwidgets_init.py"
             init_path.write_text(
-                '"""PySide6-Fluent-Widgets based on PySide6."""\n',
+                '"""PyQt6-Fluent-Widgets based on PyQt6."""\n',
                 encoding="utf-8",
             )
             with (

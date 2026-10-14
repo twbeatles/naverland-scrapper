@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 
-from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPalette, QPen
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPalette, QPen
+from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -33,8 +33,8 @@ def _is_dark_theme(theme: str | None) -> bool:
 class ArticleCard(QFrame):
     """매물 카드 위젯 (v13.0)"""
 
-    clicked = pyqtSignal(dict)
-    favorite_toggled = pyqtSignal(str, str, str, bool)
+    clicked = Signal(dict)
+    favorite_toggled = Signal(str, str, str, bool)
     _CARD_STYLE_CACHE = {}
     _TYPE_STYLE_CACHE = {}
     _PRICE_STYLE_CACHE = {}
@@ -275,8 +275,8 @@ class ArticleCard(QFrame):
 class CardViewWidget(QScrollArea):
     """카드 뷰 위젯 (v13.0)"""
 
-    article_clicked = pyqtSignal(dict)
-    favorite_toggled = pyqtSignal(str, str, str, bool)
+    article_clicked = Signal(dict)
+    favorite_toggled = Signal(str, str, str, bool)
 
     def __init__(self, is_dark: bool = True, parent=None):
         super().__init__(parent)

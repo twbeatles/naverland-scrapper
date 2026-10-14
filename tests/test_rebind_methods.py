@@ -5,7 +5,7 @@ import unittest
 from src.utils.mixin_rebind import iter_mixin_callable_names
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestMixinMethodRebinding(unittest.TestCase):
     @staticmethod
     def _mixin_callable_names(mixin_cls):

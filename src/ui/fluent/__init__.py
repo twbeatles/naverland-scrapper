@@ -1,4 +1,4 @@
-"""PyQt6-Fluent-Widgets helpers for the desktop shell."""
+"""PySide6-Fluent-Widgets helpers for the desktop shell."""
 
 from src.ui.fluent.notify import show_info_bar
 from src.ui.fluent.theme import apply_app_theme, configure_fluent_window, setup_app_theme, sync_system_theme, theme_from_settings

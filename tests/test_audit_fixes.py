@@ -12,7 +12,7 @@ class TestIssue001WindowGeometry(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -21,7 +21,7 @@ class TestIssue001WindowGeometry(unittest.TestCase):
         from src.ui.app_parts.lifecycle_parts.bootstrap import (
             AppLifecycleBootstrapMixin,
         )
-        from PyQt6.QtWidgets import QWidget
+        from PySide6.QtWidgets import QWidget
 
         warnings = []
         boot_mod.settings = types.SimpleNamespace(
@@ -469,7 +469,7 @@ class TestIssue016GroupAndNoteProtection(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -510,8 +510,8 @@ class TestIssue016GroupAndNoteProtection(unittest.TestCase):
     def test_edit_note_swallows_db_error(self):
         from unittest.mock import patch
 
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtWidgets import QTableWidgetItem
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QTableWidgetItem
 
         import src.ui.widgets.tabs as tabs_mod
         from src.ui.widgets.tabs import FavoritesTab

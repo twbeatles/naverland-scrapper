@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDoubleSpinBox,
@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QAbstractItemView, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QAbstractItemView, QWidget
 from qfluentwidgets import FluentIcon as FIF
 
 from src.core.models.crawl_models import GeoSweepConfig

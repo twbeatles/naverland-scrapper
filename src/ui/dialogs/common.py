@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QPushButton
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QPushButton
 from src.utils.constants import APP_VERSION
 from src.ui.styles import COLORS
 

@@ -1,9 +1,9 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGroupBox,
     QScrollArea, QGridLayout, QPushButton
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCursor
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCursor
 from typing import Optional
 import time
 
@@ -31,7 +31,7 @@ from src.ui.widgets.dashboard_parts.cards import StatCard
 
 class DashboardWidget(QWidget):
     """통합 대시보드 (v13.0)"""
-    warning_signal = pyqtSignal(str)
+    warning_signal = Signal(str)
     
     def __init__(self, db, theme="dark", parent=None):
         super().__init__(parent)

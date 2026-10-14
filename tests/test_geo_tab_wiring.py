@@ -16,11 +16,11 @@ def _table_text(table, row: int, column: int) -> str:
     return item.text()
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestGeoTabWiring(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -283,7 +283,7 @@ class TestGeoTabWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_scheduled_geo_run_start_failure_keeps_slot_empty(self):
-        from PyQt6.QtCore import QTime
+        from PySide6.QtCore import QTime
         from src.ui.app import RealEstateApp, settings as app_settings
 
         class _FixedDateTime(datetime):

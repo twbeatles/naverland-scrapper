@@ -22,11 +22,11 @@ def _force_complex_schedule_mode(app) -> None:
     app.schedule_mode_combo.setCurrentIndex(mode_index if mode_index >= 0 else 0)
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestUIWiring(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -295,7 +295,7 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_crawler_tab_db_load_preserves_asset_type_targets(self):
-        from PyQt6.QtWidgets import QDialog
+        from PySide6.QtWidgets import QDialog
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -329,7 +329,7 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_crawler_tab_group_load_preserves_asset_type_targets(self):
-        from PyQt6.QtWidgets import QDialog
+        from PySide6.QtWidgets import QDialog
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -724,8 +724,8 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_app_article_open_paths_track_recently_viewed(self):
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtWidgets import QTableWidgetItem
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QTableWidgetItem
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -793,7 +793,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_schedule_check_runs_once_within_catchup_window(self):
-        from PyQt6.QtCore import QTime
+        from PySide6.QtCore import QTime
         from src.ui.app import RealEstateApp, settings as app_settings
 
         class _FixedDateTime(datetime):
@@ -848,7 +848,7 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_schedule_busy_retry_within_same_window(self):
-        from PyQt6.QtCore import QTime
+        from PySide6.QtCore import QTime
         from src.ui.app import RealEstateApp, settings as app_settings
 
         class _FixedDateTime(datetime):
@@ -912,7 +912,7 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_schedule_no_target_retry_within_same_window(self):
-        from PyQt6.QtCore import QTime
+        from PySide6.QtCore import QTime
         from src.ui.app import RealEstateApp, settings as app_settings
 
         class _FixedDateTime(datetime):
@@ -1098,7 +1098,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_restore_db_maintenance_and_timer_restart(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1151,7 +1151,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_restore_db_failure_dialog_includes_restore_detail(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -1181,7 +1181,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_restore_db_aborts_when_crawler_shutdown_fails(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1230,7 +1230,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_restore_db_aborts_when_geo_shutdown_fails(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1794,7 +1794,7 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_close_event_confirmation_and_quit_path(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.ui.app import RealEstateApp
 
         class _EventStub:
@@ -2199,7 +2199,7 @@ class TestUIWiring(unittest.TestCase):
                 self._qt_app.processEvents()
 
     def test_crawler_tab_export_scope_preserves_visible_order_and_raw_data(self):
-        from PyQt6.QtCore import Qt
+        from PySide6.QtCore import Qt
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -2563,7 +2563,7 @@ class TestUIWiring(unittest.TestCase):
         import time as _time
         import types as _types
 
-        from PyQt6.QtCore import QThread
+        from PySide6.QtCore import QThread
 
         from src.ui.widgets.crawler_tab_parts.crawl_control_parts.snapshot_worker import (
             CrawlerTabSnapshotWorkerMixin,
@@ -2590,7 +2590,7 @@ class TestUIWiring(unittest.TestCase):
         import time as _time
         import types as _types
 
-        from PyQt6.QtCore import QThread
+        from PySide6.QtCore import QThread
 
         from src.ui.widgets.crawler_tab_parts.crawl_control_parts.snapshot_worker import (
             CrawlerTabSnapshotWorkerMixin,

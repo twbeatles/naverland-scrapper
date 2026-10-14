@@ -10,11 +10,11 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestCrawlPreflight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -163,7 +163,7 @@ class TestCrawlPreflight(unittest.TestCase):
         self.assertIn("조건을 넓히면", notes)
 
     def test_request_start_asks_before_discarding_unsaved_results(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
 
         tab = self.tab
         tab.collected_data = [{"단지명": "A"}]
@@ -189,7 +189,7 @@ class TestCrawlPreflight(unittest.TestCase):
         mock_start.assert_called_once()
 
     def test_clear_list_confirms_when_several_complexes(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
 
         tab = self.tab
         tab.add_task("단지A", "111")
@@ -239,16 +239,16 @@ class TestCrawlPreflight(unittest.TestCase):
         dialog.deleteLater()
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestGeoPreflight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
     def test_default_location_is_confirmed_and_range_is_explained(self):
-        from PyQt6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QMessageBox
         from src.core.database import ComplexDatabase
         from src.ui.widgets.geo_crawler_tab import GeoCrawlerTab
 

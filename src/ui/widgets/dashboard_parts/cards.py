@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from src.ui.styles import COLORS
 

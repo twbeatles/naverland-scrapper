@@ -1,9 +1,9 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QLabel, QHBoxLayout, QVBoxLayout, QLineEdit, QSlider, QPushButton, QProgressBar, QFrame,
     QTableWidgetItem, QStyledItemDelegate
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCursor, QColor
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCursor, QColor
 import webbrowser
 from src.utils.constants import CRAWL_SPEED_PRESETS, TRADE_COLORS
 from src.ui.styles import COLORS
@@ -11,7 +11,7 @@ from src.ui.styles import COLORS
 
 class EmptyStateWidget(QWidget):
     """재사용 가능한 빈 상태 위젯 (Fluent IconWidget 기반)"""
-    action_clicked = pyqtSignal()
+    action_clicked = Signal()
 
     _LEGACY_ICONS = {"📭": "DOCUMENT", "🔍": "SEARCH", "⭐": "HEART", "📁": "FOLDER", "ℹ": "INFO"}
 
@@ -104,7 +104,7 @@ def install_token_labels(table, column: int, mapper) -> None:
 
 
 class SearchBar(QWidget):
-    search_changed = pyqtSignal(str)
+    search_changed = Signal(str)
 
     def __init__(self, placeholder="검색...", parent=None):
         super().__init__(parent)
@@ -140,7 +140,7 @@ class SearchBar(QWidget):
 
 
 class SpeedSlider(QWidget):
-    speed_changed = pyqtSignal(str)
+    speed_changed = Signal(str)
     SPEEDS = ["빠름", "보통", "느림", "매우 느림"]
 
     def __init__(self, parent=None):

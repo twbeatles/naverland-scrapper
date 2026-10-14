@@ -70,11 +70,11 @@ class TestThemeColorSets(unittest.TestCase):
         self.assertGreater(_channel_luminance(COLORS["dark"]["text_primary"]), 0.70)
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestArticleCardTheme(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -127,7 +127,7 @@ class TestArticleCardTheme(unittest.TestCase):
         view.deleteLater()
 
     def test_light_article_card_enables_styled_background_and_paints_light_pixel(self):
-        from PyQt6.QtCore import Qt
+        from PySide6.QtCore import Qt
         from src.ui.styles_parts.colors import COLORS
         from src.ui.widgets.cards import ArticleCard
 
@@ -151,7 +151,7 @@ class TestArticleCardTheme(unittest.TestCase):
         from src.ui.styles_parts.colors import COLORS
         from src.ui.styles_parts.surfaces import apply_theme_surfaces
         from src.ui.widgets.crawler_tab import CrawlerTab
-        from PyQt6.QtWidgets import QGroupBox
+        from PySide6.QtWidgets import QGroupBox
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ComplexDatabase(os.path.join(tmp, "theme_cards.db"))

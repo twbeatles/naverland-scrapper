@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTableWidget, 
     QTableWidgetItem, QCheckBox, QAbstractItemView, QHeaderView, QTabWidget, 
     QGroupBox, QSplitter, QScrollArea, QFrame, QStackedWidget, QTextBrowser, 
@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
 )
 
 
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QRegularExpression, QThread
-from PyQt6.QtGui import QTextCursor, QRegularExpressionValidator
+from PySide6.QtCore import Qt, Signal, QTimer, QRegularExpression, QThread
+from PySide6.QtGui import QTextCursor, QRegularExpressionValidator
 import webbrowser
 import re
 
@@ -43,8 +43,8 @@ DataExporter = None
 
 
 class PriceSnapshotSaveThread(QThread):
-    saved_signal = pyqtSignal(int)
-    failed_signal = pyqtSignal(str)
+    saved_signal = Signal(int)
+    failed_signal = Signal(str)
 
     def __init__(self, db, items, parent=None):
         super().__init__(parent)
@@ -142,11 +142,11 @@ class CrawlerTab(
     }
     
     # Signals
-    data_collected = pyqtSignal(list)  # 수집 완료 시 데이터 전송
-    crawling_started = pyqtSignal()
-    crawling_stopped = pyqtSignal()
-    status_message = pyqtSignal(str)
-    alert_triggered = pyqtSignal(str, str, str, float, int)
+    data_collected = Signal(list)  # 수집 완료 시 데이터 전송
+    crawling_started = Signal()
+    crawling_stopped = Signal()
+    status_message = Signal(str)
+    alert_triggered = Signal(str, str, str, float, int)
     
 
 

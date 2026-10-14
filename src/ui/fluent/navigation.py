@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 from qfluentwidgets import FluentIcon, NavigationInterface, NavigationItemPosition
 
 _TWidget = TypeVar("_TWidget", bound=QWidget)

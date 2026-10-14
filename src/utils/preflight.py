@@ -13,7 +13,7 @@ from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH, bootstrap_runtime_
 
 
 REQUIRED_DEPENDENCIES = [
-    "PyQt6",
+    "PySide6",
     "qfluentwidgets",
     "bs4",
     "matplotlib",
@@ -22,7 +22,7 @@ REQUIRED_DEPENDENCIES = [
     "undetected_chromedriver",
 ]
 
-EXPECTED_QFLUENT_BINDING = "PyQt6"
+EXPECTED_QFLUENT_BINDING = "PySide6"
 
 OPTIONAL_DEPENDENCIES = [
     "psutil",
@@ -131,7 +131,7 @@ def find_qfluentwidgets_binding_mismatch(
         return ""
     return (
         f"qfluentwidgets가 {expected} 용이 아닙니다(감지: {actual}). "
-        "PySide6-Fluent-Widgets를 제거하고 PyQt6-Fluent-Widgets를 다시 설치하세요."
+        "PyQt6-Fluent-Widgets를 제거하고 PySide6-Fluent-Widgets를 다시 설치하세요."
     )
 
 

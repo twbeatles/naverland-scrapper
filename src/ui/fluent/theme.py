@@ -2,13 +2,13 @@
 
 srtgo/ktrain ``ktrain/gui/theme.py`` parity: OS 다크/라이트 연동이 기본이며,
 Fluent component가 제공하는 스타일을 QSS로 다시 그리지 않는다.
-PyQt6 바인딩은 유지한다 (DESKTOP_UI_DESIGN_RULES §1.1).
+PySide6 바인딩은 유지한다 (DESKTOP_UI_DESIGN_RULES §1.1).
 """
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QObject
-from PyQt6.QtWidgets import QDialog
+from PySide6.QtCore import QEvent, QObject
+from PySide6.QtWidgets import QDialog
 
 from typing import Any
 
@@ -46,8 +46,8 @@ def apply_app_theme(theme_name: str | None = "auto", *, accent: str | None = Non
     _PINNED_THEME = theme
     setTheme(theme)
     try:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QGuiApplication
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QGuiApplication
 
         hints = QGuiApplication.styleHints()
         if hints is not None and theme != Theme.AUTO:
@@ -103,8 +103,8 @@ def _on_system_scheme_changed(_scheme: Any = None) -> None:
 
 def _install_theme_watcher(app: Any) -> None:
     try:
-        from PyQt6.QtCore import QTimer
-        from PyQt6.QtGui import QGuiApplication
+        from PySide6.QtCore import QTimer
+        from PySide6.QtGui import QGuiApplication
 
         hints = QGuiApplication.styleHints()
         if hints is not None and hasattr(hints, "colorSchemeChanged"):

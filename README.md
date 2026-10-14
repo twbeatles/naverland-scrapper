@@ -1,7 +1,7 @@
 # Naver Real Estate Scraper & Price Tracker
 
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![UI Framework](https://img.shields.io/badge/UI-PyQt6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
+[![UI Framework](https://img.shields.io/badge/UI-PySide6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PySide6-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Version](https://img.shields.io/badge/Version-v15.5-orange?style=flat-square)](#)
 
@@ -88,10 +88,10 @@ playwright install chromium
 ```
 
 > ⚠️ **주의 (UI 라이브러리 충돌 방지)**  
-> 본 프로젝트는 `PyQt6-Fluent-Widgets`를 사용합니다. `PySide6-Fluent-Widgets`가 함께 설치되면 모듈 충돌(`ModuleNotFoundError: No module named 'PySide6'`)이 발생합니다.  
+> 본 프로젝트는 `PySide6-Fluent-Widgets`를 사용합니다. `PyQt6-Fluent-Widgets`가 함께 설치되면 모듈 충돌(`ModuleNotFoundError: No module named 'PyQt6'`)이 발생합니다.  
 > 만약 오류가 발생하면 아래 명령으로 재설치하세요:  
-> `python -m pip uninstall -y PySide6-Fluent-Widgets`  
-> `python -m pip install --force-reinstall "PyQt6-Fluent-Widgets>=1.11.0"`
+> `python -m pip uninstall -y PyQt6-Fluent-Widgets`  
+> `python -m pip install --force-reinstall "PySide6-Fluent-Widgets==1.11.3"`
 >
 > 전역 Python을 건드리고 싶지 않다면 **격리 환경**을 쓰세요: `powershell -File scripts/setup_build_env.ps1` 이 `.venv-ci`를 만들어 빌드·검증에 전용으로 사용합니다. (`PYTHONNOUSERSITE=1`로 `%APPDATA%\Python` 사용자 패키지도 차단)
 
@@ -342,7 +342,7 @@ powershell -File scripts/build_local.ps1 -OneFile -Slim   # Chromium 번들 제�
 .venv-ci\Scripts\python.exe -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ```
 
-> 전역 Python에 `PySide6-Fluent-Widgets`가 설치돼 있으면 spec이 빌드를 중단합니다(실행 시 `No module named 'PySide6'` 방지). `build_local.ps1`은 전역 환경과 무관하게 `.venv-ci`만 사용합니다. 처음부터 다시 만들려면 `scripts/setup_build_env.ps1 -Recreate`.
+> 전역 Python에 `PyQt6-Fluent-Widgets`가 설치돼 있으면 spec이 빌드를 중단합니다(실행 시 `No module named 'PyQt6'` 방지). `build_local.ps1`은 전역 환경과 무관하게 `.venv-ci`만 사용합니다. 처음부터 다시 만들려면 `scripts/setup_build_env.ps1 -Recreate`.
 
 #### 빌드 커스터마이징 환경 변수
 | 환경 변수 | 기본값 | 설명 |
@@ -365,7 +365,7 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 
 - **CI**: `.github/workflows/ci.yml` — `windows-latest`, Python 3.15 단일. `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` (Node 20, Pyright용)
 - **로컬 동일 검사**: `powershell -File scripts/ci_check.ps1` (`.venv-ci`가 있으면 자동으로 격리 환경 사용)
-- **테스트는 격리 환경 필수**: 전역 Python의 사용자 site-packages(`%APPDATA%\Python\...`) 에 `PySide6-Fluent-Widgets`가 있으면 `qfluentwidgets`가 PySide6 변종으로 잡혀 UI 테스트가 대량으로 실패합니다(`TypeError: ... 'PySide6.QtGui.QIcon'`, `NavigationInterface ... PySide6 ...`). 전역을 고치지 말고 격리 환경으로 실행하세요.
+- **테스트는 격리 환경 필수**: 전역 Python의 사용자 site-packages(`%APPDATA%\Python\...`) 에 `PyQt6-Fluent-Widgets`가 있으면 `qfluentwidgets`가 PyQt6 변종으로 잡혀 UI 테스트가 대량으로 실패합니다(`TypeError: ... 'PyQt6.QtGui.QIcon'`, `NavigationInterface ... PyQt6 ...`). 전역을 고치지 말고 격리 환경으로 실행하세요.
   ```powershell
   powershell -File scripts/setup_build_env.ps1   # .venv-ci 생성/동기화(최초 1회)
   powershell -File scripts/ci_check.ps1          # .venv-ci가 있으면 자동 사용
@@ -388,5 +388,5 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 
 ## 📄 라이선스 참고
 
-- 본 애플리케이션의 UI 컴포넌트는 `PyQt6-Fluent-Widgets` (GPLv3)를 사용합니다.
+- 본 애플리케이션의 UI 컴포넌트는 `PySide6-Fluent-Widgets` (GPLv3)를 사용합니다.
 - 상용 목적으로 수정 및 배포할 경우 관련 오픈소스 라이선스 규정을 준수해야 합니다.

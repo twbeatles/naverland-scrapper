@@ -2,7 +2,7 @@ import time
 import random
 import gc
 import traceback
-from PyQt6.QtCore import QThread, pyqtSignal
+from PySide6.QtCore import QThread, Signal
 
 try:
     import undetected_chromedriver as uc
@@ -50,16 +50,16 @@ class CrawlerThread(
     CrawlerDomScrollParseMixin,
     QThread,
 ):
-    log_signal = pyqtSignal(str, int)
-    progress_signal = pyqtSignal(int, str, int)  # percent, current_name, remaining_seconds
-    item_signal = pyqtSignal(dict)  # deprecated: items_signal(list[dict]) 사용 권장
-    items_signal = pyqtSignal(list)
-    stats_signal = pyqtSignal(dict)
-    complex_finished_signal = pyqtSignal(str, str, str, int)
-    finished_signal = pyqtSignal(list)
-    error_signal = pyqtSignal(str)
-    alert_triggered_signal = pyqtSignal(str, str, str, float, int)
-    discovered_complex_signal = pyqtSignal(dict)
+    log_signal = Signal(str, int)
+    progress_signal = Signal(int, str, int)  # percent, current_name, remaining_seconds
+    item_signal = Signal(dict)  # deprecated: items_signal(list[dict]) 사용 권장
+    items_signal = Signal(list)
+    stats_signal = Signal(dict)
+    complex_finished_signal = Signal(str, str, str, int)
+    finished_signal = Signal(list)
+    error_signal = Signal(str)
+    alert_triggered_signal = Signal(str, str, str, float, int)
+    discovered_complex_signal = Signal(dict)
     BLOCKED_PAGE_PATTERNS = (
         "captcha",
         "캡차",

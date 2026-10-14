@@ -1,13 +1,13 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QListWidget, QAbstractItemView, 
     QListWidgetItem, QHBoxLayout, QPushButton
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PySide6.QtCore import Signal, Qt
 from src.core.export import ExcelTemplate
 
 class ExcelTemplateDialog(QDialog):
     """엑셀 내보내기 템플릿 설정 (v7.3)"""
-    template_saved = pyqtSignal(dict)
+    template_saved = Signal(dict)
     
     def __init__(self, parent=None, current_template=None):
         super().__init__(parent)

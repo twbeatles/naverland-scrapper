@@ -140,7 +140,7 @@ class AppTabSetupMixin:
         # Panel starts COMPACT (48px icons); expand for labeled nav after the
         # window is shown so item animations/opacity settle (srtgo parity).
         try:
-            from PyQt6.QtCore import QTimer
+            from PySide6.QtCore import QTimer
 
             QTimer.singleShot(
                 0, lambda: self.navigationInterface.expand(useAni=False)

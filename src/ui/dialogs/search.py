@@ -1,8 +1,8 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QListWidget, QHBoxLayout, QPushButton, QListWidgetItem,
     QLineEdit, QLabel, QTabWidget, QWidget, QMessageBox
 )
-from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot, QTimer
+from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot, QTimer
 
 from src.utils.ui_labels import asset_label
 from src.core.services.keyword_search import (
@@ -19,9 +19,9 @@ _SUGGEST_DEBOUNCE_MS = 400
 class _KeywordWorker(QObject):
     """Background worker owning one browser session for keyword endpoints."""
 
-    suggestions_ready = pyqtSignal(list, int)
-    search_ready = pyqtSignal(dict, int, bool)
-    failed = pyqtSignal(str, int, str)
+    suggestions_ready = Signal(list, int)
+    search_ready = Signal(dict, int, bool)
+    failed = Signal(str, int, str)
 
     def __init__(self, session_factory=None, rate_limit_cooldown_sec=30.0,
                  retry_delay_sec=1.0):
@@ -102,7 +102,7 @@ class _KeywordWorker(QObject):
                 raise
             return self._run_fetch_once(kind, keyword, page=page)
 
-    @pyqtSlot(str, int)
+    @Slot(str, int)
     def suggest(self, keyword, generation):
         if self._cooldown_message():
             return
@@ -114,7 +114,7 @@ class _KeywordWorker(QObject):
             if not self._cancelled:
                 self.failed.emit(str(exc)[:200], int(generation), "suggest")
 
-    @pyqtSlot(str, int, int, bool)
+    @Slot(str, int, int, bool)
     def search(self, keyword, page, generation, append):
         cooled = self._cooldown_message()
         if cooled:
@@ -129,7 +129,7 @@ class _KeywordWorker(QObject):
             if not self._cancelled:
                 self.failed.emit(str(exc)[:200], int(generation), "search")
 
-    @pyqtSlot()
+    @Slot()
     def close_session(self):
         session, self._session = self._session, None
         if session is not None:
@@ -146,10 +146,10 @@ class KeywordSearchDialog(QDialog):
     단지 후보는 체크 후 목록에 추가하고, 지역 후보는 지도 탭으로 보낸다.
     """
 
-    complexes_added = pyqtSignal(list)  # [(name, complex_id, asset_type), ...]
-    region_chosen = pyqtSignal(dict)  # {"cortar_no","name","latitude","longitude",...}
-    request_suggest = pyqtSignal(str, int)
-    request_search = pyqtSignal(str, int, int, bool)
+    complexes_added = Signal(list)  # [(name, complex_id, asset_type), ...]
+    region_chosen = Signal(dict)  # {"cortar_no","name","latitude","longitude",...}
+    request_suggest = Signal(str, int)
+    request_search = Signal(str, int, int, bool)
 
     def __init__(self, parent=None, session_factory=None, mode="complex"):
         super().__init__(parent)
@@ -346,7 +346,7 @@ class KeywordSearchDialog(QDialog):
         self._generation += 1
         self.request_suggest.emit(keyword, self._generation)
 
-    @pyqtSlot(list, int)
+    @Slot(list, int)
     def _on_suggestions_ready(self, names, generation):
         if generation != self._generation:
             return
@@ -394,7 +394,7 @@ class KeywordSearchDialog(QDialog):
         if status:
             self.status_label.setText(status)
 
-    @pyqtSlot(dict, int, bool)
+    @Slot(dict, int, bool)
     def _on_search_ready(self, result, generation, append):
         if generation != self._search_generation:
             return
@@ -444,7 +444,7 @@ class KeywordSearchDialog(QDialog):
                 + (" · 「더 보기」로 더 불러올 수 있습니다" if self._has_more else "")
             )
 
-    @pyqtSlot(str, int, str)
+    @Slot(str, int, str)
     def _on_worker_failed(self, message, generation, kind):
         if kind == "search":
             if generation != self._search_generation:

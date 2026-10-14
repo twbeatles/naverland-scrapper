@@ -54,7 +54,7 @@ def _configure_qt_font_dir() -> None:
 
 
 def _apply_default_app_font(app) -> None:
-    from PyQt6.QtGui import QFont
+    from PySide6.QtGui import QFont
 
     font = QFont("Pretendard", 10)
     if font.pointSize() <= 0 and font.pixelSize() <= 0:
@@ -64,8 +64,8 @@ def _apply_default_app_font(app) -> None:
 
 def _configure_high_dpi() -> None:
     try:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QGuiApplication
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QGuiApplication
         QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     except Exception:
         pass
@@ -93,7 +93,7 @@ def main():
 
     sys.excepthook = _excepthook
 
-    from PyQt6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
     from src.ui.app import RealEstateApp
 
     _configure_high_dpi()

@@ -7,16 +7,16 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PyQt6") is None, "PyQt6 is not installed")
+@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
 class TestPerformanceSmoke(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
     def test_result_filter_miss_10k_smoke(self):
-        from PyQt6.QtWidgets import QTableWidgetItem
+        from PySide6.QtWidgets import QTableWidgetItem
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 

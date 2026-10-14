@@ -90,8 +90,8 @@ class CrawlerTabTableRowRenderMixin:
                 continue
 
     def _open_extra_columns_menu(self: Any):
-        from PyQt6.QtGui import QAction
-        from PyQt6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import QMenu
         from src.utils.result_columns import RESULT_EXTRA_COLUMN_DEFS, normalize_result_extra_columns
 
         menu = QMenu(self)

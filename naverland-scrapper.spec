@@ -2,7 +2,7 @@
 """PyInstaller spec — slim by default, optional Chromium / Selenium extras.
 
 Design goals (2026-08-05 Fluent; rechecked 2026-08-12 site reform):
-  1) Only pull what this app imports (PyQt6, qfluentwidgets, playwright, matplotlib,
+  1) Only pull what this app imports (PySide6, qfluentwidgets, playwright, matplotlib,
      openpyxl, selenium/undetected_chromedriver as optional fallback).
   2) Block accidental ML/data-science packages on polluted PYTHONPATH
      (torch, sklearn, transformers, cv2, dask, pandas, …).
@@ -36,8 +36,8 @@ from PyInstaller.utils.hooks import collect_submodules
 project_dir = Path.cwd().resolve()
 
 # qfluentwidgets is shared by PyQt6-Fluent-Widgets and PySide6-Fluent-Widgets.
-# This app uses PyQt6 and excludes PySide6; the PySide6 variant would freeze
-# then crash with ModuleNotFoundError: No module named 'PySide6'.
+# This app uses PySide6 and excludes PyQt6; the PyQt6 variant would freeze
+# then crash with ModuleNotFoundError: No module named 'PyQt6'.
 if str(project_dir) not in sys.path:
     sys.path.insert(0, str(project_dir))
 from src.utils.preflight import find_qfluentwidgets_binding_mismatch  # noqa: E402
@@ -188,30 +188,30 @@ excludes: list[str] = [
     # GUI toolkits we do not use
     "tkinter",
     "PySide2",
-    "PySide6",
     "PyQt5",
+    "PyQt6",
     "wx",
     # Qt modules not required by this app
-    "PyQt6.QtWebEngineCore",
-    "PyQt6.QtWebEngineWidgets",
-    "PyQt6.QtWebEngineQuick",
-    "PyQt6.QtWebChannel",
-    "PyQt6.QtBluetooth",
-    "PyQt6.QtNfc",
-    "PyQt6.QtPositioning",
-    "PyQt6.QtSensors",
-    "PyQt6.QtSerialPort",
-    "PyQt6.QtRemoteObjects",
-    "PyQt6.Qt3DCore",
-    "PyQt6.Qt3DRender",
-    "PyQt6.QtMultimedia",
-    "PyQt6.QtMultimediaWidgets",
-    "PyQt6.QtPdf",
-    "PyQt6.QtPdfWidgets",
-    "PyQt6.QtQuick",
-    "PyQt6.QtQuickWidgets",
-    "PyQt6.QtQml",
-    "PyQt6.QtTextToSpeech",
+    "PySide6.QtWebEngineCore",
+    "PySide6.QtWebEngineWidgets",
+    "PySide6.QtWebEngineQuick",
+    "PySide6.QtWebChannel",
+    "PySide6.QtBluetooth",
+    "PySide6.QtNfc",
+    "PySide6.QtPositioning",
+    "PySide6.QtSensors",
+    "PySide6.QtSerialPort",
+    "PySide6.QtRemoteObjects",
+    "PySide6.Qt3DCore",
+    "PySide6.Qt3DRender",
+    "PySide6.QtMultimedia",
+    "PySide6.QtMultimediaWidgets",
+    "PySide6.QtPdf",
+    "PySide6.QtPdfWidgets",
+    "PySide6.QtQuick",
+    "PySide6.QtQuickWidgets",
+    "PySide6.QtQml",
+    "PySide6.QtTextToSpeech",
     # Heavy stacks often present on polluted PYTHONPATH
     "torch",
     "torchvision",
@@ -330,24 +330,24 @@ def _ban_path(name: str) -> bool:
         "huggingface",
         "tokenizers",
         "datasets",
-        "pyqt6/qt6/qml",
-        "pyqt6/qt6/translations",
-        "pyqt6/qt6/plugins/sqldrivers",
-        "pyqt6/qt6/plugins/geoservices",
-        "pyqt6/qt6/plugins/sensors",
-        "pyqt6/qt6/plugins/position",
-        "pyqt6/qt6/plugins/webview",
-        "pyqt6/qt6/plugins/multimedia",
-        "pyqt6/qt6/plugins/mediaservice",
-        "pyqt6.qtmultimedia",
-        "pyqt6.qtwebengine",
-        "pyqt6.qtquick",
-        "pyqt6.qtqml",
-        "pyqt6.qt3d",
-        "pyqt6.qtpdf",
-        "pyqt6.qtbluetooth",
-        "pyqt6.qtsensors",
-        "pyqt6.qtpositioning",
+        "pyside6/qt/qml",
+        "pyside6/qt/translations",
+        "pyside6/qt/plugins/sqldrivers",
+        "pyside6/qt/plugins/geoservices",
+        "pyside6/qt/plugins/sensors",
+        "pyside6/qt/plugins/position",
+        "pyside6/qt/plugins/webview",
+        "pyside6/qt/plugins/multimedia",
+        "pyside6/qt/plugins/mediaservice",
+        "pyside6.qtmultimedia",
+        "pyside6.qtwebengine",
+        "pyside6.qtquick",
+        "pyside6.qtqml",
+        "pyside6.qt3d",
+        "pyside6.qtpdf",
+        "pyside6.qtbluetooth",
+        "pyside6.qtsensors",
+        "pyside6.qtpositioning",
         "qfluentwidgets/multimedia",
         "matplotlib/tests",
         "numpy/tests",

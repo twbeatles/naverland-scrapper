@@ -121,11 +121,11 @@ class TestKeywordMatching(unittest.TestCase):
         self.assertFalse(C._is_default_advanced_filter(_default_filters(include_keywords=["a"])))
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PyQt6") is None, "PyQt6 missing")
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
 class TestAdvancedFilterDialogMode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 
@@ -164,11 +164,11 @@ class TestAdvancedFilterDialogMode(unittest.TestCase):
             dlg.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PyQt6") is None, "PyQt6 missing")
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
 class TestCardSearchNormalization(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from PyQt6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
 
         cls._qt_app = QApplication.instance() or QApplication([])
 

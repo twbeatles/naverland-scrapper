@@ -18,7 +18,7 @@ class AppLifecycleBootstrapMixin:
         except Exception:
             pass
         try:
-            from PyQt6.QtGui import QGuiApplication as _QGuiApp
+            from PySide6.QtGui import QGuiApplication as _QGuiApp
             from src.ui.fluent.design_tokens import preferred_window_size as _pref_size
             _screen = _QGuiApp.primaryScreen()
             _avail = _screen.availableGeometry() if _screen is not None else None
@@ -147,7 +147,7 @@ class AppLifecycleBootstrapMixin:
                 pass
             return
         try:
-            from PyQt6.QtGui import QGuiApplication as _QGuiApp
+            from PySide6.QtGui import QGuiApplication as _QGuiApp
             _screen = _QGuiApp.primaryScreen()
             _avail = _screen.availableGeometry() if _screen is not None else None
         except Exception:

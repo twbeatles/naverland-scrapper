@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QDialog,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PySide6.QtCore import Qt, Signal
 
 from src.ui.dialogs import MultiSelectDialog
 from src.utils.logger import get_logger
@@ -27,7 +27,7 @@ logger = get_logger("GroupTab")
 class GroupTab(QWidget):
     """그룹 관리 탭"""
 
-    groups_updated = pyqtSignal()
+    groups_updated = Signal()
 
     def __init__(self, db, parent=None):
         super().__init__(parent)

@@ -1,8 +1,8 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, 
     QTableWidgetItem, QAbstractItemView, QInputDialog, QHeaderView
 )
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt
 import webbrowser
 from src.ui.widgets.components import EmptyStateWidget
 from src.utils.logger import get_logger

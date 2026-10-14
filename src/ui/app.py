@@ -12,7 +12,7 @@ from urllib.request import urlopen, Request
 from socket import timeout as SocketTimeout
 import gc
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
     QCheckBox, QTableWidget, QTableWidgetItem, QTextBrowser, QProgressBar,
@@ -21,8 +21,8 @@ from PyQt6.QtWidgets import (
     QTimeEdit, QStatusBar, QMenu, QSystemTrayIcon, QStyle, QApplication,
     QDialog, QDialogButtonBox, QSlider, QAbstractItemView, QToolTip, QSizePolicy, QStackedWidget
 )
-from PyQt6.QtCore import Qt, QTimer, QTime, QThread, pyqtSignal, QUrl, QPoint
-from PyQt6.QtGui import QAction, QColor, QShortcut, QKeySequence, QFont, QDesktopServices, QCursor
+from PySide6.QtCore import Qt, QTimer, QTime, QThread, Signal, QUrl, QPoint
+from PySide6.QtGui import QAction, QColor, QShortcut, QKeySequence, QFont, QDesktopServices, QCursor
 
 try:
     _plyer_module = importlib.import_module("plyer")

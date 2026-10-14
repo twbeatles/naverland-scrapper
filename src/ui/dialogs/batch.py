@@ -1,5 +1,5 @@
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
@@ -20,8 +20,8 @@ from src.utils.retry_handler import RetryCancelledError
 
 
 class _NameLookupWorker(QObject):
-    progress = pyqtSignal(int, int, str, str, bool, str, str)
-    finished = pyqtSignal(int, bool)
+    progress = Signal(int, int, str, str, bool, str, str)
+    finished = Signal(int, bool)
 
     def __init__(self, results):
         super().__init__()
@@ -69,7 +69,7 @@ class _NameLookupWorker(QObject):
             "needs_article_lookup": False,
         }
 
-    @pyqtSlot()
+    @Slot()
     def run(self):
         total = len(self._results)
         processed = 0
@@ -141,7 +141,7 @@ class _NameLookupWorker(QObject):
 class URLBatchDialog(QDialog):
     """URL 일괄 등록 다이얼로그."""
 
-    complexes_added = pyqtSignal(list)  # [(name, id, asset_type), ...]
+    complexes_added = Signal(list)  # [(name, id, asset_type), ...]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -314,7 +314,7 @@ class URLBatchDialog(QDialog):
             return
         self._on_lookup_progress(*args)
 
-    @pyqtSlot(int, int, str, str, bool, str, str)
+    @Slot(int, int, str, str, bool, str, str)
     def _on_lookup_progress(self, row, total, cid, name, is_verified, asset_type, status):
         if row < 0 or row >= self.result_table.rowCount():
             return
@@ -340,7 +340,7 @@ class URLBatchDialog(QDialog):
             return
         self._on_lookup_finished(*args)
 
-    @pyqtSlot(int, bool)
+    @Slot(int, bool)
     def _on_lookup_finished(self, processed, cancelled):
         self._set_parsing_state(False)
         total = self.result_table.rowCount()
