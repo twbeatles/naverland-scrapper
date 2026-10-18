@@ -65,8 +65,10 @@ class CrawlerSeleniumFlowMixin:
             self._flush_history_updates(force=True)
             self.log(f"\n{'='*50}\n✅ 완료! 총 {len(self.collected_data)}건")
         except RetryCancelledError:
+            self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
             self.log("⏹ 중단 요청으로 크롤링을 종료했습니다.", 20)
         except Exception as e:
+            self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
             self.log(f"❌ 치명적 오류: {e}", 40)
             self.log(f"상세:\n{traceback.format_exc()}", 40)
             self.error_signal.emit(str(e))
@@ -82,6 +84,7 @@ class CrawlerSeleniumFlowMixin:
 
     def _run_selenium_loop(self):
         if not UC_AVAILABLE or not BS4_AVAILABLE:
+            self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
             self.error_signal.emit("필수 라이브러리 미설치\npip install undetected-chromedriver beautifulsoup4")
             return
             
@@ -150,6 +153,7 @@ class CrawlerSeleniumFlowMixin:
                 complex_count = int(prefill_payload.get("count", 0) or 0)
                 attempted_trade_types = list(prefill_trade_types)
                 complex_trade_types = list(prefill_trade_types)
+                partial_trade_types = []
                 for ttype in self.trade_types:
                     if self._should_stop():
                         break
@@ -184,6 +188,11 @@ class CrawlerSeleniumFlowMixin:
                         batch_result = self._crawl(driver, name, cid, ttype, asset_type=asset_type)
                         count = int(batch_result.get("count", 0))
                         complex_count += count
+                        if batch_result.get("collection_status") != "complete":
+                            partial_trade_types.append(ttype)
+                            self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
+                            self.log(f"   일부 수집 {count}건: DOM 목록의 전체 페이지 완료 여부를 확인하지 못했습니다.", 30)
+                            continue
                         if ttype not in complex_trade_types:
                             complex_trade_types.append(ttype)
                         if cid and ttype:
@@ -197,11 +206,13 @@ class CrawlerSeleniumFlowMixin:
                         self._current_pair = None
                         break
                     except BlockedPageError as e:
+                        self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
                         self.log(f"   ⚠️ 차단 감지: {e}", 30)
                         self._current_pair = None
                         if self._should_stop():
                             break
                     except Exception as e:
+                        self.stats["collection_incomplete_count"] = int(self.stats.get("collection_incomplete_count", 0)) + 1
                         self.log(f"   ❌ 오류: {e}", 40)
                         self.log(f"   상세: {traceback.format_exc()}", 40)
                         self._current_pair = None
@@ -227,6 +238,8 @@ class CrawlerSeleniumFlowMixin:
                     attempted_trade_types,
                 )
                 history_trade_types = complex_trade_types or attempted_trade_types
+                if partial_trade_types:
+                    run_status = "partial"
                 self.record_crawl_history(
                     name,
                     cid,
@@ -257,6 +270,9 @@ class CrawlerSeleniumFlowMixin:
                     self.log(f"⚠️ Chrome 드라이버 종료 중 오류: {e}", 30)
     
     def _crawl(self, driver, name, cid, ttype, asset_type="APT"):
+        from src.core.services.collection_result import collection_fingerprint, record_collection_result
+
+        fingerprint = collection_fingerprint(include_pre=bool(getattr(self, "include_pre_sale_rights", False))) + ":dom"
         asset_token = str(asset_type or "APT").strip().upper() or "APT"
         if asset_token != "APT":
             raise ValueError("Selenium complex 모드는 APT만 지원합니다.")
@@ -267,6 +283,7 @@ class CrawlerSeleniumFlowMixin:
                 ttype,
                 mode=self.crawl_mode,
                 asset_type=asset_token,
+                query_fingerprint=fingerprint,
             )
             if cached_items is not None:
                 self.log(f"   💾 캐시 히트! {len(cached_items)}건 로드")
@@ -283,7 +300,7 @@ class CrawlerSeleniumFlowMixin:
                         self.stats["filtered_out"] += 1
                 self._flush_history_updates(force=True)
                 self._flush_pending_items_if_needed(force=True)
-                return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items)}
+                return {"count": matched_count, "cache_hit": True, "raw_count": len(cached_items), "collection_status": "partial"}
         
         try:
             from src.core.services.site_contract import build_complex_page_url
@@ -352,7 +369,7 @@ class CrawlerSeleniumFlowMixin:
         self._record_pair_success(name, cid, ttype, asset_type=asset_token)
         
         # v15.x: raw items는 항상 저장하되 negative cache는 확정 빈 결과일 때만 저장
-        if self.cache:
+        if self.cache and parse_result.get("collection_status") == "complete":
             raw_items = parse_result.get("raw_items", [])
             if raw_items:
                 self.cache.set(
@@ -361,6 +378,7 @@ class CrawlerSeleniumFlowMixin:
                     raw_items,
                     mode=self.crawl_mode,
                     asset_type=asset_token,
+                    query_fingerprint=fingerprint,
                 )
             else:
                 negative_ttl_seconds = max(0, int(self.negative_cache_ttl_minutes * 60))
@@ -373,10 +391,16 @@ class CrawlerSeleniumFlowMixin:
                         reason="confirmed_empty",
                         mode=self.crawl_mode,
                         asset_type=asset_token,
+                        query_fingerprint=fingerprint,
                     )
         
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
+        collection_status = str(parse_result.get("collection_status", "partial" if parse_success else "failed"))
+        record_collection_result(self.stats, {"collection_status": collection_status,
+                                 "failure_reason": "" if collection_status == "complete" else "dom_completeness_unverified"},
+                                 cid=cid, asset_type=asset_token, trade_type=ttype,
+                                 count=count, raw_count=int(parse_result.get("raw_count", 0)))
         return {
             "count": count,
             "cache_hit": False,
@@ -385,6 +409,7 @@ class CrawlerSeleniumFlowMixin:
             "parse_success": parse_success,
             "empty_confirmed": empty_confirmed,
             "blocked_detected": blocked_detected,
+            "collection_status": collection_status,
         }
 
     def _crawl_once(self, driver, name, cid, ttype, url):

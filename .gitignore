@@ -47,6 +47,7 @@ data/
 *.json.tmp
 *.json.broken.*
 !pyrightconfig.json
+!tests/fixtures/naver_article_contract.json
 *.csv
 *.xlsx
 

@@ -48,6 +48,8 @@ class PlaywrightResponseCaptureMixin:
         active_path_asset = str(asset_type or "APT")
         active_target_url = f"{HOST_NEW}/complexes/{cid}"
         include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
+        self._article_supplement_result = {}
+        capture_invalid_rows = False
 
         for base_kind, path_asset in self._candidate_paths(asset_type):
             # Use live map keys (a / b / e); bare path_asset + tradeTypes is ignored by site.
@@ -98,7 +100,7 @@ class PlaywrightResponseCaptureMixin:
                 async def _consume(response):
                     nonlocal response_seen, parse_success, parse_failed, response_match_count
                     nonlocal plan_response_seen, plan_parse_success, plan_parse_failed
-                    nonlocal capture_last_payload
+                    nonlocal capture_last_payload, capture_invalid_rows
                     url = response.url
                     expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
                     if expected not in url:
@@ -107,6 +109,11 @@ class PlaywrightResponseCaptureMixin:
                     response_seen = True
                     plan_response_seen = True
                     self._remember_article_api_request_headers(response)
+                    if int(getattr(response, "status", 200) or 200) >= 400:
+                        parse_failed = True
+                        plan_parse_failed = True
+                        response_event.set()
+                        return
                     try:
                         payload = await response.json()
                     except Exception:
@@ -114,8 +121,15 @@ class PlaywrightResponseCaptureMixin:
                         plan_parse_failed = True
                         response_event.set()
                         return
-                    article_list = payload.get("articleList") or payload.get("articles") or []
-                    if not isinstance(article_list, list):
+                    items, valid = self._normalize_article_api_payload(
+                        payload, name=name, cid=cid, trade_type=trade_type,
+                        path_asset=path_asset, mode=mode, source_lat=source_lat,
+                        source_lon=source_lon, source_zoom=source_zoom,
+                        marker_id=marker_id, seen_ids=seen_ids,
+                    )
+                    raw_items.extend(items)
+                    if not valid:
+                        capture_invalid_rows = capture_invalid_rows or bool(items)
                         parse_failed = True
                         plan_parse_failed = True
                         response_event.set()
@@ -123,27 +137,6 @@ class PlaywrightResponseCaptureMixin:
                     capture_last_payload = payload
                     parse_success = True
                     plan_parse_success = True
-                    for article in article_list:
-                        if detect_trade_type(article, requested_trade_type=trade_type) != trade_type:
-                            continue
-                        payload_marker_id = "" if mode == "complex" else str(marker_id or cid or "")
-                        item = normalize_article_payload(
-                            article,
-                            complex_name=name,
-                            complex_id=cid,
-                            requested_trade_type=trade_type,
-                            asset_type=path_asset,
-                            mode=mode,
-                            lat=source_lat,
-                            lon=source_lon,
-                            zoom=source_zoom,
-                            marker_id=payload_marker_id,
-                        )
-                        aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
-                        if not aid or aid in seen_ids:
-                            continue
-                        seen_ids.add(aid)
-                        raw_items.append(item)
                     response_event.set()
 
                 def _handle(response):
@@ -221,7 +214,7 @@ class PlaywrightResponseCaptureMixin:
             if raw_items:
                 break
 
-        if raw_items and capture_last_payload is not None:
+        if capture_last_payload is not None:
             raw_items = await self._supplement_article_api_pages(
                 name=name,
                 cid=cid,
@@ -248,6 +241,14 @@ class PlaywrightResponseCaptureMixin:
         elif parse_failed and not confirmed_capture:
             failure_reason = f"response parse failed: {final_url or 'no_final_url'}"
 
+        supplement = dict(getattr(self, "_article_supplement_result", {}) or {})
+        complete = bool(
+            confirmed_capture and not drain_timed_out and not capture_invalid_rows
+            and supplement.get("collection_status") == "complete"
+        )
+        if not complete:
+            failure_reason = failure_reason or str(supplement.get("failure_reason") or "capture_incomplete")
+
         return {
             "raw_items": raw_items,
             "response_seen": response_seen,
@@ -259,4 +260,7 @@ class PlaywrightResponseCaptureMixin:
             "block_reason": block_reason,
             "capture_failed": capture_failed,
             "failure_reason": failure_reason,
+            "collection_status": "complete" if complete else ("partial" if raw_items else "failed"),
+            "last_successful_page": int(supplement.get("last_successful_page", 0)),
+            "failed_page": int(supplement.get("failed_page", 0)),
         }

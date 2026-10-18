@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any
+import math
 
 from src.utils.helpers import PriceConverter
 
@@ -30,6 +31,8 @@ def build_price_snapshot_rows(items: list[dict] | tuple[dict, ...]) -> list[tupl
             pyeong = float(item.get("면적(평)", 0) or 0)
         except (TypeError, ValueError):
             pyeong = 0.0
+        if not math.isfinite(pyeong) or pyeong <= 0:
+            continue
         pyeong_group = round(pyeong / 5) * 5
 
         if trade_type == "매매":

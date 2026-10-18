@@ -223,6 +223,8 @@ class CrawlerDomScrollParseMixin:
         
         if skipped_type > 0:
             self.log(f"   ℹ️ 다른 거래유형 {skipped_type}건 제외 (요청: {ttype})")
+
+        self._record_observed_items(raw_items)
         
         parse_success = parse_error_count == 0
         empty_confirmed = (

@@ -264,6 +264,7 @@ class TestCrawlerRegressions(unittest.TestCase):
             "response_seen": True,
             "parse_success": True,
             "empty_confirmed": True,
+            "collection_status": "complete",
             "blocked_detected": False,
         }
 
@@ -550,7 +551,7 @@ class TestCrawlerRegressions(unittest.TestCase):
         def _crawl(driver, name, cid, ttype, asset_type="APT"):
             self.assertIsNotNone(driver)
             self.assertEqual((name, cid, ttype, asset_type), ("단지A", "10001", "전세", "APT"))
-            return {"count": 3}
+            return {"count": 3, "collection_status": "complete"}
 
         thread.record_crawl_history = _record_history
         setattr(thread, "_finalize_disappeared_articles", _finalize)

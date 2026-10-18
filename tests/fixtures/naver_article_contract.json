@@ -1,0 +1,7 @@
+{
+  "isMoreData": false,
+  "articleList": [
+    {"articleNo": "sample-sale", "tradeTypeCode": "A1", "realEstateTypeCode": "APT", "dealOrWarrantPrc": "19억 5,000", "area1": 139, "area2": 114, "sameAddrCnt": 4},
+    {"articleNo": "sample-rent", "tradeTypeCode": "B2", "realEstateTypeCode": "APT", "dealOrWarrantPrc": "2억", "rentPrc": "220", "area1": 106, "area2": 84}
+  ]
+}

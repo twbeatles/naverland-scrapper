@@ -709,6 +709,10 @@ class GeoCrawlerTab(CrawlerTab):
         except TypeError:
             item_count = 0
         finish_word = "중지했습니다" if getattr(self, "_stop_requested", False) else "마쳤습니다"
+        if not getattr(self, "_stop_requested", False) and (
+            final_stats.get("collection_incomplete_count", 0) or final_stats.get("history_save_failed", False)
+        ):
+            finish_word = "일부만 진행했습니다"
         self.status_message.emit(
             f"지도 탐색을 {finish_word}. 단지 {discovered}곳 · 매물 {item_count}건"
         )
@@ -717,7 +721,7 @@ class GeoCrawlerTab(CrawlerTab):
             safety_mode = bool(getattr(thread, "geo_incomplete_safety_mode", False)) if thread else False
             incomplete_message = "지도 탐색이 중간에 끊겨 일부 지역은 확인하지 못했습니다."
             if safety_mode:
-                incomplete_message += " 잘못된 기록을 막기 위해 이번 결과는 가격 이력에 반영하지 않았습니다."
+                incomplete_message += " 잘못된 기록을 막기 위해 소멸 판정과 전체 가격 통계를 갱신하지 않았습니다."
             incomplete_message += " 잠시 후 다시 시도하거나 탐색 범위를 줄여 보세요."
             self.append_log(incomplete_message, 30)
             self.status_message.emit(incomplete_message)

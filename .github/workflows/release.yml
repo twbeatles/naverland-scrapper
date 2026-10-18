@@ -55,6 +55,7 @@ jobs:
           "ARTIFACT=$artifact" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: softprops/action-gh-release@v3
         with:
+          body_path: docs/RELEASE_NOTES_v15.7.md
           files: |
             ${{ env.ARTIFACT }}
             ${{ runner.temp }}/latest.json

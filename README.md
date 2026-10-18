@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PySide6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PySide6-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.5-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.7-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
@@ -14,7 +14,7 @@ Naver Real Estate Scraper로 매물을 수집하는 데서 그치지 않고, 로
 - **매물 수집과 지도 탐색**: 아파트(APT)·빌라/연립(VL)의 단지 ID·URL 수집과 좌표 기반 광역 탐색을 지원합니다.
 - **가격 이력과 매물 모니터링**: 일별 가격 스냅샷, 신규·가격 변동·사라진 매물을 확인합니다.
 - **예약 자동 수집**: 단지 묶음 또는 지도 영역을 지정한 시간에 수집할 수 있습니다.
-- **로컬 분석**: 대시보드와 가격 통계로 수집 데이터를 살펴보고, 모든 데이터는 로컬 SQLite에 보관합니다.
+- **로컬 분석**: 대시보드와 가격 통계로 수집 데이터를 살펴보고, 최신 매물 이력과 일별 집계는 로컬 SQLite에 보관합니다.
 - **내보내기**: 필요한 열을 선택해 Excel 또는 CSV로 저장합니다.
 
 ## 빠른 시작
@@ -34,6 +34,20 @@ python app_entry.py
 이 프로젝트는 네이버의 공식 API 제품이 아닙니다. 대상 사이트의 변경으로 일부 기능이 동작하지 않을 수 있으며, 과도한 요청을 권장하지 않습니다. 사용자는 네이버 서비스 약관 및 관련 법규를 준수해야 합니다.
 
 ---
+
+
+## 수집 결과와 가격 통계의 기준
+
+- 일부 페이지가 실패하면 모은 매물은 결과에 남고 **부분 수집**으로 표시됩니다. 빈 목록을 확인한 경우와 네트워크/파싱 오류를 구분합니다.
+- 소멸 판정은 새로 완전히 수집한 자산·단지·거래유형에서만 수행합니다. 가격·면적 필터 밖에 있더라도 응답에서 관측한 기존 매물의 존재는 갱신합니다.
+- **전체 일별 가격 통계**는 필터 없는 완전 수집으로만 갱신합니다. 중단·부분 수집·이력 저장 실패·캐시 결과가 포함된 실행은 기존 통계를 유지합니다. 캐시 TTL 만료 후 새로 수집하면 다시 갱신됩니다.
+- Selenium 보조 엔진의 DOM 스크롤 결과는 전체 페이지 완료를 입증하지 못하므로 부분 수집으로 취급합니다. 화면 조회·내보내기는 가능하지만 소멸 판정과 기준 통계 교체에는 사용하지 않습니다.
+- 통계는 매물 광고별 가격의 집계입니다. 동일 주택의 여러 중개 광고를 하나의 주택으로 확정해 가중치를 제거한 통계는 아닙니다.
+- 목록 면적은 근사 표기일 수 있습니다. 구조화된 상세 공급/전용 면적을 확보하면 표시·평당가를 보완합니다. 내보내기에서 `공급면적(㎡)`, `전용면적(㎡)`, `면적정밀도`를 선택할 수 있습니다.
+- DB의 일별 관측·스냅샷·소멸 기준은 기존 데이터와 호환되는 **UTC 날짜**입니다. 한국 시간 00:00~08:59는 DB에서 전날에 해당합니다. 예약 실행 시각은 PC의 로컬 시각입니다. 같은 DB 날짜의 이전 실행에서 본 매물은 그날 다시 안 보여도 즉시 소멸하지 않습니다.
+- 재실행은 새 수집입니다. 중단 지점부터의 자동 재개는 제공하지 않습니다. 예약은 설정된 catch-up 창 안에서 시작하며, 이미 시작한 예약 슬롯은 재시작 후 자동 중복 실행하지 않습니다.
+
+수정 내용과 검증 범위는 [감사 후속 개선 기록](docs/AUDIT_FIXES_2026-10-18.md)을 참고하세요.
 
 ## 📑 목차
 
@@ -269,7 +283,7 @@ python app_entry.py
 
 ### 7. 데이터 백업 및 복원
 
-수집된 단지 정보, 매물 목록, 가격 스냅샷 이력은 로컬 DB에 안전하게 보관되며 언제든 백업/복원할 수 있습니다.
+단지 정보, 매물별 최신 상태와 이전 가격 기준, 일별 가격 집계는 로컬 DB에 보관되며 백업/복원할 수 있습니다. 매 실행의 전체 원본 응답을 누적 보관하는 아카이브는 아닙니다. 원본 결과를 보존하려면 수집 후 JSON으로 내보내세요.
 
 - **DB 백업**: 상단 메뉴 `파일` → `DB 백업` 선택 ➔ 원하는 위치에 `.db` 파일로 저장
 - **DB 복원**: 상단 메뉴 `파일` → `DB 복원` 선택 ➔ 백업 파일(`.db`) 선택
@@ -380,9 +394,10 @@ python -m PyInstaller --clean --noconfirm naverland-scrapper.spec
 ## 🔒 데이터 저장 위치 및 개인정보 보호
 
 - 본 프로그램은 **완전한 로컬 데스크톱 애플리케이션**입니다.
-- 사용자가 수집한 매물 정보, 검색 기록, 즐겨찾기, 메모 등 모든 데이터는 사용자의 PC 내부 SQLite 데이터베이스(`data/real_estate.db`) 및 로컬 JSON 파일에만 저장됩니다.
+- 사용자가 수집한 매물 정보, 검색 기록, 즐겨찾기, 메모 등 모든 데이터는 사용자의 PC 내부 SQLite 데이터베이스(`data/complexes.db`) 및 로컬 JSON 파일에 저장됩니다. 모든 원본 필드와 관측 시점별 목록을 DB에 누적 보관하지는 않습니다.
 - 외부 서버로 어떠한 개인 데이터나 검색 내역도 전송되지 않습니다.
-- 데이터 저장 위치를 변경하려면 `NAVERLAND_DATA_DIR` 환경 변수를 설정하세요.
+- 개발 실행 기본 경로는 저장소의 `data/complexes.db`입니다. Windows 배포 EXE는 `%LOCALAPPDATA%/NaverlandScrapperProPlus/data/complexes.db`를 사용합니다.
+- `NAVERLAND_DATA_DIR`는 기준 디렉터리를 지정합니다. 예를 들어 `D:/Naverland`로 설정하면 DB는 `D:/Naverland/data/complexes.db`, 로그는 `D:/Naverland/logs`에 저장됩니다.
 
 ---
 

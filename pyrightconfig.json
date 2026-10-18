@@ -19,8 +19,6 @@
   ],
   "pythonVersion": "3.11",
   "pythonPlatform": "Windows",
-  "venvPath": ".",
-  "venv": ".venv-ci",
   "typeCheckingMode": "standard",
   "useLibraryCodeForTypes": true,
   "reportMissingTypeStubs": "none",

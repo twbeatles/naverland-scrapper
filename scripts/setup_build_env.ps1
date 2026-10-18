@@ -17,8 +17,22 @@ $venv = Join-Path (Get-Location) ".venv-ci"
 $venvPython = Join-Path $venv "Scripts\python.exe"
 
 if ($Recreate -and (Test-Path $venv)) {
+  $resolvedVenv = (Resolve-Path -LiteralPath $venv).Path
+  $expectedVenv = Join-Path (Get-Location).Path ".venv-ci"
+  if ($resolvedVenv -ne $expectedVenv) { throw "Refusing to remove unexpected venv path: $resolvedVenv" }
   Write-Host "== Removing $venv =="
-  Remove-Item -Recurse -Force $venv
+  Remove-Item -LiteralPath $resolvedVenv -Recurse -Force
+}
+
+if (Test-Path -LiteralPath $venvPython) {
+  $runtimeOk = $false
+  try {
+    & $venvPython -c "import sys" *> $null
+    $runtimeOk = $LASTEXITCODE -eq 0
+  } catch { $runtimeOk = $false }
+  if (-not $runtimeOk) {
+    throw ".venv-ci points to an unavailable Python. Re-run scripts/setup_build_env.ps1 -Recreate with a working Python."
+  }
 }
 
 if (-not (Test-Path $venvPython)) {

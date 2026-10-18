@@ -13,13 +13,19 @@ class CrawlerTabSnapshotWorkerMixin:
     def _save_price_snapshots(self: Any, *, async_save: bool = True):
         """크롤링 결과를 가격 스냅샷으로 저장"""
         items = [dict(item or {}) for item in (self.collected_data or []) if isinstance(item, dict)]
-        if not items:
+        targets = getattr(self, "_snapshot_replace_targets", None)
+        if not items and not targets:
             return 0
         if async_save:
             return self._start_price_snapshot_worker(items)
 
         rows = build_price_snapshot_rows(items)
-        saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
+        if targets:
+            saved = self.db.add_price_snapshots_bulk(rows, replace_targets=targets)
+        else:
+            saved = self.db.add_price_snapshots_bulk(rows) if rows else 0
+        if rows and int(saved or 0) < len(rows):
+            raise RuntimeError("가격 변화 기록을 모두 저장하지 못했습니다. 기존 통계를 확인해 주세요.")
         self.append_log(f"가격 변화 기록 {saved}건을 저장했습니다.", 10)
         return int(saved or 0)
 

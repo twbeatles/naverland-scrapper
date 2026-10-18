@@ -13,6 +13,10 @@ CI_CHECK_PS1 = REPO_ROOT / "scripts" / "ci_check.ps1"
 # Regression tests that must run in CI; if one is missing from either list,
 # the safety net it provides silently stops running.
 REQUIRED_IN_CI = {
+    "tests/test_collection_integrity.py",
+    "tests/test_playwright_engine_stabilization.py",
+    "tests/test_response_capture_normalize.py",
+    "tests/test_geo_markers_cortar.py",
     "tests/test_browser_pool_guard.py",
     "tests/test_ci_subset_sync.py",
 }

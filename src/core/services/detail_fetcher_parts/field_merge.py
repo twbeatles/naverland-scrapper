@@ -28,6 +28,8 @@ def _merge_detail_field_maps(base: dict, extra: dict | None) -> dict:
 
 
 def _fields_from_named_tree(source_tree) -> dict:
+    import math
+
     fields = {
         "부동산상호": "",
         "중개사이름": "",
@@ -62,6 +64,19 @@ def _fields_from_named_tree(source_tree) -> dict:
     prev_jeonse = parse_kr_money_to_won(str(prev_jeonse_value or ""))
     if prev_jeonse:
         fields["기전세금(원)"] = prev_jeonse
+    for target, keys in (
+        ("공급면적(㎡)", {"supplyArea"}),
+        ("전용면적(㎡)", {"exclusiveArea"}),
+    ):
+        try:
+            area = float(_find_named_value(source_tree, keys))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(area) and area > 0:
+            fields[target] = area
+    if fields.get("공급면적(㎡)"):
+        fields["면적소스"] = "detail_structured"
+        fields["면적정밀도"] = "상세 표기값"
     return fields
 
 

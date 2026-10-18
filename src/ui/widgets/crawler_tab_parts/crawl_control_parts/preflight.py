@@ -225,6 +225,8 @@ class CrawlerTabPreflightMixin:
 
         if stopped:
             head = [f"수집을 중지했습니다 · 그때까지 모은 매물 {count}건"]
+        elif _n("collection_incomplete_count") or stats.get("geo_incomplete") or stats.get("history_save_failed"):
+            head = [f"일부 수집 · 현재 매물 {count}건"]
         elif count > 0:
             head = [f"수집 완료 · 매물 {count}건"]
         else:
@@ -236,6 +238,8 @@ class CrawlerTabPreflightMixin:
             head.append(f"소요 {elapsed_text}")
 
         notes = []
+        if _n("collection_incomplete_count") or stats.get("geo_incomplete") or stats.get("history_save_failed"):
+            notes.append("전체 목록을 확인하지 못했거나 저장에 실패해 기존 전체 가격 통계를 유지했습니다")
         filtered = _n("filtered_out")
         if filtered > 0:
             note = f"조건(면적·가격)에 맞지 않아 뺀 매물 {filtered}건"

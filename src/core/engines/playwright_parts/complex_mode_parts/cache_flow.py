@@ -31,6 +31,8 @@ class PlaywrightComplexCacheFlowMixin:
         source_zoom: int | None = None,
         marker_id: str = "",
     ) -> dict:
+        from src.core.services.collection_result import collection_fingerprint, result_is_complete, record_collection_result
+
         cache = self.thread.cache
         mode_token = str(mode or "complex").strip().lower()
         is_complex_mode = mode_token == "complex"
@@ -44,22 +46,10 @@ class PlaywrightComplexCacheFlowMixin:
             "source_lon": source_lon,
             "source_zoom": source_zoom,
             "marker_id": cache_marker_id,
+            "query_fingerprint": collection_fingerprint(include_pre=bool(getattr(self.thread, "include_pre_sale_rights", False))),
         }
         if cache:
             cached = cache.get(cid, trade_type, **cache_ctx)
-            if cached is None and is_complex_mode and cache_asset_type == "APT":
-                legacy_candidates = [
-                    {"mode": "complex", "asset_type": "", "marker_id": str(cid or "")},
-                    {"mode": "complex", "asset_type": "APT", "marker_id": str(cid or "")},
-                    {},
-                ]
-                for legacy_ctx in legacy_candidates:
-                    legacy_cached = cache.get(cid, trade_type, **legacy_ctx)
-                    if legacy_cached is None:
-                        continue
-                    cache.set(cid, trade_type, legacy_cached, **cache_ctx)
-                    cached = legacy_cached
-                    break
             if cached is not None:
                 self.thread.log(f"   캐시 히트: {len(cached)}건 로드")
                 self.thread.stats["cache_hits"] = self.thread.stats.get("cache_hits", 0) + 1
@@ -67,6 +57,9 @@ class PlaywrightComplexCacheFlowMixin:
                     list(cached or []),
                     trade_type,
                 )
+                record_collection_result(self.thread.stats, {"collection_status": "complete", "cache_hit": True},
+                                         cid=cid, asset_type=normalized_asset_type, trade_type=trade_type,
+                                         count=matched, raw_count=len(cached))
                 return {
                     "count": matched,
                     "raw_count": len(cached),
@@ -77,6 +70,7 @@ class PlaywrightComplexCacheFlowMixin:
                     "block_reason": "",
                     "failure_reason": "",
                     "final_url": "",
+                    "collection_status": "complete",
                 }
 
         collect_result = await self._collect_target_raw_items(
@@ -133,7 +127,8 @@ class PlaywrightComplexCacheFlowMixin:
             self.thread.stats["block_like_redirect_count"] = int(self.thread.stats.get("block_like_redirect_count", 0)) + 1
         if capture_failed:
             self.thread.stats["capture_failed_count"] = int(self.thread.stats.get("capture_failed_count", 0)) + 1
-        if cache:
+        complete = result_is_complete(collect_result)
+        if cache and complete:
             if raw_items:
                 cache.set(cid, trade_type, raw_items, **cache_ctx)
             else:
@@ -159,6 +154,8 @@ class PlaywrightComplexCacheFlowMixin:
                 elif capture_failed or block_like_redirect:
                     self.thread.log("   ⚠️ capture failure detected, negative cache skipped", 30)
         matched = await self._process_raw_items_with_filtered_details(raw_items, trade_type)
+        record_collection_result(self.thread.stats, collect_result, cid=cid, asset_type=normalized_asset_type,
+                                 trade_type=trade_type, count=matched, raw_count=len(raw_items))
         return {
             "count": matched,
             "raw_count": len(raw_items),
@@ -172,4 +169,7 @@ class PlaywrightComplexCacheFlowMixin:
             "block_reason": block_reason,
             "failure_reason": failure_reason,
             "final_url": final_url,
+            "collection_status": collect_result.get("collection_status", "failed"),
+            "last_successful_page": collect_result.get("last_successful_page", 0),
+            "failed_page": collect_result.get("failed_page", 0),
         }

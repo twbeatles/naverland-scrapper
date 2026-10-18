@@ -22,12 +22,26 @@ class PlaywrightDetailEnrichmentMixin:
     ) -> int:
         matched_count = 0
         detail_candidates: list[dict] = []
+        observe = getattr(self.thread, "_record_observed_items", None)
+        if callable(observe):
+            observe(raw_items)
 
         for raw_item in raw_items or []:
             if not isinstance(raw_item, dict):
                 continue
             item = dict(raw_item)
-            if self.thread._check_filters(item, trade_type):
+            candidate = item
+            area_filter = getattr(self.thread, "area_filter", {}) or {}
+            # Integer list areas can hide a matching fractional detail area.
+            # Fetch borderline rows, then apply the exact final filter below.
+            if (area_filter.get("enabled") and item.get("면적소스") == "list_api"
+                    and bool(getattr(self.thread, "detail_enrichment_enabled", True))):
+                sqm = float(item.get("면적(㎡)", 0) or 0)
+                low, high = float(area_filter.get("min", 0)), float(area_filter.get("max", 999))
+                if sqm > 0 and sqm.is_integer() and low <= sqm + 1 and high >= sqm - 1:
+                    candidate = dict(item)
+                    candidate["면적(㎡)"] = min(high, max(low, sqm))
+            if self.thread._check_filters(candidate, trade_type):
                 detail_candidates.append(item)
                 continue
             self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1

@@ -17,6 +17,47 @@ class ComplexDatabaseArticleBulkOpsMixin:
     if TYPE_CHECKING:
         def __getattr__(self, name: str) -> Any: ...
 
+    def touch_observed_articles(self, items: list[dict]) -> bool:
+        """Refresh existence independently of display filters, preserving price/details."""
+        if self.is_write_disabled():
+            return False
+        rows = {
+            (self._normalize_listing_asset_type(item.get("자산유형", "APT")),
+             str(item.get("단지ID", "") or ""), str(item.get("매물ID", "") or ""))
+            for item in items if isinstance(item, dict)
+            and item.get("단지ID") and item.get("매물ID")
+        }
+        if not rows:
+            return True
+        conn = self._pool.get_connection()
+        try:
+            conn.execute("PRAGMA busy_timeout=1200")
+            for attempt in range(3):
+                try:
+                    with self._write_lock:
+                        conn.executemany(
+                            "UPDATE article_history SET last_seen=CURRENT_DATE, status='active' "
+                            "WHERE asset_type=? AND complex_id=? AND article_id=?", sorted(rows),
+                        )
+                        conn.commit()
+                    return True
+                except sqlite3.DatabaseError as exc:
+                    conn.rollback()
+                    if self._is_locked_sqlite_error(exc) and attempt < 2:
+                        time.sleep(0.1 * (attempt + 1))
+                        continue
+                    if self._is_corruption_sqlite_error(exc):
+                        self._disable_writes("database_corruption", exc)
+                    logger.error(f"observed article refresh failed: {exc}")
+                    return False
+            return False
+        finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except sqlite3.DatabaseError:
+                pass
+            self._pool.return_connection(conn)
+
     def upsert_article_history_bulk(self, rows):
         if not rows:
             return 0

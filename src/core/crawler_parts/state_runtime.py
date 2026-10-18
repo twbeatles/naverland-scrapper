@@ -49,7 +49,10 @@ class CrawlerStateRuntimeMixin:
         detail_front_api_only=False,
         article_api_page_delay_ms=150,
     ):
+        from uuid import uuid4
+
         super().__init__()
+        self.run_id = uuid4().hex
         self.targets = targets
         self.trade_types = trade_types
         self.area_filter = area_filter
@@ -61,6 +64,10 @@ class CrawlerStateRuntimeMixin:
         self.collected_data = []
         self.pending_items = []
         self.stats = {
+            "collection_incomplete_count": 0,
+            "history_save_failed": False,
+            "invalid_row_count": 0,
+            "collection_results": [],
             "total_found": 0,
             "filtered_out": 0,
             "cache_hits": 0,

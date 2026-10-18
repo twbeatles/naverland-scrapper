@@ -8,9 +8,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
-if os.environ.get("NAVERLAND_SKIP_PLAYWRIGHT_TESTS", "").strip().lower() in {"1", "true", "yes", "on"}:
-    raise unittest.SkipTest("Playwright engine tests are skipped in this CI environment")
-
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
 
@@ -34,6 +31,7 @@ class _CacheStub:
     @staticmethod
     def _normalize_ctx(ctx):
         return {
+            "query_fingerprint": str(ctx.get("query_fingerprint", "") or ""),
             "mode": str(ctx.get("mode", "") or ""),
             "asset_type": str(ctx.get("asset_type", "") or ""),
             "source_lat": "" if ctx.get("source_lat", None) is None else str(ctx.get("source_lat")),
@@ -406,6 +404,14 @@ class _FakeAsyncPlaywright:
 class _FakeResponse:
     def __init__(self, url, payload, delay_sec=0.0, status=200, request_headers=None):
         self.url = url
+        # These fixtures model valid minimal listing rows. Invalid-schema/quality
+        # cases use dedicated unmodified responses in test_collection_integrity.
+        if isinstance(payload, dict) and isinstance(payload.get("articleList"), list):
+            payload = dict(payload, articleList=[
+                dict({"dealOrWarrantPrc": "1억", "area1": 99}, **a)
+                if isinstance(a, dict) and a.get("articleNo") else a
+                for a in payload["articleList"]
+            ])
         self._payload = payload
         self._delay_sec = float(delay_sec)
         self.status = status
@@ -438,6 +444,28 @@ class _FakeContextWithRequest:
 
 
 class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
+    async def test_browser_error_responses_never_become_negative_cache(self):
+        for payload, status in (({"code": "TOO_MANY_REQUESTS"}, 429),
+                                ({"success": False}, 200), ({}, 200)):
+            thread = _ThreadStub()
+            thread.playwright_article_response_wait_ms = 100
+            cache = _CacheStub()
+            thread.cache = cache
+            engine = PlaywrightCrawlerEngine(thread)
+            engine._desktop_page = _FakePage(responses=[_FakeResponse(
+                url="https://new.land.naver.com/api/articles/complex/12345?page=1",
+                payload=payload, status=status,
+            )])
+            engine._ensure_started = AsyncMock()
+            engine._maybe_enable_headed_fallback = AsyncMock(return_value=False)
+            try:
+                result = await engine._crawl_target_with_cache("sample", "12345", thread.trade_types[0], asset_type="APT")
+                self.assertEqual(result["collection_status"], "failed")
+                self.assertTrue(result["capture_failed"])
+                self.assertEqual(cache.set_calls, [])
+            finally:
+                engine._loop.close()
+
     async def test_collect_target_raw_items_drains_pending_response_tasks(self):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
@@ -1273,44 +1301,24 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(thread.stats.get("response_drain_timeout_count", 0)), 1)
         self.assertGreaterEqual(thread.stats_emitted, 1)
 
-    async def test_complex_cache_context_normalization_and_legacy_fallback(self):
+    async def test_complex_cache_rejects_legacy_entries_without_fingerprint(self):
         thread = _ThreadStub()
-        trade_type = thread.trade_types[0]
         cache = _CacheStub()
         thread.cache = cache
         engine = PlaywrightCrawlerEngine(thread)
-
-        legacy_items = [{"id": "legacy"}]
-        cache.set(
-            "12345",
-            trade_type,
-            legacy_items,
-            mode="complex",
-            asset_type="",
-            marker_id="12345",
-        )
-
-        async def _must_not_collect(*args, **kwargs):
-            raise AssertionError("network collection should not run on legacy cache fallback")
-
-        engine._collect_target_raw_items = _must_not_collect
+        cache.set("12345", thread.trade_types[0], [{"id": "legacy"}], mode="complex", asset_type="", marker_id="12345")
+        async def collect(*args, **kwargs):
+            return {"raw_items": [], "response_seen": True, "parse_success": True,
+                    "collection_status": "complete"}
+        engine._collect_target_raw_items = collect
         try:
-            result = await engine._crawl_target_with_cache("테스트", "12345", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache("테스트", "12345", thread.trade_types[0], mode="complex")
         finally:
             engine._loop.close()
+        self.assertFalse(result["cache_hit"])
+        self.assertEqual(result["raw_count"], 0)
 
-        self.assertTrue(result["cache_hit"])
-        self.assertEqual(result["raw_count"], 1)
-        self.assertTrue(
-            any(
-                call[3].get("mode") == "complex"
-                and call[3].get("asset_type") == "APT"
-                and call[3].get("marker_id") == ""
-                for call in cache.set_calls
-            )
-        )
-
-    async def test_complex_cache_reuses_selenium_normalized_context(self):
+    async def test_complex_cache_reuses_current_contract_context(self):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         cache = _CacheStub()
@@ -1318,7 +1326,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         shared_items = [{"id": "shared"}]
-        cache.set("99999", trade_type, shared_items, mode="complex", asset_type="APT")
+        cache.set("99999", trade_type, shared_items, mode="complex", asset_type="APT", query_fingerprint="articles-v2:pre=0")
 
         async def _must_not_collect(*args, **kwargs):
             raise AssertionError("network collection should not run on normalized cache hit")
@@ -1341,7 +1349,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         async def _collect_confirmed_empty(*_args, **_kwargs):
-            return {"raw_items": [], "response_seen": True, "drain_timed_out": False}
+            return {"raw_items": [], "response_seen": True, "drain_timed_out": False, "collection_status": "complete"}
 
         engine._collect_target_raw_items = _collect_confirmed_empty
         try:
@@ -1759,6 +1767,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             ],
             mode="complex",
             asset_type="APT",
+            query_fingerprint="articles-v2:pre=0",
         )
 
         async def _detail(items):
@@ -1852,7 +1861,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         async def _crawl(name, cid, trade_type, *args, **kwargs):
             if trade_type == thread.trade_types[0]:
-                return {"count": 2}
+                return {"count": 2, "collection_status": "complete"}
             raise RuntimeError("second trade failed")
 
         engine._ensure_started = _noop_started

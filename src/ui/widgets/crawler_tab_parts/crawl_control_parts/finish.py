@@ -28,6 +28,8 @@ class CrawlerTabFinishMixin:
         return "수집을 마쳤지만 조건에 맞는 매물이 없습니다."
 
     def _on_crawl_finished(self: Any, data):
+        from src.core.services.collection_result import snapshot_block_reason
+
         final_stats = {}
         thread = self.crawler_thread
         if thread and hasattr(thread, "stats"):
@@ -37,17 +39,26 @@ class CrawlerTabFinishMixin:
                 final_stats = {}
         try:
             stopped = bool(getattr(self, "_stop_requested", False))
+            incomplete = bool(final_stats.get("collection_incomplete_count", 0) or final_stats.get("geo_incomplete", False)
+                              or final_stats.get("history_save_failed", False))
             self.btn_save.setEnabled(True)
             if stopped:
                 # 중간에 멈춘 수집을 100% 완료처럼 보이게 하지 않는다.
                 self.progress_widget.status_label.setText("수집을 중지했습니다.")
                 self.progress_widget.time_label.setText("")
                 self.append_log(f"수집을 중지했습니다. 그때까지 매물 {len(data)}건을 모았습니다.", 30)
+            elif incomplete:
+                self.progress_widget.status_label.setText("일부 매물만 수집했습니다.")
+                self.progress_widget.time_label.setText("")
+                self.append_log(f"일부 매물 {len(data)}건을 모았습니다. 기존 전체 통계는 유지합니다.", 30)
             else:
                 self.progress_widget.complete()
                 self.append_log(f"수집을 마쳤습니다. 매물 {len(data)}건을 찾았습니다.")
             self._crawl_finished_once = True
-            self.status_message.emit(self._finish_status_text(len(data), stopped))
+            self.status_message.emit(
+                f"일부 매물만 수집했습니다. 현재 결과 {len(data)}건을 저장할 수 있습니다."
+                if incomplete and not stopped else self._finish_status_text(len(data), stopped)
+            )
             self._show_run_summary(len(data), final_stats, stopped=stopped)
             if final_stats:
                 detail_skip = int(final_stats.get("detail_fetch_skipped_count", 0) or 0)
@@ -111,7 +122,23 @@ class CrawlerTabFinishMixin:
             # DB Write (ISSUE-007: synchronous while the crawl lock is held,
             # so the save cannot outlive the finally-block lock release).
             try:
-                self._save_price_snapshots(async_save=False)
+                reason = snapshot_block_reason(
+                    stopped=stopped, stats=final_stats,
+                    area_filter=getattr(thread, "area_filter", {}),
+                    price_filter=getattr(thread, "price_filter", {}),
+                )
+                if reason:
+                    self.append_log(reason, 30)
+                else:
+                    self._snapshot_replace_targets = [
+                        (r["asset_type"], r["complex_id"], r["trade_type"])
+                        for r in final_stats.get("collection_results", [])
+                        if r.get("collection_status") == "complete"
+                    ]
+                    try:
+                        self._save_price_snapshots(async_save=False)
+                    finally:
+                        self._snapshot_replace_targets = None
             except (OSError, RuntimeError, ValueError, TypeError) as e:
                 self.append_log(f"가격 변화 기록을 저장하지 못했습니다: {e}", 30)
 

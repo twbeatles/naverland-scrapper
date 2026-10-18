@@ -28,7 +28,7 @@ from src.core.services.detail_fetcher_parts.page_primitives import (
     _read_body_text,
     _spawn_response_task,
 )
-from src.core.services.detail_fetcher_parts.hydration import _read_hydration_state
+from src.core.services.detail_fetcher_parts.hydration import _read_hydration_state, _decode_rsc_frames
 from src.core.services.detail_fetcher_parts.text_extract import (
     _build_detail_corpus,
     _find_named_value,
@@ -79,6 +79,7 @@ __all__ = [
     "_drain_pending_tasks",
     "_read_body_text",
     "_read_hydration_state",
+    "_decode_rsc_frames",
     "_flatten_text_fragments",
     "_build_detail_corpus",
     "_find_named_value",

@@ -86,7 +86,21 @@ class CrawlerHistoryAlertsMixin:
         if not self.db:
             return
         try:
-            self.db.add_crawl_history(
+            from src.core.services.collection_result import COLLECTION_SCHEMA_VERSION, filter_fingerprint, observation_date
+
+            diagnostics = {
+                "schema_version": COLLECTION_SCHEMA_VERSION,
+                "run_id": getattr(self, "run_id", ""),
+                "date_basis": "UTC",
+                "observed_on": observation_date(),
+                "filter_fingerprint": filter_fingerprint(self.area_filter, self.price_filter),
+                "filtered": bool(self.area_filter.get("enabled") or self.price_filter.get("enabled")),
+                "history_save_failed": bool(self.stats.get("history_save_failed", False)),
+                "invalid_row_count": int(self.stats.get("invalid_row_count", 0)),
+                "results": [r for r in self.stats.get("collection_results", [])
+                            if r.get("complex_id") == str(cid) and r.get("asset_type") == str(asset_type)],
+            }
+            saved = self.db.add_crawl_history(
                 name,
                 cid,
                 types,
@@ -98,13 +112,21 @@ class CrawlerHistoryAlertsMixin:
                 source_zoom=source_zoom,
                 asset_type=asset_type,
                 run_status=run_status,
+                diagnostics=diagnostics,
             )
+            if saved is False:
+                self.stats["history_save_failed"] = True
+                self.log("⚠️ 수집 실행 기록을 저장하지 못했습니다.", 40)
             if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
                 self._notify_db_write_disabled()
         except Exception as e:
+            self.stats["history_save_failed"] = True
             self.log(f"⚠️ 크롤링 기록 저장 실패: {e}", 30)
 
     def _finalize_disappeared_articles(self, processed_target_pairs):
+        if self.stats.get("history_save_failed", False):
+            self.log("   이력 저장 실패로 소멸 판정을 생략합니다.", 30)
+            return
         if self.crawl_mode == "geo_sweep" and not self._should_persist_geo_results():
             self.log("   geo incomplete safety mode active: disappeared marking skipped", 30)
             return
@@ -130,6 +152,7 @@ class CrawlerHistoryAlertsMixin:
                 self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
 
     def _process_raw_items(self, raw_items, requested_trade_type):
+        self._record_observed_items(raw_items)
         matched_count = 0
         for raw_item in raw_items or []:
             if not isinstance(raw_item, dict):
@@ -148,6 +171,19 @@ class CrawlerHistoryAlertsMixin:
         self._flush_history_updates(force=True)
         self._flush_pending_items_if_needed(force=True)
         return matched_count
+
+    def _record_observed_items(self, items):
+        if not self.db or not self._should_persist_geo_results():
+            return
+        refresh = getattr(self.db, "touch_observed_articles", None)
+        if not callable(refresh):
+            return
+        try:
+            if refresh(items):
+                return
+        except Exception as exc:
+            self.log(f"   관측 매물 존재 갱신 실패: {exc}", 30)
+        self.stats["history_save_failed"] = True
 
     def _run_fallback_selenium(
         self,
@@ -278,6 +314,7 @@ class CrawlerHistoryAlertsMixin:
             return 0
         if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
             self._notify_db_write_disabled()
+            self.stats["history_save_failed"] = True
             return 0
         saved = 0
         for row in rows:
@@ -327,6 +364,7 @@ class CrawlerHistoryAlertsMixin:
             return 0
         if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
             self._notify_db_write_disabled()
+            self.stats["history_save_failed"] = True
             return 0
 
         try:
@@ -335,6 +373,7 @@ class CrawlerHistoryAlertsMixin:
                 return saved
             if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
                 self._notify_db_write_disabled()
+                self.stats["history_save_failed"] = True
                 return 0
             self.log(
                 f"   ⚠️ 이력 일괄 저장 일부 실패 ({saved}/{len(rows)}), 개별 재시도...",
@@ -343,9 +382,14 @@ class CrawlerHistoryAlertsMixin:
         except Exception as e:
             if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
                 self._notify_db_write_disabled()
+                self.stats["history_save_failed"] = True
                 return 0
             self.log(f"   ⚠️ 이력 일괄 저장 실패: {e} (개별 재시도)", 30)
-        return self._flush_history_updates_fallback(rows)
+        saved = self._flush_history_updates_fallback(rows)
+        if saved != len(rows):
+            self.stats["history_save_failed"] = True
+            self.log(f"   이력 저장 실패: {saved}/{len(rows)}. 소멸·통계 갱신을 생략합니다.", 40)
+        return saved
 
     def _enrich_item_with_history_and_alerts(self, data):
         if not isinstance(data, dict):

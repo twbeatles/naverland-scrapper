@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from src.core.services.collection_result import CollectionResult
 from urllib.parse import urlencode
 
 from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail

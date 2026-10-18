@@ -16,6 +16,8 @@ class PlaywrightGeoScanMixin:
         def __getattr__(self, name: str) -> Any: ...
 
     async def _run_geo(self):
+        from src.core.services.collection_result import result_is_complete
+
         await self._ensure_started()
         geo = self.thread.geo_config
         if not geo:
@@ -133,9 +135,14 @@ class PlaywrightGeoScanMixin:
                         raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
                     count = int(result.get("count", 0))
                     complex_count += count
+                    if not result_is_complete(result):
+                        self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                        self.thread._mark_geo_incomplete("article_partial", f"{asset_type}/{cid}/{trade_type}")
+                        continue
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
-                    processed_pairs.add((asset_type, cid, trade_type))
+                    if not result.get("cache_hit", False):
+                        processed_pairs.add((asset_type, cid, trade_type))
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
@@ -143,6 +150,7 @@ class PlaywrightGeoScanMixin:
                     if callable(reset_streak):
                         reset_streak()
                 except Exception as exc:
+                    self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
                     self.thread.log(f"   {name}({trade_type}) 수집 실패: {exc}", 40)
                     is_block_like = getattr(self.thread, "_is_block_like_error", None)
                     block_like = bool(is_block_like(exc)) if callable(is_block_like) else False

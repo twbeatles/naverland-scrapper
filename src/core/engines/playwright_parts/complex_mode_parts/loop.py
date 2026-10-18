@@ -19,6 +19,8 @@ class PlaywrightComplexLoopMixin:
         def __getattr__(self, name: str) -> Any: ...
 
     async def _run_complex_mode(self):
+        from src.core.services.collection_result import result_is_complete
+
         await self._ensure_started()
         targets = list(self.thread._iter_targets())
         total = len(targets) * len(self.thread.trade_types)
@@ -37,6 +39,7 @@ class PlaywrightComplexLoopMixin:
             complex_count = 0
             attempted_trade_types = []
             complex_trade_types = []
+            partial_trade_types = []
             for trade_type in self.thread.trade_types:
                 if self.thread._should_stop():
                     break
@@ -59,11 +62,17 @@ class PlaywrightComplexLoopMixin:
                         raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
                     count = int(result.get("count", 0))
                     complex_count += count
+                    if not result_is_complete(result):
+                        partial_trade_types.append(trade_type)
+                        self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                        self.thread.log(f"   일부만 수집: {count}건. 소멸 판정과 전체 통계 갱신을 생략합니다.", 30)
+                        continue
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
                     processed_pair = (str(asset_type), str(cid), str(trade_type))
-                    processed_pairs.add(processed_pair)
-                    self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
+                    if not result.get("cache_hit", False):
+                        processed_pairs.add(processed_pair)
+                        self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
@@ -71,6 +80,7 @@ class PlaywrightComplexLoopMixin:
                     self.thread._reset_block_detection_streak()
                     self.thread.log(f"   {count}건 수집")
                 except Exception as exc:
+                    self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
                     self.thread.log(f"   오류: {exc}", 40)
                     block_like = self.thread._is_block_like_error(exc)
                     if block_like:
@@ -123,6 +133,8 @@ class PlaywrightComplexLoopMixin:
                 complex_trade_types,
                 attempted_trade_types,
             )
+            if partial_trade_types:
+                run_status = "partial"
             history_trade_types = complex_trade_types or attempted_trade_types
             self.thread.record_crawl_history(
                 name,

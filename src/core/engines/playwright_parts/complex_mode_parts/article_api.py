@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, TYPE_CHECKING
+from src.core.services.collection_result import CollectionResult
 
 from src.core.services.article_api import (
     MAX_ARTICLE_API_PAGES,
@@ -126,14 +127,17 @@ class PlaywrightArticleApiMixin:
         marker_id: str,
         seen_ids: set[str],
     ) -> tuple[list[dict], bool]:
-        if not isinstance(payload, dict):
-            return [], False
-        article_list = payload.get("articleList") or payload.get("articles") or []
-        if not isinstance(article_list, list):
+        from src.core.services.collection_result import article_list_from_payload
+
+        article_list = article_list_from_payload(payload)
+        if article_list is None:
             return [], False
         raw_items: list[dict] = []
+        valid = True
         for article in article_list:
             if not isinstance(article, dict):
+                valid = False
+                self.thread.stats["invalid_row_count"] = int(self.thread.stats.get("invalid_row_count", 0)) + 1
                 continue
             if detect_trade_type(article, requested_trade_type=trade_type) != trade_type:
                 continue
@@ -151,11 +155,16 @@ class PlaywrightArticleApiMixin:
                 marker_id=payload_marker_id,
             )
             aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
-            if not aid or aid in seen_ids:
+            if item.get("데이터품질오류") or not aid:
+                valid = False
+                self.thread.stats["invalid_row_count"] = int(self.thread.stats.get("invalid_row_count", 0)) + 1
+            if not aid:
+                continue
+            if aid in seen_ids:
                 continue
             seen_ids.add(aid)
             raw_items.append(item)
-        return raw_items, True
+        return raw_items, valid
 
     def _article_api_fast_path_success(
         self,
@@ -163,7 +172,10 @@ class PlaywrightArticleApiMixin:
         raw_items: list[dict],
         response_match_count: int,
         final_api_url: str,
-    ) -> dict:
+        failure_reason: str = "",
+        last_successful_page: int = 0,
+        failed_page: int = 0,
+    ) -> CollectionResult:
         self.thread.stats["article_api_fast_path_hit_count"] = (
             int(self.thread.stats.get("article_api_fast_path_hit_count", 0)) + 1
         )
@@ -177,8 +189,11 @@ class PlaywrightArticleApiMixin:
             "block_like_redirect": False,
             "block_reason": "",
             "capture_failed": False,
-            "failure_reason": "",
+            "failure_reason": failure_reason,
             "api_fast_path": True,
+            "collection_status": "partial" if failure_reason else "complete",
+            "last_successful_page": last_successful_page,
+            "failed_page": failed_page,
         }
 
     def _article_api_fast_path_fail_stats(self) -> None:
@@ -227,9 +242,15 @@ class PlaywrightArticleApiMixin:
         first_page = max(1, int(start_page or 1))
         last_has_more = False
         last_page = first_page
+        last_successful_page = first_page - 1
+        failure_reason = ""
 
         for page in range(first_page, MAX_ARTICLE_API_PAGES + 1):
             last_page = page
+            stop = getattr(self.thread, "_should_stop", None)
+            if callable(stop) and stop():
+                failure_reason = "cancelled"
+                break
             if page > first_page:
                 delay_sec = self._article_api_page_delay_sec()
                 if delay_sec > 0:
@@ -241,36 +262,52 @@ class PlaywrightArticleApiMixin:
                 base_kind, cid, trade_type, path_asset, page=page
             )
             final_api_url = api_url
-            response = await request_context.get(
-                api_url,
-                headers=self._article_api_headers(target_url),
-                timeout=self._article_api_timeout_ms(),
-            )
-            response_match_count += 1
+            # Retry transport/5xx at the same page. Never discard earlier pages.
+            response = None
+            for attempt in range(2):
+                try:
+                    response = await request_context.get(
+                        api_url,
+                        headers=self._article_api_headers(target_url),
+                        timeout=self._article_api_timeout_ms(),
+                    )
+                    response_match_count += 1
+                    if int(getattr(response, "status", 200) or 200) < 500 or attempt == 1:
+                        break
+                except Exception as exc:
+                    response = None
+                    failure_reason = type(exc).__name__
+                    if attempt == 1:
+                        break
+                await asyncio.sleep(0.35 * (attempt + 1))
+            if response is None:
+                self._record_article_api_failure(failure_reason or "request_failed")
+                if page == first_page and not all_raw_items:
+                    return None
+                break
+            failure_reason = ""
             status = getattr(response, "status", None)
             status_label = str(status if status is not None else "")
             self.thread.stats["article_api_last_status"] = status_label
             if status is not None and int(status) >= 400:
-                if int(status) == 429:
-                    self._record_article_api_failure("rate_limited", status=status_label)
-                    if page == first_page and not all_raw_items:
-                        return None
-                    break
+                failure_reason = "rate_limited" if int(status) == 429 else "http_error"
+                self._record_article_api_failure(failure_reason, status=status_label)
                 if page == first_page and not all_raw_items:
-                    self._record_article_api_failure("http_error", status=status_label)
                     return None
                 break
             try:
                 payload = await response.json()
             except Exception:
+                failure_reason = "invalid_json"
+                self._record_article_api_failure(failure_reason, status=status_label or failure_reason)
                 if page == first_page and not all_raw_items:
-                    self._record_article_api_failure("invalid_json", status=status_label or "invalid_json")
                     return None
                 break
             if isinstance(payload, dict) and (
                 str(payload.get("code", "") or "").upper() in {"TOO_MANY_REQUESTS", "429"}
                 or str(payload.get("detailCode", "") or "").upper() == "TOO_MANY_REQUESTS"
             ):
+                failure_reason = "rate_limited"
                 self._record_article_api_failure("rate_limited", status=status_label or "429")
                 if page == first_page and not all_raw_items:
                     return None
@@ -288,27 +325,33 @@ class PlaywrightArticleApiMixin:
                 marker_id=marker_id,
                 seen_ids=seen_ids,
             )
+            all_raw_items.extend(raw_items)
             if not valid_payload:
+                failure_reason = "invalid_payload"
+                self._record_article_api_failure(failure_reason, status=status_label or failure_reason)
                 if page == first_page and not all_raw_items:
-                    self._record_article_api_failure("invalid_payload", status=status_label or "invalid_payload")
                     return None
                 break
             list_count = article_api_list_count(payload)
-            all_raw_items.extend(raw_items)
+            last_successful_page = page
             last_has_more = article_api_has_more_pages(payload, list_count)
             if not last_has_more:
                 break
 
         if last_has_more and last_page >= MAX_ARTICLE_API_PAGES:
             self._mark_article_api_page_cap_truncation()
+            failure_reason = failure_reason or "page_cap"
 
         if not all_raw_items and response_match_count == 0:
             return None
-        return self._article_api_fast_path_success(
+        return dict(self._article_api_fast_path_success(
             raw_items=all_raw_items,
             response_match_count=response_match_count,
             final_api_url=final_api_url,
-        )
+            failure_reason=failure_reason,
+            last_successful_page=last_successful_page,
+            failed_page=last_page if failure_reason else 0,
+        ))
 
     async def _fetch_article_api_fast_path(
         self,
@@ -375,13 +418,18 @@ class PlaywrightArticleApiMixin:
         existing_items: list[dict],
         last_payload: dict | None,
     ) -> list[dict]:
-        if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
-            return list(existing_items or [])
+        self._article_supplement_result = {
+            "collection_status": "partial", "failure_reason": "pagination_unavailable",
+            "last_successful_page": 1, "failed_page": 2,
+        }
         if isinstance(last_payload, dict):
             list_count = article_api_list_count(last_payload)
             if not article_api_has_more_pages(last_payload, list_count):
+                self._article_supplement_result = {"collection_status": "complete", "failure_reason": "", "last_successful_page": 1, "failed_page": 0}
                 return list(existing_items or [])
         elif not existing_items:
+            return list(existing_items or [])
+        if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return list(existing_items or [])
         context = self._desktop_context
         request_context = getattr(context, "request", None) if context is not None else None
@@ -410,4 +458,5 @@ class PlaywrightArticleApiMixin:
             return list(existing_items or [])
         if result is None:
             return list(existing_items or [])
+        self._article_supplement_result = result
         return list(result.get("raw_items", []) or existing_items or [])

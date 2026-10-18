@@ -22,8 +22,11 @@ def _first(payload: dict[str, Any], *keys: str, default: Any = "") -> Any:
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
+    import math
+
     try:
-        return float(value)
+        parsed = float(value)
+        return parsed if math.isfinite(parsed) else float(default)
     except (TypeError, ValueError):
         return float(default)
 
@@ -127,6 +130,8 @@ def normalize_article_payload(
     sale_price, deposit, monthly = normalize_price_fields(article, trade_type)
 
     area_sqm = _to_float(_first(article, "area1", "spc1", "supplyArea", "articleArea", default=0.0))
+    supply_sqm = area_sqm
+    exclusive_sqm = _to_float(_first(article, "area2", "spc2", "exclusiveArea", default=0.0))
     if area_sqm <= 0:
         area_sqm = _to_float(_first(article, "area2", "spc2", "exclusiveArea", default=0.0))
     pyeong = AreaConverter.sqm_to_pyeong(area_sqm) if area_sqm > 0 else 0.0
@@ -198,6 +203,10 @@ def normalize_article_payload(
         "보증금": deposit,
         "월세": monthly,
         "면적(㎡)": round(area_sqm, 2) if area_sqm > 0 else 0.0,
+        "공급면적(㎡)": supply_sqm,
+        "전용면적(㎡)": exclusive_sqm,
+        "면적소스": "list_api",
+        "면적정밀도": "목록 표기값",
         "면적(평)": pyeong,
         "평당가": PricePerPyeongCalculator.calculate(price_int, pyeong) if pyeong > 0 else 0,
         "평당가_표시": PricePerPyeongCalculator.format(
@@ -234,4 +243,12 @@ def normalize_article_payload(
         "갭금액(원)": 0,
         "갭비율": 0.0,
     }
+    quality_errors = []
+    if not item["매물ID"]:
+        quality_errors.append("missing_article_id")
+    if area_sqm <= 0:
+        quality_errors.append("missing_area")
+    if price_int <= 0 and not (trade_type == "월세" and PriceConverter.to_int(monthly) > 0):
+        quality_errors.append("missing_price")
+    item["데이터품질오류"] = quality_errors
     return enrich_gap_fields(item)

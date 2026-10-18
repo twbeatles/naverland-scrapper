@@ -55,6 +55,7 @@ class ComplexDatabaseSchemaIndexMixin:
                 "source_zoom": "INTEGER DEFAULT 0",
                 "asset_type": "TEXT DEFAULT ''",
                 "run_status": "TEXT DEFAULT 'success'",
+                "diagnostics_json": "TEXT DEFAULT '{}'",
             },
             "price_snapshots": {
                 "asset_type": "TEXT DEFAULT 'APT'",

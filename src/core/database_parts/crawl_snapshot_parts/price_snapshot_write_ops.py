@@ -25,6 +25,8 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
         legacy_monthly=0,
     ):
         """Store one price snapshot row."""
+        if self.is_write_disabled():
+            return False
         conn = self._pool.get_connection()
         try:
             asset_token = self._normalize_asset_type(asset_type)
@@ -56,13 +58,16 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def add_price_snapshots_bulk(self, rows):
+    def add_price_snapshots_bulk(self, rows, *, replace_targets=None):
         """Store price snapshots in bulk."""
-        if not rows:
+        if self.is_write_disabled():
+            return 0
+        if not rows and not replace_targets:
             return 0
         conn = self._pool.get_connection()
         try:
             normalized_rows = []
+            conn.execute("PRAGMA busy_timeout=1200")
             skipped = 0
             for row in rows:
                 if not isinstance(row, (list, tuple)):
@@ -135,8 +140,10 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                         max(0, self._coerce_int(legacy_monthly, default=0)),
                     )
                 )
-            if not normalized_rows:
+            if not normalized_rows and not replace_targets:
                 return 0
+            if skipped and replace_targets:
+                raise ValueError("invalid rows cannot replace complete daily snapshots")
             cursor = conn.cursor()
             deduped_rows = {}
             for row in normalized_rows:
@@ -154,8 +161,17 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                 ) = row
                 key = (asset_type, complex_id, trade_type, pyeong, price_metric, legacy_monthly)
                 deduped_rows[key] = row
-            cursor.executemany(self._price_snapshot_upsert_sql(), list(deduped_rows.values()))
-            conn.commit()
+            with self._write_lock:
+                # Replace the entire successful target, including groups now empty.
+                # Delete + insert share one transaction; any failure rolls back both.
+                for asset, cid, trade in sorted(set(replace_targets or [])):
+                    cursor.execute(
+                        "DELETE FROM price_snapshots WHERE snapshot_date=CURRENT_DATE "
+                        "AND asset_type=? AND complex_id=? AND trade_type=? AND legacy_monthly=0",
+                        (self._normalize_asset_type(asset), str(cid), str(trade)),
+                    )
+                cursor.executemany(self._price_snapshot_upsert_sql(), list(deduped_rows.values()))
+                conn.commit()
             if skipped:
                 logger.debug(f"price snapshot bulk skipped malformed rows: {skipped}")
             # 반환값은 기존 계약 유지: 처리된 입력 행 수. 동일 키 중복 행도
@@ -169,6 +185,10 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
             logger.error(f"가격 스냅샷 일괄 저장 실패: {e}")
             return 0
         finally:
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+            except Exception:
+                pass
             self._pool.return_connection(conn)
 
     @staticmethod

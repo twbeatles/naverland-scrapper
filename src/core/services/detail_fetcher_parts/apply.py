@@ -32,6 +32,15 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
                 except (TypeError, ValueError):
                     pass
             item[key] = value
+        if applied.get("면적소스") == "detail_structured" and applied.get("공급면적(㎡)"):
+            from src.utils.helpers import AreaConverter, PriceConverter, PricePerPyeongCalculator
+
+            sqm = float(applied["공급면적(㎡)"])
+            item["면적(㎡)"] = sqm
+            item["면적(평)"] = AreaConverter.sqm_to_pyeong(sqm)
+            price = PriceConverter.to_int(item.get("매매가") if item.get("거래유형") == "매매" else item.get("보증금"))
+            item["평당가"] = PricePerPyeongCalculator.calculate(price, item["면적(평)"])
+            item["평당가_표시"] = PricePerPyeongCalculator.format(item["평당가"])
         if meta:
             source = str(meta.get("detail_source", "") or "")
             parse_state = str(meta.get("detail_parse_state", "") or "")

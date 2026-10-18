@@ -55,6 +55,8 @@ class PriceSnapshotSaveThread(QThread):
         try:
             rows = build_price_snapshot_rows(self._items)
             saved = self._db.add_price_snapshots_bulk(rows) if rows else 0
+            if rows and int(saved or 0) < len(rows):
+                raise RuntimeError("가격 변화 기록을 모두 저장하지 못했습니다.")
             self.saved_signal.emit(int(saved or 0))
         except Exception as exc:
             self.failed_signal.emit(str(exc))

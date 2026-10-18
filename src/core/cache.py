@@ -47,6 +47,7 @@ class CrawlCache:
         source_lon=None,
         source_zoom=None,
         marker_id: str = "",
+        query_fingerprint: str = "",
     ) -> str:
         parts = []
         mode_token = str(mode or "").strip().lower()
@@ -68,6 +69,8 @@ class CrawlCache:
             parts.append(f"zoom={zoom_token}")
         if marker_token:
             parts.append(f"marker={marker_token}")
+        if query_fingerprint:
+            parts.append(f"query={query_fingerprint}")
         return "|".join(parts)
 
     def _get_key(
@@ -81,6 +84,7 @@ class CrawlCache:
         source_lon=None,
         source_zoom=None,
         marker_id: str = "",
+        query_fingerprint: str = "",
     ) -> str:
         """캐시 키 생성 (기본 키 + 컨텍스트 네임스페이스)"""
         base = f"{complex_id}_{trade_type}"
@@ -91,6 +95,7 @@ class CrawlCache:
             source_lon=source_lon,
             source_zoom=source_zoom,
             marker_id=marker_id,
+            query_fingerprint=query_fingerprint,
         )
         if not context_ns:
             return base
@@ -170,6 +175,7 @@ class CrawlCache:
         source_lon=None,
         source_zoom=None,
         marker_id: str = "",
+        query_fingerprint: str = "",
     ) -> Optional[List[dict]]:
         """캐시된 결과 반환 (유효한 경우)"""
         with self._lock:
@@ -180,6 +186,7 @@ class CrawlCache:
                 source_lon=source_lon,
                 source_zoom=source_zoom,
                 marker_id=marker_id,
+                query_fingerprint=query_fingerprint,
             )
             key = self._get_key(
                 complex_id,
@@ -190,6 +197,7 @@ class CrawlCache:
                 source_lon=source_lon,
                 source_zoom=source_zoom,
                 marker_id=marker_id,
+                query_fingerprint=query_fingerprint,
             )
             entry = self._cache.get(key)
             # 레거시 호환: 무컨텍스트 조회 경로에서만 legacy 기본 키를 읽는다.
@@ -238,6 +246,7 @@ class CrawlCache:
         source_lon=None,
         source_zoom=None,
         marker_id: str = "",
+        query_fingerprint: str = "",
     ):
         """결과 캐시"""
         with self._lock:
@@ -248,6 +257,7 @@ class CrawlCache:
                 source_lon=source_lon,
                 source_zoom=source_zoom,
                 marker_id=marker_id,
+                query_fingerprint=query_fingerprint,
             )
             key = self._get_key(
                 complex_id,
@@ -258,6 +268,7 @@ class CrawlCache:
                 source_lon=source_lon,
                 source_zoom=source_zoom,
                 marker_id=marker_id,
+                query_fingerprint=query_fingerprint,
             )
             payload = {
                 'cached_at': datetime.now().isoformat(),

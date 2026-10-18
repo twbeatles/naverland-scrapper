@@ -15,7 +15,6 @@ jobs:
       PYTHONUTF8: "1"
       PYTHONIOENCODING: "utf-8"
       NAVERLAND_SKIP_PLAYWRIGHT_BROWSER_CHECK: "1"
-      NAVERLAND_SKIP_PLAYWRIGHT_TESTS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -60,6 +59,13 @@ jobs:
           tests/test_app_entry.py
           tests/test_main_paths.py
           tests/test_article_api.py
+          tests/test_collection_integrity.py
+          tests/test_playwright_engine_stabilization.py
+          tests/test_response_capture_normalize.py
+          tests/test_geo_markers_cortar.py
+          tests/test_site_contract.py
+          tests/test_crawler_regressions.py
+          tests/test_crawl_lock.py
           tests/test_paths_runtime.py
           tests/test_live_smoke.py
           tests/test_analysis.py

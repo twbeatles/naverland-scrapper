@@ -24,9 +24,12 @@ class ComplexDatabaseCrawlHistoryOpsMixin:
         source_zoom=None,
         asset_type="",
         run_status="success",
+        diagnostics=None,
     ):
         if self.is_write_disabled():
             return False
+        import json
+
         conn = self._pool.get_connection()
         try:
             with self._write_lock:
@@ -40,8 +43,9 @@ class ComplexDatabaseCrawlHistoryOpsMixin:
                             """
                             INSERT INTO crawl_history (
                                 complex_name, complex_id, trade_types, item_count,
-                                engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status,
+                                diagnostics_json
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                             (
                                 name,
@@ -55,6 +59,7 @@ class ComplexDatabaseCrawlHistoryOpsMixin:
                                 int(source_zoom or 0),
                                 asset_type,
                                 str(run_status or "success"),
+                                json.dumps(diagnostics or {}, ensure_ascii=False, allow_nan=False),
                             ),
                         )
                         conn.commit()
