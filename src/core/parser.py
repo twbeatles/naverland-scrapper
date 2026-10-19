@@ -93,6 +93,36 @@ class NaverURLParser(
             "complex_group": 1,
         },
         {
+            "pattern": re.compile(r"fin\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE),
+            "family": "fin",
+            "entity_type": "complex",
+            "asset_type": "APT",
+            "complex_group": 1,
+        },
+        {
+            "pattern": re.compile(
+                r"fin\.land\.naver\.com/houses/(\d+)(?:\?[^\s#]*articleId=(\d+)[^\s#]*)?",
+                re.IGNORECASE,
+            ),
+            "family": "fin",
+            "entity_type": "complex",
+            "asset_type": "VL",
+            "complex_group": 1,
+            "article_group": 2,
+        },
+        {
+            "pattern": re.compile(r"articleNo=(\d+)", re.IGNORECASE),
+            "family": "new",
+            "entity_type": "article",
+            "article_group": 1,
+        },
+        {
+            "pattern": re.compile(r"articleNumber=(\d+)", re.IGNORECASE),
+            "family": "fin",
+            "entity_type": "article",
+            "article_group": 1,
+        },
+        {
             "pattern": re.compile(r"fin\.land\.naver\.com/articles/(\d+)", re.IGNORECASE),
             "family": "fin",
             "entity_type": "article",

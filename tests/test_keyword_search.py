@@ -6,7 +6,9 @@ from urllib.parse import parse_qs, urlparse
 
 from src.core.services.keyword_search import (
     KeywordSearchError,
+    address_query_variants,
     fetch_search_page,
+    fetch_search_page_with_fallback,
     fetch_suggestions,
     is_rate_limit_error,
     parse_autocomplete_payload,
@@ -225,6 +227,106 @@ class TestKeywordSearchFetch(unittest.TestCase):
         self.assertTrue(is_rate_limit_error(RuntimeError("429 too many")))
         self.assertFalse(is_rate_limit_error(KeywordSearchError("a", 500)))
         self.assertFalse(is_rate_limit_error(RuntimeError("boom")))
+
+
+class TestAddressQueryVariants(unittest.TestCase):
+    def test_short_names_untouched(self):
+        self.assertEqual(address_query_variants("분당구"), ["분당구"])
+        self.assertEqual(address_query_variants("반포자이"), ["반포자이"])
+        self.assertEqual(address_query_variants("한신한진아파트"), ["한신한진아파트"])
+        self.assertEqual(address_query_variants("  "), [])
+
+    def test_full_address_falls_back_to_dong(self):
+        self.assertEqual(
+            address_query_variants("서울특별시 서초구 반포동"),
+            ["서울특별시 서초구 반포동", "서초구 반포동", "반포동"],
+        )
+
+    def test_bunji_number_stripped_then_dong(self):
+        self.assertEqual(
+            address_query_variants("경기도 성남시 분당구 정자동 123"),
+            ["경기도 성남시 분당구 정자동 123", "경기도 성남시 분당구 정자동",
+             "분당구 정자동", "정자동"],
+        )
+
+    def test_road_name_number_stripped(self):
+        self.assertEqual(
+            address_query_variants("정자일로 123"), ["정자일로 123", "정자일로"]
+        )
+
+    def test_map_links_untouched(self):
+        url = "https://fin.land.naver.com/map?center=abc&zoom=15"
+        self.assertEqual(address_query_variants(url), [url])
+
+    def test_variant_cap(self):
+        variants = address_query_variants("서울특별시 서초구 반포동", max_variants=2)
+        self.assertEqual(variants, ["서울특별시 서초구 반포동", "서초구 반포동"])
+
+
+class TestFetchSearchFallback(unittest.TestCase):
+    def _fetch_by_keyword(self, calls, mapping):
+        def _page_fetch(url):
+            keyword = parse_qs(urlparse(url).query).get("keyword", [""])[0]
+            calls.append(keyword)
+            return mapping.get(keyword, (200, SEARCH_EMPTY_RAW))
+
+        return _page_fetch
+
+    def test_raw_hit_needs_no_extra_fetch(self):
+        calls = []
+        result = fetch_search_page_with_fallback(
+            "반포자이", self._fetch_by_keyword(calls, {"반포자이": (200, SEARCH_BANPO_RAW)})
+        )
+        self.assertEqual(len(result["complexes"]), 2)
+        self.assertEqual(result["effective_query"], "반포자이")
+        self.assertEqual(calls, ["반포자이"])
+
+    def test_empty_raw_falls_back_to_dong(self):
+        calls = []
+        result = fetch_search_page_with_fallback(
+            "서울특별시 서초구 반포동",
+            self._fetch_by_keyword(calls, {"반포동": (200, SEARCH_BANPO_RAW)}),
+        )
+        self.assertEqual(len(result["complexes"]), 2)
+        self.assertEqual(result["effective_query"], "반포동")
+        self.assertEqual(
+            calls, ["서울특별시 서초구 반포동", "서초구 반포동", "반포동"]
+        )
+
+    def test_all_empty_reports_raw_effective_query(self):
+        calls = []
+        result = fetch_search_page_with_fallback(
+            "서울특별시 서초구 반포동", self._fetch_by_keyword(calls, {})
+        )
+        self.assertEqual(result["complexes"], [])
+        self.assertEqual(result["regions"], [])
+        self.assertEqual(result["effective_query"], "서울특별시 서초구 반포동")
+        self.assertEqual(len(calls), 3)
+
+    def test_rate_limit_raises_without_burning_variants(self):
+        calls = []
+        with self.assertRaises(KeywordSearchError):
+            fetch_search_page_with_fallback(
+                "서울특별시 서초구 반포동",
+                self._fetch_by_keyword(calls, {"서울특별시 서초구 반포동": (429, "")}),
+            )
+        self.assertEqual(calls, ["서울특별시 서초구 반포동"])
+
+    def test_plain_error_moves_to_next_variant(self):
+        calls = []
+        result = fetch_search_page_with_fallback(
+            "서울특별시 서초구 반포동",
+            self._fetch_by_keyword(
+                calls,
+                {
+                    "서울특별시 서초구 반포동": (500, "oops"),
+                    "서초구 반포동": (500, "oops"),
+                    "반포동": (200, SEARCH_BANPO_RAW),
+                },
+            ),
+        )
+        self.assertEqual(len(result["complexes"]), 2)
+        self.assertEqual(result["effective_query"], "반포동")
 
 
 if __name__ == "__main__":

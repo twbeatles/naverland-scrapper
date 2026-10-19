@@ -91,7 +91,7 @@ class GeoCrawlerTab(CrawlerTab):
         self.btn_find_region = QPushButton("지역 찾기")
         self.btn_find_region.setIcon(FIF.SEARCH.icon())
         self.btn_find_region.setObjectName("secondaryBtn")
-        self.btn_find_region.setToolTip("동·구 이름으로 검색해 탐색할 위치를 정합니다. (예: 반포동, 분당구)")
+        self.btn_find_region.setToolTip("동·구 이름이나 실제 주소로 검색해 탐색할 위치를 정합니다. (예: 반포동, 분당구, 서울특별시 서초구 반포동)")
         self.btn_find_region.clicked.connect(self._show_region_search_dialog)
         place_row.addWidget(self.btn_find_region)
         self.lbl_geo_place = QLabel("")

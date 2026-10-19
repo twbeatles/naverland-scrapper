@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PySide6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PySide6-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.7-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.8-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
@@ -150,7 +150,7 @@ python app_entry.py
 단지 번호나 웹 URL을 직접 입력하여 특정 단지들의 매물을 집중적으로 수집하는 화면입니다.
 
 #### ① 단지 추가하기
-- **단지 찾기 (기본 방법)**: `단지 찾기`를 눌러 단지 이름이나 지역 이름(예: `래미안`, `반포자이`, `반포동`)으로 검색하고, 원하는 단지를 체크해 추가합니다. 지역 탭에서 지역을 고르면 **지도로 찾기**의 탐색 위치로 보낼 수 있습니다.
+- **단지 찾기 (기본 방법)**: `단지 찾기`를 눌러 단지 이름·지역 이름·실제 주소(예: `래미안`, `반포자이`, `반포동`, `서울특별시 서초구 반포동`)로 검색하고, 원하는 단지를 체크해 추가합니다. 네이버 지도 링크(`new.land` `ms=` 위치 링크, 단지 번호가 있는 링크)를 붙여넣어도 됩니다. 지역 탭에서 지역을 고르면 **지도로 찾기**의 탐색 위치로 보낼 수 있습니다.
 - **불러오기 메뉴**:
   - `내 단지에서 고르기`: 저장해 둔 단지에서 선택
   - `단지 묶음 불러오기`: 묶음에 든 단지를 한 번에 추가
@@ -160,6 +160,7 @@ python app_entry.py
     - `https://new.land.naver.com/complexes/102378`
     - `https://land.naver.com/complex?complexNo=123456`
     - `https://fin.land.naver.com/articles/2539123450` (매물 주소에서 단지를 찾아 줌)
+    - `https://fin.land.naver.com/complexes/22853`, `https://fin.land.naver.com/houses/654321`
     - `https://m.land.naver.com/article/info/2513105556`
 - **단지 번호로 직접 추가**: 접혀 있는 `단지 번호로 직접 추가`를 펼쳐 번호(예: `3833`)와 주택 종류(아파트/빌라)를 넣고 추가합니다.
 - 목록 아래의 `내 단지에 저장`으로 목록을 저장해 두면 다음부터 불러오기로 바로 가져옵니다.
@@ -199,7 +200,7 @@ python app_entry.py
 
 단지 이름을 몰라도 지역만 고르면 그 주변의 아파트와 빌라·연립 단지를 자동으로 찾아 수집합니다.
 
-1. **지역 찾기**: 동·구 이름(예: `반포동`, `분당구`)을 검색해 탐색할 위치를 고릅니다. 위도·경도를 직접 넣을 필요가 없습니다.
+1. **지역 찾기**: 동·구 이름이나 실제 주소(예: `반포동`, `분당구`, `서울특별시 서초구 반포동`)를 검색해 탐색할 위치를 고릅니다. 위도·경도를 직접 넣을 필요가 없습니다.
 2. **주변까지 넓히기**: `0단계`는 정한 위치의 지도 한 화면만, `1~6단계`는 주변을 점점 넓게 훑습니다 (넓을수록 시간이 더 걸립니다).
 3. **주택 종류**: `아파트`, `빌라·연립` 체크
 4. **좌표 직접 입력·세부 설정 (기본 접힘)**: 위도/경도, 지도 확대 단계(12~18), 지도 이동 간격, 옮길 때마다 대기 시간. 보통은 기본값 그대로 씁니다.

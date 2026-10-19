@@ -4,6 +4,8 @@ import json
 import os
 import time
 import unittest
+from urllib.parse import parse_qs, urlparse
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -410,6 +412,250 @@ class TestKeywordWorkerResilience(unittest.TestCase):
             dlg._on_worker_failed("suggest boom", 9, "suggest")
             self.assertTrue(dlg._busy)
         finally:
+            dlg.deleteLater()
+
+
+@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+class TestKeywordSearchDialogHardening(unittest.TestCase):
+    """Refactor guards: null payloads, address fallback, map links, shutdown."""
+
+    @classmethod
+    def setUpClass(cls):
+        from PySide6.QtWidgets import QApplication
+
+        cls._qt_app = QApplication.instance() or QApplication([])
+
+    def _pump_until(self, predicate, timeout_sec=15.0):
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
+            self._qt_app.processEvents()
+            if predicate():
+                return True
+            time.sleep(0.02)
+        self._qt_app.processEvents()
+        return bool(predicate())
+
+    def test_null_lists_do_not_stick_busy(self):
+        """API explicit nulls must render as 'no results', not wedge the dialog."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        dlg = KeywordSearchDialog(session_factory=lambda: None)
+        try:
+            dlg._search_generation = 1
+            dlg._keyword = "분당구"
+            dlg._busy = True
+            dlg._on_search_ready(
+                {"complexes": None, "regions": None, "is_more_data": False}, 1, False
+            )
+            self.assertFalse(dlg._busy)
+            self.assertEqual(dlg.complex_list.count(), 0)
+            self.assertEqual(dlg.region_list.count(), 0)
+            self.assertIn("결과가 없습니다", dlg.status_label.text())
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_address_fallback_keeps_effective_query_for_more(self):
+        """Full address with empty raw hit resolves via dong; page 2 reuses it."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        second_page = json.dumps(
+            {"complexes": [], "regions": [], "isShown": False,
+             "isMoreData": False, "keyword": "반포동"},
+            ensure_ascii=False,
+        )
+        first_page = json.dumps(
+            {"complexes": [
+                {"complexNo": "22853", "complexName": "반포자이",
+                 "realEstateTypeCode": "APT",
+                 "cortarAddress": "서울시 서초구 반포동",
+                 "deepLink": "/complexes/22853"}],
+             "isShown": True, "isMoreData": True, "keyword": "반포동"},
+            ensure_ascii=False,
+        )
+        calls = []
+
+        class _Session:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def fetch(self, url):
+                keyword = parse_qs(urlparse(url).query).get("keyword", [""])[0]
+                page = parse_qs(urlparse(url).query).get("page", ["1"])[0]
+                calls.append((keyword, page))
+                if "api/search" in url and keyword == "반포동":
+                    return (200, first_page if page == "1" else second_page)
+                return (200, '{"isShown":false,"isMoreData":false}')
+
+        sessions = []
+        dlg = KeywordSearchDialog(
+            session_factory=lambda: sessions.append(_Session()) or sessions[-1]
+        )
+        try:
+            dlg.input_keyword.setText("서울특별시 서초구 반포동")
+            dlg._run_search()
+            self.assertTrue(
+                self._pump_until(lambda: dlg.complex_list.count() == 1),
+                "fallback search did not populate",
+            )
+            self.assertEqual(dlg._search_query, "반포동")
+            searched = [kw for kw, _pg in calls if kw]
+            self.assertEqual(searched[0], "서울특별시 서초구 반포동")
+            self.assertIn("반포동", searched)
+            dlg._load_more()
+            self.assertTrue(
+                self._pump_until(lambda: not dlg._busy),
+                "second page did not finish",
+            )
+            pages = [(kw, pg) for kw, pg in calls if pg == "2"]
+            self.assertTrue(pages, "no page-2 fetch observed")
+            self.assertTrue(all(kw == "반포동" for kw, _pg in pages))
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_map_link_ms_center_becomes_region_row(self):
+        """new.land map links (ms=lat,lon,zoom) need no network at all."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        sessions = []
+        dlg = KeywordSearchDialog(
+            mode="region",
+            session_factory=lambda: sessions.append(object()) or sessions[-1],
+        )
+        try:
+            dlg.input_keyword.setText(
+                "https://new.land.naver.com/complexes?ms=37.5494,126.9057,16&a=APT:ABYG:JGC"
+            )
+            dlg._run_search()
+            self.assertTrue(
+                self._pump_until(lambda: dlg.region_list.count() == 1),
+                "map-link region row missing",
+            )
+            self.assertEqual(sessions, [])
+            data = dlg.region_list.item(0).data(
+                __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.ItemDataRole.UserRole
+            )
+            self.assertAlmostEqual(data["latitude"], 37.5494)
+            self.assertAlmostEqual(data["longitude"], 126.9057)
+            self.assertFalse(dlg._busy)
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_opaque_viewport_link_shows_guidance(self):
+        """fin.land viewport links carry no IDs: explain, don't hang or crash."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        dlg = KeywordSearchDialog(session_factory=lambda: None)
+        try:
+            dlg.input_keyword.setText(
+                "https://fin.land.naver.com/map?center=3zkT1e-2AM2FA&zoom=15.6"
+            )
+            dlg._run_search()
+            self.assertFalse(dlg._busy)
+            self.assertIn("단지 정보가 없어요", dlg.status_label.text())
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_resolve_pasted_complex_link(self):
+        """Pasted complex URLs resolve to checkable rows via name lookup."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        class _Session:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def fetch(self, url):
+                raise AssertionError("resolve path must not hit the network")
+
+        sessions = []
+        dlg = KeywordSearchDialog(
+            session_factory=lambda: sessions.append(_Session()) or sessions[-1]
+        )
+        try:
+            with patch(
+                "src.core.parser.NaverURLParser.fetch_complex_name",
+                return_value="반포자이",
+            ):
+                dlg.input_keyword.setText("https://new.land.naver.com/complexes/22853")
+                dlg._run_search()
+                self.assertTrue(
+                    self._pump_until(lambda: dlg.complex_list.count() == 1),
+                    "resolved row missing",
+                )
+                row = dlg.complex_list.item(0)
+                self.assertIn("반포자이", row.text())
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_late_suggest_failure_keeps_search_status(self):
+        """A late autocomplete failure must not clobber the search status."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        dlg = KeywordSearchDialog(session_factory=lambda: None)
+        try:
+            dlg._search_generation = 2
+            dlg._keyword = "반포자이"
+            dlg._busy = True
+            dlg._on_search_ready(
+                {"complexes": [{"complex_id": "22853", "name": "반포자이",
+                                "address": "", "asset_type": "APT"}],
+                 "regions": [], "is_more_data": False},
+                2, False,
+            )
+            self.assertIn("단지 1곳", dlg.status_label.text())
+            dlg._generation = 5
+            dlg._on_worker_failed("boom", 5, "suggest")
+            self.assertIn("단지 1곳", dlg.status_label.text())
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_close_during_slow_search_exits_pump(self):
+        """Closing mid-flight must stop the pump without hanging the dialog."""
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        class _SlowSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def fetch(self, url):
+                time.sleep(2.0)
+                return (200, '{"isShown":false,"isMoreData":false}')
+
+        dlg = KeywordSearchDialog(session_factory=_SlowSession)
+        try:
+            dlg.input_keyword.setText("분당구")
+            dlg._run_search()
+            self.assertTrue(
+                self._pump_until(lambda: dlg._pump_thread is not None),
+                "pump thread did not start",
+            )
+            time.sleep(0.5)
+            dlg.reject()
+            thread = dlg._pump_thread
+            # reject() already shut the pump down; the thread must be gone or
+            # finish on its own shortly after its in-flight fetch returns.
+            if thread is not None:
+                thread.join(timeout=10.0)
+                self.assertFalse(thread.is_alive())
+        finally:
+            try:
+                dlg.reject()
+            except Exception:
+                pass
             dlg.deleteLater()
 
 

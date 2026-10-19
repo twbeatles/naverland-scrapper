@@ -394,5 +394,59 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(mock_fetch.call_count, 2)
 
 
+class TestMapLinkParsing(unittest.TestCase):
+    def test_fin_complex_and_house_patterns(self):
+        parsed = NaverURLParser.parse_url_info(
+            "https://fin.land.naver.com/complexes/22853"
+        )
+        self.assertEqual(parsed["family"], "fin")
+        self.assertEqual(parsed["entity_type"], "complex")
+        self.assertEqual(parsed["asset_type"], "APT")
+        self.assertEqual(parsed["complex_id"], "22853")
+
+        parsed_house = NaverURLParser.parse_url_info(
+            "https://fin.land.naver.com/houses/654321"
+        )
+        self.assertEqual(parsed_house["asset_type"], "VL")
+        self.assertEqual(parsed_house["complex_id"], "654321")
+
+    def test_article_number_params(self):
+        self.assertEqual(
+            NaverURLParser.extract_article_id(
+                "https://new.land.naver.com/complexes/22853?articleNo=2513105556"
+            ),
+            "2513105556",
+        )
+        self.assertEqual(
+            NaverURLParser.extract_article_id(
+                "https://fin.land.naver.com/map?articleNumber=2513105556"
+            ),
+            "2513105556",
+        )
+
+    def test_opaque_viewport_link_yields_no_ids(self):
+        text = (
+            "https://fin.land.naver.com/map?center=3zkT1e-2AM2FA"
+            "&zoom=15.676549711312278&tradeTypes=A1-B1"
+        )
+        self.assertEqual(NaverURLParser.extract_from_text(text), [])
+        self.assertIsNone(NaverURLParser.extract_map_center(text))
+
+    def test_extract_map_center(self):
+        center = NaverURLParser.extract_map_center(
+            "https://new.land.naver.com/complexes?ms=37.5494,126.9057,16&a=APT:ABYG:JGC"
+        )
+        self.assertIsNotNone(center)
+        assert center is not None
+        lat, lon, zoom = center
+        self.assertAlmostEqual(lat, 37.5494)
+        self.assertAlmostEqual(lon, 126.9057)
+        self.assertEqual(zoom, 16)
+        self.assertIsNone(NaverURLParser.extract_map_center("반포동"))
+        self.assertIsNone(
+            NaverURLParser.extract_map_center("https://example.com/?ms=1.0,2.0,16")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

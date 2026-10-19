@@ -29,6 +29,34 @@ class NaverURLExtractMixin:
         article_id = str(parsed.get("article_id", "") or "").strip()
         return article_id or None
 
+    _MAP_CENTER_RE = re.compile(
+        r"[?&]ms=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def extract_map_center(cls, url_or_text):
+        """지도 링크의 ``ms=위도,경도,줌``을 (lat, lon, zoom)으로 반환한다.
+
+        new.land/m.land 공유 링크용. fin.land ``map?center=`` 같은 불투명
+        상태값은 해독할 수 없어 ``None``을 반환한다. 한국 범위를 벗어난
+        좌표도 ``None``이다.
+        """
+        raw = str(url_or_text or "")
+        match = cls._MAP_CENTER_RE.search(raw)
+        if not match:
+            return None
+        try:
+            lat = float(match.group(1))
+            lon = float(match.group(2))
+            zoom = int(float(match.group(3)))
+        except (TypeError, ValueError):
+            return None
+        if not (33.0 <= lat <= 39.5 and 124.0 <= lon <= 132.1):
+            return None
+        zoom = max(12, min(18, zoom))
+        return (lat, lon, zoom)
+
     @classmethod
     def parse_url_info(cls, url_or_text):
         """URL 문자열을 구조화해 반환한다."""
@@ -55,7 +83,7 @@ class NaverURLExtractMixin:
             complex_id = match.group(complex_group) if complex_group else ""
             article_id = match.group(article_group) if article_group and match.lastindex and match.lastindex >= article_group else ""
             if not article_id:
-                article_match = re.search(r"articleId=(\d+)", token, re.IGNORECASE)
+                article_match = re.search(r"article(?:Id|No|Number)=(\d+)", token, re.IGNORECASE)
                 if article_match:
                     article_id = article_match.group(1)
             entity_type = str(entry.get("entity_type", "") or "")

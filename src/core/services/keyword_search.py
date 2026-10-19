@@ -130,6 +130,48 @@ def parse_search_has_more(payload: Any) -> bool:
 PageFetch = Callable[[str], tuple[int, str]]
 """Fetch callable: full URL -> (status_code, body_text)."""
 
+_ADDRESS_VARIANT_CAP = 4
+_REGION_TAIL_SUFFIXES = ("동", "읍", "면", "리", "구", "군", "시", "도", "로", "길")
+_TRAILING_BUNJI_RE = re.compile(r"^(.*\S)\s+\d+(?:-\d+)?(?:번지)?$")
+_URL_LIKE_RE = re.compile(r"https?://|land\.naver\.com|fin\.land", re.IGNORECASE)
+
+
+def _is_region_tail(text: str) -> bool:
+    """True when a query tail looks like a legal-dong / district name."""
+    token = str(text or "").strip()
+    if len(token) < 2 or any(ch.isdigit() for ch in token):
+        return False
+    return token.endswith(_REGION_TAIL_SUFFIXES)
+
+
+def address_query_variants(keyword: str, *, max_variants: int = _ADDRESS_VARIANT_CAP) -> list[str]:
+    """Build fallback queries so a full real address still resolves.
+
+    ``/api/search`` matches short names (``반포동``, ``분당구``) reliably but
+    often returns nothing for a full address (``서울특별시 서초구 반포동``,
+    ``경기도 성남시 분당구 정자동 123``). Variants are tried in order, most
+    specific first; callers stop at the first variant with any result.
+    URLs are returned untouched (map links are resolved elsewhere).
+    """
+    raw = re.sub(r"\s+", " ", str(keyword or "").strip())
+    if not raw:
+        return []
+    if _URL_LIKE_RE.search(raw):
+        return [raw]
+    variants = [raw]
+    stripped = _TRAILING_BUNJI_RE.sub(r"\1", raw).strip()
+    if stripped and stripped != raw and len(stripped) >= 2:
+        variants.append(stripped)
+    for base in list(variants):
+        tokens = base.split(" ")
+        for tail_len in (2, 1):
+            if len(tokens) > tail_len:
+                tail = " ".join(tokens[-tail_len:])
+                if _is_region_tail(tail) and tail not in variants:
+                    variants.append(tail)
+    cap = max(1, int(max_variants or 1))
+    return variants[:cap]
+
 
 class KeywordSearchError(Exception):
     """Transport-level keyword search failure (rate limit, HTTP error)."""
@@ -180,6 +222,47 @@ def fetch_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> 
         "regions": parse_search_regions(payload),
         "is_more_data": parse_search_has_more(payload),
     }
+
+
+def _is_empty_search_result(result: dict) -> bool:
+    return not (result.get("complexes") or result.get("regions"))
+
+
+def fetch_search_page_with_fallback(
+    keyword: str,
+    page_fetch: PageFetch,
+    *,
+    page: int = 1,
+    max_variants: int = _ADDRESS_VARIANT_CAP,
+) -> dict:
+    """Fetch one ``/api/search`` page, falling back through address variants.
+
+    The raw keyword is tried first; when it yields no complexes and no
+    regions, shorter variants from :func:`address_query_variants` are tried
+    until one hits (or the list is exhausted). Transport errors raise
+    immediately (rate limits must not burn through variants). The winning
+    query is reported as ``effective_query`` so follow-up pages keep it.
+    """
+    variants = address_query_variants(keyword, max_variants=max_variants) or [str(keyword or "").strip()]
+    last_error: KeywordSearchError | None = None
+    empty: dict = {"complexes": [], "regions": [], "is_more_data": False}
+    for variant in variants:
+        try:
+            result = fetch_search_page(variant, page_fetch, page=page)
+        except KeywordSearchError as exc:
+            last_error = exc
+            if is_rate_limit_error(exc):
+                raise
+            continue
+        if _is_empty_search_result(result):
+            empty = result
+            continue
+        result["effective_query"] = variant
+        return result
+    if last_error is not None:
+        raise last_error
+    empty["effective_query"] = variants[0]
+    return empty
 
 
 class KeywordBrowserSession:

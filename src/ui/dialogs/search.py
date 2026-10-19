@@ -1,14 +1,18 @@
+import queue
+import threading
+
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QListWidget, QHBoxLayout, QPushButton, QListWidgetItem,
     QLineEdit, QLabel, QTabWidget, QWidget, QMessageBox
 )
-from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot, QTimer
+from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer
 
 from src.utils.ui_labels import asset_label
 from src.core.services.keyword_search import (
     KeywordBrowserSession,
     KeywordSearchError,
     fetch_search_page,
+    fetch_search_page_with_fallback,
     fetch_suggestions,
     is_rate_limit_error,
 )
@@ -17,7 +21,13 @@ _SUGGEST_DEBOUNCE_MS = 400
 
 
 class _KeywordWorker(QObject):
-    """Background worker owning one browser session for keyword endpoints."""
+    """Background fetch logic driven by a plain (non-Qt) pump thread.
+
+    Playwright's sync API must not share a thread with a Qt event loop:
+    consecutive in-page fetches from a QThread slot crash the process
+    with an access violation. A daemon threading.Thread owns the browser
+    session outright; results cross back through queued signals.
+    """
 
     suggestions_ready = Signal(list, int)
     search_ready = Signal(dict, int, bool)
@@ -121,13 +131,70 @@ class _KeywordWorker(QObject):
             self.failed.emit(cooled, int(generation), "search")
             return
         try:
-            result = self._fetch_with_retry("search", keyword, page=page)
+            if bool(append) or int(page or 1) > 1:
+                result = self._fetch_with_retry("search", keyword, page=page)
+            else:
+                result = self._fetch_fresh_search(keyword)
             if not self._cancelled:
                 payload = result if isinstance(result, dict) else {}
                 self.search_ready.emit(dict(payload), int(generation), bool(append))
         except Exception as exc:
             if not self._cancelled:
                 self.failed.emit(str(exc)[:200], int(generation), "search")
+
+    def _fetch_fresh_search(self, keyword):
+        """Fresh (page-1) search: address variants first, one retry."""
+        try:
+            return fetch_search_page_with_fallback(
+                keyword, self._ensure_session().fetch, page=1)
+        except KeywordSearchError as exc:
+            if self._cancelled:
+                raise
+            if is_rate_limit_error(exc):
+                self._note_rate_limit()
+            if not self._sleep_retry_delay():
+                raise
+            return fetch_search_page_with_fallback(
+                keyword, self._ensure_session().fetch, page=1)
+
+    def resolve(self, entries, generation):
+        """Resolve pasted complex IDs to rows (runs on the pump thread)."""
+        try:
+            from src.core.parser import NaverURLParser
+        except Exception as exc:
+            if not self._cancelled:
+                self.failed.emit(str(exc)[:200], int(generation), "search")
+            return
+        rows = []
+        for entry in entries or []:
+            if self._cancelled:
+                return
+            data = dict(entry or {})
+            cid = str(data.get("complex_id", "") or "").strip()
+            asset = str(data.get("asset_type", "APT") or "APT").strip().upper()
+            if asset not in {"APT", "VL"}:
+                asset = "APT"
+            if not cid:
+                continue
+            try:
+                name = NaverURLParser.fetch_complex_name(cid, asset_type=asset)
+            except Exception:
+                name = ""
+            name = str(name or "").strip() or f"단지_{cid}"
+            rows.append({
+                "complex_id": cid,
+                "name": name,
+                "address": "",
+                "asset_type": asset,
+                "latitude": None,
+                "longitude": None,
+                "deep_link": "",
+            })
+        if not self._cancelled:
+            self.search_ready.emit(
+                {"complexes": rows, "regions": [],
+                 "is_more_data": False, "effective_query": ""},
+                int(generation), False)
 
     @Slot()
     def close_session(self):
@@ -148,19 +215,20 @@ class KeywordSearchDialog(QDialog):
 
     complexes_added = Signal(list)  # [(name, complex_id, asset_type), ...]
     region_chosen = Signal(dict)  # {"cortar_no","name","latitude","longitude",...}
-    request_suggest = Signal(str, int)
-    request_search = Signal(str, int, int, bool)
 
     def __init__(self, parent=None, session_factory=None, mode="complex"):
         super().__init__(parent)
         # mode="region": 지도 탐색 위치를 고르는 용도 (지역 목록만 보여 준다).
         self._mode = "region" if str(mode or "").lower() == "region" else "complex"
         self._session_factory = session_factory
-        self._worker_thread = None
-        self._worker = None
+        self._pump_thread: threading.Thread | None = None
+        self._task_queue: queue.Queue | None = None
+        self._worker: _KeywordWorker | None = None
         self._generation = 0
         self._search_generation = 0
+        self._completed_search_generation = -1
         self._keyword = ""
+        self._search_query = ""
         self._next_page = 1
         self._has_more = False
         self._busy = False
@@ -173,9 +241,9 @@ class KeywordSearchDialog(QDialog):
         layout.setSpacing(8)
 
         hint = QLabel(
-            "동·구 이름을 검색한 뒤 목록에서 탐색할 지역을 골라 주세요."
+            "동·구 이름이나 실제 주소로 검색한 뒤 목록에서 탐색할 지역을 골라 주세요."
             if self._mode == "region"
-            else "단지 이름이나 지역 이름으로 검색한 뒤, 수집할 단지를 체크해 추가하세요."
+            else "단지 이름·지역 이름·실제 주소로 검색한 뒤, 수집할 단지를 체크해 추가하세요. 네이버 지도 링크도 붙여넣을 수 있습니다."
         )
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
@@ -185,9 +253,9 @@ class KeywordSearchDialog(QDialog):
         search_row.setSpacing(6)
         self.input_keyword = QLineEdit()
         self.input_keyword.setPlaceholderText(
-            "예: 반포동, 분당구, 해운대"
+            "예: 반포동, 분당구, 서울특별시 서초구 반포동"
             if self._mode == "region"
-            else "예: 래미안 퍼스티지, 반포자이, 반포동"
+            else "예: 래미안 퍼스티지, 반포자이, 반포동, 지도 링크 붙여넣기"
         )
         self.input_keyword.setToolTip("두 글자 이상 입력하면 추천 검색어가 나타납니다.")
         self.input_keyword.returnPressed.connect(self._run_search)
@@ -289,37 +357,82 @@ class KeywordSearchDialog(QDialog):
 
     # -- worker plumbing -------------------------------------------------
     def _ensure_worker(self):
-        if self._worker_thread is not None:
+        if self._pump_thread is not None:
             return
-        self._worker_thread = QThread(self)
+        self._task_queue = queue.Queue()
         self._worker = _KeywordWorker(session_factory=self._session_factory)
-        self._worker.moveToThread(self._worker_thread)
-        self.request_suggest.connect(self._worker.suggest)
-        self.request_search.connect(self._worker.search)
         self._worker.suggestions_ready.connect(self._on_suggestions_ready)
         self._worker.search_ready.connect(self._on_search_ready)
         self._worker.failed.connect(self._on_worker_failed)
-        self._worker_thread.start()
+        self._pump_thread = threading.Thread(target=self._pump_loop, daemon=True)
+        self._pump_thread.start()
+
+    def _enqueue(self, task):
+        self._ensure_worker()
+        if self._task_queue is not None:
+            self._task_queue.put(task)
+
+    def _pump_loop(self):
+        """Run queued fetches on a plain thread (never a QThread)."""
+        worker = self._worker
+        task_queue = self._task_queue
+        if worker is None or task_queue is None:
+            return
+        try:
+            while True:
+                try:
+                    task = task_queue.get()
+                except Exception:
+                    return
+                if task is None:
+                    return
+                kind = task[0]
+                try:
+                    if kind == "suggest":
+                        worker.suggest(task[1], task[2])
+                    elif kind == "search":
+                        worker.search(task[1], task[2], task[3], task[4])
+                    elif kind == "resolve":
+                        worker.resolve(task[1], task[2])
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        task_queue.task_done()
+                    except Exception:
+                        pass
+        finally:
+            try:
+                worker.close_session()
+            except Exception:
+                pass
 
     def _shutdown_worker(self):
+        try:
+            self._suggest_timer.stop()
+        except Exception:
+            pass
         if self._worker is not None:
             try:
                 self._worker.cancel()
             except Exception:
                 pass
-        thread, self._worker_thread = self._worker_thread, None
+        thread, self._pump_thread = self._pump_thread, None
+        task_queue, self._task_queue = self._task_queue, None
         worker, self._worker = self._worker, None
-        if thread is not None:
+        if task_queue is not None:
             try:
-                thread.quit()
-                thread.wait(3000)
+                task_queue.put(None)
             except Exception:
                 pass
-        if worker is not None:
+        if thread is not None and thread.is_alive():
             try:
-                worker.close_session()
+                thread.join(timeout=5.0)
             except Exception:
                 pass
+        # A still-blocked pump thread is a daemon: it can never abort the
+        # process. It sees the cancel flag after its fetch returns, closes
+        # its own session, and exits on its own.
 
     def closeEvent(self, a0):
         self._shutdown_worker()
@@ -344,7 +457,7 @@ class KeywordSearchDialog(QDialog):
             return
         self._ensure_worker()
         self._generation += 1
-        self.request_suggest.emit(keyword, self._generation)
+        self._enqueue(("suggest", keyword, self._generation))
 
     @Slot(list, int)
     def _on_suggestions_ready(self, names, generation):
@@ -371,21 +484,78 @@ class KeywordSearchDialog(QDialog):
             return
         if self._busy:
             return
-        self._ensure_worker()
         self._search_generation += 1
+        self._completed_search_generation = -1
         self._keyword = keyword
+        self._search_query = keyword
         self._next_page = 1
         self._has_more = False
         self.complex_list.clear()
         self.region_list.clear()
+        if self._handle_map_link(keyword):
+            return
         self._set_busy(True, f"'{keyword}' 검색 중...")
-        self.request_search.emit(keyword, 1, self._search_generation, False)
+        self._enqueue(("search", keyword, 1, self._search_generation, False))
+
+    def _handle_map_link(self, keyword):
+        """Pasted Naver map links: IDs resolve, ms= centers, else guidance."""
+        text = str(keyword or "")
+        lowered = text.lower()
+        if "land.naver.com" not in lowered and "fin.land" not in lowered:
+            return False
+        try:
+            from src.core.parser import NaverURLParser
+        except Exception:
+            return False
+        found = NaverURLParser.extract_from_text(text)
+        entries = [e for e in found if str((e or {}).get("complex_id", "") or "").strip()]
+        if entries:
+            self._set_busy(True, f"링크에서 단지 {len(entries)}곳을 확인 중...")
+            self._enqueue(("resolve", entries, self._search_generation))
+            return True
+        center = NaverURLParser.extract_map_center(text)
+        if center is not None:
+            lat, lon, _zoom = center
+            self.complex_list.clear()
+            self.region_list.clear()
+            self._has_more = False
+            self._next_page = 1
+            self._search_query = ""
+            name = f"지도 링크 위치 ({lat:.4f}, {lon:.4f})"
+            row = QListWidgetItem(name)
+            row.setData(
+                Qt.ItemDataRole.UserRole,
+                {"cortar_no": "", "name": name,
+                 "latitude": lat, "longitude": lon, "deep_link": ""},
+            )
+            row.setToolTip("이 위치를 탐색 위치로 쓸 수 있습니다.")
+            self.region_list.addItem(row)
+            self.tabs.setTabText(0, "단지 0")
+            self.tabs.setTabText(1, "지역 1")
+            if self._mode != "region":
+                self.tabs.setCurrentIndex(1)
+            self._set_busy(False)
+            self.status_label.setText(f"지도 링크의 위치를 찾았습니다: {name}")
+            return True
+        articles = [e for e in found if str((e or {}).get("article_id", "") or "").strip()]
+        if articles:
+            self.status_label.setText(
+                "매물 링크는 「불러오기 → 주소 붙여넣기」에서 열어 주세요. "
+                "여기서는 단지·지도 링크를 붙여넣을 수 있습니다."
+            )
+        else:
+            self.status_label.setText(
+                "지도 화면 링크에는 단지 정보가 없어요. "
+                "단지가 열린 상태의 링크(단지 번호 포함)를 붙여넣어 주세요."
+            )
+        return True
 
     def _load_more(self):
         if self._busy or not self._has_more or not self._keyword:
             return
         self._set_busy(True, f"'{self._keyword}' {self._next_page}페이지 불러오는 중...")
-        self.request_search.emit(self._keyword, self._next_page, self._search_generation, True)
+        query = str(self._search_query or self._keyword or "")
+        self._enqueue(("search", query, self._next_page, self._search_generation, True))
 
     def _set_busy(self, busy: bool, status: str = ""):
         self._busy = busy
@@ -401,7 +571,9 @@ class KeywordSearchDialog(QDialog):
         if not append:
             self.complex_list.clear()
             self.region_list.clear()
-        for item in result.get("complexes", []):
+        if not append:
+            self._search_query = str(result.get("effective_query", "") or self._keyword or "")
+        for item in result.get("complexes", []) or []:
             cid = str(item.get("complex_id", "") or "")
             name = str(item.get("name", "") or f"단지_{cid}")
             address = str(item.get("address", "") or "")
@@ -412,7 +584,7 @@ class KeywordSearchDialog(QDialog):
             row.setCheckState(Qt.CheckState.Unchecked)
             row.setData(Qt.ItemDataRole.UserRole, {"name": name, "cid": cid, "asset": asset})
             self.complex_list.addItem(row)
-        for item in result.get("regions", []):
+        for item in result.get("regions", []) or []:
             name = str(item.get("name", "") or "")
             row = QListWidgetItem(name or "(이름 없음)")
             row.setData(Qt.ItemDataRole.UserRole, dict(item))
@@ -422,6 +594,7 @@ class KeywordSearchDialog(QDialog):
             else:
                 row.setToolTip("위치 정보가 없는 지역입니다.")
             self.region_list.addItem(row)
+        self._completed_search_generation = generation
         self._has_more = bool(result.get("is_more_data"))
         if self._has_more:
             self._next_page += 1
@@ -429,6 +602,8 @@ class KeywordSearchDialog(QDialog):
         n_region = self.region_list.count()
         self.tabs.setTabText(0, f"단지 {n_complex}")
         self.tabs.setTabText(1, f"지역 {n_region}")
+        if self._mode == "region" and n_complex > 0:
+            self.tabs.setTabVisible(0, True)
         if self._mode != "region" and n_complex == 0 and n_region > 0:
             self.tabs.setCurrentIndex(1)
         self._set_busy(False)
@@ -450,9 +625,12 @@ class KeywordSearchDialog(QDialog):
             if generation != self._search_generation:
                 return
             self._set_busy(False)
+            self._completed_search_generation = generation
             self.status_label.setText(f"검색하지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
             return
         if generation != self._generation or self._busy:
+            return
+        if self._completed_search_generation == self._search_generation:
             return
         self.status_label.setText(f"추천 검색어를 불러오지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
 
