@@ -69,7 +69,7 @@ NAV_ENTRIES: Sequence[tuple[str, NavEntry | str]] = (
     ),
     (
         ROUTE_STATS,
-        NavEntry(ROUTE_STATS, "가격 통계", _icon("MARKET"), NavigationItemPosition.TOP),
+        NavEntry(ROUTE_STATS, "시세 흐름", _icon("MARKET"), NavigationItemPosition.TOP),
     ),
     (
         ROUTE_HISTORY,

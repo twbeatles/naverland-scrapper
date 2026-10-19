@@ -230,6 +230,14 @@ class AppLifecycleBootstrapMixin:
                 sb.setObjectName("appStatusBar")
         except Exception:
             pass
+        # Matplotlib 차트·요약 띠는 QSS를 받지 않으므로 직접 다시 칠한다.
+        for widget_name in ("chart_widget", "stats_summary"):
+            widget = getattr(self, widget_name, None)
+            if widget is not None and hasattr(widget, "set_theme"):
+                try:
+                    widget.set_theme(_key)
+                except Exception:
+                    pass
         # Guide HTML embeds its own theme colors (QTextBrowser document defaults are black).
         if hasattr(self, "_refresh_guide_theme"):
             try:

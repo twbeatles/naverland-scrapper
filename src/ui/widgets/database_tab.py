@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
 )
 import webbrowser
 
+from PySide6.QtCore import Signal
+
 from src.utils.helpers import get_complex_url
 from src.ui.widgets.components import SearchBar, EmptyStateWidget
 from src.utils.logger import get_logger
@@ -22,6 +24,9 @@ logger = get_logger("DatabaseTab")
 
 class DatabaseTab(QWidget):
     """단지 DB 관리 탭"""
+
+    # (asset_type, complex_id) — 앱이 「시세 흐름」 화면으로 이동해 이 단지를 고른다.
+    trend_requested = Signal(str, str)
 
     COL_ID = 0
     COL_ASSET = 1
@@ -55,6 +60,11 @@ class DatabaseTab(QWidget):
         self.search_bar.search_changed.connect(self._filter_table)
         button_layout.addWidget(self.search_bar, 1)
 
+        self.btn_trend = QPushButton("시세 흐름 보기")
+        self.btn_trend.setObjectName("primaryBtn")
+        self.btn_trend.setToolTip("고른 단지의 날짜별 가격 흐름을 「시세 흐름」 화면에서 봅니다.")
+        self.btn_trend.clicked.connect(self._request_trend)
+
         btn_memo = QPushButton("메모 고치기")
         btn_memo.setObjectName("secondaryBtn")
         btn_memo.setToolTip("고른 단지에 메모를 남깁니다.")
@@ -73,6 +83,7 @@ class DatabaseTab(QWidget):
         self.btn_delete_multi = self.btn_delete_db
         self.btn_memo = btn_memo
 
+        button_layout.addWidget(self.btn_trend)
         button_layout.addWidget(btn_memo)
         button_layout.addWidget(self.btn_delete_db)
         button_layout.addWidget(self.btn_refresh_db)
@@ -168,6 +179,19 @@ class DatabaseTab(QWidget):
         has_rows = self.table.rowCount() > 0
         self.btn_delete.setEnabled(has_rows and has_selection)
         self.btn_memo.setEnabled(has_rows and has_selection)
+        self.btn_trend.setEnabled(has_rows and has_selection)
+
+    def _request_trend(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        cid_item = self.table.item(row, self.COL_COMPLEX_ID)
+        asset_item = self.table.item(row, self.COL_ASSET)
+        cid = cid_item.text().strip() if cid_item is not None else ""
+        if not cid:
+            return
+        asset_type = (asset_item.text().strip().upper() if asset_item is not None else "") or "APT"
+        self.trend_requested.emit(asset_type, cid)
 
     def _confirm_delete(self, *, title: str, text: str) -> tuple[bool, bool]:
         msg = QMessageBox(self)

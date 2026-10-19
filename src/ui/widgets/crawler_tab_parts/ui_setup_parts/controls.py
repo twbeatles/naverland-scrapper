@@ -296,8 +296,12 @@ class CrawlerTabControlSetupMixin:
         list_vheader = self.table_list.verticalHeader()
         if list_vheader is not None:
             list_vheader.setVisible(False)
-        self.table_list.setToolTip("두 번 누르면 네이버 부동산 단지 페이지를 엽니다.")
+        self.table_list.setToolTip(
+            "두 번 누르면 네이버 부동산 단지 페이지를 엽니다.\n오른쪽 클릭으로 그 단지의 시세 흐름을 볼 수 있습니다."
+        )
         self.table_list.doubleClicked.connect(self._open_complex_url)
+        self.table_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_list.customContextMenuRequested.connect(self._show_task_list_context_menu)
         from src.ui.widgets.components import install_token_labels
         from src.utils.ui_labels import asset_label
 

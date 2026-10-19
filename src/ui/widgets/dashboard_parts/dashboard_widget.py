@@ -87,7 +87,7 @@ class DashboardWidget(QWidget):
         title = QLabel("대시보드")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
-        subtitle = QLabel("방금 수집한 결과를 한눈에 요약합니다. 날짜별 가격 흐름은 「가격 통계」에서 볼 수 있습니다.")
+        subtitle = QLabel("방금 수집한 결과를 한눈에 요약합니다. 단지별 날짜별 시세 변화는 「시세 흐름」에서 볼 수 있습니다.")
         subtitle.setObjectName("hintLabel")
         subtitle.setWordWrap(True)
         self._subtitle = subtitle

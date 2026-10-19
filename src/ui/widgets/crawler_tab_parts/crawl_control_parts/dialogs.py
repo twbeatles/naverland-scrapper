@@ -188,6 +188,55 @@ class CrawlerTabDialogOpsMixin:
         dlg.template_saved.connect(lambda t: settings.set("excel_template", t))
         dlg.exec()
 
+    def _result_row_complex(self: Any, row: int) -> tuple[str, str]:
+        """결과 표 한 줄의 (주택 종류, 단지 번호). 모르면 ("", "")."""
+        payload = self._row_payload_cache[row] if 0 <= row < len(self._row_payload_cache) else {}
+        cid = str((payload or {}).get("단지ID", "") or "").strip()
+        asset = self._normalize_task_asset_type((payload or {}).get("자산유형", "APT"))
+        return (asset, cid) if cid else ("", "")
+
+    def _request_trend(self: Any, asset_type: str, complex_id: str):
+        cid = str(complex_id or "").strip()
+        if cid:
+            self.trend_requested.emit(self._normalize_task_asset_type(asset_type), cid)
+
+    def _show_result_context_menu(self: Any, pos):
+        from PySide6.QtWidgets import QMenu
+
+        index = self.result_table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        self.result_table.selectRow(row)
+        asset, cid = self._result_row_complex(row)
+        menu = QMenu(self)
+        menu.addAction("매물 페이지 열기", self._open_article_url)
+        action = menu.addAction("이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid))
+        if action is not None:
+            action.setEnabled(bool(cid))
+        viewport = self.result_table.viewport()
+        menu.exec((viewport or self.result_table).mapToGlobal(pos))
+
+    def _show_task_list_context_menu(self: Any, pos):
+        from PySide6.QtWidgets import QMenu
+
+        index = self.table_list.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        self.table_list.selectRow(row)
+        cid_item = self.table_list.item(row, 1)
+        asset_item = self.table_list.item(row, 2)
+        cid = cid_item.text().strip() if cid_item is not None else ""
+        asset = asset_item.text() if asset_item is not None else "APT"
+        menu = QMenu(self)
+        menu.addAction("단지 페이지 열기", self._open_complex_url)
+        action = menu.addAction("이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid))
+        if action is not None:
+            action.setEnabled(bool(cid))
+        viewport = self.table_list.viewport()
+        menu.exec((viewport or self.table_list).mapToGlobal(pos))
+
     def _open_article_url(self: Any):
         row = self.result_table.currentRow()
         if row < 0:

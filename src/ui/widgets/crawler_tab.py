@@ -149,6 +149,8 @@ class CrawlerTab(
     crawling_stopped = Signal()
     status_message = Signal(str)
     alert_triggered = Signal(str, str, str, float, int)
+    # (asset_type, complex_id) — 앱이 「시세 흐름」으로 이동해 이 단지를 고른다.
+    trend_requested = Signal(str, str)
     
 
 

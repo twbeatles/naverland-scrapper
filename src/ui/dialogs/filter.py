@@ -6,13 +6,15 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal
 
 class MultiSelectDialog(QDialog):
-    def __init__(self, title, items, parent=None):
+    def __init__(self, title, items, parent=None, preselected=None, hint=""):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumSize(450, 550)
         self._selected = []
+        self._preselected = list(preselected or [])
+        self._hint = str(hint or "")
         self._setup_ui(items)
-    
+
     def _setup_ui(self, items):
         layout = QVBoxLayout(self)
         
@@ -28,7 +30,12 @@ class MultiSelectDialog(QDialog):
         btn_layout.addWidget(btn_none)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
-        
+        if self._hint:
+            hint_label = QLabel(self._hint)
+            hint_label.setObjectName("hintLabel")
+            hint_label.setWordWrap(True)
+            layout.addWidget(hint_label)
+
         # 리스트
         self.list_widget = QListWidget()
         self.list_widget.setAlternatingRowColors(True)
@@ -38,6 +45,7 @@ class MultiSelectDialog(QDialog):
             item = QListWidgetItem()
             checkbox = QCheckBox(text)
             checkbox.setProperty("data", data)
+            checkbox.setChecked(data in self._preselected)
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, checkbox)
         layout.addWidget(self.list_widget)
@@ -58,7 +66,8 @@ class MultiSelectDialog(QDialog):
             cb = self.list_widget.itemWidget(self.list_widget.item(i))
             if isinstance(cb, QCheckBox):
                 cb.stateChanged.connect(self._update_count)
-    
+        self._update_count()
+
     def _update_count(self):
         count = sum(1 for i in range(self.list_widget.count())
                    if isinstance(w := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox) and w.isChecked())

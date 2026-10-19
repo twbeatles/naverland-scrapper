@@ -1391,7 +1391,7 @@ class TestUIWiring(unittest.TestCase):
                 rent_header = app.stats_table.horizontalHeaderItem(3)
                 assert rent_header is not None
                 self.assertIn("월세", rent_header.text())
-                self.assertEqual(_table_text(app.stats_table, 0, 5), "100")
+                self.assertEqual(_table_text(app.stats_table, 0, 5), "100만")
 
                 app.stats_metric_combo.setCurrentIndex(app.stats_metric_combo.findData("deposit"))
                 app._load_stats()
@@ -1400,7 +1400,7 @@ class TestUIWiring(unittest.TestCase):
                 deposit_header = app.stats_table.horizontalHeaderItem(3)
                 assert deposit_header is not None
                 self.assertIn("보증금", deposit_header.text())
-                self.assertEqual(_table_text(app.stats_table, 0, 5), "52500")
+                self.assertEqual(_table_text(app.stats_table, 0, 5), "5억 2,500만")
             finally:
                 if hasattr(app, "schedule_timer") and app.schedule_timer:
                     app.schedule_timer.stop()
@@ -1630,14 +1630,19 @@ class TestUIWiring(unittest.TestCase):
                 if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "92001":
                     app.stats_complex_combo.setCurrentIndex(i)
                     break
-            app._load_stats()
-
+            # 기본 거래 종류(매매)는 한 시리즈라 바로 그래프와 요약이 나온다.
+            app._on_stats_complex_changed(app.stats_complex_combo.currentIndex())
             chart_widget = app.chart_widget
             assert chart_widget is not None
-            self.assertEqual(
-                chart_widget.message_label.text(),
-                "차트를 보려면 거래유형과 평형을 하나로 좁혀주세요.",
-            )
+            self.assertEqual(app.stats_type_combo.currentText(), "매매")
+            self.assertTrue(chart_widget.message_label.isHidden())
+            self.assertEqual(app.stats_summary.value_text("latest"), "1억 1,000만")
+
+            # 「전체」로 넓히면 서로 다른 가격 기준이 섞이므로 하나를 고르라고 안내한다.
+            app.stats_type_combo.setCurrentText("전체")
+            from src.core.services.price_trend import MSG_PICK_TRADE_TYPE
+
+            self.assertEqual(chart_widget.message_label.text(), MSG_PICK_TRADE_TYPE)
 
             if hasattr(app, "schedule_timer") and app.schedule_timer:
                 app.schedule_timer.stop()
@@ -1645,6 +1650,160 @@ class TestUIWiring(unittest.TestCase):
                 app.db.close()
             app.deleteLater()
             self._qt_app.processEvents()
+
+    def test_stats_trend_flow_auto_trade_summary_and_jump_from_db_tab(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_trend_flow.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+            try:
+                self.assertTrue(app.db.add_complex("매매단지", "93001", asset_type="APT"))
+                self.assertTrue(app.db.add_complex("전세만단지", "93002", asset_type="APT"))
+                conn = app.db._pool.get_connection()
+                try:
+                    conn.cursor().executemany(
+                        """
+                        INSERT INTO price_snapshots (
+                            complex_id, trade_type, pyeong, min_price, max_price, avg_price,
+                            item_count, asset_type, snapshot_date
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            ("93001", "매매", 34.0, 95000, 105000, 100000, 4, "APT", "2026-01-05"),
+                            ("93001", "매매", 34.0, 98000, 110000, 104000, 5, "APT", "2026-02-05"),
+                            ("93001", "매매", 34.0, 100000, 112000, 110000, 3, "APT", "2026-03-05"),
+                            ("93002", "전세", 25.0, 40000, 46000, 43000, 2, "APT", "2026-03-05"),
+                        ],
+                    )
+                    conn.commit()
+                finally:
+                    app.db._pool.return_connection(conn)
+
+                app.db_tab.load_data()
+                target_row = -1
+                for row in range(app.db_tab.table.rowCount()):
+                    if _table_text(app.db_tab.table, row, app.db_tab.COL_COMPLEX_ID) == "93001":
+                        target_row = row
+                self.assertGreaterEqual(target_row, 0)
+                app.db_tab.table.selectRow(target_row)
+                self.assertTrue(app.db_tab.btn_trend.isEnabled())
+                app.db_tab.btn_trend.click()
+
+                self.assertIs(app.tabs.currentWidget(), app.stats_tab)
+                self.assertEqual(app.stats_complex_combo.currentData(), ("APT", "93001"))
+                # 면적이 하나뿐이면 자동으로 골라 요약이 바로 보인다.
+                self.assertEqual(app.stats_pyeong_combo.currentText(), "34평")
+                self.assertEqual(app.stats_summary.value_text("latest"), "11억")
+                self.assertEqual(app.stats_summary.value_text("period"), "+1억")
+                self.assertEqual(app.stats_summary.value_text("records"), "3일")
+                self.assertEqual(app.stats_table.columnCount(), 8)
+                self.assertEqual(_table_text(app.stats_table, 0, 7), "+6,000만 (+5.8%)")
+                assert app.chart_widget is not None
+                self.assertTrue(app.chart_widget.message_label.isHidden())
+
+                # 매매 기록이 없는 단지로 바꾸면 기록이 있는 전세로 자동 전환한다.
+                idx = app._find_stats_complex_index(("APT", "93002"))
+                self.assertGreaterEqual(idx, 0)
+                app.stats_complex_combo.setCurrentIndex(idx)
+                self.assertEqual(app.stats_type_combo.currentText(), "전세")
+                self.assertEqual(app.stats_summary.value_text("latest"), "4억 3,000만")
+
+                # 사용자가 직접 고른 거래 종류는 바꾸지 않고 빈 상태를 안내한다.
+                app.stats_type_combo.setCurrentText("매매")
+                self.assertEqual(app.stats_type_combo.currentText(), "매매")
+                self.assertIn("매매 가격 기록이 없습니다", app.chart_widget.message_label.text())
+
+                # 테마 전환이 차트/요약에 예외 없이 전달된다.
+                app._apply_domain_stylesheet("light")
+                self.assertEqual(app.chart_widget._theme, "light")
+            finally:
+                if hasattr(app, "schedule_timer") and app.schedule_timer:
+                    app.schedule_timer.stop()
+                if hasattr(app, "db") and app.db:
+                    app.db.close()
+                app.deleteLater()
+                self._qt_app.processEvents()
+
+    def test_stats_compare_complexes_and_jump_from_crawler_tab(self):
+        from src.core.database import ComplexDatabase
+        from src.ui.app import RealEstateApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "ui_stats_compare.db")
+
+            def _db_factory():
+                return ComplexDatabase(db_path)
+
+            with (
+                patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
+                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+            ):
+                app = RealEstateApp()
+            try:
+                self.assertTrue(app.db.add_complex("기준단지", "94001", asset_type="APT"))
+                self.assertTrue(app.db.add_complex("비교단지", "94002", asset_type="APT"))
+                self.assertTrue(app.db.add_complex("전세만", "94003", asset_type="APT"))
+                conn = app.db._pool.get_connection()
+                try:
+                    conn.cursor().executemany(
+                        """
+                        INSERT INTO price_snapshots (
+                            complex_id, trade_type, pyeong, min_price, max_price, avg_price,
+                            item_count, asset_type, snapshot_date
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            ("94001", "매매", 34.0, 100000, 104000, 102000, 2, "APT", "2026-02-01"),
+                            ("94001", "매매", 34.0, 104000, 108000, 106000, 2, "APT", "2026-03-01"),
+                            ("94002", "매매", 25.0, 60000, 64000, 62500, 3, "APT", "2026-02-01"),
+                            ("94002", "매매", 25.0, 62000, 66000, 65000, 3, "APT", "2026-03-01"),
+                            ("94003", "전세", 25.0, 40000, 42000, 41000, 1, "APT", "2026-03-01"),
+                        ],
+                    )
+                    conn.commit()
+                finally:
+                    app.db._pool.return_connection(conn)
+
+                # 수집 화면의 우클릭 「시세 흐름 보기」와 같은 신호로 이동한다.
+                app.crawler_tab.trend_requested.emit("APT", "94001")
+                self.assertIs(app.tabs.currentWidget(), app.stats_tab)
+                self.assertEqual(app.stats_complex_combo.currentData(), ("APT", "94001"))
+
+                app._set_stats_compare(["APT:94002", "APT:94003", "APT:99999"])
+                self.assertEqual(app._active_stats_compare_keys(), ["APT:94002", "APT:94003"])
+                self.assertFalse(app.stats_compare_label.isHidden())
+                self.assertIn("비교단지", app.stats_compare_label.text())
+                assert app.chart_widget is not None and app.chart_widget.ax is not None
+                legend = app.chart_widget.ax.get_legend()
+                assert legend is not None
+                labels = [t.get_text() for t in legend.get_texts()]
+                # 전세만 있는 단지는 매매 비교에서 빠지고, 평당가 등락률이 범례에 붙는다.
+                self.assertEqual(len(labels), 2)
+                self.assertTrue(labels[0].startswith("기준단지"))
+                self.assertTrue(labels[1].startswith("비교단지 (+4.0%)"))
+                # 변화 요약은 여전히 기준 단지 자체 값이다.
+                self.assertEqual(app.stats_summary.value_text("latest"), "10억 6,000만")
+
+                app._clear_stats_compare()
+                self.assertTrue(app.stats_compare_label.isHidden())
+                self.assertTrue(app.btn_stats_compare_clear.isHidden())
+            finally:
+                if hasattr(app, "schedule_timer") and app.schedule_timer:
+                    app.schedule_timer.stop()
+                if hasattr(app, "db") and app.db:
+                    app.db.close()
+                app.deleteLater()
+                self._qt_app.processEvents()
 
     def test_stats_tab_repeated_entry_after_data_collection(self):
         from src.core.database import ComplexDatabase

@@ -172,6 +172,7 @@ class AppTabSetupMixin:
         tab.data_collected.connect(self._on_crawl_data_collected)
         tab.status_message.connect(self.status_bar.showMessage)
         tab.alert_triggered.connect(self._on_alert_triggered)
+        tab.trend_requested.connect(self._open_stats_for_complex)
         return tab
 
     def _create_geo_tab(self: Any):
@@ -189,12 +190,15 @@ class AppTabSetupMixin:
         tab.data_collected.connect(self._on_crawl_data_collected)
         tab.status_message.connect(self.status_bar.showMessage)
         tab.alert_triggered.connect(self._on_alert_triggered)
+        tab.trend_requested.connect(self._open_stats_for_complex)
         return tab
 
     def _create_db_tab(self: Any):
         from src.ui.widgets.database_tab import DatabaseTab
 
-        return DatabaseTab(self.db)
+        tab = DatabaseTab(self.db)
+        tab.trend_requested.connect(self._open_stats_for_complex)
+        return tab
 
     def _create_group_tab(self: Any):
         from src.ui.widgets.group_tab import GroupTab
@@ -454,6 +458,8 @@ class AppTabSetupMixin:
         install_token_labels(self.history_table, 4, crawl_mode_label)
         install_token_labels(self.history_table, 5, history_status_label)
         self.history_table.setColumnHidden(3, True)  # 엔진은 문제 진단용이라 숨긴다
+        self.history_table.setToolTip("두 번 누르면 그 단지의 「시세 흐름」을 엽니다.")
+        self.history_table.cellDoubleClicked.connect(self._open_stats_from_history_row)
         layout.addWidget(self.history_table, 1)
 
         self.history_empty_label = EmptyStateWidget(
@@ -483,36 +489,53 @@ class AppTabSetupMixin:
         table.setVisible(has_rows)
 
     def _setup_stats_tab(self: Any):
+        from src.core.services.price_trend import PERIOD_OPTIONS
         from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
-        from src.ui.widgets.components import build_page_header
+        from src.ui.widgets.components import EmptyStateWidget, build_page_header
+        from src.ui.widgets.trend_summary import TrendSummaryStrip
 
         self.stats_tab = QWidget()
         layout = QVBoxLayout(self.stats_tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SM)
-        layout.addWidget(
+
+        header_row = QHBoxLayout()
+        header_row.addWidget(
             build_page_header(
-                "가격 통계",
-                "수집할 때마다 쌓인 기록으로 단지별 최저·최고·평균 가격의 흐름을 봅니다.",
-            )
+                TAB_STATS,
+                "같은 단지를 여러 날 수집할수록 쌓이는 기록으로 평균·최저·최고 가격이 어떻게 움직였는지 봅니다.",
+            ),
+            1,
         )
+        btn_load = QPushButton("새로고침")
+        btn_load.setObjectName("secondaryBtn")
+        btn_load.setToolTip("단지 목록과 가격 기록을 다시 불러옵니다. 조건을 바꾸면 자동으로 다시 그립니다.")
+        btn_load.clicked.connect(lambda *_: self._reload_stats_page())
+        header_row.addWidget(btn_load, 0, Qt.AlignmentFlag.AlignBottom)
+        self.btn_stats_reload = btn_load
+        layout.addLayout(header_row)
 
         def _label(text: str) -> QLabel:
             lbl = QLabel(text)
             lbl.setObjectName("fieldLabel")
             return lbl
 
-        fl = QHBoxLayout()
+        self.stats_filter_bar = QWidget()
+        fl = QHBoxLayout(self.stats_filter_bar)
+        fl.setContentsMargins(0, 0, 0, 0)
         fl.setSpacing(_XS)
         fl.addWidget(_label("단지"))
         self.stats_complex_combo = QComboBox()
-        self.stats_complex_combo.setMinimumWidth(220)
-        self.stats_complex_combo.setToolTip("가격 흐름을 볼 단지를 고릅니다.")
-        fl.addWidget(self.stats_complex_combo)
+        self.stats_complex_combo.setMinimumWidth(240)
+        self.stats_complex_combo.setToolTip("시세 흐름을 볼 단지를 고릅니다.")
+        fl.addWidget(self.stats_complex_combo, 1)
         fl.addSpacing(_XS)
         fl.addWidget(_label("거래 종류"))
         self.stats_type_combo = QComboBox()
         self.stats_type_combo.addItems(["전체", "매매", "전세", "월세"])
+        # 매매·전세·월세는 가격 기준이 달라 한 그래프에 겹치지 않으므로 하나를 기본으로 고른다.
+        self.stats_type_combo.setCurrentText("매매")
+        self.stats_type_combo.setToolTip("단지를 바꿨을 때 고른 거래 종류의 기록이 없으면 기록이 있는 종류로 바꿔 보여 줍니다.")
         fl.addWidget(self.stats_type_combo)
         self.stats_metric_label = _label("기준")
         fl.addWidget(self.stats_metric_label)
@@ -521,45 +544,95 @@ class AppTabSetupMixin:
         self.stats_metric_combo.addItem("보증금", "deposit")
         self.stats_metric_combo.setToolTip("월세는 매달 내는 금액과 보증금 중 무엇을 기준으로 볼지 고릅니다.")
         fl.addWidget(self.stats_metric_combo)
-        self.stats_type_combo.currentIndexChanged.connect(self._on_stats_type_changed)
-        self.stats_metric_combo.currentIndexChanged.connect(self._load_stats)
         fl.addSpacing(_XS)
         fl.addWidget(_label("면적"))
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")
+        self.stats_pyeong_combo.setToolTip("면적을 하나 고르면 변화 요약과 최저~최고 범위가 함께 나타납니다.")
         fl.addWidget(self.stats_pyeong_combo)
-        btn_load = QPushButton("보기")
-        btn_load.setObjectName("primaryBtn")
-        btn_load.setToolTip("고른 조건으로 가격 기록을 불러옵니다.")
-        btn_load.clicked.connect(self._load_stats)
-        fl.addWidget(btn_load)
-        fl.addStretch()
-        layout.addLayout(fl)
+        fl.addSpacing(_XS)
+        fl.addWidget(_label("기간"))
+        self.stats_period_combo = QComboBox()
+        for period_label, days in PERIOD_OPTIONS:
+            self.stats_period_combo.addItem(period_label, days)
+        self.stats_period_combo.setToolTip("변화 요약과 그래프를 계산할 기간입니다.")
+        fl.addWidget(self.stats_period_combo)
+        layout.addWidget(self.stats_filter_bar)
+
+        self.stats_compare_bar = QWidget()
+        cmp_row = QHBoxLayout(self.stats_compare_bar)
+        cmp_row.setContentsMargins(0, 0, 0, 0)
+        cmp_row.setSpacing(_XS)
+        self.btn_stats_compare = QPushButton("다른 단지와 비교…")
+        self.btn_stats_compare.setObjectName("secondaryBtn")
+        self.btn_stats_compare.setToolTip(
+            "다른 단지를 골라 같은 거래 종류의 평당 평균가 흐름을 한 그래프에 겹쳐 봅니다.\n"
+            "면적이 달라도 비교할 수 있도록 평당가(만원/평)로 맞춥니다."
+        )
+        self.btn_stats_compare.clicked.connect(lambda *_: self._choose_stats_compare())
+        cmp_row.addWidget(self.btn_stats_compare)
+        self.stats_compare_label = QLabel("")
+        self.stats_compare_label.setObjectName("hintLabel")
+        self.stats_compare_label.hide()
+        cmp_row.addWidget(self.stats_compare_label, 1)
+        self.btn_stats_compare_clear = QPushButton("비교 끄기")
+        self.btn_stats_compare_clear.setObjectName("secondaryBtn")
+        self.btn_stats_compare_clear.setToolTip("비교를 끄고 고른 단지 하나의 흐름만 봅니다.")
+        self.btn_stats_compare_clear.clicked.connect(lambda *_: self._clear_stats_compare())
+        self.btn_stats_compare_clear.hide()
+        cmp_row.addWidget(self.btn_stats_compare_clear)
+        cmp_row.addStretch(0)
+        self._stats_compare_keys = []
+        layout.addWidget(self.stats_compare_bar)
         self.stats_metric_label.hide()
         self.stats_metric_combo.hide()
 
+        self.stats_type_combo.currentIndexChanged.connect(self._on_stats_type_changed)
+        self.stats_metric_combo.currentIndexChanged.connect(self._on_stats_type_changed)
+        self.stats_pyeong_combo.currentIndexChanged.connect(lambda *_: self._load_stats())
+        self.stats_period_combo.currentIndexChanged.connect(lambda *_: self._load_stats())
+
+        self.stats_summary = TrendSummaryStrip(theme=str(getattr(self, "current_theme", "dark") or "dark"))
+        self.stats_summary.clear("단지를 고르면 최근 평균과 변화가 여기에 나타납니다.")
+        layout.addWidget(self.stats_summary)
+
         self.stats_table = QTableWidget()
-        self.stats_table.setColumnCount(6)
-        self.stats_table.setHorizontalHeaderLabels(["날짜", "거래 종류", "평형", "최저가", "최고가", "평균가"])
+        self.stats_table.setColumnCount(8)
+        self.stats_table.setHorizontalHeaderLabels(
+            ["날짜", "거래 종류", "평형", "최저가", "최고가", "평균가", "매물 수", "직전 대비"]
+        )
         stats_header = self.stats_table.horizontalHeader()
         if stats_header is not None:
             stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.stats_table.setAlternatingRowColors(True)
         self.stats_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.stats_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.stats_table.setSortingEnabled(True)
 
-        # v10.0: Chart Integration
+        # 그래프가 핵심이므로 위에, 날짜별 상세 표는 아래에 둔다.
         self.stats_splitter = QSplitter(Qt.Orientation.Vertical)
-        self.stats_splitter.addWidget(self.stats_table)
         self.chart_widget = None
         self.chart_placeholder = QLabel(
-            "단지를 고르고 「보기」를 누르면 가격 흐름 그래프가 여기에 나타납니다.\n"
+            "단지를 고르면 시세 흐름 그래프가 여기에 나타납니다.\n"
             "같은 단지를 여러 날 수집할수록 흐름이 또렷해집니다."
         )
         self.chart_placeholder.setObjectName("listPlaceholder")
         self.chart_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.stats_splitter.addWidget(self.chart_placeholder)
-        self.stats_splitter.setSizes([320, 280])
+        self.stats_splitter.addWidget(self.stats_table)
+        self.stats_splitter.setSizes([340, 240])
         layout.addWidget(self.stats_splitter, 1)
+
+        self.stats_empty_state = EmptyStateWidget(
+            icon="MARKET",
+            title="아직 쌓인 가격 기록이 없습니다",
+            description=(
+                "「매물 수집」이나 「지도로 찾기」로 단지를 수집하면 날짜별 가격이 기록됩니다.\n"
+                "같은 단지를 며칠에 걸쳐 수집하거나 「예약 수집」을 켜 두면 시세 흐름을 볼 수 있습니다."
+            ),
+        )
+        self.stats_empty_state.hide()
+        layout.addWidget(self.stats_empty_state, 1)
         prepare_page(self.stats_tab, ROUTE_STATS)
         self.tabs.addTab(self.stats_tab, TAB_STATS)
 
@@ -623,7 +696,7 @@ class AppTabSetupMixin:
             return
         from src.ui.widgets.chart import ChartWidget
 
-        self.chart_widget = ChartWidget()
+        self.chart_widget = ChartWidget(theme=str(getattr(self, "current_theme", "dark") or "dark"))
         idx = self.stats_splitter.indexOf(self.chart_placeholder)
         if idx >= 0:
             self.stats_splitter.insertWidget(idx, self.chart_widget)
@@ -686,12 +759,11 @@ class AppTabSetupMixin:
             if not force and self._noncritical_loaded.get("stats", False):
                 return
             try:
-                self._load_stats_complexes()
-                self._load_stats()
+                self._reload_stats_page()
                 self._mark_noncritical_loaded("stats")
             except Exception as e:
                 ui_logger.exception(f"통계 탭 로드 실패: {e}")
-                self.status_bar.showMessage("가격 통계를 불러오지 못했습니다.")
+                self.status_bar.showMessage("시세 흐름을 불러오지 못했습니다.")
         elif index == self.TAB_DASHBOARD:
             if not force and self._noncritical_loaded.get("dashboard", False):
                 return

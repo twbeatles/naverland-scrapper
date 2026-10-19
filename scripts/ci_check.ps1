@@ -61,6 +61,7 @@ Write-Host "== Pytest (CI subset) =="
   tests/test_paths_runtime.py `
   tests/test_live_smoke.py `
   tests/test_analysis.py `
+  tests/test_price_trend.py `
   tests/test_database_module.py `
   tests/test_ui_wiring.py `
   tests/test_ui_runtime_smoke.py `
