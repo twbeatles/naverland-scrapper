@@ -509,13 +509,29 @@ class KeywordSearchDialog(QDialog):
             from src.core.parser import NaverURLParser
         except Exception:
             return False
-        found = NaverURLParser.extract_from_text(text)
-        entries = [e for e in found if str((e or {}).get("complex_id", "") or "").strip()]
+        try:
+            found = NaverURLParser.extract_from_text(text)
+        except Exception:
+            found = []
+        if not isinstance(found, list):
+            found = []
+        entries = [
+            e for e in found
+            if isinstance(e, dict) and str(e.get("complex_id", "") or "").strip()
+        ]
         if entries:
             self._set_busy(True, f"링크에서 단지 {len(entries)}곳을 확인 중...")
             self._enqueue(("resolve", entries, self._search_generation))
             return True
-        center = NaverURLParser.extract_map_center(text)
+        try:
+            center = NaverURLParser.extract_map_center(text)
+        except Exception:
+            center = None
+            self.status_label.setText(
+                "링크를 해석하지 못했습니다. "
+                "단지가 열린 상태의 링크(단지 번호 포함)를 붙여넣어 주세요."
+            )
+            return True
         if center is not None:
             lat, lon, _zoom = center
             self.complex_list.clear()
@@ -539,7 +555,10 @@ class KeywordSearchDialog(QDialog):
             self._set_busy(False)
             self.status_label.setText(f"지도 링크의 위치를 찾았습니다: {name}")
             return True
-        articles = [e for e in found if str((e or {}).get("article_id", "") or "").strip()]
+        articles = [
+            e for e in found
+            if isinstance(e, dict) and str(e.get("article_id", "") or "").strip()
+        ]
         if articles:
             self.status_label.setText(
                 "매물 링크는 「불러오기 → 주소 붙여넣기」에서 열어 주세요. "
