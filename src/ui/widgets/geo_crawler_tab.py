@@ -109,8 +109,8 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_rings.setValue(max(0, self._int_setting("geo_grid_rings", 1)))
         self.spin_rings.setSuffix(" 단계")
         self.spin_rings.setToolTip(
-            "0단계는 정한 위치의 지도 한 화면만 봅니다.\n"
-            "숫자가 커질수록 주변을 더 넓게 훑고, 시간도 더 걸립니다."
+            "0단계는 정한 위치의 지도 한 화면 넓이만 찾습니다.\n"
+            "숫자가 커질수록 주변 구역까지 넓게 찾고, 시간도 더 걸립니다."
         )
         grid.addWidget(self._field_label("주변까지 넓히기"), 0, 0)
         grid.addWidget(self.spin_rings, 0, 1)
@@ -167,8 +167,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_step.setRange(120, 1600)
         self.spin_step.setSingleStep(40)
         self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
-        self.spin_step.setToolTip("한 번에 지도를 옮기는 거리입니다. 기본값을 권장합니다.")
-        adv_grid.addWidget(self._field_label("지도 이동 간격"), 3, 0)
+        self.spin_step.setSuffix(" px")
+        self.spin_step.setToolTip("주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다.")
+        adv_grid.addWidget(self._field_label("구역 간격"), 3, 0)
         adv_grid.addWidget(self.spin_step, 3, 1)
 
         self.spin_dwell = QSpinBox()
@@ -176,8 +177,10 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_dwell.setSingleStep(100)
         self.spin_dwell.setSuffix(" ms")
         self.spin_dwell.setValue(self._int_setting("geo_sweep_dwell_ms", 600))
-        self.spin_dwell.setToolTip("지도를 옮긴 뒤 매물이 뜰 때까지 기다리는 시간입니다. (1000ms = 1초)")
-        adv_grid.addWidget(self._field_label("옮길 때마다 대기"), 4, 0)
+        self.spin_dwell.setToolTip(
+            "한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)"
+        )
+        adv_grid.addWidget(self._field_label("구역마다 쉬는 시간"), 4, 0)
         adv_grid.addWidget(self.spin_dwell, 4, 1)
 
         save_defaults = QPushButton("지금 값을 기본으로 저장")
@@ -244,9 +247,9 @@ class GeoCrawlerTab(CrawlerTab):
         rings = max(0, int(self.spin_rings.value()))
         screens = (2 * rings + 1) ** 2
         if rings == 0:
-            text = "지도 1화면 · 정한 위치만 봅니다."
+            text = "1구역 · 정한 위치의 지도 한 화면 넓이만 찾습니다."
         else:
-            text = f"지도 {screens}화면 · 단계를 올릴수록 훨씬 오래 걸립니다."
+            text = f"{screens}구역 · 단계를 올릴수록 훨씬 오래 걸립니다."
         self.lbl_geo_range.setText(text)
 
     def _is_default_geo_center(self) -> bool:

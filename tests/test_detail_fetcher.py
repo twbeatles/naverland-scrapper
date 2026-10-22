@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 import unittest
@@ -81,7 +82,11 @@ class _FakePage:
     async def content(self):
         return self._html.get(self.url, "")
 
-    async def evaluate(self, script):
+    async def evaluate(self, script, arg=None):
+        # In-page front-api fetch (2026-10): route through the fake request routes.
+        if isinstance(arg, list) and arg and "/front-api/" in str(arg[0]):
+            response = await self.request.get(arg[0])
+            return {"status": response.status, "body": json.dumps(await response.json())}
         return self._hydration.get(self.url, {})
 
     def locator(self, query):
@@ -102,36 +107,18 @@ class _FakeResponse:
 
 
 class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
-    async def test_fetch_mobile_article_detail_falls_back_from_fin_to_m_info(self):
+    async def test_fetch_mobile_article_detail_skips_m_land_redirect(self):
+        # m.land article pages redirect to the fin article (2026-10-22): no extra hop.
         article_no = "2513105556"
         page = _FakePage(
             {
                 f"https://fin.land.naver.com/articles/{article_no}": "\n".join(
-                    [
-                        "네이버페이 부동산",
-                        "실거래가",
-                        "지도",
-                        "단지",
-                        "주변 환경",
-                        "관심단지",
-                        "매물 상세",
-                        "본문",
-                        "지역 정보",
-                        "가격 정보",
-                        "생활권",
-                        "교통",
-                    ]
-                ),
-                f"https://m.land.naver.com/article/info/{article_no}": "\n".join(
                     [
                         "실거래가",
                         "중개소",
                         "홍길동",
                         "행복부동산",
                         "전화 02-123-4567",
-                        "기전세금 1억 2,000만",
-                        "3년 내 최고 1억 5,000만",
-                        "3년 내 최저 1억",
                     ]
                 ),
             }
@@ -139,10 +126,123 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
 
         detail = await fetch_mobile_article_detail(page, article_no)
 
-        self.assertEqual(detail["전화1"], "02-123-4567")
-        self.assertEqual(detail["부동산상호"], "행복부동산")
-        self.assertEqual(detail["_detail_meta"]["detail_source"], "m_info")
-        self.assertIn(detail["_detail_meta"]["detail_parse_state"], {"partial", "success"})
+        self.assertEqual(detail["_detail_meta"]["detail_source"], "fin_article")
+        self.assertFalse(any("m.land.naver.com" in url for url in page.visited))
+
+    async def test_front_api_runs_in_page_on_fin_origin(self):
+        article_no = "2656920495"
+        fin_url = f"https://fin.land.naver.com/articles/{article_no}"
+        agent_url = build_front_api_agent_url(article_no)
+        page = _FakePage(
+            {fin_url: "요청하신 페이지를 찾을 수 없어요"},
+            request_routes={
+                agent_url: {
+                    "isSuccess": True,
+                    "result": {
+                        "brokerageName": "송파로얄공인중개사사무소",
+                        "brokerName": "이수영",
+                        "phone": {"brokerage": "02-430-4500", "mobile": "010-4542-4501"},
+                    },
+                }
+            },
+        )
+        evaluated = []
+        original = page.evaluate
+
+        async def _evaluate(script, arg=None):
+            if isinstance(arg, list):
+                evaluated.append(arg[0])
+            return await original(script, arg)
+
+        page.evaluate = _evaluate
+        detail = await fetch_mobile_article_detail(page, article_no)
+
+        self.assertEqual(detail["부동산상호"], "송파로얄공인중개사사무소")
+        self.assertEqual(detail["전화2"], "010-4542-4501")
+        self.assertIn(agent_url, evaluated)
+        self.assertFalse(any("new.land" in url for url in page.visited))
+
+    async def test_agent_phone_wins_over_complex_management_office_phone(self):
+        # Live 2026-10-22: the article page also loads /complex?complexNumber=, whose
+        # managementOfficeContact used to be stored as the broker phone.
+        article_no = "2657052503"
+        fin_url = f"https://fin.land.naver.com/articles/{article_no}"
+        agent_url = build_front_api_agent_url(article_no)
+        page = _FakePage(
+            {fin_url: "헬리오시티\n관리사무소 02-403-8330"},
+            responses={
+                fin_url: [
+                    _FakeResponse(
+                        "https://fin.land.naver.com/front-api/v1/complex?complexNumber=111515",
+                        {"isSuccess": True, "result": {"name": "헬리오시티", "managementOfficeContact": "02-403-8330"}},
+                    )
+                ]
+            },
+            request_routes={
+                agent_url: {
+                    "isSuccess": True,
+                    "result": {
+                        "brokerageName": "삼천공인중개사사무소",
+                        "brokerName": "홍순화",
+                        "phone": {"brokerage": "02-415-3000", "mobile": "010-1111-2222"},
+                    },
+                }
+            },
+        )
+
+        detail = await fetch_mobile_article_detail(page, article_no)
+
+        self.assertEqual(detail["부동산상호"], "삼천공인중개사사무소")
+        self.assertEqual(detail["전화1"], "02-415-3000")
+        self.assertEqual(detail["전화2"], "010-1111-2222")
+
+    async def test_api_first_skips_article_page_and_reads_previous_deposit(self):
+        from src.core.services.detail_fetcher import (
+            build_front_api_article_key_url,
+            build_front_api_basic_info_url,
+        )
+
+        article_no = "2657059949"
+        agent_url = build_front_api_agent_url(article_no)
+        key_url = build_front_api_article_key_url(article_no)
+        basic_url = build_front_api_basic_info_url(article_no, real_estate_type="A01", trade_type="A1")
+        page = _FakePage(
+            {},
+            request_routes={
+                agent_url: {"isSuccess": True, "result": {
+                    "brokerageName": "API중개", "brokerName": "김중개",
+                    "phone": {"brokerage": "02-111-2222"},
+                }},
+                key_url: {"isSuccess": True, "result": {"type": {"realEstateType": "A01", "tradeType": "A1"}}},
+                basic_url: {"isSuccess": True, "result": {"priceInfo": {"price": 2880000000, "previousDeposit": 1300000000}}},
+            },
+        )
+
+        detail = await fetch_mobile_article_detail(page, article_no)
+
+        self.assertEqual(detail["_detail_meta"]["detail_source"], "front_api")
+        self.assertEqual(detail["부동산상호"], "API중개")
+        self.assertEqual(int(detail["기전세금(원)"]), 1_300_000_000)
+        self.assertFalse(any("/articles/" in url for url in page.visited))
+        self.assertIn(basic_url, [call["url"] for call in page.request.calls])
+
+    async def test_basic_info_skipped_for_lease_articles(self):
+        from src.core.services.detail_fetcher import build_front_api_article_key_url
+
+        article_no = "2656983002"
+        key_url = build_front_api_article_key_url(article_no)
+        page = _FakePage(
+            {},
+            request_routes={
+                build_front_api_agent_url(article_no): {"isSuccess": True, "result": {"brokerageName": "전세중개"}},
+                key_url: {"isSuccess": True, "result": {"type": {"realEstateType": "A01", "tradeType": "B1"}}},
+            },
+        )
+
+        detail = await fetch_mobile_article_detail(page, article_no)
+
+        self.assertEqual(detail["부동산상호"], "전세중개")
+        self.assertFalse(any("basicInfo" in call["url"] for call in page.request.calls))
 
     async def test_apply_mobile_detail_strips_internal_meta(self):
         item = {"단지ID": "12345", "매물ID": "A1", "매매가": "1억"}
@@ -209,7 +309,7 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(detail.get("부동산상호"), "API중개")
         self.assertEqual(detail.get("_detail_meta", {}).get("detail_source"), "front_api")
-        # Session warm may goto new.land once; never open fin article HTML in API-only mode.
+        # Session warm may park on fin robots.txt once; never open fin article HTML in API-only mode.
         self.assertFalse(
             any("fin.land.naver.com/articles" in str(call.get("url", "")) for call in page.goto_calls)
         )

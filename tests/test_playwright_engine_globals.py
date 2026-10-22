@@ -21,6 +21,20 @@ REQUIRED_GLOBALS = (
     "is_fin_html_dead_url",
     "build_grid_sweep_coords",
     "clamp_korea",
+    # fin.land front-api path (2026-10-22)
+    "DESKTOP_USER_AGENT",
+    "FIN_API_ORIGIN_PAGE",
+    "FRONT_API_COMPLEX_ARTICLE_LIST",
+    "MAX_ARTICLE_API_PAGES",
+    "build_fin_article_list_body",
+    "parse_fin_article_list",
+    "parse_fin_bounded_complexes",
+    "parse_fin_complex_info",
+    "build_fin_bounded_complexes_body",
+    "build_fin_complex_info_url",
+    "fin_article_list_url",
+    "FRONT_API_BOUNDED_COMPLEXES",
+    "trade_type_to_code",
 )
 
 

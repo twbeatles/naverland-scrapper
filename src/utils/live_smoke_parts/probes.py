@@ -383,6 +383,21 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
     final_url = str(result["final_url"] or "")
     lower_final_url = final_url.lower()
     agent_seen, agent_status = await capture_task
+    agent_source = "passive"
+    if not agent_seen and "fin.land.naver.com" in lower_final_url:
+        # The fin map SPA renders the article layer without calling agent on load
+        # (2026-10-22); the app fetches it in-page, so the probe does the same.
+        try:
+            probe = await page.evaluate(
+                "(url) => fetch(url, {headers: {accept: 'application/json'}})"
+                ".then(r => r.status).catch(() => 0)",
+                expected_agent,
+            )
+            agent_status = int(probe or 0) or None
+            agent_seen = agent_status is not None
+            agent_source = "in_page"
+        except Exception:
+            agent_seen = False
     if not agent_seen:
         reason = _append_reason(reason, "agent_capture_missing")
         if "/map" in lower_final_url:
@@ -398,7 +413,7 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
         status=result["status"],
         title=str(result["title"] or ""),
         reason=reason,
-        extra=f"agent_api={agent_status if agent_status is not None else '-'}",
+        extra=f"agent_api={agent_status if agent_status is not None else '-'} agent_source={agent_source}",
     )
 
 
@@ -441,6 +456,97 @@ async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tup
         reason=reason,
         extra=extra,
     )
+
+
+async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str, str, int]:
+    """fin.land front-api contract (primary source since 2026-10-22).
+
+    In-page fetch from the light fin origin page: keyword autocomplete and the
+    first complex article list page must parse.
+    """
+    import json as _json
+    from urllib.parse import quote
+
+    from src.core.services.fin_article_api import parse_fin_article_list, parse_fin_bounded_complexes
+    from src.core.services.map_geometry import viewport_bounds
+    from src.core.services.site_contract import (
+        FIN_API_ORIGIN_PAGE,
+        FRONT_API_BOUNDED_COMPLEXES,
+        FRONT_API_COMPLEX_ARTICLE_LIST,
+        build_fin_article_list_body,
+        build_fin_autocomplete_url,
+        build_fin_bounded_complexes_body,
+    )
+
+    fetch_js = """async ([url, method, body]) => {
+        const opt = {method, headers: {accept: 'application/json'}};
+        if (body !== null) { opt.body = JSON.stringify(body); opt.headers['content-type'] = 'application/json'; }
+        try { const r = await fetch(url, opt); return {status: r.status, body: await r.text()}; }
+        catch (e) { return {status: 0, body: ''}; }
+    }"""
+    reason = ""
+    sample_article_id = ""
+    article_count = 0
+    geo_count = 0
+    status: int | None = None
+    try:
+        await page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=timeout_ms)
+        search = await page.evaluate(
+            fetch_js, [build_fin_autocomplete_url("complexes", "헬리오시티"), "GET", None]
+        )
+        search_payload = _json.loads(str(search.get("body") or "{}")) if int(search.get("status") or 0) == 200 else {}
+        search_hits = len(((search_payload.get("result") or {}).get("list") or [])) if isinstance(search_payload, dict) else 0
+        if search_hits <= 0:
+            reason = _append_reason(reason, f"fin_search_empty:{search.get('status')}")
+        await page.wait_for_timeout(800)
+        listing = await page.evaluate(
+            fetch_js,
+            [FRONT_API_COMPLEX_ARTICLE_LIST, "POST", build_fin_article_list_body(complex_id, "매매", size=10)],
+        )
+        status = int(listing.get("status") or 0) or None
+        parsed = parse_fin_article_list(_json.loads(str(listing.get("body") or "null"))) if status == 200 else None
+        if parsed is None:
+            reason = _append_reason(reason, f"fin_article_list_invalid:{status}")
+        else:
+            article_count = len(parsed["articles"])
+            if parsed["articles"]:
+                sample_article_id = str(parsed["articles"][0].get("articleNo", "") or "")
+        # Geo discovery contract: one bbox of the map list panel (default smoke area).
+        await page.wait_for_timeout(800)
+        bounded = await page.evaluate(
+            fetch_js,
+            [
+                FRONT_API_BOUNDED_COMPLEXES,
+                "POST",
+                build_fin_bounded_complexes_body(
+                    asset_type="APT", trade_type="매매", bounds=viewport_bounds(37.5608, 126.9888, 16), zoom=16
+                ),
+            ],
+        )
+        geo = (
+            parse_fin_bounded_complexes(_json.loads(str(bounded.get("body") or "null")), trade_code="A1")
+            if int(bounded.get("status") or 0) == 200
+            else None
+        )
+        if geo is None:
+            reason = _append_reason(reason, f"fin_bounded_invalid:{bounded.get('status')}")
+        else:
+            geo_count = len(geo["markers"])
+            if geo_count <= 0:
+                reason = _append_reason(reason, "fin_bounded_empty")
+    except Exception as exc:
+        reason = _append_reason(reason, f"exception:{type(exc).__name__}")
+    ok = not reason
+    return ok, _build_smoke_line(
+        ok=ok,
+        kind="fin-contract",
+        target=FRONT_API_COMPLEX_ARTICLE_LIST,
+        final_url=str(getattr(page, "url", "") or ""),
+        status=status,
+        title="",
+        reason=reason,
+        extra=f"complex={complex_id} articles={article_count} geo_complexes={geo_count}",
+    ), sample_article_id, article_count
 
 
 async def _run_geo_contract_probe(page, timeout_ms: int) -> tuple[bool, str]:

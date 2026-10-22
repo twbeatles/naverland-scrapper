@@ -1,6 +1,14 @@
-"""Keyword search against Naver Land (``/api/autocomplete`` + ``/api/search``).
+"""Keyword search against Naver Land.
 
-Live contract verified 2026-10 with a real browser session:
+Primary (fin.land, live 2026-10-22): ``GET /front-api/v1/search/autocomplete/
+complexes`` and ``.../legalDivisions`` (``keyword``, ``size``, 0-based
+``page``) -> ``{"result": {"list": [...], "hasNextPage", "totalCount"}}``.
+Complex items carry ``complexNumber``, ``complexName``, ``type`` (A01...),
+``legalDivisionName`` and ``coordinates`` (x=lon, y=lat); region items carry
+the 10-digit ``legalDivisionNumber`` (same as legacy ``cortarNo``). Full
+addresses return nothing, so :func:`address_query_variants` still applies.
+
+Legacy fallback (new.land, verified 2026-10-04):
 
 - ``GET /api/autocomplete?keyword=...`` -> JSON array of display strings with
   ``<strong class='text_input'>`` highlight markup (no IDs).
@@ -20,7 +28,14 @@ from collections.abc import Callable
 from typing import Any
 
 from src.core.services.site_contract import (
+    DESKTOP_USER_AGENT,
+    FIN_API_ORIGIN_PAGE,
+    HOST_FIN,
+    HOST_NEW,
     build_autocomplete_url,
+    build_fin_autocomplete_url,
+    build_fin_complex_info_url,
+    build_fin_region_by_coordinate_url,
     build_search_url,
 )
 
@@ -127,6 +142,93 @@ def parse_search_has_more(payload: Any) -> bool:
     return bool(isinstance(payload, dict) and payload.get("isMoreData"))
 
 
+_FIN_ASSET_BY_TYPE = {"A01": "APT", "A04": "APT", "B01": "APT", "A05": "VL", "A06": "VL", "C02": "VL"}
+
+
+def _fin_result(payload: Any) -> dict | None:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(payload, dict) or payload.get("isSuccess") is False:
+        return None
+    result = payload.get("result")
+    if not isinstance(result, dict) or not isinstance(result.get("list"), list):
+        return None
+    return result
+
+
+def _fin_coords(item: dict) -> tuple[float | None, float | None]:
+    raw_coords = item.get("coordinates")
+    coords: dict = raw_coords if isinstance(raw_coords, dict) else {}
+    try:
+        lat = float(coords["yCoordinate"]) if coords.get("yCoordinate") is not None else None
+        lon = float(coords["xCoordinate"]) if coords.get("xCoordinate") is not None else None
+    except (TypeError, ValueError):
+        return None, None
+    return lat, lon
+
+
+def parse_fin_complex_candidates(payload: Any) -> list[dict]:
+    """fin ``autocomplete/complexes`` -> normalized complex candidates."""
+    result = _fin_result(payload)
+    if result is None:
+        return []
+    rows = []
+    for item in result["list"]:
+        if not isinstance(item, dict):
+            continue
+        cid = str(item.get("complexNumber", "") or "").strip()
+        if not cid:
+            continue
+        lat, lon = _fin_coords(item)
+        rows.append(
+            {
+                "complex_id": cid,
+                "name": str(item.get("complexName", "") or "").strip(),
+                "address": str(item.get("legalDivisionName", "") or "").strip(),
+                "asset_type": _FIN_ASSET_BY_TYPE.get(str(item.get("type", "") or "").upper(), "APT"),
+                "latitude": lat,
+                "longitude": lon,
+                "deep_link": f"{HOST_FIN}/complexes/{cid}?tab=article",
+                "legal_division_number": str(item.get("legalDivisionNumber", "") or ""),
+            }
+        )
+    return rows
+
+
+def parse_fin_region_candidates(payload: Any) -> list[dict]:
+    """fin ``autocomplete/legalDivisions`` -> region rows (``cortar_no`` kept)."""
+    result = _fin_result(payload)
+    if result is None:
+        return []
+    rows = []
+    for item in result["list"]:
+        if not isinstance(item, dict):
+            continue
+        number = str(item.get("legalDivisionNumber", "") or "").strip()
+        if not number:
+            continue
+        lat, lon = _fin_coords(item)
+        rows.append(
+            {
+                "cortar_no": number,
+                "name": str(item.get("legalDivisionName", "") or "").strip(),
+                "latitude": lat,
+                "longitude": lon,
+                "deep_link": "",
+                "level": str(item.get("legalDivisionLevelType", "") or ""),
+            }
+        )
+    return rows
+
+
+def parse_fin_has_next(payload: Any) -> bool:
+    result = _fin_result(payload)
+    return bool(result and result.get("hasNextPage"))
+
+
 PageFetch = Callable[[str], tuple[int, str]]
 """Fetch callable: full URL -> (status_code, body_text)."""
 
@@ -224,6 +326,124 @@ def fetch_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> 
     }
 
 
+def _fin_get(url: str, keyword: str, page_fetch: PageFetch) -> Any:
+    status, body = page_fetch(url)
+    if status != 200:
+        raise KeywordSearchError(keyword, status)
+    try:
+        payload = json.loads(body)
+    except (ValueError, TypeError) as exc:
+        raise KeywordSearchError(keyword, status, "invalid response") from exc
+    if _fin_result(payload) is None:
+        raise KeywordSearchError(keyword, status, "unexpected response")
+    return payload
+
+
+def fetch_fin_suggestions(keyword: str, page_fetch: PageFetch, *, size: int = 10) -> list[str]:
+    """Complex-name suggestions from fin autocomplete (errors raise)."""
+    keyword = str(keyword or "").strip()
+    if not keyword:
+        return []
+    payload = _fin_get(build_fin_autocomplete_url("complexes", keyword, page=0, size=size), keyword, page_fetch)
+    names: list[str] = []
+    for row in parse_fin_complex_candidates(payload):
+        name = row["name"]
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def fetch_fin_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> dict:
+    """One fin search page; ``page`` is 1-based like the legacy API.
+
+    Regions are only fetched with the first page (they are few and do not page).
+    """
+    keyword = str(keyword or "").strip()
+    if not keyword:
+        return {"complexes": [], "regions": [], "is_more_data": False}
+    page_no = max(1, int(page or 1))
+    complex_payload = _fin_get(
+        build_fin_autocomplete_url("complexes", keyword, page=page_no - 1), keyword, page_fetch
+    )
+    regions: list[dict] = []
+    if page_no == 1:
+        region_payload = _fin_get(
+            build_fin_autocomplete_url("legalDivisions", keyword, page=0), keyword, page_fetch
+        )
+        regions = parse_fin_region_candidates(region_payload)
+    return {
+        "complexes": parse_fin_complex_candidates(complex_payload),
+        "regions": regions,
+        "is_more_data": parse_fin_has_next(complex_payload),
+        "source": "fin",
+    }
+
+
+def fetch_complex_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> dict:
+    """fin search first; legacy new.land ``/api/search`` when fin fails.
+
+    Rate limits are not retried on the other host (both share bot signals).
+    """
+    try:
+        return fetch_fin_search_page(keyword, page_fetch, page=page)
+    except KeywordSearchError as exc:
+        if is_rate_limit_error(exc):
+            raise
+        fin_error = exc
+    try:
+        result = fetch_search_page(keyword, page_fetch, page=page)
+    except KeywordSearchError:
+        raise fin_error from None
+    result["source"] = "new_land"
+    return result
+
+
+def fetch_complex_suggestions(keyword: str, page_fetch: PageFetch) -> list[str]:
+    """fin suggestions first; legacy new.land autocomplete when fin fails."""
+    try:
+        return fetch_fin_suggestions(keyword, page_fetch)
+    except KeywordSearchError as exc:
+        if is_rate_limit_error(exc):
+            raise
+        return fetch_suggestions(keyword, page_fetch)
+
+
+def fetch_fin_complex_info(complex_id: str, page_fetch: PageFetch, *, asset_type: str = "APT") -> dict:
+    """Name/address/coords for a complex number via fin ``/complex`` ({} on failure)."""
+    from src.core.services.fin_article_api import parse_fin_complex_info
+
+    cid = str(complex_id or "").strip()
+    if not cid:
+        return {}
+    try:
+        status, body = page_fetch(build_fin_complex_info_url(cid, asset_type=asset_type))
+    except Exception:
+        return {}
+    if status != 200:
+        return {}
+    try:
+        return parse_fin_complex_info(json.loads(body))
+    except (TypeError, ValueError):
+        return {}
+
+
+def fetch_fin_region_by_coordinate(lat: float, lon: float, page_fetch: PageFetch) -> dict:
+    """Legal-division row for a map point ({} on failure); keeps the given point."""
+    try:
+        status, body = page_fetch(build_fin_region_by_coordinate_url(lat, lon))
+        payload = json.loads(body) if status == 200 else None
+    except Exception:
+        return {}
+    result = payload.get("result") if isinstance(payload, dict) else None
+    if not isinstance(result, dict):
+        return {}
+    number = str(result.get("legalDivisionNumber", "") or "").strip()
+    name = str(result.get("legalDivisionName", "") or "").strip()
+    if not number or not name:
+        return {}
+    return {"cortar_no": number, "name": name, "latitude": float(lat), "longitude": float(lon), "deep_link": ""}
+
+
 def _is_empty_search_result(result: dict) -> bool:
     return not (result.get("complexes") or result.get("regions"))
 
@@ -234,8 +454,12 @@ def fetch_search_page_with_fallback(
     *,
     page: int = 1,
     max_variants: int = _ADDRESS_VARIANT_CAP,
+    fetch_page: Callable[..., dict] | None = None,
 ) -> dict:
-    """Fetch one ``/api/search`` page, falling back through address variants.
+    """Fetch one search page, falling back through address variants.
+
+    ``fetch_page`` defaults to the legacy :func:`fetch_search_page`; the UI
+    passes :func:`fetch_complex_search_page` (fin first).
 
     The raw keyword is tried first; when it yields no complexes and no
     regions, shorter variants from :func:`address_query_variants` are tried
@@ -248,7 +472,7 @@ def fetch_search_page_with_fallback(
     empty: dict = {"complexes": [], "regions": [], "is_more_data": False}
     for variant in variants:
         try:
-            result = fetch_search_page(variant, page_fetch, page=page)
+            result = (fetch_page or fetch_search_page)(variant, page_fetch, page=page)
         except KeywordSearchError as exc:
             last_error = exc
             if is_rate_limit_error(exc):
@@ -268,19 +492,22 @@ def fetch_search_page_with_fallback(
 class KeywordBrowserSession:
     """Short-lived browser session for keyword endpoints (rate-limit safe).
 
-    The autocomplete/search APIs answer 429 to cookie-less HTTP but 200 from a
-    real browser session (verified live). Usage::
+    The search APIs answer 429 to out-of-browser HTTP and to ``HeadlessChrome``
+    user agents, but 200 to in-page ``fetch`` (verified live 2026-10-22).
+    The session parks one page on a light fin.land origin URL; a new.land page
+    is opened lazily only when a legacy fallback URL is requested. Usage::
 
         with KeywordBrowserSession() as session:
-            names = fetch_suggestions("래미안", session.fetch)
-            page1 = fetch_search_page("래미안", session.fetch, page=1)
+            page1 = fetch_complex_search_page("래미안", session.fetch, page=1)
     """
 
     def __init__(self, *, executable_path: str | None = None):
         self._executable_path = executable_path
         self._playwright = None
         self._browser = None
+        self._context = None
         self._page = None
+        self._new_land_page = None
 
     def __enter__(self) -> KeywordBrowserSession:
         from playwright.sync_api import sync_playwright
@@ -295,21 +522,12 @@ class KeywordBrowserSession:
             )
         else:
             self._browser = self._playwright.chromium.launch(headless=True)
-        self._page = self._browser.new_page(
-            locale="ko-KR",
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-            ),
-        )
-        self._page.add_init_script(
+        self._context = self._browser.new_context(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
+        self._context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
-        self._page.goto("https://new.land.naver.com/", wait_until="domcontentloaded", timeout=25000)
-        try:
-            self._page.wait_for_load_state("networkidle", timeout=5000)
-        except Exception:
-            pass
+        self._page = self._context.new_page()
+        self._page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=25000)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -322,14 +540,28 @@ class KeywordBrowserSession:
                     self._playwright.stop()
             finally:
                 self._browser = None
+                self._context = None
                 self._page = None
+                self._new_land_page = None
                 self._playwright = None
 
+    def _page_for(self, url: str):
+        if not str(url or "").startswith(HOST_NEW):
+            return self._page
+        if self._new_land_page is None and self._context is not None:
+            page = self._context.new_page()
+            page.goto(f"{HOST_NEW}/", wait_until="domcontentloaded", timeout=25000)
+            self._new_land_page = page
+        return self._new_land_page
+
     def fetch(self, url: str) -> tuple[int, str]:
-        """GET a same-site URL inside the session; returns (status, text)."""
+        """GET a URL inside the session on its own origin; returns (status, text)."""
         if self._page is None:
             raise RuntimeError("KeywordBrowserSession is not open")
-        result = self._page.evaluate(
+        page = self._page_for(url)
+        if page is None:
+            raise RuntimeError("KeywordBrowserSession is not open")
+        result = page.evaluate(
             """(url) => {
                 return fetch(url, {headers: {accept: 'application/json'}})
                     .then(async (r) => ({status: r.status, body: await r.text()}))

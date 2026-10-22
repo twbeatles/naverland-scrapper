@@ -31,6 +31,7 @@ from src.utils.live_smoke_parts.probes import (
     _run_complex_probe_detail,
     _run_detail_field_probe,
     _run_detail_probe,
+    _run_fin_contract_probe,
     _run_geo_contract_probe,
     _run_geo_marker_probe,
     _run_home_probes,
@@ -73,10 +74,12 @@ async def _run_live_smoke_async(
             browser = await controller.chromium.launch(headless=bool(headless))
             browser_source = f"playwright_chromium:{getattr(controller.chromium, 'executable_path', '') or ''}"
 
+        from src.core.services.site_contract import DESKTOP_USER_AGENT
+
         context = await browser.new_context(
             viewport={"width": 1600, "height": 900},
             locale="ko-KR",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            user_agent=DESKTOP_USER_AGENT,
         )
         messages.append(f"[info] browser={browser_source} mode={'headless' if headless else 'headed'}")
         home_page = await _new_smoke_page(context)
@@ -90,6 +93,20 @@ async def _run_live_smoke_async(
             overall_ok = overall_ok and home_ok
         finally:
             await home_page.close()
+
+        fin_page = await _new_smoke_page(context)
+        try:
+            fin_ok, fin_line, fin_sample_article_id, _fin_count = await _run_fin_contract_probe(
+                fin_page,
+                complex_id,
+                timeout_ms,
+            )
+            messages.append(fin_line)
+            overall_ok = overall_ok and fin_ok
+        finally:
+            await fin_page.close()
+        if fin_sample_article_id and (not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID):
+            effective_article_id = fin_sample_article_id
 
         article_api_ok, article_api_line, api_sample_article_id, _api_article_count = await _run_article_api_probe(
             context,

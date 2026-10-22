@@ -14,6 +14,11 @@ from src.core.services.article_api import (
     article_api_real_estate_type,
     build_article_api_url,
 )
+from src.core.services.fin_article_api import (
+    parse_fin_article_list,
+    parse_fin_bounded_complexes,
+    parse_fin_complex_info,
+)
 from src.core.services.response_capture import (
     TRADE_CODE_MAP,
     detect_trade_type,
@@ -21,14 +26,23 @@ from src.core.services.response_capture import (
     normalize_marker_payload,
 )
 from src.core.services.site_contract import (
+    DESKTOP_USER_AGENT,
+    FIN_API_ORIGIN_PAGE,
+    FRONT_API_BOUNDED_COMPLEXES,
+    FRONT_API_COMPLEX_ARTICLE_LIST,
     HOST_FIN,
     HOST_M,
     HOST_NEW,
     build_complex_overview_url,
     build_complex_page_url,
+    build_fin_article_list_body,
+    build_fin_bounded_complexes_body,
+    build_fin_complex_info_url,
+    fin_article_list_url,
     build_geo_map_url,
     build_single_markers_url,
     is_fin_html_dead_url,
+    trade_type_to_code,
 )
 from src.utils.helpers import ChromeParamHelper
 from src.utils.logger import get_logger

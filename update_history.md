@@ -1,5 +1,28 @@
 # Update History
 
+## 2026-10-22: fin.land 전면 전환 대응 (수집·검색·링크·지도 탐색·빌라, v15.10에 포함)
+
+- 실측: `fin.land.naver.com/map?layer=` SPA가 주 사이트, m.land는 이미 fin으로 리다이렉트, new.land는 아직 동작하지만 `ms=` 좌표가 base62로 바뀜. front-api는 브라우저 내부 `fetch`만 200이고 브라우저 밖 요청과 `HeadlessChrome` UA는 429. 상세: `docs/NAVER_LAND_SURVEY_2026-10-22.md`, 계획: `docs/FIN_LAND_MIGRATION_PLAN_2026-10-22.md`
+- 수집: APT 단지 매물 목록을 fin `POST /front-api/v1/complex/article/list`(커서 `lastInfo`+`seed`)로 1순위 수집. 동일매물 묶음을 펼쳐 기존 광고 단위 행 유지(헬리오시티 매매 905묶음 → 1,977행), 기존 필드로 변환해 DB·export 계약 불변. 실패 시 new.land Article API → response capture 폴백. 신규 `fin_api` mixin, `fin_article_api`·`fin_land_codec` 서비스, 캐시 fingerprint v3
+- 데스크톱 컨텍스트·검색·조회 브라우저 UA를 완전한 Chrome UA(`DESKTOP_USER_AGENT`)로 통일
+- 상세: front-api(agent/basicInfo)를 fin 오리진 페이지 내부 fetch로 호출(기존 `APIRequestContext`는 429), `basicInfo` 파라미터 `articleNumber`+유형 코드로 수정, m.land 상세 후보·m.land/fin HTML 진입 계획 제거
+- 검색: fin autocomplete(단지 + 법정동) 우선, 실패 시 new.land `/api/search` 폴백. 주소 변형 재사용(`서울특별시 송파구 가락동` → `송파구 가락동`), 결과에 법정동 주소·좌표·단지번호 툴팁. 링크로 넣은 단지는 fin `/complex`로 이름·주소 확인
+- 링크: fin `map?layer=`(lz-string) 단지·매물 링크 해석, fin `center=`와 new.land base62 `ms=` 좌표 해석, 매물 링크 → 단지 역조회는 fin `/search/articles` 우선. 단지 열기 링크 기본값 fin(`/complexes/{id}?tab=article`, 빌라는 new.land 유지)
+- live smoke `fin-contract` 단계 추가, `[detail]`은 SPA가 agent를 자동 호출하지 않으면 페이지 내부 fetch로 확인
+- 2차(같은 날): 지도 탐색을 fin `boundedComplexes` 구역 조회로 교체(드래그 불필요, 예전 경로의 base62 `ms=` 해석 고장도 수정), 빌라 목록을 fin `/complex/villa/article/list`로 교체(new.land 빌라 지도는 이미 단지 마커를 쓰지 않아 기존 경로가 동작하지 않았음). 없는 번호는 정보 API로 판별해 예전 경로로 넘김
+- 상세: fin API 우선(`agent` → `article/key` → 매매만 `basicInfo`의 `previousDeposit`=기전세금), 못 받은 매물만 상세 화면을 엶. 같은 56건 101초 → 14초. 중개사 전화 칸에 단지 관리사무소 번호가 들어가던 문제 수정
+- UI: 지도 탐색 「구역 간격」「구역마다 쉬는 시간」(fin 구역 사이 간격으로 사용), 상세 설정 문구, 단지 번호 입력 힌트(fin 주소), 지도 위치 링크에 법정동 이름 표시, 단지 열기 링크 빌라도 fin(`isVilla=true`)
+- 실제 수집 스레드 종단 검증(임시 DB): 단지 3곳 4,069건·재실행 신규 0건, 지도 탐색 단지 320곳(아파트 117·빌라 203) 5,772건, 상세 API 우선 426건 포함 84.7초. 모두 complete
+
+## 2026-10-21: updater rename-swap + clean-env hardening (v15.10)
+
+- Windows running/just-exited EXE overwrite/delete 실패(WinError 5) 대응: 복사 후 덮어쓰기에서 2단계 이름 변경(설치본 -> 백업, 새 빌드 -> 설치본)으로 교체. 첫 이동 실패 시 설치본 유지.
+- 낡은 백업은 다음 시도에서 덮어쓰기로 처리하고, 두 이동 사이 중단 시 다음 실행에서 백업 복구. 레거시 `{name}.{token}.bak` 잔재는 최선을 다해 정리.
+- 헬퍼·재기동·`--preflight` 스모크 자식은 PyInstaller 부트로더 환경(`_MEI*`/`_PYI*`/`_PYINSTALLER*`)을 제거한 환경으로 실행.
+- 회귀 테스트 `tests/test_update_installer.py` 8건 추가(리네임 순서·낡은 백업 덮어쓰기·중단 복구·잠긴 덮어쓰기 롤백·깨끗한 자식 환경) + CI 서브셋·릴리스 테스트에 등록.
+- 릴리스: `APP_VERSION` v15.10, `docs/RELEASE_NOTES_v15.10.md`, `release.yml` 노트 경로·테스트 목록 갱신, README 배지 동기화.
+- 릴리스 구성: v15.10은 아직 태그 전이라 위 updater 수정과 2026-10-22 fin.land 전환 대응을 한 릴리스로 낸다 (`docs/RELEASE_NOTES_v15.10.md`에 둘 다 수록).
+
 ## 2026-10-19: 시세 흐름 화면 개편 + 단지 비교 (v15.9)
 
 - 메뉴 「가격 통계」 → 「시세 흐름」. 기본 거래 종류를 `매매`로 두고 단지·거래 종류·면적·기간을 바꾸면 즉시 다시 그림 (기존에는 기본값 '전체'라 첫 진입 시 그래프 대신 안내 문구만 보였고 매번 「보기」를 눌러야 했음)

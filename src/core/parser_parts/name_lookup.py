@@ -126,13 +126,15 @@ class NaverNameLookupMixin:
                 else:
                     browser = playwright.chromium.launch(headless=True)
                 try:
-                    page = browser.new_page(
-                        locale="ko-KR",
-                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    )
+                    from src.core.services.site_contract import DESKTOP_USER_AGENT
+
+                    page = browser.new_page(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
                     page.add_init_script(
                         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
                     )
+                    fin_name = cls._fetch_name_via_fin_page(page, cid, asset_type=asset_token)
+                    if fin_name:
+                        return fin_name
 
                     def _handle(response):
                         nonlocal captured_name
@@ -150,7 +152,7 @@ class NaverNameLookupMixin:
 
                     page.on("response", _handle)
                     page.goto(
-                        build_complex_url(cid, asset_type=asset_token),
+                        build_complex_url(cid, asset_type=asset_token, preferred_family="new"),
                         wait_until="domcontentloaded",
                         timeout=12000,
                     )
@@ -167,6 +169,27 @@ class NaverNameLookupMixin:
             raise
         except Exception as e:
             get_logger("NaverURLParser").debug(f"단지명 browser fallback 실패 ({asset_token}:{cid}): {e}")
+            return ""
+
+    @classmethod
+    def _fetch_name_via_fin_page(cls, page, complex_id, asset_type="APT") -> str:
+        """fin ``/complex`` in-page fetch (out-of-browser calls get 429, 2026-10-22)."""
+        from src.core.services.fin_article_api import parse_fin_complex_info
+        from src.core.services.site_contract import FIN_API_ORIGIN_PAGE, build_fin_complex_info_url
+
+        try:
+            page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=12000)
+            result = page.evaluate(
+                """(url) => fetch(url, {headers: {accept: 'application/json'}})
+                    .then(async (r) => ({status: r.status, body: await r.text()}))
+                    .catch(() => ({status: 0, body: ''}))""",
+                build_fin_complex_info_url(complex_id, asset_type=asset_type),
+            )
+            if not isinstance(result, dict) or int(result.get("status", 0) or 0) != 200:
+                return ""
+            return str(parse_fin_complex_info(json.loads(result.get("body") or "")).get("name", "") or "")
+        except Exception as e:
+            get_logger("NaverURLParser").debug(f"단지명 fin 조회 실패 ({complex_id}): {e}")
             return ""
 
     @classmethod

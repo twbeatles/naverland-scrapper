@@ -25,10 +25,23 @@ class PlaywrightGeoMarkerMixin:
     ) -> int:
         if not isinstance(payload, list):
             return 0
-        added = 0
         asset = str(asset_type or "APT").strip().upper() or "APT"
-        for raw_marker in payload:
-            marker = normalize_marker_payload(raw_marker, asset_type=asset)
+        markers = [normalize_marker_payload(raw_marker, asset_type=asset) for raw_marker in payload]
+        return self._ingest_normalized_markers(discovered, markers, asset_type=asset, stats=stats)
+
+    def _ingest_normalized_markers(
+        self,
+        discovered: dict[str, dict],
+        markers: list[dict],
+        *,
+        asset_type: str,
+        stats: dict | None = None,
+    ) -> int:
+        """Dedupe by asset+complex, keeping the marker with the larger count."""
+        added = 0
+        default_asset = str(asset_type or "APT").strip().upper() or "APT"
+        for marker in markers:
+            asset = str(marker.get("asset_type", "") or default_asset).strip().upper() or default_asset
             cid = marker.get("complex_id", "")
             if not cid:
                 continue

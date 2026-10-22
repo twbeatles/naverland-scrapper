@@ -1326,7 +1326,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         shared_items = [{"id": "shared"}]
-        cache.set("99999", trade_type, shared_items, mode="complex", asset_type="APT", query_fingerprint="articles-v2:pre=0")
+        cache.set("99999", trade_type, shared_items, mode="complex", asset_type="APT", query_fingerprint="articles-v3:pre=0")
 
         async def _must_not_collect(*args, **kwargs):
             raise AssertionError("network collection should not run on normalized cache hit")
@@ -1767,7 +1767,7 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             ],
             mode="complex",
             asset_type="APT",
-            query_fingerprint="articles-v2:pre=0",
+            query_fingerprint="articles-v3:pre=0",
         )
 
         async def _detail(items):

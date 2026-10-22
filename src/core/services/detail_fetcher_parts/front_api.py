@@ -13,10 +13,25 @@ def build_front_api_agent_url(article_no: str) -> str:
     return _build(article_no)
 
 
-def build_front_api_basic_info_url(article_no: str) -> str:
+def build_front_api_basic_info_url(article_no: str, *, real_estate_type: str = "A01", trade_type: str = "A1") -> str:
     from src.core.services.site_contract import build_front_api_basic_info_url as _build
 
+    return _build(article_no, real_estate_type=real_estate_type, trade_type=trade_type)
+
+
+def build_front_api_article_key_url(article_no: str) -> str:
+    from src.core.services.site_contract import build_front_api_article_key_url as _build
+
     return _build(article_no)
+
+
+def _article_type_codes(payload) -> tuple[str, str]:
+    """(realEstateType, tradeType) from an ``/article/key`` payload."""
+    result = payload.get("result") if isinstance(payload, dict) else None
+    types = result.get("type") if isinstance(result, dict) else None
+    if not isinstance(types, dict):
+        return "", ""
+    return str(types.get("realEstateType", "") or ""), str(types.get("tradeType", "") or "")
 
 
 def parse_front_api_agent_payload(payload) -> dict:
@@ -37,6 +52,18 @@ def parse_front_api_agent_payload(payload) -> dict:
     for tree in candidates:
         extracted = _fields_from_named_tree(tree)
         merged = _merge_detail_field_maps(merged, extracted)
+    # basicInfo priceInfo.previousDeposit is the sitting tenant's deposit in won
+    # (the text money parser would read bare digits as 만원).
+    for tree in candidates:
+        price_info = tree.get("priceInfo") if isinstance(tree, dict) else None
+        if isinstance(price_info, dict):
+            try:
+                previous = int(price_info.get("previousDeposit") or 0)
+            except (TypeError, ValueError):
+                previous = 0
+            if previous > 0:
+                merged["기전세금(원)"] = previous
+                break
     return {k: v for k, v in merged.items() if v not in (None, "", 0, 0.0)}
 
 
@@ -53,6 +80,46 @@ def _request_context_from_page(detail_page):
         if request is not None and hasattr(request, "get"):
             return request
     return None
+
+
+_PAGE_FETCH_JS = """async ([url, timeoutMs]) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {headers: {accept: 'application/json'}, signal: ctrl.signal});
+    return {status: r.status, body: await r.text()};
+  } catch (e) {
+    return {status: 0, body: ''};
+  } finally { clearTimeout(timer); }
+}"""
+
+
+def _page_on_fin_origin(page) -> bool:
+    try:
+        return str(getattr(page, "url", "") or "").startswith("https://fin.land.naver.com/")
+    except Exception:
+        return False
+
+
+async def _fetch_front_api_json_in_page(page, url: str, *, timeout_ms: int = 8000):
+    """In-page fetch from a fin.land origin (out-of-browser requests get 429)."""
+    import json
+
+    try:
+        result = await page.evaluate(_PAGE_FETCH_JS, [url, max(1000, int(timeout_ms or 8000))])
+    except Exception:
+        return None, None
+    if not isinstance(result, dict):
+        return None, None
+    try:
+        status = int(result.get("status", 0) or 0) or None
+    except (TypeError, ValueError):
+        status = None
+    try:
+        payload = json.loads(str(result.get("body", "") or ""))
+    except (TypeError, ValueError):
+        return status, None
+    return status, payload
 
 
 async def _fetch_front_api_json(request_context, url: str, *, referer: str, timeout_ms: int = 8000):
@@ -81,36 +148,26 @@ async def _fetch_front_api_json(request_context, url: str, *, referer: str, time
 
 
 async def _warm_front_api_session(detail_page, *, timeout_ms: int = 5000) -> bool:
-    """Best-effort cookie/auth warm before front-api (new.land + auth/si)."""
-    request_context = _request_context_from_page(detail_page)
-    if request_context is None:
+    """Park the page on a fin.land origin so front-api can be fetched in-page.
+
+    Uses the light ``robots.txt`` page instead of the map SPA, which fires
+    ~20 side requests per load (2026-10-22).
+    """
+    if detail_page is None or not hasattr(detail_page, "goto"):
         return False
-    warmed = False
-    # Prefer new.land (stable host) so browser context has land cookies.
+    if _page_on_fin_origin(detail_page):
+        return True
+    from src.core.services.site_contract import FIN_API_ORIGIN_PAGE
+
     try:
-        if detail_page is not None and hasattr(detail_page, "goto"):
-            current = str(getattr(detail_page, "url", "") or "")
-            if "new.land.naver.com" not in current and "fin.land.naver.com" not in current:
-                await detail_page.goto(
-                    "https://new.land.naver.com/",
-                    wait_until="domcontentloaded",
-                    timeout=max(1000, int(timeout_ms)),
-                )
-                warmed = True
-    except Exception:
-        pass
-    try:
-        status, payload = await _fetch_front_api_json(
-            request_context,
-            "https://fin.land.naver.com/front-api/v1/auth/si",
-            referer="https://fin.land.naver.com/",
-            timeout_ms=timeout_ms,
+        await detail_page.goto(
+            FIN_API_ORIGIN_PAGE,
+            wait_until="domcontentloaded",
+            timeout=max(1000, int(timeout_ms)),
         )
-        if status is not None and int(status) < 400 and payload is not None:
-            warmed = True
     except Exception:
-        pass
-    return warmed
+        return False
+    return _page_on_fin_origin(detail_page)
 
 
 async def _supplement_front_api_artifacts(
@@ -133,36 +190,48 @@ async def _supplement_front_api_artifacts(
         except (TypeError, ValueError):
             timeout_ms = 8000
 
-    # One warm per page object to reduce repeated auth traffic.
-    if request_context is not None and not getattr(detail_page, "_front_api_session_warmed", False):
+    # A page already on fin.land needs no navigation; others are parked on robots.txt.
+    if detail_page is not None and not _page_on_fin_origin(detail_page):
         try:
-            await _warm_front_api_session(detail_page, timeout_ms=min(6000, timeout_ms))
-            try:
-                setattr(detail_page, "_front_api_session_warmed", True)
-            except Exception:
-                pass
-            artifacts["front_api_session_warmed"] = True
+            artifacts["front_api_session_warmed"] = await _warm_front_api_session(
+                detail_page, timeout_ms=min(6000, timeout_ms)
+            )
         except Exception:
             artifacts["front_api_session_warmed"] = False
 
-    for url in (
-        build_front_api_agent_url(article_no),
-        build_front_api_basic_info_url(article_no),
-    ):
+    in_page = _page_on_fin_origin(detail_page)
+
+    async def _get(url: str):
+        if in_page:
+            return await _fetch_front_api_json_in_page(detail_page, url, timeout_ms=timeout_ms)
+        return await _fetch_front_api_json(request_context, url, referer=referer, timeout_ms=timeout_ms)
+
+    # agent (broker/phones) -> key (exact type codes) -> basicInfo only for sales:
+    # basicInfo rejects wrong type codes, and previousDeposit matters for 매매 only.
+    pending = [build_front_api_agent_url(article_no), build_front_api_article_key_url(article_no)]
+    while pending:
+        url = pending.pop(0)
         if url in existing_urls:
             continue
-        status, payload = await _fetch_front_api_json(
-            request_context,
-            url,
-            referer=referer,
-            timeout_ms=timeout_ms,
-        )
+        status, payload = await _get(url)
         if status is not None and int(status) == 429:
             artifacts["front_api_rate_limited"] = True
             break
         if payload is None:
             continue
         if status is not None and int(status) >= 400:
+            continue
+        if "/article/key" in url:
+            real_estate_type, trade_code = _article_type_codes(payload)
+            if real_estate_type and trade_code == "A1":
+                pending.append(
+                    build_front_api_basic_info_url(
+                        article_no, real_estate_type=real_estate_type, trade_type=trade_code
+                    )
+                )
+            existing_urls.add(url)
+            continue
+        if isinstance(payload, dict) and payload.get("isSuccess") is False:
             continue
         responses.append({"url": url, "payload": payload, "status": status})
         existing_urls.add(url)

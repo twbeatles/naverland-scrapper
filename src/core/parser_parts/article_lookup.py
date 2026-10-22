@@ -12,6 +12,7 @@ from src.utils.retry_handler import RetryCancelledError
 logger = get_logger("Parser")
 from src.core.parser_parts.contracts import runtime_contract
 from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession
+from src.core.services.site_contract import DESKTOP_USER_AGENT
 
 
 class NaverArticleLookupMixin:
@@ -21,16 +22,13 @@ class NaverArticleLookupMixin:
         aid = str(article_id or "").strip()
         if not aid:
             return ()
-        return (
-            ("fin_article", f"https://fin.land.naver.com/articles/{aid}"),
-            ("m_info", f"https://m.land.naver.com/article/info/{aid}"),
-            ("m_view", f"https://m.land.naver.com/article/view/{aid}"),
-        )
+        # m.land article pages redirect to this fin URL since 2026-10.
+        return (("fin_article", f"https://fin.land.naver.com/articles/{aid}"),)
 
     @classmethod
     def _fetch_article_lookup_impl(cls, url: str) -> str:
         req = urllib.request.Request(str(url or ""))
-        req.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        req.add_header("User-Agent", DESKTOP_USER_AGENT)
         req.add_header("Accept", "text/html,application/json;q=0.9,*/*;q=0.8")
         with urllib.request.urlopen(req, timeout=10) as response:
             return response.read().decode("utf-8", errors="ignore")

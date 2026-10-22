@@ -29,33 +29,17 @@ class NaverURLExtractMixin:
         article_id = str(parsed.get("article_id", "") or "").strip()
         return article_id or None
 
-    _MAP_CENTER_RE = re.compile(
-        r"[?&]ms=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)",
-        re.IGNORECASE,
-    )
-
     @classmethod
     def extract_map_center(cls, url_or_text):
-        """지도 링크의 ``ms=위도,경도,줌``을 (lat, lon, zoom)으로 반환한다.
+        """지도 링크의 중심 좌표를 (lat, lon, zoom)으로 반환한다.
 
-        new.land/m.land 공유 링크용. fin.land ``map?center=`` 같은 불투명
-        상태값은 해독할 수 없어 ``None``을 반환한다. 한국 범위를 벗어난
-        좌표도 ``None``이다.
+        new.land ``ms=위도,경도,줌``(숫자 또는 2026-10 base62 형식)과 fin.land
+        ``center=경도-위도&zoom=``(base62)을 해석한다. 한국 범위를 벗어난
+        좌표는 ``None``이다.
         """
-        raw = str(url_or_text or "")
-        match = cls._MAP_CENTER_RE.search(raw)
-        if not match:
-            return None
-        try:
-            lat = float(match.group(1))
-            lon = float(match.group(2))
-            zoom = int(float(match.group(3)))
-        except (TypeError, ValueError):
-            return None
-        if not (33.0 <= lat <= 39.5 and 124.0 <= lon <= 132.1):
-            return None
-        zoom = max(12, min(18, zoom))
-        return (lat, lon, zoom)
+        from src.core.services.fin_land_codec import parse_map_center
+
+        return parse_map_center(str(url_or_text or ""))
 
     @classmethod
     def parse_url_info(cls, url_or_text):
@@ -74,6 +58,9 @@ class NaverURLExtractMixin:
 
         url = runtime_cls._URL_RE.search(raw)
         token = url.group(0) if url else raw
+        fin_map = cls._parse_fin_map_layer(token)
+        if fin_map is not None:
+            return fin_map
         for entry in runtime_cls._PARSE_PATTERNS:
             match = entry["pattern"].search(token)
             if not match:
@@ -89,11 +76,15 @@ class NaverURLExtractMixin:
             entity_type = str(entry.get("entity_type", "") or "")
             if article_id and entity_type != "article":
                 entity_type = "article"
+            asset_type = str(entry.get("asset_type", "") or "")
+            # fin villa links: /complexes/{id}?isVilla=true (2026-10-22).
+            if complex_id and "isvilla=true" in token.lower():
+                asset_type = "VL"
             return {
                 "url": token,
                 "family": str(entry.get("family", "") or ""),
                 "entity_type": entity_type,
-                "asset_type": str(entry.get("asset_type", "") or ""),
+                "asset_type": asset_type,
                 "complex_id": str(complex_id or ""),
                 "article_id": str(article_id or ""),
             }
@@ -105,6 +96,28 @@ class NaverURLExtractMixin:
             "asset_type": "",
             "complex_id": "",
             "article_id": "",
+        }
+
+    @classmethod
+    def _parse_fin_map_layer(cls, token):
+        """fin.land ``map?layer=`` 링크(lz-string 레이어)를 단지/매물 ID로 해석한다."""
+        lowered = str(token or "").lower()
+        if "fin.land.naver.com/map" not in lowered or "layer=" not in lowered:
+            return None
+        from src.core.services.fin_land_codec import parse_fin_map_link
+
+        parsed = parse_fin_map_link(token)
+        complex_id = str(parsed.get("complex_id", "") or "")
+        article_id = str(parsed.get("article_id", "") or "")
+        if not complex_id and not article_id:
+            return None
+        return {
+            "url": token,
+            "family": "fin",
+            "entity_type": "article" if article_id else "complex",
+            "asset_type": str(parsed.get("asset_type", "") or ("APT" if complex_id else "")),
+            "complex_id": complex_id,
+            "article_id": article_id,
         }
 
     @classmethod

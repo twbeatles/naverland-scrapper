@@ -93,7 +93,11 @@ class CrawlerTabFinishMixin:
                 if fail_summary:
                     self.append_log(f"진단: 목록 조회 실패 사유 {fail_summary}", 10)
                 if detail_disabled:
-                    self.append_log("참고: 설정에서 상세 정보 가져오기가 꺼져 있어 중개소·기존 전세금 칸이 비어 있을 수 있습니다.", 20)
+                    self.append_log(
+                        "참고: 설정에서 상세 정보 가져오기가 꺼져 있어 중개사 이름·전화·기존 전세금 칸이 비어 있을 수 있습니다. "
+                        "중개소 이름은 목록에서 채워집니다.",
+                        20,
+                    )
                 elif detail_cap > 0:
                     self.append_log(
                         f"참고: 단지마다 정해 둔 상세 조회 한도를 넘어 {detail_cap}건은 기본 정보만 담았습니다.",

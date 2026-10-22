@@ -54,7 +54,7 @@ class CrawlerTabTaskOpsMixin:
                 self,
                 "입력 확인",
                 "단지 번호(숫자)나 네이버 부동산 단지 주소를 입력해 주세요.\n"
-                "예: 12345 또는 land.naver.com/complexes/12345",
+                "예: 12345 또는 fin.land.naver.com/complexes/12345 (단지를 연 지도 주소도 됩니다)",
             )
             self.input_id.setFocus()
             self.input_id.selectAll()

@@ -43,12 +43,20 @@ from src.core.services.detail_fetcher_parts.field_keys import (
     _PREV_JEONSE_KEYS,
 )
 from src.core.services.detail_fetcher_parts.field_merge import (
+    _COMPLEX_LEVEL_PATH,
+    _is_agent_response,
+    _is_complex_level_response,
     _backfill_fields_from_artifacts,
     _fields_from_named_tree,
     _merge_detail_field_maps,
 )
 from src.core.services.detail_fetcher_parts.front_api import (
+    _PAGE_FETCH_JS,
     _fetch_front_api_json,
+    _fetch_front_api_json_in_page,
+    _article_type_codes,
+    _page_on_fin_origin,
+    build_front_api_article_key_url,
     _request_context_from_page,
     _supplement_front_api_artifacts,
     _warm_front_api_session,
@@ -67,7 +75,10 @@ from src.core.services.detail_fetcher_parts.detail_parse import (
     _merge_detail_artifacts,
     _parse_detail_fields,
 )
-from src.core.services.detail_fetcher_parts.orchestrator import fetch_mobile_article_detail
+from src.core.services.detail_fetcher_parts.orchestrator import (
+    _structured_response_fields,
+    fetch_mobile_article_detail,
+)
 from src.core.services.detail_fetcher_parts.apply import apply_mobile_detail
 
 __all__ = [
@@ -92,11 +103,20 @@ __all__ = [
     "_merge_detail_field_maps",
     "_fields_from_named_tree",
     "_backfill_fields_from_artifacts",
+    "_COMPLEX_LEVEL_PATH",
+    "_is_agent_response",
+    "_is_complex_level_response",
+    "_structured_response_fields",
     "build_front_api_agent_url",
     "build_front_api_basic_info_url",
     "parse_front_api_agent_payload",
     "_request_context_from_page",
     "_fetch_front_api_json",
+    "_fetch_front_api_json_in_page",
+    "_page_on_fin_origin",
+    "_article_type_codes",
+    "build_front_api_article_key_url",
+    "_PAGE_FETCH_JS",
     "_warm_front_api_session",
     "_supplement_front_api_artifacts",
     "_collect_detail_artifacts",

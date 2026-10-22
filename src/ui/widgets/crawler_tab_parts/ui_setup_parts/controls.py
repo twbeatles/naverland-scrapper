@@ -245,8 +245,9 @@ class CrawlerTabControlSetupMixin:
         self.input_id.setPlaceholderText("단지 번호 또는 주소")
         self.input_id.setToolTip(
             "네이버 부동산 단지 주소에 들어 있는 숫자입니다.\n"
-            "예: land.naver.com/complexes/12345 → 12345\n"
-            "주소를 통째로 붙여넣어도 번호와 주택 종류를 알아서 읽습니다."
+            "예: fin.land.naver.com/complexes/12345 → 12345\n"
+            "단지를 연 지도 주소(fin.land.naver.com/map?layer=...)를 통째로 붙여넣어도\n"
+            "번호와 주택 종류를 알아서 읽습니다."
         )
         self._complex_id_regex = QRegularExpression(r"^\d+$")
         self.input_id.textChanged.connect(self._on_manual_id_text_changed)

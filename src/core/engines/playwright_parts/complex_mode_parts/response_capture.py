@@ -51,6 +51,30 @@ class PlaywrightResponseCaptureMixin:
         self._article_supplement_result = {}
         capture_invalid_rows = False
 
+        # fin.land front-api is the primary source since the 2026-10 site switch;
+        # new.land Article API / response capture below remain as fallback.
+        if self._fin_front_api_enabled(active_path_asset):
+            try:
+                fin_result = await self._fetch_fin_article_list(
+                    name=name,
+                    cid=cid,
+                    trade_type=trade_type,
+                    path_asset=active_path_asset,
+                    mode=mode,
+                    source_lat=source_lat,
+                    source_lon=source_lon,
+                    source_zoom=source_zoom,
+                    marker_id=marker_id,
+                    seen_ids=seen_ids,
+                )
+            except Exception as exc:
+                fin_result = None
+                self._record_fin_api_failure(type(exc).__name__, status=type(exc).__name__)
+                self.thread.log(f"   fin front-api 실패({cid}), new.land 경로로 전환: {exc}", 20)
+            if fin_result is not None:
+                return fin_result
+            seen_ids.clear()
+
         for base_kind, path_asset in self._candidate_paths(asset_type):
             # Use live map keys (a / b / e); bare path_asset + tradeTypes is ignored by site.
             target_url = build_complex_page_url(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, TYPE_CHECKING
 
+from src.core.services.site_contract import DESKTOP_USER_AGENT
 from src.utils.helpers import ChromeParamHelper
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ class PlaywrightBrowserRuntimeMixin:
         self._headed_fallback_used: bool = False
         self._entry_plan_success_by_key: dict[tuple[str, str, str], str] = {}
         self._article_api_auth_header: str = ""
+        self._fin_api_page: Any | None = None
 
     def run(self) -> None:
         if not PLAYWRIGHT_AVAILABLE:
@@ -181,7 +183,8 @@ class PlaywrightBrowserRuntimeMixin:
             browser,
             "desktop",
             viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            # Full Chrome UA: fin front-api answers 429 to HeadlessChrome (2026-10-22).
+            user_agent=DESKTOP_USER_AGENT,
             locale="ko-KR",
         )
         self._desktop_context = desktop_context
@@ -293,7 +296,7 @@ class PlaywrightBrowserRuntimeMixin:
                     await page.close()
                 except Exception:
                     pass
-        for obj in [self._desktop_page, self._mobile_context, self._desktop_context, self._browser]:
+        for obj in [self._fin_api_page, self._desktop_page, self._mobile_context, self._desktop_context, self._browser]:
             if obj is None:
                 continue
             try:
@@ -305,6 +308,7 @@ class PlaywrightBrowserRuntimeMixin:
                 await self._playwright.stop()
             except Exception:
                 pass
+        self._fin_api_page = None
         self._desktop_page = None
         self._mobile_context = None
         self._desktop_context = None

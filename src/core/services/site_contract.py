@@ -13,6 +13,15 @@
   Both need a browser session (cookie-less HTTP answers 429).
 - ``single-markers/2.0`` bbox-only form returns ``[]``; the site always sends
   ``cortarNo`` (resolved via ``/api/cortars``) alongside the bbox.
+
+2026-10-22 live probe notes (fin.land full switch, docs/NAVER_LAND_SURVEY_2026-10-22.md):
+- fin.land ``/map?layer=`` SPA is the primary site; m.land already redirects there.
+- front-api answers 200 to in-browser ``fetch`` from a fin.land origin page
+  (no cookies needed) but 429 to out-of-browser requests and to any
+  ``HeadlessChrome`` user agent.
+- Complex article list: ``POST /front-api/v1/complex/article/list`` with
+  cursor paging (``lastInfo`` + ``seed``); ``list`` items are same-listing
+  groups that must be expanded to keep per-ad rows.
 """
 
 from __future__ import annotations
@@ -35,9 +44,40 @@ COMPLEX_OVERVIEW_API = f"{HOST_NEW}/api/complexes/overview"
 SINGLE_MARKERS_COMPLEX = f"{HOST_NEW}/api/complexes/single-markers/2.0"
 SINGLE_MARKERS_HOUSE = f"{HOST_NEW}/api/houses/single-markers/2.0"
 
-FRONT_API_AGENT = f"{HOST_FIN}/front-api/v1/article/agent"
-FRONT_API_BASIC_INFO = f"{HOST_FIN}/front-api/v1/article/basicInfo"
-FRONT_API_MAINTENANCE = f"{HOST_FIN}/front-api/v1/article/maintenanceFee"
+FRONT_API_BASE = f"{HOST_FIN}/front-api/v1"
+FRONT_API_AGENT = f"{FRONT_API_BASE}/article/agent"
+FRONT_API_BASIC_INFO = f"{FRONT_API_BASE}/article/basicInfo"
+FRONT_API_MAINTENANCE = f"{FRONT_API_BASE}/article/maintenanceFee"
+FRONT_API_COMPLEX = f"{FRONT_API_BASE}/complex"
+FRONT_API_COMPLEX_ARTICLE_LIST = f"{FRONT_API_BASE}/complex/article/list"
+FRONT_API_VILLA = f"{FRONT_API_BASE}/complex/villa"
+FRONT_API_VILLA_ARTICLE_LIST = f"{FRONT_API_BASE}/complex/villa/article/list"
+FRONT_API_BOUNDED_COMPLEXES = f"{FRONT_API_BASE}/complex/boundedComplexes"
+FRONT_API_AUTOCOMPLETE = f"{FRONT_API_BASE}/search/autocomplete"
+
+# Same-origin page used to issue front-api fetches without loading the map SPA
+# (the SPA fires ~20 side requests per load and trips rate limits).
+FIN_API_ORIGIN_PAGE = f"{HOST_FIN}/robots.txt"
+
+# Must not contain "HeadlessChrome": front-api answers 429 to it (2026-10-22).
+DESKTOP_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+)
+
+FIN_ARTICLE_PAGE_SIZE = 30  # site ARTICLE_PAGINATION_SIZE (schema max 30)
+FIN_ARTICLE_SORT = "RANKING_DESC"
+FIN_REAL_ESTATE_APT = "A01"
+FIN_COMPLEX_PAGE_SIZE = 30  # site COMPLEX_PAGINATION_SIZE
+FIN_COMPLEX_SORT = "ARTICLE_COUNT_DESC"  # COMPLEX_LIST_SORT_TYPE.매물수순
+
+# Map filter realEstateTypes per app asset token (bundle VILLA_REAL_ESTATE_TYPES =
+# 연립 A05, 다세대 A06, 도시형생활주택 A07, 빌라·연립 C02). APT adds 재건축 A04.
+FIN_REAL_ESTATE_TYPES = {
+    "APT": ("A01", "A04"),
+    "VL": ("A05", "A06", "A07", "C02"),
+}
+FIN_PRE_SALE_TYPE = "B01"
 
 # Map / complex page query keys observed live
 GEO_QUERY_ASSET = "a"  # e.g. APT:ABYG:JGC
@@ -49,7 +89,11 @@ _TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.it
 
 
 def trade_type_to_code(trade_type: str) -> str:
-    return _TRADE_TO_CODE.get(str(trade_type or "").strip(), "A1")
+    """App label (매매/전세/월세) or an existing code (A1/B1/B2) -> code."""
+    token = str(trade_type or "").strip()
+    if token.upper() in TRADE_CODE_MAP:
+        return token.upper()
+    return _TRADE_TO_CODE.get(token, "A1")
 
 
 def article_api_real_estate_type(path_asset: str, *, include_pre: bool = False) -> str:
@@ -108,14 +152,141 @@ def build_complex_page_url(
     return f"{HOST_NEW}/{kind}/{cid}?" + urlencode(params)
 
 
+def build_front_api_article_key_url(article_no: str) -> str:
+    """``/article/key`` -> complex/building keys plus exact ``realEstateType``/``tradeType``."""
+    return f"{FRONT_API_BASE}/article/key?" + urlencode({"articleNumber": str(article_no or "").strip()})
+
+
 def build_front_api_agent_url(article_no: str) -> str:
     aid = str(article_no or "").strip()
     return f"{FRONT_API_AGENT}?articleNumber={aid}"
 
 
-def build_front_api_basic_info_url(article_no: str) -> str:
-    aid = str(article_no or "").strip()
-    return f"{FRONT_API_BASIC_INFO}?articleId={aid}"
+def build_front_api_basic_info_url(
+    article_no: str,
+    *,
+    real_estate_type: str = FIN_REAL_ESTATE_APT,
+    trade_type: str = "매매",
+) -> str:
+    """``basicInfo`` needs ``articleNumber`` + type codes (``articleId`` -> 400)."""
+    params = {
+        "articleNumber": str(article_no or "").strip(),
+        "realEstateType": str(real_estate_type or FIN_REAL_ESTATE_APT),
+        "tradeType": trade_type_to_code(trade_type),
+    }
+    return f"{FRONT_API_BASIC_INFO}?" + urlencode(params)
+
+
+def _is_villa(asset_type: str) -> bool:
+    return str(asset_type or "").strip().upper() == "VL"
+
+
+def build_fin_complex_info_url(complex_id: str, *, asset_type: str = "APT") -> str:
+    """``/complex`` (APT) or ``/complex/villa`` (VL) info; unknown IDs return no ``result``."""
+    base = FRONT_API_VILLA if _is_villa(asset_type) else FRONT_API_COMPLEX
+    return f"{base}?" + urlencode({"complexNumber": str(complex_id or "").strip()})
+
+
+def fin_article_list_url(asset_type: str = "APT") -> str:
+    return FRONT_API_VILLA_ARTICLE_LIST if _is_villa(asset_type) else FRONT_API_COMPLEX_ARTICLE_LIST
+
+
+def fin_real_estate_types(asset_type: str, *, include_pre: bool = False) -> list[str]:
+    asset = "VL" if _is_villa(asset_type) else "APT"
+    types = list(FIN_REAL_ESTATE_TYPES[asset])
+    if include_pre and asset == "APT":
+        types.append(FIN_PRE_SALE_TYPE)
+    return types
+
+
+def build_fin_bounded_complexes_body(
+    *,
+    asset_type: str,
+    trade_type: str,
+    bounds: dict[str, float],
+    zoom: int,
+    last_info: list | None = None,
+    seed: str = "",
+    include_pre: bool = False,
+) -> dict[str, Any]:
+    """Body for ``POST /complex/boundedComplexes`` (map list panel, live 2026-10-22).
+
+    ``bounds`` uses the viewport keys from ``map_geometry.viewport_bounds``.
+    ``hasArticle`` limits results to complexes with listings.
+    """
+    paging: dict[str, Any] = {
+        "size": FIN_COMPLEX_PAGE_SIZE,
+        "complexSortType": FIN_COMPLEX_SORT,
+        "lastInfo": list(last_info or []),
+    }
+    if seed:
+        paging["seed"] = str(seed)
+    return {
+        "filter": {
+            "tradeTypes": [trade_type_to_code(trade_type)],
+            "realEstateTypes": fin_real_estate_types(asset_type, include_pre=include_pre),
+            "hasArticle": True,
+        },
+        "boundingBox": {
+            "left": float(bounds["leftLon"]),
+            "right": float(bounds["rightLon"]),
+            "top": float(bounds["topLat"]),
+            "bottom": float(bounds["bottomLat"]),
+        },
+        "precision": int(zoom or 15),
+        "userChannelType": "PC",
+        "complexPagingRequest": paging,
+    }
+
+
+def build_fin_article_list_body(
+    complex_id: str,
+    trade_type: str,
+    *,
+    last_info: list | None = None,
+    seed: str = "",
+    size: int = FIN_ARTICLE_PAGE_SIZE,
+    sort: str = FIN_ARTICLE_SORT,
+) -> dict[str, Any]:
+    """Body for ``POST /complex/article/list`` (cursor paging via lastInfo/seed)."""
+    body: dict[str, Any] = {
+        "size": max(1, min(FIN_ARTICLE_PAGE_SIZE, int(size or FIN_ARTICLE_PAGE_SIZE))),
+        "complexNumber": str(complex_id or "").strip(),
+        "tradeTypes": [trade_type_to_code(trade_type)],
+        "userChannelType": "PC",
+        "articleSortType": str(sort or FIN_ARTICLE_SORT),
+        "lastInfo": list(last_info or []),
+    }
+    if seed:
+        body["seed"] = str(seed)
+    return body
+
+
+def build_fin_autocomplete_url(kind: str, keyword: str, *, page: int = 0, size: int = 10) -> str:
+    """fin search autocomplete; ``kind`` is ``complexes`` or ``legalDivisions``.
+
+    ``page`` is 0-based on fin (the legacy new.land search was 1-based).
+    """
+    params = {
+        "keyword": str(keyword or ""),
+        "size": str(max(1, int(size or 10))),
+        "page": str(max(0, int(page or 0))),
+    }
+    return f"{FRONT_API_AUTOCOMPLETE}/{kind}?" + urlencode(params)
+
+
+def build_fin_region_by_coordinate_url(lat: float, lon: float) -> str:
+    """Coordinate -> legal division (``type=EUP`` = 읍·면·동 level)."""
+    params = {"longitude": str(float(lon)), "latitude": str(float(lat)), "type": "EUP"}
+    return f"{FRONT_API_BASE}/legalDivision/searchByCoordinate?" + urlencode(params)
+
+
+def build_fin_complex_page_url(complex_id: str, *, asset_type: str = "APT") -> str:
+    """Shareable fin complex link (307 -> ``map?layer=`` complex_detail)."""
+    params = {"tab": "article"}
+    if str(asset_type or "").strip().upper() == "VL":
+        params["isVilla"] = "true"
+    return f"{HOST_FIN}/complexes/{str(complex_id or '').strip()}?" + urlencode(params)
 
 
 def build_complex_overview_url(complex_id: str, *, asset_type: str = "APT") -> str:

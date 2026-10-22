@@ -10,18 +10,24 @@ def _normalize_asset_type(asset_type: str) -> str:
     return token if token in {"APT", "VL"} else "APT"
 
 
-def build_complex_url(complex_id, *, asset_type="APT", preferred_family="new"):
-    """단지 URL 생성."""
+def build_complex_url(complex_id, *, asset_type="APT", preferred_family="fin"):
+    """단지 URL 생성.
+
+    기본은 fin.land 단지 링크(``/complexes/{id}?tab=article`` → 지도 레이어로 이동,
+    빌라는 ``isVilla=true``). m.land는 2026-10부터 fin으로 리다이렉트되므로 ``m``
+    요청도 fin 링크를 준다. ``new``는 예전 new.land 링크.
+    """
     cid = str(complex_id or "").strip()
     if not cid:
         return ""
 
-    family = str(preferred_family or "new").strip().lower()
+    family = str(preferred_family or "fin").strip().lower()
     normalized_asset = _normalize_asset_type(asset_type)
     path = "houses" if normalized_asset == "VL" else "complexes"
 
-    if family == "m":
-        return f"https://m.land.naver.com/{path}/{cid}"
+    if family in {"fin", "m"}:
+        suffix = "?tab=article&isVilla=true" if normalized_asset == "VL" else "?tab=article"
+        return f"https://fin.land.naver.com/complexes/{cid}{suffix}"
     return f"https://new.land.naver.com/{path}/{cid}"
 
 
@@ -137,7 +143,7 @@ class PricePerPyeongCalculator:
             return "-"
         return PriceConverter.to_string(price_per_pyeong) + "/평"
 
-def get_complex_url(complex_id, asset_type="APT", preferred_family="new"):
+def get_complex_url(complex_id, asset_type="APT", preferred_family="fin"):
     """호환용 단지 URL 생성."""
     return build_complex_url(
         complex_id,

@@ -52,10 +52,9 @@ class ArticleLookupBrowserFallbackSession:
                 self._browser = self._playwright.chromium.launch(headless=True)
         else:
             self._browser = self._playwright.chromium.launch(headless=True)
-        self._page = self._browser.new_page(
-            locale="ko-KR",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        )
+        from src.core.services.site_contract import DESKTOP_USER_AGENT
+
+        self._page = self._browser.new_page(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
         try:
             self._page.add_init_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
@@ -64,6 +63,46 @@ class ArticleLookupBrowserFallbackSession:
             pass
         return self._page
 
+    def _resolve_via_fin_api(self, page, aid: str) -> dict:
+        """fin ``/search/articles?articleNumber=`` -> complexNumber (live 2026-10-22).
+
+        The call must run in-page on a fin.land origin; out-of-browser requests get 429.
+        """
+        from src.core.services.site_contract import FIN_API_ORIGIN_PAGE, FRONT_API_BASE
+
+        try:
+            if not str(getattr(page, "url", "") or "").startswith("https://fin.land.naver.com/"):
+                page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=8000)
+            url = f"{FRONT_API_BASE}/search/articles?articleNumber={aid}&userChannelType=PC"
+            result = page.evaluate(
+                """(url) => fetch(url, {headers: {accept: 'application/json'}})
+                    .then(async (r) => ({status: r.status, body: await r.text()}))
+                    .catch(() => ({status: 0, body: ''}))""",
+                url,
+            )
+            if not isinstance(result, dict) or int(result.get("status", 0) or 0) != 200:
+                return {}
+            payload = json.loads(str(result.get("body", "") or ""))
+        except Exception as e:
+            self._logger.debug(f"매물 단지 fin API 조회 실패 ({aid}): {e}")
+            return {}
+        article = payload.get("result") if isinstance(payload, dict) else None
+        if not isinstance(article, dict):
+            return {}
+        cid = str(article.get("complexNumber", "") or "").strip()
+        if not cid:
+            return {}
+        from src.core.services.fin_article_api import fin_article_to_legacy
+
+        asset = str(fin_article_to_legacy(article).get("realEstateTypeCode", "") or "APT")
+        return {
+            "source": "fin_search_articles:browser_fallback",
+            "complex_id": cid,
+            "asset_type": asset,
+            "article_id": aid,
+            "url": url,
+        }
+
     def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
         aid = str(article_id or "").strip()
         if not aid:
@@ -71,6 +110,9 @@ class ArticleLookupBrowserFallbackSession:
         page = self._ensure_page()
         if page is None:
             return {}
+        resolved = self._resolve_via_fin_api(page, aid)
+        if resolved:
+            return resolved
         for source, url in self._parser_cls._article_lookup_urls(aid):
             if self._parser_cls._is_cancelled(cancel_checker):
                 raise RetryCancelledError("article lookup cancelled during browser fallback")

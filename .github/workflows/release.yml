@@ -33,7 +33,7 @@ jobs:
           python -m pip install -r requirements.txt pytest pyinstaller
           python -I -c "import sys; sys.path.insert(0, '.'); from src.utils.preflight import find_qfluentwidgets_binding_mismatch as f; e = f(); print(e or 'qfluentwidgets: PySide6 OK'); raise SystemExit(1 if e else 0)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pytest -q tests/test_app_entry.py tests/test_main_paths.py tests/test_update_manifest.py
+          python -m pytest -q tests/test_app_entry.py tests/test_main_paths.py tests/test_update_manifest.py tests/test_update_installer.py
       - name: Build signed release
         shell: pwsh
         run: |
@@ -55,7 +55,7 @@ jobs:
           "ARTIFACT=$artifact" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: softprops/action-gh-release@v3
         with:
-          body_path: docs/RELEASE_NOTES_v15.9.md
+          body_path: docs/RELEASE_NOTES_v15.10.md
           files: |
             ${{ env.ARTIFACT }}
             ${{ runner.temp }}/latest.json

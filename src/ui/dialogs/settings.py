@@ -248,28 +248,40 @@ class SettingsDialog(QDialog):
 
         detail_group = QGroupBox("")
         detail_layout = QGridLayout()
-        self.check_detail_front_api = QCheckBox("상세 페이지가 비어 있으면 다른 경로로 보충하기")
+        self.check_detail_front_api = QCheckBox("중개 정보를 빠른 경로로 먼저 가져오기 (권장)")
         self.check_detail_front_api.setToolTip(
-            "상세 페이지가 비어 있어도 중개 정보를 보충합니다."
+            "매물 상세 화면을 열기 전에 네이버 API로 중개소·중개사·전화를 먼저 가져옵니다.\n"
+            "같은 정보를 약 7배 빠르게 받고, 못 받은 매물만 상세 화면을 엽니다."
         )
         detail_layout.addWidget(self.check_detail_front_api, 0, 0, 1, 2)
-        self.check_detail_front_api_only = QCheckBox("상세 페이지를 열지 않고 빠른 경로만 쓰기")
+        self.check_detail_front_api_only = QCheckBox("빠른 경로로 못 받아도 상세 화면은 열지 않기")
         self.check_detail_front_api_only.setToolTip(
-            "상세 페이지가 열리지 않거나 너무 느릴 때 켜 보세요. "
-            "페이지를 열지 않고 전화·중개 정보만 가져옵니다."
+            "상세 화면이 열리지 않거나 너무 느릴 때 켜 보세요.\n"
+            "빠른 경로로 받지 못한 매물은 중개 정보가 빈 채로 남습니다."
         )
         detail_layout.addWidget(self.check_detail_front_api_only, 1, 0, 1, 2)
         detail_layout.addWidget(QLabel("단지마다 상세 정보를 가져올 매물 수"), 2, 0)
         self.spin_detail_max = QSpinBox()
         self.spin_detail_max.setRange(0, 500)
         self.spin_detail_max.setSpecialValueText("제한 없음")
+        self.spin_detail_max.setToolTip(
+            "큰 단지(매물 수천 건)는 상세 정보를 모두 받는 데 오래 걸립니다.\n"
+            "필요한 만큼만 정해 두면 수집이 빨라지고 네이버 접속 제한 위험도 줄어듭니다."
+        )
         detail_layout.addWidget(self.spin_detail_max, 2, 1)
         detail_layout.addWidget(QLabel("목록 한 장 넘길 때마다 대기 (ms)"), 3, 0)
         self.spin_article_page_delay = QSpinBox()
         self.spin_article_page_delay.setRange(0, 2000)
         self.spin_article_page_delay.setSingleStep(50)
+        self.spin_article_page_delay.setToolTip(
+            "매물 목록을 다음 장으로 넘길 때 쉬는 시간입니다. 새 네이버 목록은 최소 400ms를 지킵니다."
+        )
         detail_layout.addWidget(self.spin_article_page_delay, 3, 1)
-        self.check_article_api_fast_path = QCheckBox("빠른 목록 조회 사용 (권장)")
+        self.check_article_api_fast_path = QCheckBox("예전 목록 경로에서도 빠른 조회 사용 (권장)")
+        self.check_article_api_fast_path.setToolTip(
+            "매물 목록은 새 네이버(fin.land)에서 먼저 받습니다.\n"
+            "그게 안 될 때 쓰는 예전 경로(new.land)에서 화면 대신 빠른 조회를 씁니다."
+        )
         detail_layout.addWidget(self.check_article_api_fast_path, 4, 0, 1, 2)
         detail_group.setLayout(detail_layout)
         _foldable("상세 정보 가져오는 방식", detail_group, layout)
@@ -332,9 +344,13 @@ class SettingsDialog(QDialog):
         self.check_geo_incomplete_safety_mode = QCheckBox(
             "탐색이 중간에 끊기면 그 결과를 가격 기록에 반영하지 않기 (권장)"
         )
-        geo_layout.addWidget(QLabel("지도 이동 간격"), 0, 0)
+        self.spin_geo_step.setSuffix(" px")
+        self.spin_geo_step.setToolTip("주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다.")
+        self.spin_geo_dwell.setSuffix(" ms")
+        self.spin_geo_dwell.setToolTip("한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)")
+        geo_layout.addWidget(QLabel("지도 탐색 구역 간격"), 0, 0)
         geo_layout.addWidget(self.spin_geo_step, 0, 1)
-        geo_layout.addWidget(QLabel("옮길 때마다 대기 (ms)"), 1, 0)
+        geo_layout.addWidget(QLabel("구역마다 쉬는 시간"), 1, 0)
         geo_layout.addWidget(self.spin_geo_dwell, 1, 1)
         geo_layout.addWidget(self.check_geo_incomplete_safety_mode, 2, 0, 1, 2)
         geo_layout.addWidget(

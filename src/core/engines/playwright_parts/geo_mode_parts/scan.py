@@ -210,6 +210,12 @@ class PlaywrightGeoScanMixin:
     ):
         if not self._desktop_page:
             return False
+        # fin boundedComplexes first (no map dragging); new.land map below is fallback.
+        if self._fin_front_api_enabled(asset_type):
+            fin_ok = await self._scan_geo_asset_type_fin(asset_type, trade_type, lat, lon, zoom, geo)
+            if fin_ok is not None:
+                return fin_ok
+            self.thread.log(f"   fin 지도 목록을 쓸 수 없어 new.land 지도로 전환({asset_type}/{trade_type})", 20)
         base_kind = "houses" if asset_type == "VL" else "complexes"
         # Live UI keeps trade filter as ``b=A1``; ``tradeTypes`` is dropped (2026-08-12).
         include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))

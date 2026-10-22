@@ -56,6 +56,7 @@ Write-Host "== Pytest (CI subset) =="
   tests/test_response_capture_normalize.py `
   tests/test_geo_markers_cortar.py `
   tests/test_site_contract.py `
+  tests/test_fin_land.py `
   tests/test_crawler_regressions.py `
   tests/test_crawl_lock.py `
   tests/test_paths_runtime.py `
@@ -70,6 +71,7 @@ Write-Host "== Pytest (CI subset) =="
   tests/test_detail_fetcher.py `
   tests/test_solid_split_facades.py `
   tests/test_browser_pool_guard.py `
+  tests/test_update_installer.py `
   tests/test_ci_subset_sync.py `
   tests/test_gap_analysis.py `
   tests/test_managers_cache.py `

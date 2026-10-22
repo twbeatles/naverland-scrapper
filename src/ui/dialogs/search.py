@@ -13,9 +13,11 @@ from src.utils.ui_labels import asset_label
 from src.core.services.keyword_search import (
     KeywordBrowserSession,
     KeywordSearchError,
-    fetch_search_page,
+    fetch_complex_search_page,
+    fetch_complex_suggestions,
+    fetch_fin_complex_info,
+    fetch_fin_region_by_coordinate,
     fetch_search_page_with_fallback,
-    fetch_suggestions,
     is_rate_limit_error,
 )
 
@@ -33,6 +35,7 @@ class _KeywordWorker(QObject):
 
     suggestions_ready = Signal(list, int)
     search_ready = Signal(dict, int, bool)
+    region_located = Signal(dict, int)
     failed = Signal(str, int, str)
 
     def __init__(self, session_factory=None, rate_limit_cooldown_sec=30.0,
@@ -98,8 +101,8 @@ class _KeywordWorker(QObject):
 
     def _run_fetch_once(self, kind, keyword, page=1):
         if kind == "suggest":
-            return fetch_suggestions(keyword, self._ensure_session().fetch)
-        return fetch_search_page(keyword, self._ensure_session().fetch, page=int(page or 1))
+            return fetch_complex_suggestions(keyword, self._ensure_session().fetch)
+        return fetch_complex_search_page(keyword, self._ensure_session().fetch, page=int(page or 1))
 
     def _fetch_with_retry(self, kind, keyword, page=1):
         """Single retry on transport errors; rate limits arm the cooldown."""
@@ -148,7 +151,8 @@ class _KeywordWorker(QObject):
         """Fresh (page-1) search: address variants first, one retry."""
         try:
             return fetch_search_page_with_fallback(
-                keyword, self._ensure_session().fetch, page=1)
+                keyword, self._ensure_session().fetch, page=1,
+                fetch_page=fetch_complex_search_page)
         except KeywordSearchError as exc:
             if self._cancelled:
                 raise
@@ -157,7 +161,8 @@ class _KeywordWorker(QObject):
             if not self._sleep_retry_delay():
                 raise
             return fetch_search_page_with_fallback(
-                keyword, self._ensure_session().fetch, page=1)
+                keyword, self._ensure_session().fetch, page=1,
+                fetch_page=fetch_complex_search_page)
 
     def resolve(self, entries, generation):
         """Resolve pasted complex IDs to rows (runs on the pump thread)."""
@@ -178,18 +183,27 @@ class _KeywordWorker(QObject):
                 asset = "APT"
             if not cid:
                 continue
+            # fin /complex via the browser session first (name, address, coords);
+            # out-of-browser name lookups are rate limited since 2026-10.
+            info = {}
             try:
-                name = NaverURLParser.fetch_complex_name(cid, asset_type=asset)
+                info = fetch_fin_complex_info(cid, self._ensure_session().fetch, asset_type=asset)
             except Exception:
-                name = ""
+                info = {}
+            name = str(info.get("name", "") or "").strip()
+            if not name:
+                try:
+                    name = NaverURLParser.fetch_complex_name(cid, asset_type=asset)
+                except Exception:
+                    name = ""
             name = str(name or "").strip() or f"단지_{cid}"
             rows.append({
                 "complex_id": cid,
                 "name": name,
-                "address": "",
+                "address": str(info.get("address", "") or ""),
                 "asset_type": asset,
-                "latitude": None,
-                "longitude": None,
+                "latitude": info.get("latitude"),
+                "longitude": info.get("longitude"),
                 "deep_link": "",
             })
         if not self._cancelled:
@@ -197,6 +211,17 @@ class _KeywordWorker(QObject):
                 {"complexes": rows, "regions": [],
                  "is_more_data": False, "effective_query": ""},
                 int(generation), False)
+
+    def locate(self, lat, lon, generation):
+        """Name a pasted map point by its legal division (best effort)."""
+        if self._cooldown_message():
+            return
+        try:
+            region = fetch_fin_region_by_coordinate(lat, lon, self._ensure_session().fetch)
+        except Exception:
+            region = {}
+        if region and not self._cancelled:
+            self.region_located.emit(dict(region), int(generation))
 
     @Slot()
     def close_session(self):
@@ -209,10 +234,11 @@ class _KeywordWorker(QObject):
 
 
 class KeywordSearchDialog(QDialog):
-    """키워드 단지 검색 다이얼로그 (v15.2).
+    """키워드 단지 검색 다이얼로그 (v15.2, 2026-10 fin.land 전환).
 
-    네이버 ``/api/autocomplete`` 제안 + ``/api/search`` 해석을 사용한다.
-    단지 후보는 체크 후 목록에 추가하고, 지역 후보는 지도 탭으로 보낸다.
+    fin ``search/autocomplete``(단지·법정동)를 먼저 쓰고 실패하면 new.land
+    ``/api/search``로 넘어간다. 단지 후보는 체크 후 목록에 추가하고, 지역
+    후보는 지도 탭으로 보낸다.
     """
 
     complexes_added = Signal(list)  # [(name, complex_id, asset_type), ...]
@@ -365,6 +391,7 @@ class KeywordSearchDialog(QDialog):
         self._worker = _KeywordWorker(session_factory=self._session_factory)
         self._worker.suggestions_ready.connect(self._on_suggestions_ready)
         self._worker.search_ready.connect(self._on_search_ready)
+        self._worker.region_located.connect(self._on_region_located)
         self._worker.failed.connect(self._on_worker_failed)
         self._pump_thread = threading.Thread(target=self._pump_loop, daemon=True)
         self._pump_thread.start()
@@ -396,6 +423,8 @@ class KeywordSearchDialog(QDialog):
                         worker.search(task[1], task[2], task[3], task[4])
                     elif kind == "resolve":
                         worker.resolve(task[1], task[2])
+                    elif kind == "locate":
+                        worker.locate(task[1], task[2], task[3])
                 except Exception:
                     pass
                 finally:
@@ -554,6 +583,8 @@ class KeywordSearchDialog(QDialog):
                 self.tabs.setCurrentIndex(1)
             self._set_busy(False)
             self.status_label.setText(f"지도 링크의 위치를 찾았습니다: {name}")
+            # Replace the coordinate label with the legal-division name when known.
+            self._enqueue(("locate", lat, lon, self._search_generation))
             return True
         articles = [
             e for e in found
@@ -603,6 +634,7 @@ class KeywordSearchDialog(QDialog):
             row = QListWidgetItem(text)
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             row.setCheckState(Qt.CheckState.Unchecked)
+            row.setToolTip(f"단지번호 {cid}" + (f" · {address}" if address else ""))
             row.setData(Qt.ItemDataRole.UserRole, {"name": name, "cid": cid, "asset": asset})
             self.complex_list.addItem(row)
         for item in result.get("regions", []) or []:
@@ -639,6 +671,22 @@ class KeywordSearchDialog(QDialog):
                 )
                 + (" · 「더 보기」로 더 불러올 수 있습니다" if self._has_more else "")
             )
+
+    @Slot(dict, int)
+    def _on_region_located(self, region, generation):
+        if generation != self._search_generation or self.region_list.count() != 1:
+            return
+        item = self.region_list.item(0)
+        if item is None:
+            return
+        data = dict(item.data(Qt.ItemDataRole.UserRole) or {})
+        if data.get("cortar_no"):
+            return
+        data.update({"cortar_no": region.get("cortar_no", ""), "name": region.get("name", "")})
+        label = f"{data['name']} 일대 (지도 링크 위치)"
+        item.setText(label)
+        item.setData(Qt.ItemDataRole.UserRole, data)
+        self.status_label.setText(f"지도 링크의 위치를 찾았습니다: {label}")
 
     @Slot(str, int, str)
     def _on_worker_failed(self, message, generation, kind):

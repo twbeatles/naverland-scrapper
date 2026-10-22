@@ -15,13 +15,22 @@ from src.utils.helpers import (
 
 
 class TestURLHelpers(unittest.TestCase):
-    def test_build_complex_url_keeps_complex_deeplink_default(self):
+    def test_build_complex_url_defaults_to_fin_complex_link(self):
+        # new.land is being retired; fin /complexes/{id} redirects to the map layer.
         self.assertEqual(
             build_complex_url("12345"),
+            "https://fin.land.naver.com/complexes/12345?tab=article",
+        )
+        self.assertEqual(
+            build_complex_url("12345", preferred_family="new"),
             "https://new.land.naver.com/complexes/12345",
         )
         self.assertEqual(
             build_complex_url("54321", asset_type="VL"),
+            "https://fin.land.naver.com/complexes/54321?tab=article&isVilla=true",
+        )
+        self.assertEqual(
+            build_complex_url("54321", asset_type="VL", preferred_family="new"),
             "https://new.land.naver.com/houses/54321",
         )
 
@@ -38,7 +47,7 @@ class TestURLHelpers(unittest.TestCase):
     def test_legacy_helper_wrappers_remain_compatible(self):
         self.assertEqual(
             get_complex_url("12345"),
-            "https://new.land.naver.com/complexes/12345",
+            "https://fin.land.naver.com/complexes/12345?tab=article",
         )
         self.assertEqual(
             get_article_url("12345", "2513105556", "APT"),

@@ -65,8 +65,8 @@ def _fields_from_named_tree(source_tree) -> dict:
     if prev_jeonse:
         fields["기전세금(원)"] = prev_jeonse
     for target, keys in (
-        ("공급면적(㎡)", {"supplyArea"}),
-        ("전용면적(㎡)", {"exclusiveArea"}),
+        ("공급면적(㎡)", {"supplyArea", "supplySpace"}),
+        ("전용면적(㎡)", {"exclusiveArea", "exclusiveSpace"}),
     ):
         try:
             area = float(_find_named_value(source_tree, keys))
@@ -80,11 +80,25 @@ def _fields_from_named_tree(source_tree) -> dict:
     return fields
 
 
+# Complex-level fin payloads (e.g. /complex?complexNumber= carries the management
+# office phone) must not feed broker name/phone fields (2026-10-22 live check).
+_COMPLEX_LEVEL_PATH = "/front-api/v1/complex"
+
+
+def _is_complex_level_response(item) -> bool:
+    return isinstance(item, dict) and _COMPLEX_LEVEL_PATH in str(item.get("url", "") or "")
+
+
+def _is_agent_response(item) -> bool:
+    return isinstance(item, dict) and "/article/agent" in str(item.get("url", "") or "")
+
+
 def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dict:
     artifacts = dict(artifacts or {})
+    responses = [item for item in list(artifacts.get("responses", []) or []) if not _is_complex_level_response(item)]
     source_tree = {
         "hydration_state": artifacts.get("hydration_state", {}),
-        "responses": artifacts.get("responses", []),
+        "responses": responses,
     }
     extracted = _fields_from_named_tree(source_tree)
     return _merge_detail_field_maps(fields, extracted)

@@ -263,7 +263,7 @@ class TestGeoPreflight(unittest.TestCase):
             tab._geo_place_name = ""
 
             tab.spin_rings.setValue(2)
-            self.assertIn("25화면", tab.lbl_geo_range.text())
+            self.assertIn("25구역", tab.lbl_geo_range.text())
 
             with (
                 patch(

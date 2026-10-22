@@ -424,13 +424,40 @@ class TestMapLinkParsing(unittest.TestCase):
             "2513105556",
         )
 
-    def test_opaque_viewport_link_yields_no_ids(self):
+    def test_fin_viewport_link_yields_center_but_no_ids(self):
+        # fin center= is base62 "<lon>-<lat>" (live 2026-10-22).
         text = (
             "https://fin.land.naver.com/map?center=3zkT1e-2AM2FA"
             "&zoom=15.676549711312278&tradeTypes=A1-B1"
         )
         self.assertEqual(NaverURLParser.extract_from_text(text), [])
-        self.assertIsNone(NaverURLParser.extract_map_center(text))
+        center = NaverURLParser.extract_map_center(text)
+        assert center is not None
+        lat, lon, zoom = center
+        self.assertAlmostEqual(lat, 37.566377, places=5)
+        self.assertAlmostEqual(lon, 127.0548312, places=5)
+        self.assertEqual(zoom, 15)
+
+    def test_new_land_base62_ms_center(self):
+        center = NaverURLParser.extract_map_center(
+            "https://new.land.naver.com/complexes/111515?ms=2AJ9Kw,3zn5fO,16&a=APT:ABYG:JGC"
+        )
+        self.assertEqual(center, (37.4976, 127.1072, 16))
+
+    def test_fin_layer_links_resolve_ids(self):
+        complex_link = (
+            "https://fin.land.naver.com/map?layer=NobwRAlgJmBcYGMD2BbADgGwKYA8D6UWALgIYQZgA0YaJATiS"
+            "gM5zjLrY4CSMsAjAICsfQQF9qTLPQQALAAr1GLWOFIAjOGHpEICbGFGiAukA&tradeTypes=A1-B1"
+        )
+        article_link = (
+            "https://fin.land.naver.com/map?layer=NobwRAlgJmBcYEMBOAXCBjANgUwPpWxQQkzABowAHZBAWwGc5xk"
+            "0tsBJGeAJgDYBWXgE5uABgAsQ-mAC%2BFetmToAFgAUaDJjJkBdIA"
+        )
+        self.assertEqual(NaverURLParser.extract_complex_id(complex_link), "111515")
+        self.assertEqual(NaverURLParser.extract_article_id(article_link), "2656920495")
+        found = NaverURLParser.extract_from_text(f"{complex_link}\n{article_link}")
+        self.assertEqual(found[0]["complex_id"], "111515")
+        self.assertTrue(found[1].get("needs_article_lookup"))
 
     def test_extract_map_center(self):
         center = NaverURLParser.extract_map_center(

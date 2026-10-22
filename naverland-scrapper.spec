@@ -110,6 +110,10 @@ hiddenimports += [
 hiddenimports += [
     "src.core.services.site_contract",
     "src.core.services.article_api",
+    # 2026-10-22 fin.land switch: some call sites import these lazily.
+    "src.core.services.fin_land_codec",
+    "src.core.services.fin_article_api",
+    "src.core.services.keyword_search",
     "src.core.services.detail_fetcher",
     "src.core.services.response_capture",
     "src.core.services.map_geometry",

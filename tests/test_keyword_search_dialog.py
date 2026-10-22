@@ -312,7 +312,8 @@ class TestKeywordWorkerResilience(unittest.TestCase):
             worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
             worker.search("반포자이", 1, 7, False)
             self._qt_app.processEvents()
-            self.assertEqual(state["calls"], 2)
+            # 429, then the retry: fin rejects the legacy-shaped body, new.land parses it.
+            self.assertEqual(state["calls"], 3)
             self.assertEqual(len(ready), 1)
             self.assertEqual(len(ready[0][0]["complexes"]), 1)
             self.assertEqual(failed, [])
@@ -331,7 +332,8 @@ class TestKeywordWorkerResilience(unittest.TestCase):
             worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
             worker.search("a", 1, 3, False)
             self._qt_app.processEvents()
-            self.assertEqual(state["calls"], 2)
+            # Two attempts, each trying fin then the legacy new.land fallback.
+            self.assertEqual(state["calls"], 4)
             self.assertEqual(ready, [])
             self.assertEqual(len(failed), 1)
             self.assertEqual(failed[0][1], 3)
@@ -518,24 +520,19 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
             dlg.deleteLater()
 
     def test_map_link_ms_center_becomes_region_row(self):
-        """new.land map links (ms=lat,lon,zoom) need no network at all."""
+        """new.land map links (ms=lat,lon,zoom) give a usable row without waiting on network.
+
+        Naming the point (fin searchByCoordinate) only happens in the background.
+        """
         from src.ui.dialogs.search import KeywordSearchDialog
 
-        sessions = []
-        dlg = KeywordSearchDialog(
-            mode="region",
-            session_factory=lambda: sessions.append(object()) or sessions[-1],
-        )
+        dlg = KeywordSearchDialog(mode="region", session_factory=lambda: None)
         try:
             dlg.input_keyword.setText(
                 "https://new.land.naver.com/complexes?ms=37.5494,126.9057,16&a=APT:ABYG:JGC"
             )
             dlg._run_search()
-            self.assertTrue(
-                self._pump_until(lambda: dlg.region_list.count() == 1),
-                "map-link region row missing",
-            )
-            self.assertEqual(sessions, [])
+            self.assertEqual(dlg.region_list.count(), 1, "map-link region row missing")
             data = dlg.region_list.item(0).data(
                 __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.ItemDataRole.UserRole
             )
@@ -546,8 +543,31 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
             dlg.reject()
             dlg.deleteLater()
 
-    def test_opaque_viewport_link_shows_guidance(self):
-        """fin.land viewport links carry no IDs: explain, don't hang or crash."""
+    def test_located_region_name_replaces_coordinate_label(self):
+        from PySide6.QtCore import Qt
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        dlg = KeywordSearchDialog(mode="region", session_factory=lambda: None)
+        try:
+            dlg.input_keyword.setText("https://fin.land.naver.com/map?center=3zkT1e-2AM2FA&zoom=15")
+            dlg._run_search()
+            dlg._on_region_located(
+                {"cortar_no": "1123010500", "name": "서울시 동대문구 답십리동"}, dlg._search_generation
+            )
+            item = dlg.region_list.item(0)
+            self.assertIn("답십리동", item.text())
+            data = item.data(Qt.ItemDataRole.UserRole)
+            self.assertEqual(data["cortar_no"], "1123010500")
+            self.assertAlmostEqual(data["latitude"], 37.566377, places=5)
+            # A stale generation must not rename rows of a newer search.
+            dlg._on_region_located({"cortar_no": "1", "name": "다른 곳"}, dlg._search_generation - 1)
+            self.assertIn("답십리동", dlg.region_list.item(0).text())
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_fin_viewport_link_resolves_center(self):
+        """fin.land viewport links carry no IDs but a base62 center (2026-10-22)."""
         from src.ui.dialogs.search import KeywordSearchDialog
 
         dlg = KeywordSearchDialog(session_factory=lambda: None)
@@ -555,6 +575,20 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
             dlg.input_keyword.setText(
                 "https://fin.land.naver.com/map?center=3zkT1e-2AM2FA&zoom=15.6"
             )
+            dlg._run_search()
+            self.assertFalse(dlg._busy)
+            self.assertIn("지도 링크의 위치를 찾았습니다", dlg.status_label.text())
+            self.assertEqual(dlg.region_list.count(), 1)
+        finally:
+            dlg.reject()
+            dlg.deleteLater()
+
+    def test_viewport_link_without_center_shows_guidance(self):
+        from src.ui.dialogs.search import KeywordSearchDialog
+
+        dlg = KeywordSearchDialog(session_factory=lambda: None)
+        try:
+            dlg.input_keyword.setText("https://fin.land.naver.com/map?tradeTypes=A1-B1")
             dlg._run_search()
             self.assertFalse(dlg._busy)
             self.assertIn("단지 정보가 없어요", dlg.status_label.text())

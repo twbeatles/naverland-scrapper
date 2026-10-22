@@ -29,6 +29,7 @@ from src.utils.live_smoke_parts.probes import (
     _run_complex_probe_detail,
     _run_detail_field_probe,
     _run_detail_probe,
+    _run_fin_contract_probe,
     _run_geo_marker_probe,
     _run_home_probes,
 )

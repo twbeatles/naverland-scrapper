@@ -53,6 +53,52 @@ def _is_child(path: Path, parent: Path) -> bool:
         return False
 
 
+# PyInstaller one-file bootloader variables inherited from the running EXE
+# must not leak into helper/restart/smoke children: a stale _MEIPASS points
+# at the parent's temp dir and breaks the child once the parent exits.
+_BOOTLOADER_ENV_PREFIXES = ("_MEI", "_PYI", "_PYINSTALLER")
+
+
+def clean_bootloader_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    """Return an env mapping without PyInstaller bootloader variables."""
+    source = base if base is not None else os.environ
+    cleaned = dict(source)
+    for key in list(cleaned.keys()):
+        if key.upper().startswith(_BOOTLOADER_ENV_PREFIXES):
+            del cleaned[key]
+    return cleaned
+
+
+def backup_path_for(target: Path) -> Path:
+    """Fixed backup next to the installed EXE so stale backups can be reused."""
+    return target.with_name(f"{target.name}.bak")
+
+
+def _cleanup_legacy_token_backups(target: Path) -> None:
+    """Best-effort removal of pre-fix `{name}.{token}.bak` leftovers."""
+    try:
+        for legacy in target.parent.glob(f"{target.name}.*.bak"):
+            if legacy == backup_path_for(target):
+                continue
+            try:
+                legacy.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _recover_interrupted_swap(target: Path, backup: Path) -> bool:
+    """Restore `backup -> target` when a previous run died between the moves."""
+    try:
+        if not target.exists() and backup.exists():
+            os.replace(backup, target)
+            return True
+    except OSError:
+        pass
+    return False
+
+
 def download_verified_artifact(manifest: ReleaseManifest) -> Path:
     root = staging_root(); root.mkdir(parents=True, exist_ok=True)
     staged = root / f"update-{manifest.version}-{uuid4().hex}.exe"
@@ -90,7 +136,7 @@ def launch_update_helper(*, target: Path, staged: Path, manifest: ReleaseManifes
     _write_json(ticket, {"token": token, "target": str(target), "staged": str(staged), "sha256": manifest.artifact_sha256, "size": manifest.artifact_size})
     try:
         shutil.copy2(target, helper)
-        subprocess.Popen([str(helper), "--apply-update", "--update-token", token, "--update-parent-pid", str(parent_pid)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        subprocess.Popen([str(helper), "--apply-update", "--update-token", token, "--update-parent-pid", str(parent_pid)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
     except Exception:
         helper.unlink(missing_ok=True); ticket.unlink(missing_ok=True); raise
 
@@ -120,7 +166,22 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
         raise ValueError("Invalid update ticket")
     target, staged = Path(target_value).resolve(), Path(staged_value).resolve()
     helper = Path(sys.executable).resolve()
-    if helper.parent != root or not _is_child(staged, root) or target.suffix.lower() != ".exe" or not target.is_file() or not staged.is_file():
+    if helper.parent != root or not _is_child(staged, root) or target.suffix.lower() != ".exe":
+        raise ValueError("Invalid update paths")
+    _cleanup_legacy_token_backups(target)
+    backup = backup_path_for(target)
+    if not target.exists():
+        # Previous run died between the two renames: installed slot is empty
+        # but the backup still holds the last good build. Recover first so a
+        # stale interrupted swap never blocks the next attempt.
+        if backup.exists():
+            try:
+                os.replace(backup, target)
+            except OSError as exc:
+                raise ValueError(f"Installed executable is missing and backup recovery failed: {exc}") from exc
+        else:
+            raise ValueError("Invalid update paths")
+    if not target.is_file() or not staged.is_file():
         raise ValueError("Invalid update paths")
     _verify_staged(staged, sha_value, size_value)
     deadline = time.monotonic() + 45
@@ -129,20 +190,70 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
         except OSError: break
         time.sleep(.2)
     else: raise TimeoutError("Application did not exit before update")
-    backup = target.with_name(f"{target.name}.{token}.bak")
     status: dict[str, object] = {"version": staged.name, "backup": str(backup)}
-    shutil.copy2(target, backup)
+    # Windows keeps a running (or just-exited, AV-scanned) EXE locked for
+    # overwrite/delete, but a rename out of the way still succeeds. So swap
+    # with two renames: installed -> backup, then staged -> installed. If the
+    # first rename fails the installed build is untouched.
+    moved_to_backup = False
+    swapped = False
     try:
-        os.replace(staged, target)
-        smoke = subprocess.run([str(target), "--preflight"], timeout=smoke_timeout, check=False, capture_output=True)
+        # A stale backup from a previous attempt is simply overwritten by the
+        # rename below; it never blocks the next attempt.
+        try:
+            os.replace(target, backup)
+        except OSError as exc:
+            raise RuntimeError(f"Could not move installed executable to backup: {exc}") from exc
+        moved_to_backup = True
+        try:
+            os.replace(staged, target)
+        except OSError as exc:
+            try:
+                if not target.exists() and backup.exists():
+                    os.replace(backup, target)
+            except OSError:
+                pass
+            raise RuntimeError(f"Update swap failed, previous version restored: {exc}") from exc
+        swapped = True
+        smoke = subprocess.run([str(target), "--preflight"], timeout=smoke_timeout, check=False, capture_output=True, env=clean_bootloader_env())
         if smoke.returncode != 0: raise RuntimeError(f"Updated executable preflight failed ({smoke.returncode})")
-        subprocess.Popen([str(target)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        subprocess.Popen([str(target)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
         status["status"] = "applied"
     except Exception as exc:
-        if backup.exists(): os.replace(backup, target)
+        if swapped:
+            # Smoke/restart failed after the swap: the new build owns the
+            # installed slot (possibly still locked), so rename it aside
+            # first and then rename the backup home. Overwriting the locked
+            # slot in place would fail with WinError 5.
+            try:
+                aside = target.with_name(f"{target.name}.failed-{token}")
+                try:
+                    if aside.exists():
+                        aside.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                os.replace(target, aside)
+                os.replace(backup, target)
+                try:
+                    aside.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            except OSError as rollback_exc:
+                status.update(status="rolled_back", error=f"{exc} (rollback failed: {rollback_exc}; backup kept at {backup})")
+                raise
+        elif moved_to_backup:
+            try:
+                if not target.exists() and backup.exists():
+                    os.replace(backup, target)
+            except OSError:
+                pass
         status.update(status="rolled_back", error=str(exc))
         raise
     finally:
         _write_json(_result_path(root), status)
         ticket.unlink(missing_ok=True)
-    if backup.exists(): backup.unlink(missing_ok=True)
+    if backup.exists():
+        try:
+            backup.unlink(missing_ok=True)
+        except OSError:
+            pass

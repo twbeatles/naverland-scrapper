@@ -13,6 +13,8 @@ from src.core.services.detail_fetcher_parts.detail_parse import (
 )
 from src.core.services.detail_fetcher_parts.field_merge import (
     _backfill_fields_from_artifacts,
+    _is_agent_response,
+    _is_complex_level_response,
     _merge_detail_field_maps,
 )
 from src.core.services.detail_fetcher_parts.front_api import (
@@ -20,6 +22,23 @@ from src.core.services.detail_fetcher_parts.front_api import (
     parse_front_api_agent_payload,
 )
 from src.core.services.detail_fetcher_parts.page_primitives import _is_not_found_body
+
+
+def _structured_response_fields(artifacts: dict) -> dict:
+    """Fields from front-api payloads: the broker agent API first, then others.
+
+    Complex-level payloads are skipped (their phone is the management office).
+    """
+    responses = [
+        item for item in list((artifacts or {}).get("responses", []) or [])
+        if isinstance(item, dict) and isinstance(item.get("payload"), dict)
+    ]
+    ordered = [item for item in responses if _is_agent_response(item)]
+    ordered += [item for item in responses if not _is_agent_response(item) and not _is_complex_level_response(item)]
+    fields: dict = {}
+    for item in ordered:
+        fields = _merge_detail_field_maps(fields, parse_front_api_agent_payload(item["payload"]))
+    return fields
 
 
 async def fetch_mobile_article_detail(
@@ -33,7 +52,7 @@ async def fetch_mobile_article_detail(
     if not article_no:
         return {}
 
-    from src.core.services.site_contract import HOST_FIN, HOST_M, is_fin_html_dead_url
+    from src.core.services.site_contract import HOST_FIN, is_fin_html_dead_url
 
     best_source = ""
     best_artifacts: dict = {}
@@ -52,13 +71,7 @@ async def fetch_mobile_article_detail(
             {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
             navigation_timeout_ms=navigation_timeout_ms,
         )
-        cold_fields: dict = {}
-        for response_item in list(cold_artifacts.get("responses", []) or []):
-            if not isinstance(response_item, dict):
-                continue
-            payload = response_item.get("payload")
-            if isinstance(payload, dict):
-                cold_fields = _merge_detail_field_maps(cold_fields, parse_front_api_agent_payload(payload))
+        cold_fields: dict = _structured_response_fields(cold_artifacts)
         cold_fields = _backfill_fields_from_artifacts(cold_fields, cold_artifacts)
         cold_meta = _build_detail_meta("front_api", "", cold_fields, cold_artifacts)
         if bool(cold_artifacts.get("front_api_rate_limited")):
@@ -68,10 +81,30 @@ async def fetch_mobile_article_detail(
         cold_fields["_detail_meta"] = cold_meta
         return cold_fields
 
-    # Prefer front-api-only first when HTML is known-dead; try fin once then skip m.* redirects.
+    # fin front-api first (2026-10-22: ~7x faster than opening the article SPA with
+    # the same broker fields); open the article page only when the API gave nothing.
+    if use_front_api:
+        api_artifacts = await _supplement_front_api_artifacts(
+            detail_page,
+            article_no,
+            {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
+            navigation_timeout_ms=navigation_timeout_ms,
+        )
+        api_fields = _structured_response_fields(api_artifacts)
+        if _detail_core_field_score(api_fields) > 0:
+            api_meta = _build_detail_meta("front_api", "", api_fields, api_artifacts)
+            api_fields["_detail_meta"] = api_meta
+            return api_fields
+        if bool(api_artifacts.get("front_api_rate_limited")):
+            # Opening the page would only add load while the site is throttling.
+            api_meta = _build_detail_meta("front_api", "", api_fields, api_artifacts)
+            api_meta["front_api_rate_limited"] = True
+            api_fields["_detail_meta"] = api_meta
+            return api_fields
+
+    # m.land article pages redirect to the same fin article (2026-10-22): fin only.
     url_candidates: list[tuple[str, str]] = [
         ("fin_article", f"{HOST_FIN}/articles/{article_no}"),
-        ("m_info", f"{HOST_M}/article/info/{article_no}"),
     ]
     for source, url in url_candidates:
         if fin_html_dead and source.startswith("m_"):
@@ -118,15 +151,13 @@ async def fetch_mobile_article_detail(
 
         body_text = str(merged_artifacts.get("body_text", "") or candidate_body or "")
         corpus_text = str(merged_artifacts.get("corpus_text", "") or candidate_corpus or "")
-        fields = _parse_detail_fields(body_text, fallback_text=corpus_text)
+        # Structured front-api payloads (broker agent first) win over text parsing:
+        # page text also shows the complex management office phone.
+        fields = _merge_detail_field_maps(
+            _structured_response_fields(merged_artifacts),
+            _parse_detail_fields(body_text, fallback_text=corpus_text),
+        )
         fields = _backfill_fields_from_artifacts(fields, merged_artifacts)
-        # Prefer structured front-api payloads when present.
-        for response_item in list(merged_artifacts.get("responses", []) or []):
-            if not isinstance(response_item, dict):
-                continue
-            payload = response_item.get("payload")
-            if isinstance(payload, dict):
-                fields = _merge_detail_field_maps(fields, parse_front_api_agent_payload(payload))
         meta = _build_detail_meta(source, body_text, fields, merged_artifacts)
         if bool(merged_artifacts.get("front_api_rate_limited")):
             meta["front_api_rate_limited"] = True
@@ -155,13 +186,7 @@ async def fetch_mobile_article_detail(
             {"responses": [], "body_text": "", "html_text": "", "hydration_state": {}},
             navigation_timeout_ms=navigation_timeout_ms,
         )
-        cold_fields = {}
-        for response_item in list(cold_artifacts.get("responses", []) or []):
-            if not isinstance(response_item, dict):
-                continue
-            payload = response_item.get("payload")
-            if isinstance(payload, dict):
-                cold_fields = _merge_detail_field_maps(cold_fields, parse_front_api_agent_payload(payload))
+        cold_fields = _structured_response_fields(cold_artifacts)
         cold_fields = _backfill_fields_from_artifacts(cold_fields, cold_artifacts)
         cold_meta = _build_detail_meta("front_api", "", cold_fields, cold_artifacts)
         if bool(cold_artifacts.get("front_api_rate_limited")):

@@ -26,9 +26,21 @@ class PlaywrightGeoMapControlMixin:
         ms = parse_qs(parsed.query).get("ms", [None])[0]
         if not ms:
             return None
+        # new.land writes ms= as base62 since 2026-10 (plain decimals still accepted).
+        from src.core.services.fin_land_codec import decode_base62_coord
+
         try:
-            lat, lon, zoom = ms.split(",")
-            return float(lat), float(lon), float(zoom)
+            lat_token, lon_token, zoom = ms.split(",")
+            values = []
+            for token in (lat_token, lon_token):
+                try:
+                    values.append(float(token))
+                except ValueError:
+                    decoded = decode_base62_coord(token)
+                    if decoded is None:
+                        return None
+                    values.append(decoded)
+            return values[0], values[1], float(zoom)
         except Exception:
             return None
 

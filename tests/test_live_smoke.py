@@ -186,6 +186,56 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
         self.assertIn("core_field_count=2", line)
 
 
+class _FinProbePage:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.url = ""
+
+    async def goto(self, url, wait_until="domcontentloaded", timeout=None):
+        self.url = url
+
+    async def wait_for_timeout(self, _ms):
+        return None
+
+    async def evaluate(self, _script, _args):
+        status, payload = self._responses.pop(0)
+        return {"status": status, "body": json.dumps(payload)}
+
+
+class TestFinContractProbe(unittest.IsolatedAsyncioTestCase):
+    async def test_fin_contract_probe_reads_search_and_article_list(self):
+        page = _FinProbePage([
+            (200, {"isSuccess": True, "result": {"list": [{"complexNumber": 111515}]}}),
+            (200, {"isSuccess": True, "detailCode": "success", "result": {
+                "hasNextPage": False, "lastInfo": [], "totalCount": 1,
+                "list": [{"representativeArticleInfo": {"articleNumber": "2656920495", "tradeType": "A1"}}],
+            }}),
+            (200, {"isSuccess": True, "detailCode": "success", "result": {
+                "hasNextPage": False, "lastInfo": [], "list": [{"type": "COMPLEX", "complex": {
+                    "complexInfo": {"complexNumber": 3833, "name": "남산타운", "type": "A01"},
+                    "articleCountInfoDto": {"dealCount": 12}}}],
+            }}),
+        ])
+        ok, line, sample, count = await live_smoke._run_fin_contract_probe(page, "111515", 1000)
+        self.assertTrue(ok)
+        self.assertEqual(sample, "2656920495")
+        self.assertEqual(count, 1)
+        self.assertIn("[ok] [fin-contract]", line)
+        self.assertIn("geo_complexes=1", line)
+        self.assertIn("robots.txt", page.url)
+
+    async def test_fin_contract_probe_fails_on_rate_limit(self):
+        page = _FinProbePage([
+            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+        ])
+        ok, line, _sample, count = await live_smoke._run_fin_contract_probe(page, "111515", 1000)
+        self.assertFalse(ok)
+        self.assertEqual(count, 0)
+        self.assertIn("fin_article_list_invalid:429", line)
+
+
 class TestRunLiveSmoke(unittest.TestCase):
     def test_run_live_smoke_writes_json_log_for_unexpected_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

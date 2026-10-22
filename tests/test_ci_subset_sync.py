@@ -19,6 +19,7 @@ REQUIRED_IN_CI = {
     "tests/test_geo_markers_cortar.py",
     "tests/test_browser_pool_guard.py",
     "tests/test_ci_subset_sync.py",
+    "tests/test_update_installer.py",
 }
 
 _TEST_PATTERN = re.compile(r"tests/test_[A-Za-z0-9_]+\.py")

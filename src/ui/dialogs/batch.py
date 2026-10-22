@@ -170,9 +170,9 @@ class URLBatchDialog(QDialog):
         self.input_text.setReadOnly(False)
         self.input_text.setPlaceholderText(
             "예시:\n"
+            "https://fin.land.naver.com/map?layer=... (단지·매물을 연 지도 링크)\n"
+            "https://fin.land.naver.com/complexes/111515\n"
             "https://new.land.naver.com/complexes/102378\n"
-            "https://land.naver.com/complex?complexNo=123456\n"
-            "https://m.land.naver.com/article/info/2513105556\n"
             "https://fin.land.naver.com/articles/2539123450\n"
             "123456\n"
             "789012"

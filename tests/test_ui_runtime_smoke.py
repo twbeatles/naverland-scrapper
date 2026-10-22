@@ -271,12 +271,13 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         placeholder = dlg.input_text.placeholderText()
         self.assertIn("https://new.land.naver.com/complexes/102378", placeholder)
         self.assertIn("https://fin.land.naver.com/articles/2539123450", placeholder)
+        self.assertIn("https://fin.land.naver.com/complexes/111515", placeholder)
         dlg._selected_complexes = [("테스트단지", "102378"), ("빌라단지", "202020", "VL")]
         self.assertEqual(
             dlg.get_urls(),
             [
-                "https://new.land.naver.com/complexes/102378",
-                "https://new.land.naver.com/houses/202020",
+                "https://fin.land.naver.com/complexes/102378?tab=article",
+                "https://fin.land.naver.com/complexes/202020?tab=article&isVilla=true",
             ],
         )
         dlg.deleteLater()

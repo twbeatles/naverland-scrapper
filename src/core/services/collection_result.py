@@ -6,7 +6,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Literal, TypedDict
 
-COLLECTION_SCHEMA_VERSION = 2
+# v3: fin.land front-api became the primary article source (2026-10-22).
+COLLECTION_SCHEMA_VERSION = 3
 
 
 def observation_date(now: datetime | None = None) -> str:
