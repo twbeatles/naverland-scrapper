@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlencode
 
-from src.core.services.map_geometry import build_grid_sweep_coords, clamp_korea
-from src.core.services.response_capture import TRADE_CODE_MAP, normalize_marker_payload
+from src.core.services.response_capture import TRADE_CODE_MAP
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403

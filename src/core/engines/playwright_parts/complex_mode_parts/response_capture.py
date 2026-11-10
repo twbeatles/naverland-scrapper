@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any, TYPE_CHECKING
 
-from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
-from src.core.services.response_capture import detect_trade_type, normalize_article_payload
 from src.core.services.site_contract import HOST_NEW, build_complex_page_url
 
 if TYPE_CHECKING:

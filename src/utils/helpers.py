@@ -1,4 +1,3 @@
-import re
 from datetime import datetime
 from pathlib import Path
 import os
@@ -58,24 +57,33 @@ def build_article_url(
 class PriceConverter:
     @staticmethod
     def to_int(price_str):
-        if not price_str: return 0
+        if not price_str:
+            return 0
         price_str = str(price_str).replace(",", "").replace(" ", "").strip()
         total = 0
         if "억" in price_str:
             parts = price_str.split("억")
-            try: total += int(float(parts[0])) * 10000
-            except (ValueError, TypeError): pass
+            try:
+                total += int(float(parts[0])) * 10000
+            except (ValueError, TypeError):
+                pass
             if len(parts) > 1 and parts[1]:
                 remain = parts[1].replace("만", "").strip()
                 if remain:
-                    try: total += int(float(remain))
-                    except (ValueError, TypeError): pass
+                    try:
+                        total += int(float(remain))
+                    except (ValueError, TypeError):
+                        pass
         elif "만" in price_str:
-            try: total = int(float(price_str.replace("만", "").strip()))
-            except (ValueError, TypeError): pass
+            try:
+                total = int(float(price_str.replace("만", "").strip()))
+            except (ValueError, TypeError):
+                pass
         else:
-            try: total = int(float(price_str))
-            except (ValueError, TypeError): pass
+            try:
+                total = int(float(price_str))
+            except (ValueError, TypeError):
+                pass
         return total
     
     @staticmethod
@@ -264,7 +272,7 @@ class ChromeParamHelper:
             # 메이저 버전 추출
             major_version = int(version.split('.')[0])
             return major_version
-        except Exception as e:
+        except Exception:
             # 실패 시 로그 출력 또는 None 반환 (호출 측에서 처리)
             # print(f"Chrome version detection failed: {e}")
             return None

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject
-from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QComboBox, QWidget
+from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QComboBox
 
 
 class InputWheelGuard(QObject):

@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import sys
-from pathlib import Path
-from typing import Any, Iterable
 
 from src.core.services.article_api import (
     article_api_has_more_pages,
     article_api_list_count,
     build_article_api_url,
 )
-from src.utils.helpers import ChromeParamHelper
-from src.utils.paths import BASE_DIR, DATA_DIR, is_frozen_runtime
 from src.core.services.detail_fetcher import fetch_mobile_article_detail
 
 try:
@@ -22,10 +16,7 @@ try:
 except ImportError:
     async_playwright = None
     PLAYWRIGHT_AVAILABLE = False
-from src.core.parser import NaverURLParser
 from src.utils.live_smoke_parts.helpers import (
-    DEFAULT_SMOKE_ARTICLE_ID,
-    DEFAULT_SMOKE_COMPLEX_ID,
     _append_reason,
     _build_smoke_line,
     _capture_response_status,
@@ -465,7 +456,6 @@ async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tup
     first complex article list page must parse.
     """
     import json as _json
-    from urllib.parse import quote
 
     from src.core.services.fin_article_api import parse_fin_article_list, parse_fin_bounded_complexes
     from src.core.services.map_geometry import viewport_bounds

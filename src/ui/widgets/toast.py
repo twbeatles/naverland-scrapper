@@ -10,8 +10,8 @@ from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGraphicsOpacityEffe
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
 from src.utils.logger import get_logger
 
-logger = get_logger("Toast")
 from PySide6.QtGui import QFont
+logger = get_logger("Toast")
 
 
 class ToastWidget(QWidget):

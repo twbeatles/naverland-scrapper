@@ -4,7 +4,6 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.core.database import *  # noqa: F403
-    from src.core.database_parts.pool import ConnectionPool
 
 
 import re

@@ -4,7 +4,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCursor, QColor
-import webbrowser
 from src.utils.constants import CRAWL_SPEED_PRESETS, TRADE_COLORS
 from src.ui.styles import COLORS
 
@@ -181,7 +180,8 @@ class SpeedSlider(QWidget):
 
     def current_speed(self): return self.SPEEDS[self.slider.value()]
     def set_speed(self, speed):
-        if speed in self.SPEEDS: self.slider.setValue(self.SPEEDS.index(speed))
+        if speed in self.SPEEDS:
+            self.slider.setValue(self.SPEEDS.index(speed))
 
 class ProgressWidget(QWidget):
     """진행 상태 위젯 - 예상 시간 표시"""

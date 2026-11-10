@@ -238,7 +238,7 @@ class AppTabSetupMixin:
 
     
     def _setup_schedule_tab(self: Any):
-        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
         from src.ui.widgets.components import build_page_header
         from src.utils.ui_labels import SCHEDULE_MODE_LABELS
 

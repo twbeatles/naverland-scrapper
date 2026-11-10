@@ -1,4 +1,5 @@
-from src.utils.version import APP_VERSION
+
+from src.utils.version import APP_VERSION  # noqa: F401  # hub re-export: `from src.utils.constants import APP_VERSION` used by app.py (do not remove)
 
 APP_TITLE = "네이버 부동산 매물 크롤러 Pro Plus"
 

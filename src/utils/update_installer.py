@@ -34,8 +34,10 @@ def _write_json(path: Path, value: dict[str, object]) -> None:
 def consume_update_result() -> dict[str, object] | None:
     root = staging_root()
     for stale in root.glob("update-helper-*.exe"):
-        try: stale.unlink()
-        except OSError: pass
+        try:
+            stale.unlink()
+        except OSError:
+            pass
     path = _result_path(root)
     try:
         result = json.loads(path.read_text(encoding="utf-8"))
@@ -100,9 +102,11 @@ def _recover_interrupted_swap(target: Path, backup: Path) -> bool:
 
 
 def download_verified_artifact(manifest: ReleaseManifest) -> Path:
-    root = staging_root(); root.mkdir(parents=True, exist_ok=True)
+    root = staging_root()
+    root.mkdir(parents=True, exist_ok=True)
     staged = root / f"update-{manifest.version}-{uuid4().hex}.exe"
-    digest = hashlib.sha256(); total = 0
+    digest = hashlib.sha256()
+    total = 0
     try:
         with urlopen(Request(manifest.artifact_url, headers={"User-Agent": "NaverlandScrapper-Updater"}), timeout=REQUEST_TIMEOUT_SECONDS) as response, staged.open("xb") as output:
             final = urlsplit(response.geturl())
@@ -112,13 +116,16 @@ def download_verified_artifact(manifest: ReleaseManifest) -> Path:
                 total += len(chunk)
                 if total > manifest.artifact_size or total > MAX_ARTIFACT_BYTES:
                     raise ValueError("Update artifact size mismatch")
-                digest.update(chunk); output.write(chunk)
-            output.flush(); os.fsync(output.fileno())
+                digest.update(chunk)
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
         if total != manifest.artifact_size or digest.hexdigest().lower() != manifest.artifact_sha256:
             raise ValueError("Update artifact integrity check failed")
         return staged
     except Exception:
-        staged.unlink(missing_ok=True); raise
+        staged.unlink(missing_ok=True)
+        raise
 
 
 def discard_staged_update(staged: Path) -> None:
@@ -127,7 +134,8 @@ def discard_staged_update(staged: Path) -> None:
 
 
 def launch_update_helper(*, target: Path, staged: Path, manifest: ReleaseManifest, parent_pid: int) -> None:
-    root = staging_root(); target, staged = target.resolve(), staged.resolve()
+    root = staging_root()
+    target, staged = target.resolve(), staged.resolve()
     if not _is_child(staged, root) or target != Path(sys.executable).resolve():
         raise ValueError("Update paths are not trusted")
     token = uuid4().hex
@@ -138,29 +146,39 @@ def launch_update_helper(*, target: Path, staged: Path, manifest: ReleaseManifes
         shutil.copy2(target, helper)
         subprocess.Popen([str(helper), "--apply-update", "--update-token", token, "--update-parent-pid", str(parent_pid)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
     except Exception:
-        helper.unlink(missing_ok=True); ticket.unlink(missing_ok=True); raise
+        helper.unlink(missing_ok=True)
+        ticket.unlink(missing_ok=True)
+        raise
 
 
 def _load_ticket(token: str) -> tuple[Path, dict[str, object]]:
     if len(token) != 32 or any(c not in "0123456789abcdef" for c in token):
         raise ValueError("Invalid update token")
-    root = staging_root(); ticket = root / f"update-{token}.json"
-    try: data = json.loads(ticket.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc: raise ValueError("Update ticket is unavailable") from exc
-    if not isinstance(data, dict) or data.get("token") != token: raise ValueError("Invalid update ticket")
+    root = staging_root()
+    ticket = root / f"update-{token}.json"
+    try:
+        data = json.loads(ticket.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Update ticket is unavailable") from exc
+    if not isinstance(data, dict) or data.get("token") != token:
+        raise ValueError("Invalid update ticket")
     return ticket, data
 
 
 def _verify_staged(staged: Path, expected_sha256: str, expected_size: int) -> None:
-    if staged.stat().st_size != int(expected_size): raise ValueError("Staged update size changed before installation")
+    if staged.stat().st_size != int(expected_size):
+        raise ValueError("Staged update size changed before installation")
     digest = hashlib.sha256()
     with staged.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""): digest.update(chunk)
-    if digest.hexdigest().lower() != str(expected_sha256).lower(): raise ValueError("Staged update hash changed before installation")
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest().lower() != str(expected_sha256).lower():
+        raise ValueError("Staged update hash changed before installation")
 
 
 def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> None:
-    root = staging_root(); ticket, data = _load_ticket(token)
+    root = staging_root()
+    ticket, data = _load_ticket(token)
     target_value, staged_value, sha_value, size_value = data.get("target"), data.get("staged"), data.get("sha256"), data.get("size")
     if not isinstance(target_value, str) or not isinstance(staged_value, str) or not isinstance(sha_value, str) or not isinstance(size_value, int):
         raise ValueError("Invalid update ticket")
@@ -186,10 +204,13 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
     _verify_staged(staged, sha_value, size_value)
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
-        try: os.kill(parent_pid, 0)
-        except OSError: break
+        try:
+            os.kill(parent_pid, 0)
+        except OSError:
+            break
         time.sleep(.2)
-    else: raise TimeoutError("Application did not exit before update")
+    else:
+        raise TimeoutError("Application did not exit before update")
     status: dict[str, object] = {"version": staged.name, "backup": str(backup)}
     # Windows keeps a running (or just-exited, AV-scanned) EXE locked for
     # overwrite/delete, but a rename out of the way still succeeds. So swap
@@ -216,7 +237,8 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
             raise RuntimeError(f"Update swap failed, previous version restored: {exc}") from exc
         swapped = True
         smoke = subprocess.run([str(target), "--preflight"], timeout=smoke_timeout, check=False, capture_output=True, env=clean_bootloader_env())
-        if smoke.returncode != 0: raise RuntimeError(f"Updated executable preflight failed ({smoke.returncode})")
+        if smoke.returncode != 0:
+            raise RuntimeError(f"Updated executable preflight failed ({smoke.returncode})")
         subprocess.Popen([str(target)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
         status["status"] = "applied"
     except Exception as exc:

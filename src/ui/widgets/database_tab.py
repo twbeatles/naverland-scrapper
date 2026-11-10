@@ -214,15 +214,11 @@ class DatabaseTab(QWidget):
 
         db_id_item = self.table.item(row, self.COL_ID)
         name_item = self.table.item(row, self.COL_NAME)
-        asset_item = self.table.item(row, self.COL_ASSET)
-        cid_item = self.table.item(row, self.COL_COMPLEX_ID)
 
         if not db_id_item:
             return
         db_id = int(db_id_item.text())
         name = name_item.text() if name_item else ""
-        asset_type = asset_item.text() if asset_item else ""
-        complex_id = cid_item.text() if cid_item else ""
 
         ok, purge_related = self._confirm_delete(
             title="단지 삭제",

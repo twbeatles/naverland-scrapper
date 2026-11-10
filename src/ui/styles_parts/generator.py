@@ -59,7 +59,7 @@ def _generate_stylesheet(theme: str = "dark") -> str:
     start_hover = c['accent_hover']
     progress_gradient = c['accent']
     start_text = c["bg_primary"] if is_dark else "#ffffff"
-    statusbar_border = f"rgba(245, 158, 11, 0.15)" if is_dark else c["border"]
+    statusbar_border = "rgba(245, 158, 11, 0.15)" if is_dark else c["border"]
 
     return f"""
 /* ========================================

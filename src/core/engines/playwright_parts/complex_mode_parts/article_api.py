@@ -12,7 +12,6 @@ from src.core.services.article_api import (
     article_api_real_estate_type,
     build_article_api_url,
 )
-from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
 from src.core.services.response_capture import TRADE_CODE_MAP, detect_trade_type, normalize_article_payload
 
 if TYPE_CHECKING:

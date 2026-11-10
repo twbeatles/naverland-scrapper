@@ -3,14 +3,14 @@ import os
 import sys
 from pathlib import Path
 
+from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
+from src.utils.paths import bootstrap_runtime_paths
+from src.utils.preflight import run_preflight_checks
 # Add project root to sys.path to allow running this script directly.
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
-from src.utils.paths import bootstrap_runtime_paths
-from src.utils.preflight import run_preflight_checks
 
 
 def _configure_stdio_encoding() -> None:

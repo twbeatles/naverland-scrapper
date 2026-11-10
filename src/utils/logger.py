@@ -6,7 +6,8 @@ from datetime import datetime
 def setup_logger(name="realestate_crawler"):
     from src.utils.paths import LOG_DIR
     logger = logging.getLogger(name)
-    if logger.handlers: return logger
+    if logger.handlers:
+        return logger
     logger.setLevel(logging.DEBUG)
     
     ch = logging.StreamHandler()
@@ -53,7 +54,7 @@ def cleanup_old_logs(days=30):
                 if file_date < cutoff_date:
                     log_file.unlink()
                     removed_count += 1
-            except (ValueError, OSError) as e:
+            except (ValueError, OSError):
                 continue  # 파싱 실패 시 무시
         if removed_count > 0:
             log_cleanup_logger.info(f"오래된 로그 파일 {removed_count}개 삭제")

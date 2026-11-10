@@ -450,7 +450,7 @@ class KeywordSearchDialog(QDialog):
                 pass
         thread, self._pump_thread = self._pump_thread, None
         task_queue, self._task_queue = self._task_queue, None
-        worker, self._worker = self._worker, None
+        self._worker = None
         if task_queue is not None:
             try:
                 task_queue.put(None)

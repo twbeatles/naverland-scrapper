@@ -1,10 +1,8 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGroupBox,
-    QScrollArea, QGridLayout, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
+    QGridLayout
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCursor
-from typing import Optional
 import time
 
 try:
@@ -16,7 +14,6 @@ except ImportError:
     Figure = None
     MATPLOTLIB_AVAILABLE = False
 
-from src.utils.constants import TRADE_COLORS
 from src.core.managers import settings
 from src.utils.helpers import PriceConverter
 from src.utils.logger import get_logger
@@ -24,9 +21,9 @@ from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
 from src.ui.styles import COLORS
 from src.ui.widgets.components import EmptyStateWidget
 
-logger = get_logger("Dashboard")
-
 from src.ui.widgets.dashboard_parts.cards import StatCard
+
+logger = get_logger("Dashboard")
 
 
 class DashboardWidget(QWidget):
@@ -83,7 +80,6 @@ class DashboardWidget(QWidget):
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
         layout.setSpacing(_SM)
         
-        from src.ui.fluent.design_tokens import FONT_PAGE_TITLE as _PT
         title = QLabel("대시보드")
         title.setObjectName("pageTitle")
         layout.addWidget(title)

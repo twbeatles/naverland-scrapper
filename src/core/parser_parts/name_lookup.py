@@ -1,16 +1,13 @@
 import json
-import re
 import time
 import urllib.request
-from html import unescape
-from socket import timeout as SocketTimeout
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 
 from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
-logger = get_logger("Parser")
 from src.core.parser_parts.contracts import runtime_contract
+logger = get_logger("Parser")
 
 
 class NaverNameLookupMixin:

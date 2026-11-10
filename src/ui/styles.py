@@ -2,9 +2,8 @@
 UI stylesheet facade.
 """
 
-from src.ui.styles_parts.colors import COLORS
+from src.ui.styles_parts.colors import COLORS  # noqa: F401  # hub re-export: `from src.ui.styles import COLORS` used by dialogs/cards/components (do not remove)
 from src.ui.styles_parts.generator import _generate_stylesheet
-from src.ui.styles_parts.surfaces import apply_theme_surfaces
 
 
 def get_dark_stylesheet():

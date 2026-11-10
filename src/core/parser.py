@@ -1,7 +1,7 @@
 import re
 
 from src.core.parser_parts.article_lookup import NaverArticleLookupMixin
-from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession
+from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession  # noqa: F401  # hub re-export: `from src.core.parser import ...` used by tests (do not remove)
 from src.core.parser_parts.name_lookup import NaverNameLookupMixin
 from src.core.parser_parts.url_extract import NaverURLExtractMixin
 

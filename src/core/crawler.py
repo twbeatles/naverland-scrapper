@@ -1,46 +1,46 @@
-import time
-import random
-import gc
-import traceback
 from PySide6.QtCore import QThread, Signal
 
+from src.utils.mixin_rebind import rebind_inherited_methods
+from src.core.crawler_parts.state_runtime import CrawlerStateRuntimeMixin
+from src.core.crawler_parts.history_alerts import CrawlerHistoryAlertsMixin
+from src.core.crawler_parts.selenium_flow import CrawlerSeleniumFlowMixin
+from src.core.crawler_parts.dom_scroll_parse import CrawlerDomScrollParseMixin, BlockedPageError  # noqa: F401  # BlockedPageError star-carried (do not remove)
+import time  # noqa: F401  # star-carried: `from src.core.crawler import *` in crawler_parts/* (do not remove)
+import random  # noqa: F401  # star-carried: `from src.core.crawler import *` in crawler_parts/* (do not remove)
+import gc  # noqa: F401  # star-carried: `from src.core.crawler import *` in crawler_parts/* (do not remove)
+import traceback  # noqa: F401  # star-carried: `from src.core.crawler import *` in crawler_parts/* (do not remove)
+from src.utils.constants import CRAWL_SPEED_PRESETS  # noqa: F401  # star-carried (do not remove)
+from src.utils.helpers import PriceConverter, ChromeParamHelper, DateTimeHelper, get_complex_url  # noqa: F401  # star-carried (do not remove)
+from src.utils.retry_handler import RetryCancelledError, RetryHandler  # noqa: F401  # star-carried (do not remove)
+from src.core.engines import PlaywrightCrawlerEngine, SeleniumCrawlerEngine  # noqa: F401  # star-carried (do not remove)
+from src.core.item_parser import ItemParser  # noqa: F401  # star-carried (do not remove)
+from src.core.models.crawl_models import GeoSweepConfig  # noqa: F401  # star-carried (do not remove)
 try:
-    import undetected_chromedriver as uc
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, NoSuchElementException
+    import undetected_chromedriver as uc  # noqa: F401  # star-carried: selenium_flow uses via star (do not remove)
+    from selenium.webdriver.support.ui import WebDriverWait  # noqa: F401  # star-carried (do not remove)
+    from selenium.webdriver.support import expected_conditions as EC  # noqa: F401  # star-carried (do not remove)
+    from selenium.common.exceptions import TimeoutException, NoSuchElementException  # noqa: F401  # star-carried (do not remove)
     UC_AVAILABLE = True
 except ImportError:
     UC_AVAILABLE = False
 
 try:
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup  # noqa: F401  # star-carried (do not remove)
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
 
 try:
-    import psutil
+    import psutil  # noqa: F401  # star-carried (do not remove)
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-from src.utils.constants import CRAWL_SPEED_PRESETS
-from src.utils.helpers import PriceConverter, ChromeParamHelper, DateTimeHelper, get_complex_url
-from src.utils.retry_handler import RetryCancelledError, RetryHandler
-from src.core.engines import PlaywrightCrawlerEngine, SeleniumCrawlerEngine
-from src.core.item_parser import ItemParser
-from src.core.models.crawl_models import GeoSweepConfig
 
 # 메모리 임계치 (MB) - 초과 시 드라이버 재시작
 MEMORY_THRESHOLD_MB = 500
 
-from src.utils.mixin_rebind import rebind_inherited_methods
 
-from src.core.crawler_parts.state_runtime import CrawlerStateRuntimeMixin
-from src.core.crawler_parts.history_alerts import CrawlerHistoryAlertsMixin
-from src.core.crawler_parts.selenium_flow import CrawlerSeleniumFlowMixin
-from src.core.crawler_parts.dom_scroll_parse import CrawlerDomScrollParseMixin, BlockedPageError
 
 
 class CrawlerThread(

@@ -72,9 +72,12 @@ class CrawlerTabStartStopMixin:
             return False
              
         trade_types = []
-        if self.check_trade.isChecked(): trade_types.append("매매")
-        if self.check_jeonse.isChecked(): trade_types.append("전세")
-        if self.check_monthly.isChecked(): trade_types.append("월세")
+        if self.check_trade.isChecked():
+            trade_types.append("매매")
+        if self.check_jeonse.isChecked():
+            trade_types.append("전세")
+        if self.check_monthly.isChecked():
+            trade_types.append("월세")
         
         if not trade_types:
             crawl_lock.release(lock_owner)

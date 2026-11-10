@@ -57,7 +57,8 @@ class UpdateController(QObject):
             self.failed.emit("업데이트 채널이 아직 설정되지 않았습니다.")
             return False
         with self._lock:
-            if self._busy: return False
+            if self._busy:
+                return False
             self._busy = True
         def worker():
             try:
@@ -69,7 +70,8 @@ class UpdateController(QObject):
             else:
                 self.update_available.emit(manifest)
             finally:
-                with self._lock: self._busy = False
+                with self._lock:
+                    self._busy = False
         check_thread = threading.Thread(target=worker, name="UpdateCheck", daemon=True)
         with self._lock:
             self._threads.append(check_thread)
@@ -81,13 +83,17 @@ class UpdateController(QObject):
             self.failed.emit("개발 실행에서는 자동 설치를 사용할 수 없습니다.")
             return False
         with self._lock:
-            if self._busy: return False
+            if self._busy:
+                return False
             self._busy = True
         def worker():
-            try: self.downloaded.emit(manifest, download_verified_artifact(manifest))
-            except Exception as exc: self.failed.emit(str(exc))
+            try:
+                self.downloaded.emit(manifest, download_verified_artifact(manifest))
+            except Exception as exc:
+                self.failed.emit(str(exc))
             finally:
-                with self._lock: self._busy = False
+                with self._lock:
+                    self._busy = False
         download_thread = threading.Thread(target=worker, name="UpdateDownload", daemon=True)
         with self._lock:
             self._threads.append(download_thread)
@@ -99,4 +105,4 @@ class UpdateController(QObject):
         launch_update_helper(target=Path(sys.executable).resolve(), staged=staged, manifest=manifest, parent_pid=os.getpid())
 
 
-import os  # kept below Qt imports to avoid altering packaged Qt startup
+import os  # noqa: E402  # kept below Qt imports to avoid altering packaged Qt startup

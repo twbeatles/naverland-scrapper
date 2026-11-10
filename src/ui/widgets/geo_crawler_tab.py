@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QCheckBox,
-    QDialog,
     QDoubleSpinBox,
     QGridLayout,
     QGroupBox,

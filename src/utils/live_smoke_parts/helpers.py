@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-from src.utils.helpers import ChromeParamHelper
 from src.utils.paths import BASE_DIR, DATA_DIR, is_frozen_runtime
-from src.core.services.detail_fetcher import fetch_mobile_article_detail
 
 try:
     from playwright.async_api import async_playwright

@@ -275,7 +275,8 @@ class AppStatsScheduleStatsHistoryMixin:
                 summary_widget.clear("단지를 고르면 최근 평균과 변화가 여기에 나타납니다.")
             return
         ttype = self.stats_type_combo.currentText()
-        if ttype == "전체": ttype = None
+        if ttype == "전체":
+            ttype = None
         price_metric = self._current_stats_price_metric()
         self._refresh_stats_metric_visibility()
         self._update_stats_table_headers(price_metric)
