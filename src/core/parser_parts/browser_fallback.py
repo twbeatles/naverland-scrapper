@@ -112,11 +112,11 @@ class ArticleLookupBrowserFallbackSession:
                 raise RetryCancelledError("article lookup cancelled during browser fallback")
             captured_artifacts: list[str] = []
 
-            def _capture_response(response):
+            def _capture_response(response, _artifacts=captured_artifacts):
                 try:
                     response_url = str(getattr(response, "url", "") or "")
                     if response_url:
-                        captured_artifacts.append(response_url)
+                        _artifacts.append(response_url)
                 except Exception:
                     pass
 

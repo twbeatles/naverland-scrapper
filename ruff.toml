@@ -1,4 +1,4 @@
-# naverland-scrapper Ruff staged rollout - S1_BASE (Phase B) + S2_IMPORT
+# naverland-scrapper Ruff staged rollout - S1_BASE (Phase B) + S2_IMPORT + S3_BUG
 # src/ star architecture (45 files, F405x742): cgv-style resolvability check
 # 2026-11-11: 718/742 resolve to unconditional top-level defs in star sources;
 # 24/742 are try/except optional-dependency guards (uc/UC_AVAILABLE/
@@ -10,7 +10,7 @@ line-length = 88
 preview = false
 
 [lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B"]
 fixable = []
 
 [lint.per-file-ignores]

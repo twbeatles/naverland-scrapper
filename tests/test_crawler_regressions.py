@@ -522,7 +522,7 @@ class TestCrawlerRegressions(unittest.TestCase):
             cache=None,
             max_retry_count=0,
         )
-        setattr(thread, "_fallback_allowed_pairs", {thread._pair_key("단지A", "10001", "전세")})
+        setattr(thread, "_fallback_allowed_pairs", {thread._pair_key("단지A", "10001", "전세")})  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
         thread._fallback_prefill_processed_target_pairs = {("APT", "10001", "매매")}
         thread._fallback_prefill_complexes = {
             ("단지A", "10001"): {
@@ -553,9 +553,9 @@ class TestCrawlerRegressions(unittest.TestCase):
             return {"count": 3, "collection_status": "complete"}
 
         thread.record_crawl_history = _record_history
-        setattr(thread, "_finalize_disappeared_articles", _finalize)
-        setattr(thread, "_init_driver", lambda: _Driver())
-        setattr(thread, "_crawl", _crawl)
+        setattr(thread, "_finalize_disappeared_articles", _finalize)  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
+        setattr(thread, "_init_driver", lambda: _Driver())  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
+        setattr(thread, "_crawl", _crawl)  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
         thread.complex_finished_signal.connect(lambda *args: finished.append(args))
 
         with (

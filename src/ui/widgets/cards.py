@@ -442,7 +442,7 @@ class CardViewWidget(QScrollArea):
         if text:
             self._filtered_data = [
                 d
-                for d, searchable, searchable_norm in zip(self._all_data, self._search_text_cache, norm_cache)
+                for d, searchable, searchable_norm in zip(self._all_data, self._search_text_cache, norm_cache, strict=True)
                 if text in searchable or (bool(text_norm) and text_norm in searchable_norm)
             ]
         else:

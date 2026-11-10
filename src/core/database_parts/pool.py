@@ -94,7 +94,7 @@ class ConnectionPool:
         except Exception as e:
             with self._lease_lock:
                 if self._closing:
-                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
+                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection") from e
             logger.warning(f"Pool acquisition failed, creating fallback connection: {e}")
             conn = self._create_connection()
             with self._lease_lock:
@@ -103,7 +103,7 @@ class ConnectionPool:
                         conn.close()
                     except Exception:
                         pass
-                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
+                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection") from e
                 self._all_connections[id(conn)] = conn
         with self._lease_lock:
             if self._closing:

@@ -210,7 +210,7 @@ class ChartWidget(QWidget):
             rows = []
             mins = list(s.min_vals) if s.min_vals is not None else [None] * len(s.dates)
             maxs = list(s.max_vals) if s.max_vals is not None else [None] * len(s.dates)
-            for d, a, mi, ma in zip(s.dates, s.avg, mins, maxs):
+            for d, a, mi, ma in zip(s.dates, s.avg, mins, maxs, strict=True):
                 parsed = self._parse_date(d)
                 if parsed is None:
                     continue

@@ -349,7 +349,7 @@ class TestFinEngineFastPath(unittest.TestCase):
         from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 
         thread = _ThreadStub()
-        setattr(thread, "article_api_page_delay_ms", 0)
+        setattr(thread, "article_api_page_delay_ms", 0)  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
         engine = PlaywrightCrawlerEngine(thread)
         engine._desktop_context = object()
         engine._fin_api_page = _FakeFinPage(responses)
@@ -455,7 +455,7 @@ class TestFinEngineFastPath(unittest.TestCase):
             fallback_calls.append(kwargs["cid"])
             return {"raw_items": [], "collection_status": "complete", "api_fast_path": True}
 
-        setattr(engine, "_fetch_article_api_fast_path", _legacy)
+        setattr(engine, "_fetch_article_api_fast_path", _legacy)  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
         self._collect_asset(engine, "123456", "VL")
         self.assertEqual(fallback_calls, ["123456"])
         self.assertEqual(thread.stats["fin_api_failure_reasons"], {"unknown_complex": 1})
@@ -540,8 +540,8 @@ class TestFinGeoDiscovery(unittest.TestCase):
         thread = _ThreadStub()
         thread.geo_config.rings = 0
         registered = []
-        setattr(thread, "register_discovered_complex", lambda marker: registered.append(marker))
-        setattr(thread, "emit_stats", lambda: None)
+        setattr(thread, "register_discovered_complex", lambda marker: registered.append(marker))  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
+        setattr(thread, "emit_stats", lambda: None)  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
         engine = PlaywrightCrawlerEngine(thread)
         engine._desktop_context = object()
         engine._desktop_page = object()

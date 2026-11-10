@@ -119,12 +119,12 @@ class PlaywrightResponseCaptureMixin:
                 plan_block_reason = ""
                 plan_final_url = ""
 
-                async def _consume(response):
+                async def _consume(response, _base_kind=base_kind, _path_asset=path_asset, _response_event=response_event):
                     nonlocal response_seen, parse_success, parse_failed, response_match_count
                     nonlocal plan_response_seen, plan_parse_success, plan_parse_failed
                     nonlocal capture_last_payload, capture_invalid_rows
                     url = response.url
-                    expected = f"/api/articles/{'house' if base_kind == 'houses' else 'complex'}/{cid}"
+                    expected = f"/api/articles/{'house' if _base_kind == 'houses' else 'complex'}/{cid}"
                     if expected not in url:
                         return
                     response_match_count += 1
@@ -134,18 +134,18 @@ class PlaywrightResponseCaptureMixin:
                     if int(getattr(response, "status", 200) or 200) >= 400:
                         parse_failed = True
                         plan_parse_failed = True
-                        response_event.set()
+                        _response_event.set()
                         return
                     try:
                         payload = await response.json()
                     except Exception:
                         parse_failed = True
                         plan_parse_failed = True
-                        response_event.set()
+                        _response_event.set()
                         return
                     items, valid = self._normalize_article_api_payload(
                         payload, name=name, cid=cid, trade_type=trade_type,
-                        path_asset=path_asset, mode=mode, source_lat=source_lat,
+                        path_asset=_path_asset, mode=mode, source_lat=source_lat,
                         source_lon=source_lon, source_zoom=source_zoom,
                         marker_id=marker_id, seen_ids=seen_ids,
                     )
@@ -154,16 +154,16 @@ class PlaywrightResponseCaptureMixin:
                         capture_invalid_rows = capture_invalid_rows or bool(items)
                         parse_failed = True
                         plan_parse_failed = True
-                        response_event.set()
+                        _response_event.set()
                         return
                     capture_last_payload = payload
                     parse_success = True
                     plan_parse_success = True
-                    response_event.set()
+                    _response_event.set()
 
-                def _handle(response):
+                def _handle(response, _consume=_consume, _pending_tasks=pending_tasks):
                     try:
-                        self._spawn_response_task(pending_tasks, _consume(response))
+                        self._spawn_response_task(_pending_tasks, _consume(response))
                     except Exception:
                         return None
 
@@ -189,7 +189,7 @@ class PlaywrightResponseCaptureMixin:
                         try:
                             await self._async_retry(
                                 f"article load {base_kind}/{cid}",
-                                lambda: page.wait_for_load_state("networkidle", timeout=6000),
+                                lambda _page=page: _page.wait_for_load_state("networkidle", timeout=6000),
                             )
                         except Exception:
                             pass

@@ -282,8 +282,8 @@ class DatabaseTab(QWidget):
     def _filter_table(self, text):
         token = str(text or "").lower()
         for row in range(self.table.rowCount()):
-            def _cell_text(col: int) -> str:
-                cell = self.table.item(row, col)
+            def _cell_text(col: int, _row=row) -> str:
+                cell = self.table.item(_row, col)
                 return cell.text().lower() if cell is not None else ""
 
             match = any(token in _cell_text(col) for col in range(self.table.columnCount()))

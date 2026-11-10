@@ -130,7 +130,7 @@ def get_resource_path(relative_path):
     """번들/일반 실행 환경에서 리소스 경로를 반환"""
     if is_frozen_runtime():
         if hasattr(sys, "_MEIPASS"):
-            base_path = Path(getattr(sys, "_MEIPASS"))
+            base_path = Path(getattr(sys, "_MEIPASS"))  # noqa: B009  # sys._MEIPASS unknown to pyright; hasattr-guarded above (do not simplify)
         else:
             base_path = Path(sys.executable).parent
     else:

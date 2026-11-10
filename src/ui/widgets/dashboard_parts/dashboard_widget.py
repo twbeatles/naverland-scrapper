@@ -439,7 +439,7 @@ class DashboardWidget(QWidget):
             colors = ['#ef4444', '#22c55e', '#3b82f6']
             label_map = {"매매": "Sale", "전세": "Jeonse", "월세": "Monthly"}
             
-            for i, (label, count) in enumerate(trade_counts.items()):
+            for label, count in trade_counts.items():
                 if count > 0:
                     if self._korean_font_ok:
                         display = str(label)

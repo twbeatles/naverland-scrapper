@@ -267,14 +267,14 @@ class PlaywrightBrowserRuntimeMixin:
         while True:
             try:
                 return await asyncio.wait_for(pool.get(), timeout=0.5)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 should_stop = False
                 try:
                     should_stop = bool(self.thread._should_stop())
                 except Exception:
                     should_stop = False
                 if should_stop:
-                    raise asyncio.CancelledError("detail page wait interrupted by stop request")
+                    raise asyncio.CancelledError("detail page wait interrupted by stop request") from e
 
     async def _release_detail_page(self, page) -> None:
         pool = self._page_pool

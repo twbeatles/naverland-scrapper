@@ -117,7 +117,7 @@ def _install_theme_watcher(app: Any) -> None:
         timer.start(_POLL_MS)
         try:
             # ISSUE-005: shutdown stops this poll timer via the handle.
-            setattr(app, "_theme_watcher_timer", timer)
+            setattr(app, "_theme_watcher_timer", timer)  # noqa: B010  # dynamic handle on Any app; direct assign breaks pyright (do not simplify)
         except Exception:
             pass
     except Exception:

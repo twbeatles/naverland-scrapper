@@ -113,7 +113,7 @@ def register_navigation(
     """Wire navigation items. ``pages`` maps route_key -> page widget."""
 
     first_key: Optional[str] = None
-    for key, entry in NAV_ENTRIES:
+    for _key, entry in NAV_ENTRIES:
         if entry == "separator":
             nav.addSeparator()
             continue

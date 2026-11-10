@@ -49,5 +49,5 @@ def install_global_wheel_guard(app: QCoreApplication | None = None) -> InputWhee
 
     guard = InputWheelGuard(qt_app)
     qt_app.installEventFilter(guard)
-    setattr(qt_app, "_input_wheel_guard", guard)
+    setattr(qt_app, "_input_wheel_guard", guard)  # noqa: B010  # not a QCoreApplication attr; direct assign breaks pyright (do not simplify)
     return guard
