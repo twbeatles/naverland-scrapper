@@ -1,9 +1,14 @@
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
-    QGridLayout
-)
-from PySide6.QtCore import Qt, Signal
 import time
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -15,13 +20,12 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 from src.core.managers import settings
-from src.utils.helpers import PriceConverter
-from src.utils.logger import get_logger
-from src.utils.plot import setup_korean_font, sanitize_text_for_matplotlib
 from src.ui.styles import COLORS
 from src.ui.widgets.components import EmptyStateWidget
-
 from src.ui.widgets.dashboard_parts.cards import StatCard
+from src.utils.helpers import PriceConverter
+from src.utils.logger import get_logger
+from src.utils.plot import sanitize_text_for_matplotlib, setup_korean_font
 
 logger = get_logger("Dashboard")
 

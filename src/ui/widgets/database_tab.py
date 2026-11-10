@@ -1,23 +1,22 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QInputDialog,
-    QMessageBox,
-    QCheckBox,
-)
 import webbrowser
 
 from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
+from src.ui.widgets.components import EmptyStateWidget, SearchBar
 from src.utils.helpers import get_complex_url
-from src.ui.widgets.components import SearchBar, EmptyStateWidget
 from src.utils.logger import get_logger
-
 
 logger = get_logger("DatabaseTab")
 
@@ -40,7 +39,8 @@ class DatabaseTab(QWidget):
         self._init_ui()
 
     def _init_ui(self):
-        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         from src.ui.widgets.components import build_page_header, install_token_labels
         from src.utils.ui_labels import asset_label
 

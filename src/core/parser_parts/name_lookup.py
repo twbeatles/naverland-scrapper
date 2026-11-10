@@ -3,10 +3,10 @@ import time
 import urllib.request
 from urllib.error import HTTPError
 
+from src.core.parser_parts.contracts import runtime_contract
 from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
-from src.core.parser_parts.contracts import runtime_contract
 logger = get_logger("Parser")
 
 
@@ -80,7 +80,7 @@ class NaverNameLookupMixin:
         try:
             from playwright.sync_api import sync_playwright
 
-            from src.utils.helpers import build_complex_url, ChromeParamHelper
+            from src.utils.helpers import ChromeParamHelper, build_complex_url
         except Exception as e:
             get_logger("NaverURLParser").debug(f"단지명 browser fallback 사용 불가: {e}")
             return ""
@@ -172,7 +172,10 @@ class NaverNameLookupMixin:
     def _fetch_name_via_fin_page(cls, page, complex_id, asset_type="APT") -> str:
         """fin ``/complex`` in-page fetch (out-of-browser calls get 429, 2026-10-22)."""
         from src.core.services.fin_article_api import parse_fin_complex_info
-        from src.core.services.site_contract import FIN_API_ORIGIN_PAGE, build_fin_complex_info_url
+        from src.core.services.site_contract import (
+            FIN_API_ORIGIN_PAGE,
+            build_fin_complex_info_url,
+        )
 
         try:
             page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=12000)

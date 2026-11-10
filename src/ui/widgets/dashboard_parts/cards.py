@@ -37,7 +37,9 @@ class StatCard(QFrame):
         self.setMinimumHeight(96)
 
         layout = QVBoxLayout(self)
-        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         layout.setContentsMargins(_GG, _SM, _GG, _SM)
         layout.setSpacing(_XS)
 

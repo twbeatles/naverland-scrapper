@@ -1,5 +1,7 @@
 import platform
+
 from matplotlib import font_manager, rc
+
 from src.utils.logger import get_logger
 
 logger = get_logger("Plot")

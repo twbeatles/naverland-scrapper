@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DEFAULT_SETTINGS = {
     "theme": "dark", "crawl_speed": "보통", "minimize_to_tray": True,
     "show_notifications": True, "confirm_before_close": True,

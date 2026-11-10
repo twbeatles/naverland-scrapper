@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
@@ -19,6 +19,7 @@ class AppLifecycleBootstrapMixin:
             pass
         try:
             from PySide6.QtGui import QGuiApplication as _QGuiApp
+
             from src.ui.fluent.design_tokens import preferred_window_size as _pref_size
             _screen = _QGuiApp.primaryScreen()
             _avail = _screen.availableGeometry() if _screen is not None else None
@@ -27,7 +28,8 @@ class AppLifecycleBootstrapMixin:
                 self.resize(_pw, _ph)
         except Exception:
             pass
-        from src.ui.fluent.design_tokens import MIN_WINDOW_WIDTH as _MIN_W, MIN_WINDOW_HEIGHT as _MIN_H
+        from src.ui.fluent.design_tokens import MIN_WINDOW_HEIGHT as _MIN_H
+        from src.ui.fluent.design_tokens import MIN_WINDOW_WIDTH as _MIN_W
         self.setMinimumSize(_MIN_W, _MIN_H)
         # ISSUE-001: geometry is applied only through the validated
         # _restore_window_geometry() single path (no unvalidated setGeometry).
@@ -103,7 +105,8 @@ class AppLifecycleBootstrapMixin:
         Invalid saved values fall back to the default size so a corrupt
         settings entry can never crash startup (ISSUE-001).
         """
-        from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW, DEFAULT_WINDOW_HEIGHT as _DH
+        from src.ui.fluent.design_tokens import DEFAULT_WINDOW_HEIGHT as _DH
+        from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW
         try:
             geo = settings.get("window_geometry")
         except Exception:

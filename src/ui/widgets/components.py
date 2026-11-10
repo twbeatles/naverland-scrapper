@@ -1,11 +1,21 @@
-from PySide6.QtWidgets import (
-    QWidget, QLabel, QHBoxLayout, QVBoxLayout, QLineEdit, QSlider, QPushButton, QProgressBar, QFrame,
-    QTableWidgetItem, QStyledItemDelegate
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCursor, QColor
-from src.utils.constants import CRAWL_SPEED_PRESETS, TRADE_COLORS
+from PySide6.QtGui import QColor, QCursor
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QSlider,
+    QStyledItemDelegate,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from src.ui.styles import COLORS
+from src.utils.constants import CRAWL_SPEED_PRESETS, TRADE_COLORS
 
 
 class EmptyStateWidget(QWidget):

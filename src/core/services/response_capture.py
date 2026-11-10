@@ -3,8 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.services.gap_analysis import enrich_gap_fields
-from src.utils.helpers import AreaConverter, DateTimeHelper, PriceConverter, PricePerPyeongCalculator
-
+from src.utils.helpers import (
+    AreaConverter,
+    DateTimeHelper,
+    PriceConverter,
+    PricePerPyeongCalculator,
+)
 
 TRADE_CODE_MAP = {
     "A1": "매매",

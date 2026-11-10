@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from src.utils import paths as paths_util
-from src.utils.logger import get_logger
 from src.utils.json_store import atomic_write_json, load_json_with_recovery
+from src.utils.logger import get_logger
 
 
 class FilterPresetManager:

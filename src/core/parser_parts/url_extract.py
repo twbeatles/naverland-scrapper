@@ -1,8 +1,8 @@
 import re
 
+from src.core.parser_parts.contracts import runtime_contract
 from src.utils.logger import get_logger
 
-from src.core.parser_parts.contracts import runtime_contract
 logger = get_logger("Parser")
 
 

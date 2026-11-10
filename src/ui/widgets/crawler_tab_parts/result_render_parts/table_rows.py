@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.widgets.crawler_tab import *  # noqa: F403
@@ -92,7 +92,11 @@ class CrawlerTabTableRowRenderMixin:
     def _open_extra_columns_menu(self: Any):
         from PySide6.QtGui import QAction
         from PySide6.QtWidgets import QMenu
-        from src.utils.result_columns import RESULT_EXTRA_COLUMN_DEFS, normalize_result_extra_columns
+
+        from src.utils.result_columns import (
+            RESULT_EXTRA_COLUMN_DEFS,
+            normalize_result_extra_columns,
+        )
 
         menu = QMenu(self)
         baseline = normalize_result_extra_columns(settings.get("result_extra_columns", []))

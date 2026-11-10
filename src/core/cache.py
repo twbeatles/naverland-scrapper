@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List
 from threading import Lock
-from src.utils.paths import CACHE_PATH
-from src.utils.logger import get_logger
+from typing import Dict, List, Optional
+
 from src.utils.json_store import atomic_write_json, load_json_with_recovery
+from src.utils.logger import get_logger
+from src.utils.paths import CACHE_PATH
+
 
 class CrawlCache:
     """크롤링 결과 캐시 (v12.0)"""

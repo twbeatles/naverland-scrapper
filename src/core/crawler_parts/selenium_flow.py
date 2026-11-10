@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.core.crawler import *  # noqa: F403
@@ -270,7 +270,10 @@ class CrawlerSeleniumFlowMixin:
                     self.log(f"⚠️ Chrome 드라이버 종료 중 오류: {e}", 30)
     
     def _crawl(self, driver, name, cid, ttype, asset_type="APT"):
-        from src.core.services.collection_result import collection_fingerprint, record_collection_result
+        from src.core.services.collection_result import (
+            collection_fingerprint,
+            record_collection_result,
+        )
 
         fingerprint = collection_fingerprint(include_pre=bool(getattr(self, "include_pre_sale_rights", False))) + ":dom"
         asset_token = str(asset_type or "APT").strip().upper() or "APT"

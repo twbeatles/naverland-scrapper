@@ -1,6 +1,7 @@
 import logging
-from logging.handlers import RotatingFileHandler
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
+
 # from src.utils.paths import LOG_DIR  <-- Removed to fix circular import
 
 def setup_logger(name="realestate_crawler"):

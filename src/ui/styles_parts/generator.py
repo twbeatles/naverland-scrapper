@@ -1,6 +1,5 @@
 from src.ui.styles_parts.colors import COLORS
 
-
 _CHECK_ICON_CACHE: dict[str, str] = {}
 
 

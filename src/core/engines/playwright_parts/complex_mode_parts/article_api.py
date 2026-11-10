@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
-from src.core.services.collection_result import CollectionResult
+from typing import TYPE_CHECKING, Any
 
 from src.core.services.article_api import (
     MAX_ARTICLE_API_PAGES,
@@ -12,7 +11,12 @@ from src.core.services.article_api import (
     article_api_real_estate_type,
     build_article_api_url,
 )
-from src.core.services.response_capture import TRADE_CODE_MAP, detect_trade_type, normalize_article_payload
+from src.core.services.collection_result import CollectionResult
+from src.core.services.response_capture import (
+    TRADE_CODE_MAP,
+    detect_trade_type,
+    normalize_article_payload,
+)
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403

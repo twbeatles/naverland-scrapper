@@ -20,7 +20,9 @@ def build_front_api_basic_info_url(article_no: str, *, real_estate_type: str = "
 
 
 def build_front_api_article_key_url(article_no: str) -> str:
-    from src.core.services.site_contract import build_front_api_article_key_url as _build
+    from src.core.services.site_contract import (
+        build_front_api_article_key_url as _build,
+    )
 
     return _build(article_no)
 

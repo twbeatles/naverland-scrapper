@@ -1,25 +1,24 @@
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
+    QDialog,
     QGroupBox,
-    QTableWidget,
-    QTableWidgetItem,
+    QHBoxLayout,
     QHeaderView,
     QInputDialog,
-    QMessageBox,
+    QLabel,
     QListWidget,
     QListWidgetItem,
-    QLabel,
+    QMessageBox,
+    QPushButton,
     QSplitter,
-    QDialog,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal
 
 from src.ui.dialogs import MultiSelectDialog
 from src.utils.logger import get_logger
-
 
 logger = get_logger("GroupTab")
 
@@ -35,7 +34,8 @@ class GroupTab(QWidget):
         self._init_ui()
 
     def _init_ui(self):
-        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         from src.ui.widgets.components import (
             EmptyStateWidget,
             build_page_header,

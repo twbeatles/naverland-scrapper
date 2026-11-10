@@ -14,21 +14,21 @@ Single-responsibility owners live in
 """
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
 
 from src.ui.app_parts.lifecycle_parts.bootstrap import AppLifecycleBootstrapMixin
 from src.ui.app_parts.lifecycle_parts.menu import AppLifecycleMenuMixin
-from src.ui.app_parts.lifecycle_parts.updates import AppLifecycleUpdatesMixin
+from src.ui.app_parts.lifecycle_parts.notify import AppLifecycleNotifyMixin
 from src.ui.app_parts.lifecycle_parts.shortcuts_actions import (
     AppLifecycleShortcutsActionsMixin,
 )
-from src.ui.app_parts.lifecycle_parts.tray import AppLifecycleTrayMixin
-from src.ui.app_parts.lifecycle_parts.timers_events import AppLifecycleTimersEventsMixin
-from src.ui.app_parts.lifecycle_parts.notify import AppLifecycleNotifyMixin
 from src.ui.app_parts.lifecycle_parts.shutdown import AppLifecycleShutdownMixin
+from src.ui.app_parts.lifecycle_parts.timers_events import AppLifecycleTimersEventsMixin
+from src.ui.app_parts.lifecycle_parts.tray import AppLifecycleTrayMixin
+from src.ui.app_parts.lifecycle_parts.updates import AppLifecycleUpdatesMixin
 
 
 class AppLifecycleMixin(

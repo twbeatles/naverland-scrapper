@@ -8,7 +8,12 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 from src.utils.update_installer import download_verified_artifact, launch_update_helper
-from src.utils.update_manifest import NoUpdateAvailableError, ReleaseManifest, download_release_manifest, verify_release_manifest
+from src.utils.update_manifest import (
+    NoUpdateAvailableError,
+    ReleaseManifest,
+    download_release_manifest,
+    verify_release_manifest,
+)
 from src.utils.version import APP_VERSION, UPDATE_MANIFEST_URL, UPDATE_PUBLIC_KEY_B64
 
 

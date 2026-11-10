@@ -3,16 +3,16 @@ from __future__ import annotations
 from copy import deepcopy
 from threading import Lock
 from typing import Any
-from src.utils import paths as paths_util
-from src.utils.logger import get_logger
-from src.utils.json_store import atomic_write_json, load_json_with_recovery
+
 from src.core.managers_parts.schedule_defaults import (
     DEFAULT_SETTINGS,
     DEPRECATED_SETTINGS_KEYS,
 )
 from src.core.managers_parts.schedule_normalize import _normalize_schedule_config
 from src.core.managers_parts.settings_sanitize import _sanitize_settings_payload
-
+from src.utils import paths as paths_util
+from src.utils.json_store import atomic_write_json, load_json_with_recovery
+from src.utils.logger import get_logger
 
 _LIGHT_DEFAULTS_MIGRATION_KEY = "light_defaults_migrated_v1"
 

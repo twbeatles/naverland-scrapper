@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.widgets.crawler_tab import *  # noqa: F403
@@ -122,6 +122,7 @@ class CrawlerTabIOActionsMixin:
 
     def _save_with_export_scope(self: Any, kind: str, scope: str = "visible"):
         from pathlib import Path
+
         from src.ui.widgets.crawler_tab import _get_data_exporter_cls
 
         items = self._export_items_for_scope(scope)

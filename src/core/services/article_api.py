@@ -5,8 +5,10 @@ from urllib.parse import urlencode
 
 from src.core.services.site_contract import (
     HOST_NEW,
-    article_api_real_estate_type as _contract_real_estate_type,
     trade_type_to_code,
+)
+from src.core.services.site_contract import (
+    article_api_real_estate_type as _contract_real_estate_type,
 )
 
 DEFAULT_ARTICLE_API_PAGE_SIZE = 20

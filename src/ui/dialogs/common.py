@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextBrowser, QPushButton
-from src.utils.constants import APP_VERSION
+from PySide6.QtWidgets import QDialog, QPushButton, QTextBrowser, QVBoxLayout
+
 from src.ui.styles import COLORS
+from src.utils.constants import APP_VERSION
+
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None, theme="dark"):

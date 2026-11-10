@@ -5,16 +5,16 @@ Legacy imports from ``src.ui.widgets.dialogs`` are redirected to
 """
 
 from src.ui.dialogs import (
-    PresetDialog,
-    SettingsDialog,
-    AlertSettingDialog,
-    ShortcutsDialog,
-    AdvancedFilterDialog,
-    MultiSelectDialog,
-    URLBatchDialog,
-    ExcelTemplateDialog,
     AboutDialog,
+    AdvancedFilterDialog,
+    AlertSettingDialog,
+    ExcelTemplateDialog,
+    MultiSelectDialog,
+    PresetDialog,
     RecentSearchDialog,
+    SettingsDialog,
+    ShortcutsDialog,
+    URLBatchDialog,
 )
 
 __all__ = [

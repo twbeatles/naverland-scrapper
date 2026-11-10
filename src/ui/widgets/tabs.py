@@ -1,12 +1,21 @@
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
-    QTableWidgetItem, QAbstractItemView, QInputDialog, QHeaderView
-)
-from PySide6.QtCore import Qt
 import webbrowser
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from src.ui.widgets.components import EmptyStateWidget
-from src.utils.logger import get_logger
 from src.utils.helpers import get_article_url
+from src.utils.logger import get_logger
 
 logger = get_logger("FavoritesTab")
 
@@ -22,7 +31,8 @@ class FavoritesTab(QWidget):
         self._setup_ui()
     
     def _setup_ui(self):
-        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         from src.ui.widgets.components import build_page_header
 
         layout = QVBoxLayout(self)

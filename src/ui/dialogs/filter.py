@@ -1,9 +1,23 @@
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QGroupBox, QGridLayout, QLabel, QSpinBox, 
-    QDoubleSpinBox, QHBoxLayout, QCheckBox, QLineEdit, QPushButton, 
-    QListWidget, QAbstractItemView, QListWidgetItem, QDialogButtonBox, QMessageBox
-)
 from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+)
+
 
 class MultiSelectDialog(QDialog):
     def __init__(self, title, items, parent=None, preselected=None, hint=""):

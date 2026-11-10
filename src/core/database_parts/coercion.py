@@ -10,8 +10,8 @@ Single-responsibility owners live in
 """
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
 import re
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.core.database import *  # noqa: F403

@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.core.services.detail_fetcher import fetch_mobile_article_detail
+from src.utils.live_smoke_parts import probes as _probe_module
+from src.utils.live_smoke_parts import runner as _runner_module
 from src.utils.live_smoke_parts.helpers import (
     DEFAULT_SMOKE_ARTICLE_ID,
     DEFAULT_SMOKE_COMPLEX_ID,
@@ -14,15 +16,13 @@ from src.utils.live_smoke_parts.helpers import (
     default_live_smoke_urls,
 )
 from src.utils.live_smoke_parts.probes import (
-    _run_article_lookup_probe,
+    _navigate_probe,  # noqa: F401  # hub re-export (do not remove)
     _run_article_api_probe,  # noqa: F401  # hub re-export: tests use `live_smoke.<name>` attribute (do not remove)
+    _run_article_lookup_probe,
     _run_complex_probe,  # noqa: F401  # hub re-export (do not remove)
     _run_complex_probe_detail,  # noqa: F401  # hub re-export (do not remove)
     _run_fin_contract_probe,  # noqa: F401  # hub re-export (do not remove)
-    _navigate_probe,  # noqa: F401  # hub re-export (do not remove)
 )
-from src.utils.live_smoke_parts import probes as _probe_module
-from src.utils.live_smoke_parts import runner as _runner_module
 
 
 def _sync_facade_overrides() -> None:

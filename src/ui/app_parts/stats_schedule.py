@@ -11,7 +11,7 @@ Single-responsibility owners live in
 """
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 from src.ui.app_parts.stats_schedule_parts.geo_assets import (
     AppStatsScheduleGeoAssetsMixin,
 )
-from src.ui.app_parts.stats_schedule_parts.stats_history import (
-    AppStatsScheduleStatsHistoryMixin,
+from src.ui.app_parts.stats_schedule_parts.group_state import (
+    AppStatsScheduleGroupStateMixin,
 )
 from src.ui.app_parts.stats_schedule_parts.schedule_config import (
     AppStatsScheduleConfigMixin,
@@ -28,8 +28,8 @@ from src.ui.app_parts.stats_schedule_parts.schedule_config import (
 from src.ui.app_parts.stats_schedule_parts.schedule_run import (
     AppStatsScheduleRunMixin,
 )
-from src.ui.app_parts.stats_schedule_parts.group_state import (
-    AppStatsScheduleGroupStateMixin,
+from src.ui.app_parts.stats_schedule_parts.stats_history import (
+    AppStatsScheduleStatsHistoryMixin,
 )
 
 

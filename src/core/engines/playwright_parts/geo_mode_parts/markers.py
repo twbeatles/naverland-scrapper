@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.core.services.map_geometry import viewport_bounds
 from src.core.services.response_capture import normalize_marker_payload

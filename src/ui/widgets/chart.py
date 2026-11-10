@@ -8,10 +8,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 try:
+    import matplotlib.dates as mdates
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.figure import Figure
     from matplotlib.ticker import FuncFormatter
-    import matplotlib.dates as mdates
 
     MATPLOTLIB_AVAILABLE = True
 except ImportError:

@@ -457,7 +457,10 @@ async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tup
     """
     import json as _json
 
-    from src.core.services.fin_article_api import parse_fin_article_list, parse_fin_bounded_complexes
+    from src.core.services.fin_article_api import (
+        parse_fin_article_list,
+        parse_fin_bounded_complexes,
+    )
     from src.core.services.map_geometry import viewport_bounds
     from src.core.services.site_contract import (
         FIN_API_ORIGIN_PAGE,

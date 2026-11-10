@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.core.services.response_capture import TRADE_CODE_MAP
 
@@ -28,7 +28,11 @@ class PlaywrightComplexCacheFlowMixin:
         source_zoom: int | None = None,
         marker_id: str = "",
     ) -> dict:
-        from src.core.services.collection_result import collection_fingerprint, result_is_complete, record_collection_result
+        from src.core.services.collection_result import (
+            collection_fingerprint,
+            record_collection_result,
+            result_is_complete,
+        )
 
         cache = self.thread.cache
         mode_token = str(mode or "complex").strip().lower()

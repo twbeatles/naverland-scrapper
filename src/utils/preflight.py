@@ -1,16 +1,14 @@
-import importlib.util
 import importlib
+import importlib.util
 import json
 import os
 import sys
 from pathlib import Path
-from typing import Literal
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
 from src.utils.helpers import ChromeParamHelper
 from src.utils.logger import get_logger
 from src.utils.paths import DATA_DIR, LOG_DIR, SETTINGS_PATH, bootstrap_runtime_paths
-
 
 REQUIRED_DEPENDENCIES = [
     "PySide6",

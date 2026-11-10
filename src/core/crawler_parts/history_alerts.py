@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.core.crawler import *  # noqa: F403
@@ -86,7 +86,11 @@ class CrawlerHistoryAlertsMixin:
         if not self.db:
             return
         try:
-            from src.core.services.collection_result import COLLECTION_SCHEMA_VERSION, filter_fingerprint, observation_date
+            from src.core.services.collection_result import (
+                COLLECTION_SCHEMA_VERSION,
+                filter_fingerprint,
+                observation_date,
+            )
 
             diagnostics = {
                 "schema_version": COLLECTION_SCHEMA_VERSION,

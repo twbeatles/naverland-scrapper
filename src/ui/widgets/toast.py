@@ -6,11 +6,18 @@ Toast 알림 위젯 (v14.0)
 """
 from typing import Any, cast
 
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGraphicsOpacityEffect, QPushButton
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+)
+
 from src.utils.logger import get_logger
 
-from PySide6.QtGui import QFont
 logger = get_logger("Toast")
 
 

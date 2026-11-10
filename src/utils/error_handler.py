@@ -1,6 +1,7 @@
 import random
-from urllib.error import URLError, HTTPError
 from socket import timeout as SocketTimeout
+from urllib.error import HTTPError, URLError
+
 
 class NetworkErrorHandler:
     """네트워크 오류 처리 (v14.0)"""

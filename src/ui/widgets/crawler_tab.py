@@ -1,46 +1,74 @@
+import re  # noqa: F401  # star-carried (do not remove)
+import webbrowser  # noqa: F401  # star-carried: `from src.ui.widgets.crawler_tab import *` in parts (do not remove)
+
+from PySide6.QtCore import QRegularExpression, Qt, QThread, QTimer, Signal  # noqa: F401  # Qt/QTimer/QRegularExpression star-carried (do not remove)
 from PySide6.QtWidgets import (  # noqa: F401  # QWidget used in body; rest star-carried + patch targets (do not remove)
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QLineEdit, QComboBox, QSpinBox, QCheckBox,
-    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
-    QTabWidget, QGroupBox, QSplitter, QScrollArea, QFrame,
-    QDialog, QMessageBox, QFileDialog, QMenu, QApplication,
-    QPushButton, QSizePolicy, QStackedWidget, QTextBrowser,
+    QAbstractItemView,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
 )
 
-
-from PySide6.QtCore import Qt, QRegularExpression, QThread, QTimer, Signal  # noqa: F401  # Qt/QTimer/QRegularExpression star-carried (do not remove)
-import webbrowser  # noqa: F401  # star-carried: `from src.ui.widgets.crawler_tab import *` in parts (do not remove)
-import re  # noqa: F401  # star-carried (do not remove)
-from src.utils.helpers import PriceConverter, DateTimeHelper, get_article_url, get_complex_url  # noqa: F401  # star-carried (do not remove)
-from src.core.managers import settings  # noqa: F401  # star-carried (do not remove)
-from src.ui.widgets.cards import CardViewWidget  # noqa: F401  # star-carried (do not remove)
-from src.ui.styles import COLORS  # noqa: F401  # star-carried (do not remove)
-
-from src.core.services.price_snapshots import build_price_snapshot_rows
-from src.ui.dialogs import (  # noqa: F401  # package facade re-exports; star-carried + patch targets (do not remove)
-    MultiSelectDialog,  # noqa: F401  # tests patch crawler_tab.MultiSelectDialog
-    URLBatchDialog,
-    KeywordSearchDialog,
-    RecentSearchDialog,
-    ExcelTemplateDialog,
-    AdvancedFilterDialog,
-    )
-from src.ui.widgets.components import (  # noqa: F401  # star-carried (do not remove)
-    SearchBar, SpeedSlider, ProgressWidget, SummaryCard, SortableTableWidgetItem,
-    NumericSortTableWidgetItem,
-    )
 # Re-exported into mixin rebind globals (rebind_inherited_methods below).
 from qfluentwidgets import FluentIcon as FIF  # noqa: F401
-from src.ui.fluent.design_tokens import secondary_text_color  # noqa: F401
-from src.utils.logger import get_logger
 
-from src.utils.mixin_rebind import rebind_inherited_methods
-from src.ui.widgets.crawler_tab_parts.ui_setup import CrawlerTabUISetupMixin
+from src.core.managers import settings  # noqa: F401  # star-carried (do not remove)
+from src.core.services.price_snapshots import build_price_snapshot_rows
+from src.ui.dialogs import (  # noqa: F401  # package facade re-exports; star-carried + patch targets (do not remove)
+    AdvancedFilterDialog,
+    ExcelTemplateDialog,
+    KeywordSearchDialog,
+    MultiSelectDialog,  # noqa: F401  # tests patch crawler_tab.MultiSelectDialog
+    RecentSearchDialog,
+    URLBatchDialog,
+)
+from src.ui.fluent.design_tokens import secondary_text_color  # noqa: F401
+from src.ui.styles import COLORS  # noqa: F401  # star-carried (do not remove)
+from src.ui.widgets.cards import CardViewWidget  # noqa: F401  # star-carried (do not remove)
+from src.ui.widgets.components import (  # noqa: F401  # star-carried (do not remove)
+    NumericSortTableWidgetItem,
+    ProgressWidget,
+    SearchBar,
+    SortableTableWidgetItem,
+    SpeedSlider,
+    SummaryCard,
+)
 from src.ui.widgets.crawler_tab_parts.crawl_control import CrawlerTabCrawlControlMixin
-from src.ui.widgets.crawler_tab_parts.result_render import CrawlerTabResultRenderMixin
 from src.ui.widgets.crawler_tab_parts.filters_search import CrawlerTabFiltersSearchMixin
 from src.ui.widgets.crawler_tab_parts.io_actions import CrawlerTabIOActionsMixin
-
+from src.ui.widgets.crawler_tab_parts.result_render import CrawlerTabResultRenderMixin
+from src.ui.widgets.crawler_tab_parts.ui_setup import CrawlerTabUISetupMixin
+from src.utils.helpers import (  # noqa: F401  # star-carried (do not remove)
+    DateTimeHelper,
+    PriceConverter,
+    get_article_url,
+    get_complex_url,
+)
+from src.utils.logger import get_logger
+from src.utils.mixin_rebind import rebind_inherited_methods
 
 logger = get_logger("CrawlerTab")
 

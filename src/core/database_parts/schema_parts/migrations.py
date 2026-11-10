@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logger import get_logger
 
@@ -116,6 +116,7 @@ class ComplexDatabaseSchemaMigrationMixin:
     def _backup_before_schema_migration(self, conn, reason: str):
         import sqlite3
         from pathlib import Path
+
         from src.utils.helpers import DateTimeHelper
 
         if getattr(self, "_schema_migration_backup_path", None):

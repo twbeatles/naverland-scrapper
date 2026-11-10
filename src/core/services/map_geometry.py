@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-
 KOR_BOUNDS = (33.0, 39.5, 124.0, 132.1)
 
 

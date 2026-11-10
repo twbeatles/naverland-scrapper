@@ -4,12 +4,12 @@ from html import unescape
 from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
 
+from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession
+from src.core.parser_parts.contracts import runtime_contract
+from src.core.services.site_contract import DESKTOP_USER_AGENT
 from src.utils.logger import get_logger
 from src.utils.retry_handler import RetryCancelledError
 
-from src.core.parser_parts.contracts import runtime_contract
-from src.core.parser_parts.browser_fallback import ArticleLookupBrowserFallbackSession
-from src.core.services.site_contract import DESKTOP_USER_AGENT
 logger = get_logger("Parser")
 
 

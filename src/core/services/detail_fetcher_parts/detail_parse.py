@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from src.core.services.detail_fetcher_parts.money import parse_kr_money_to_won
 
 

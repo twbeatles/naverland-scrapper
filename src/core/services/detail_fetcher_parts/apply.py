@@ -33,7 +33,11 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
                     pass
             item[key] = value
         if applied.get("면적소스") == "detail_structured" and applied.get("공급면적(㎡)"):
-            from src.utils.helpers import AreaConverter, PriceConverter, PricePerPyeongCalculator
+            from src.utils.helpers import (
+                AreaConverter,
+                PriceConverter,
+                PricePerPyeongCalculator,
+            )
 
             sqm = float(applied["공급면적(㎡)"])
             item["면적(㎡)"] = sqm

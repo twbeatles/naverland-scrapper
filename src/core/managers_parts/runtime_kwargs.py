@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from src.core.managers_parts.schedule_normalize import _clamp_int
 from src.core.managers_parts.settings_manager import get_settings
 

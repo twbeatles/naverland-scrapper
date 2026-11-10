@@ -1,34 +1,32 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QDoubleSpinBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
-    QHeaderView,
     QVBoxLayout,
+    QWidget,
 )
-
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QAbstractItemView, QWidget
 from qfluentwidgets import FluentIcon as FIF
 
-from src.core.models.crawl_models import GeoSweepConfig
 from src.core.managers import collection_runtime_kwargs, settings
+from src.core.models.crawl_models import GeoSweepConfig
 from src.ui.widgets.crawler_tab import (
     CrawlerTab,
     _get_crawl_cache_cls,
     _get_crawler_thread_cls,
 )
-
-
 
 CrawlerThread = None
 

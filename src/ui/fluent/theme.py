@@ -7,11 +7,10 @@ PySide6 바인딩은 유지한다 (DESKTOP_UI_DESIGN_RULES §1.1).
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject
-from PySide6.QtWidgets import QDialog
-
 from typing import Any
 
+from PySide6.QtCore import QEvent, QObject
+from PySide6.QtWidgets import QDialog
 from qfluentwidgets import Theme, isDarkTheme, setTheme, setThemeColor
 
 from src.ui.fluent.design_tokens import ACCENT_DARK, ACCENT_LIGHT

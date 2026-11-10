@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from src.core.services.detail_fetcher import apply_mobile_detail, fetch_mobile_article_detail
+from src.core.services.detail_fetcher import (
+    apply_mobile_detail,
+    fetch_mobile_article_detail,
+)
 
 if TYPE_CHECKING:
     from src.core.engines.playwright_engine import *  # noqa: F403

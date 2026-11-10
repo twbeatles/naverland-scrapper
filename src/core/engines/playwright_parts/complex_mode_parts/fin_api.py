@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.core.services.article_api import MAX_ARTICLE_API_PAGES
-from src.core.services.fin_article_api import parse_fin_article_list, parse_fin_complex_info
+from src.core.services.fin_article_api import (
+    parse_fin_article_list,
+    parse_fin_complex_info,
+)
 from src.core.services.site_contract import (
     FIN_API_ORIGIN_PAGE,
     build_fin_article_list_body,

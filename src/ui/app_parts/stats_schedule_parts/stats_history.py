@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.ui.app import *  # noqa: F403
@@ -525,7 +525,12 @@ class AppStatsScheduleStatsHistoryMixin:
 
             self.chart_widget.clear(MSG_PICK_TRADE_TYPE)
             return True
-        from src.core.services.price_trend import filter_period, format_pct, per_pyeong_series, summarize
+        from src.core.services.price_trend import (
+            filter_period,
+            format_pct,
+            per_pyeong_series,
+            summarize,
+        )
         from src.ui.widgets.chart import ChartSeries, format_price_axis
         from src.utils.helpers import PriceConverter
 

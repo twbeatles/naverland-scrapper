@@ -13,7 +13,11 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from src.utils.update_manifest import MAX_ARTIFACT_BYTES, REQUEST_TIMEOUT_SECONDS, ReleaseManifest
+from src.utils.update_manifest import (
+    MAX_ARTIFACT_BYTES,
+    REQUEST_TIMEOUT_SECONDS,
+    ReleaseManifest,
+)
 
 
 def staging_root() -> Path:

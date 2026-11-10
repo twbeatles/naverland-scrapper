@@ -1,7 +1,7 @@
-from datetime import datetime
-from pathlib import Path
 import os
 import winreg
+from datetime import datetime
+from pathlib import Path
 
 
 def _normalize_asset_type(asset_type: str) -> str:

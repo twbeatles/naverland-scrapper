@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.core.services.fin_article_api import parse_fin_bounded_complexes
 from src.core.services.map_geometry import build_grid_sweep_coords, viewport_bounds

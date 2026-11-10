@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import time
-
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from qfluentwidgets import NavigationInterface
 
@@ -83,7 +82,8 @@ class AppTabSetupMixin:
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        from src.ui.fluent.design_tokens import GROUP_GAP as _GG, PAGE_MARGIN as _PM
+        from src.ui.fluent.design_tokens import GROUP_GAP as _GG
+        from src.ui.fluent.design_tokens import PAGE_MARGIN as _PM
         content_layout.setContentsMargins(_PM, _GG, _PM, _GG)
         from src.ui.fluent.design_tokens import GROUP_GAP as _GG2
         content_layout.setSpacing(_GG2)
@@ -238,7 +238,8 @@ class AppTabSetupMixin:
 
     
     def _setup_schedule_tab(self: Any):
-        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         from src.ui.widgets.components import build_page_header
         from src.utils.ui_labels import SCHEDULE_MODE_LABELS
 
@@ -426,8 +427,16 @@ class AppTabSetupMixin:
 
     def _setup_history_tab(self: Any):
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
-        from src.ui.widgets.components import EmptyStateWidget, build_page_header, install_token_labels
-        from src.utils.ui_labels import asset_label, crawl_mode_label, history_status_label
+        from src.ui.widgets.components import (
+            EmptyStateWidget,
+            build_page_header,
+            install_token_labels,
+        )
+        from src.utils.ui_labels import (
+            asset_label,
+            crawl_mode_label,
+            history_status_label,
+        )
 
         self.history_tab = QWidget()
         layout = QVBoxLayout(self.history_tab)
@@ -491,7 +500,8 @@ class AppTabSetupMixin:
 
     def _setup_stats_tab(self: Any):
         from src.core.services.price_trend import PERIOD_OPTIONS
-        from src.ui.fluent.design_tokens import SPACE_SM as _SM, SPACE_XS as _XS
+        from src.ui.fluent.design_tokens import SPACE_SM as _SM
+        from src.ui.fluent.design_tokens import SPACE_XS as _XS
         from src.ui.widgets.components import EmptyStateWidget, build_page_header
         from src.ui.widgets.trend_summary import TrendSummaryStrip
 

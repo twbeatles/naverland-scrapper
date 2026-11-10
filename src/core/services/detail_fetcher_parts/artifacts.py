@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+
 from src.core.services.detail_fetcher_parts.hydration import _read_hydration_state
 from src.core.services.detail_fetcher_parts.page_primitives import (
     _drain_pending_tasks,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from src.core.services.detail_fetcher_parts.field_keys import (
     _AGENT_NAME_KEYS,
     _OFFICE_KEYS,

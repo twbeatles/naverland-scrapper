@@ -3,13 +3,21 @@ from __future__ import annotations
 import queue
 import threading
 
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QListWidget, QHBoxLayout, QPushButton, QListWidgetItem,
-    QLineEdit, QLabel, QTabWidget, QWidget, QMessageBox
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer
 
-from src.utils.ui_labels import asset_label
 from src.core.services.keyword_search import (
     KeywordBrowserSession,
     KeywordSearchError,
@@ -20,6 +28,7 @@ from src.core.services.keyword_search import (
     fetch_search_page_with_fallback,
     is_rate_limit_error,
 )
+from src.utils.ui_labels import asset_label
 
 _SUGGEST_DEBOUNCE_MS = 400
 

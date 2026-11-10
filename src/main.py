@@ -6,6 +6,7 @@ from pathlib import Path
 from src.utils.logger import cleanup_old_logs, get_logger, setup_logger
 from src.utils.paths import bootstrap_runtime_paths
 from src.utils.preflight import run_preflight_checks
+
 # Add project root to sys.path to allow running this script directly.
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -94,14 +95,15 @@ def main():
     sys.excepthook = _excepthook
 
     from PySide6.QtWidgets import QApplication
+
     from src.ui.app import RealEstateApp
 
     _configure_high_dpi()
     app = QApplication(sys.argv)
     _apply_default_app_font(app)
     try:
-        from src.ui.fluent.theme import setup_app_theme as _setup_theme
         from src.core.managers import settings as _settings
+        from src.ui.fluent.theme import setup_app_theme as _setup_theme
         _setup_theme(app, _settings.get("theme", "dark"))
     except Exception:
         pass

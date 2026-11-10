@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+
 from src.core.managers_parts.schedule_defaults import (
     DEFAULT_SETTINGS,
     DEPRECATED_SETTINGS_KEYS,
