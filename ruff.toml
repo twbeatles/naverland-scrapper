@@ -1,0 +1,61 @@
+# naverland-scrapper Ruff staged rollout - S1_BASE (Phase B)
+# src/ star architecture (45 files, F405x742): cgv-style resolvability check
+# 2026-11-11: 718/742 resolve to unconditional top-level defs in star sources;
+# 24/742 are try/except optional-dependency guards (uc/UC_AVAILABLE/
+# BS4_AVAILABLE/PLAYWRIGHT_AVAILABLE/PSUTIL_AVAILABLE/psutil/async_playwright/
+# NOTIFICATION_AVAILABLE/notification) - runtime-safe idiom, tests guard on flags.
+# Silencing is display-only. Owner action retained: replace star imports
+# with explicit imports (structural change).
+line-length = 88
+preview = false
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+fixable = []
+
+[lint.per-file-ignores]
+"src/core/crawler_parts/dom_scroll_parse.py" = ["F405"]
+"src/core/crawler_parts/history_alerts.py" = ["F405"]
+"src/core/crawler_parts/selenium_flow.py" = ["F405"]
+"src/core/crawler_parts/state_runtime.py" = ["F405"]
+"src/core/database_parts/alert_ops.py" = ["F405"]
+"src/core/database_parts/backup_restore_ops.py" = ["F405"]
+"src/core/database_parts/coercion_parts/recovery.py" = ["F405"]
+"src/core/database_parts/coercion_parts/schema_normalize.py" = ["F405"]
+"src/core/database_parts/coercion_parts/value_coerce.py" = ["F405"]
+"src/core/database_parts/complex_group_ops.py" = ["F405"]
+"src/core/database_parts/crawl_snapshot_parts/crawl_history_ops.py" = ["F405"]
+"src/core/database_parts/crawl_snapshot_parts/price_snapshot_query_ops.py" = ["F405"]
+"src/core/database_parts/crawl_snapshot_parts/price_snapshot_write_ops.py" = ["F405"]
+"src/core/engines/playwright_parts/runtime_parts/browser.py" = ["F405"]
+"src/ui/app_parts/db_maintenance.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/bootstrap.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/menu.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/notify.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/shortcuts_actions.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/shutdown.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/timers_events.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/tray.py" = ["F405"]
+"src/ui/app_parts/lifecycle_parts/updates.py" = ["F405"]
+"src/ui/app_parts/settings_preset.py" = ["F405"]
+"src/ui/app_parts/stats_schedule_parts/geo_assets.py" = ["F405"]
+"src/ui/app_parts/stats_schedule_parts/schedule_config.py" = ["F405"]
+"src/ui/app_parts/stats_schedule_parts/schedule_run.py" = ["F405"]
+"src/ui/app_parts/stats_schedule_parts/stats_history.py" = ["F405"]
+"src/ui/app_parts/tab_setup.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/dialogs.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/finish.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/preflight.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/snapshot_worker.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/start_stop.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/crawl_control_parts/tasks.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/filters_search.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/io_actions.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/result_render_parts/card_sync.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/result_render_parts/compact.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/result_render_parts/logging.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/result_render_parts/table_rows.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/ui_setup_parts/controls.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/ui_setup_parts/layout.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/ui_setup_parts/result_area.py" = ["F405"]
+"src/ui/widgets/crawler_tab_parts/ui_setup_parts/runtime_settings.py" = ["F405"]
