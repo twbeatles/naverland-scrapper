@@ -3,7 +3,6 @@ import unittest
 from pathlib import Path
 from typing import Optional
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src"
 

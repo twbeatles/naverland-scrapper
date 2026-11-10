@@ -345,6 +345,7 @@ class _FakeFinPage:
 class TestFinEngineFastPath(unittest.TestCase):
     def _engine(self, responses):
         from test_playwright_engine_stabilization import _ThreadStub
+
         from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 
         thread = _ThreadStub()
@@ -367,7 +368,9 @@ class TestFinEngineFastPath(unittest.TestCase):
             engine._loop.close()
 
     def test_paginates_with_cursor_and_completes(self):
-        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import PlaywrightFinApiMixin as fin_api
+        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import (
+            PlaywrightFinApiMixin as fin_api,
+        )
 
         original = fin_api.FIN_MIN_PAGE_DELAY_SEC
         fin_api.FIN_MIN_PAGE_DELAY_SEC = 0
@@ -388,7 +391,9 @@ class TestFinEngineFastPath(unittest.TestCase):
         self.assertEqual(thread.stats.get("fin_api_hit_count"), 1)
 
     def test_later_page_rate_limit_keeps_rows_as_partial(self):
-        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import PlaywrightFinApiMixin as fin_api
+        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import (
+            PlaywrightFinApiMixin as fin_api,
+        )
 
         original = fin_api.FIN_MIN_PAGE_DELAY_SEC
         fin_api.FIN_MIN_PAGE_DELAY_SEC = 0
@@ -407,7 +412,9 @@ class TestFinEngineFastPath(unittest.TestCase):
         self.assertEqual(thread.stats["fin_api_failure_reasons"], {"rate_limited": 1})
 
     def _no_delay(self):
-        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import PlaywrightFinApiMixin
+        from src.core.engines.playwright_parts.complex_mode_parts.fin_api import (
+            PlaywrightFinApiMixin,
+        )
 
         original = PlaywrightFinApiMixin.FIN_MIN_PAGE_DELAY_SEC
         PlaywrightFinApiMixin.FIN_MIN_PAGE_DELAY_SEC = 0
@@ -521,8 +528,11 @@ class TestFinGeoDiscovery(unittest.TestCase):
 
     def _geo_engine(self, responses):
         from test_playwright_engine_stabilization import _ThreadStub
+
         from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
-        from src.core.engines.playwright_parts.geo_mode_parts.fin_markers import PlaywrightGeoFinMarkerMixin
+        from src.core.engines.playwright_parts.geo_mode_parts.fin_markers import (
+            PlaywrightGeoFinMarkerMixin,
+        )
 
         original = PlaywrightGeoFinMarkerMixin.FIN_GEO_PAGE_DELAY_SEC
         PlaywrightGeoFinMarkerMixin.FIN_GEO_PAGE_DELAY_SEC = 0

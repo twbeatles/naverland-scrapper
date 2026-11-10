@@ -4,7 +4,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.core.export import DataExporter, ExcelTemplate, ExportResult, OPENPYXL_AVAILABLE
+from src.core.export import (
+    OPENPYXL_AVAILABLE,
+    DataExporter,
+    ExcelTemplate,
+    ExportResult,
+)
 from src.utils.helpers import PriceConverter
 
 

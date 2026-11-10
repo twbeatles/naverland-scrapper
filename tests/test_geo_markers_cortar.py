@@ -6,7 +6,6 @@ from src.core.engines.playwright_parts.geo_mode_parts.markers import (
     PlaywrightGeoMarkerMixin,
 )
 
-
 _MIXIN = PlaywrightGeoMarkerMixin()
 
 

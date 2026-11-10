@@ -17,11 +17,12 @@ class TestIssue001WindowGeometry(unittest.TestCase):
         cls._qt_app = QApplication.instance() or QApplication([])
 
     def _restore(self, geo):
+        from PySide6.QtWidgets import QWidget
+
         from src.ui.app_parts.lifecycle_parts import bootstrap as boot_mod
         from src.ui.app_parts.lifecycle_parts.bootstrap import (
             AppLifecycleBootstrapMixin,
         )
-        from PySide6.QtWidgets import QWidget
 
         warnings = []
         boot_mod.settings = types.SimpleNamespace(

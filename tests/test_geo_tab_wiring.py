@@ -1,11 +1,10 @@
-import importlib.util
 import copy
+import importlib.util
 import os
 import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch
-
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -284,7 +283,9 @@ class TestGeoTabWiring(unittest.TestCase):
 
     def test_scheduled_geo_run_start_failure_keeps_slot_empty(self):
         from PySide6.QtCore import QTime
-        from src.ui.app import RealEstateApp, settings as app_settings
+
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         class _FixedDateTime(datetime):
             @classmethod

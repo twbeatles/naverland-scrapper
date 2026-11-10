@@ -1,12 +1,11 @@
-import importlib.util
 import copy
+import importlib.util
 import os
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -296,6 +295,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_crawler_tab_db_load_preserves_asset_type_targets(self):
         from PySide6.QtWidgets import QDialog
+
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -330,6 +330,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_crawler_tab_group_load_preserves_asset_type_targets(self):
         from PySide6.QtWidgets import QDialog
+
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 
@@ -530,7 +531,8 @@ class TestUIWiring(unittest.TestCase):
         self._qt_app.processEvents()
 
     def test_schedule_group_refresh_does_not_overwrite_missing_saved_group(self):
-        from src.ui.app import RealEstateApp, settings as app_settings
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         original_settings = copy.deepcopy(app_settings._settings)
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -565,7 +567,8 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_schedule_config_load_is_hydration_only(self):
-        from src.ui.app import RealEstateApp, settings as app_settings
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         original_settings = copy.deepcopy(app_settings._settings)
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -726,6 +729,7 @@ class TestUIWiring(unittest.TestCase):
     def test_app_article_open_paths_track_recently_viewed(self):
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QTableWidgetItem
+
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -794,7 +798,9 @@ class TestUIWiring(unittest.TestCase):
 
     def test_schedule_check_runs_once_within_catchup_window(self):
         from PySide6.QtCore import QTime
-        from src.ui.app import RealEstateApp, settings as app_settings
+
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         class _FixedDateTime(datetime):
             @classmethod
@@ -849,7 +855,9 @@ class TestUIWiring(unittest.TestCase):
 
     def test_schedule_busy_retry_within_same_window(self):
         from PySide6.QtCore import QTime
-        from src.ui.app import RealEstateApp, settings as app_settings
+
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         class _FixedDateTime(datetime):
             @classmethod
@@ -913,7 +921,9 @@ class TestUIWiring(unittest.TestCase):
 
     def test_schedule_no_target_retry_within_same_window(self):
         from PySide6.QtCore import QTime
-        from src.ui.app import RealEstateApp, settings as app_settings
+
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         class _FixedDateTime(datetime):
             @classmethod
@@ -970,7 +980,8 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_schedule_start_failure_restores_manual_tasks_and_keeps_slot_empty(self):
-        from src.ui.app import RealEstateApp, settings as app_settings
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
             app = RealEstateApp()
@@ -1022,7 +1033,8 @@ class TestUIWiring(unittest.TestCase):
             self._qt_app.processEvents()
 
     def test_schedule_no_target_restore_preserves_manual_tasks_and_keeps_slot_empty(self):
-        from src.ui.app import RealEstateApp, settings as app_settings
+        from src.ui.app import RealEstateApp
+        from src.ui.app import settings as app_settings
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
             app = RealEstateApp()
@@ -1099,6 +1111,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_restore_db_maintenance_and_timer_restart(self):
         from PySide6.QtWidgets import QMessageBox
+
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1152,6 +1165,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_restore_db_failure_dialog_includes_restore_detail(self):
         from PySide6.QtWidgets import QMessageBox
+
         from src.ui.app import RealEstateApp
 
         with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
@@ -1182,6 +1196,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_restore_db_aborts_when_crawler_shutdown_fails(self):
         from PySide6.QtWidgets import QMessageBox
+
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1231,6 +1246,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_restore_db_aborts_when_geo_shutdown_fails(self):
         from PySide6.QtWidgets import QMessageBox
+
         from src.ui.app import RealEstateApp
 
         class _TimerStub:
@@ -1954,6 +1970,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_close_event_confirmation_and_quit_path(self):
         from PySide6.QtWidgets import QMessageBox
+
         from src.ui.app import RealEstateApp
 
         class _EventStub:
@@ -2359,6 +2376,7 @@ class TestUIWiring(unittest.TestCase):
 
     def test_crawler_tab_export_scope_preserves_visible_order_and_raw_data(self):
         from PySide6.QtCore import Qt
+
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 

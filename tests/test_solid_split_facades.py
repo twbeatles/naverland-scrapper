@@ -46,8 +46,8 @@ class TestDetailFetcherFacade(unittest.TestCase):
 
     def test_orchestrator_entry_points_are_identical_objects(self):
         import src.core.services.detail_fetcher as facade
-        from src.core.services.detail_fetcher_parts import orchestrator
         from src.core.services.detail_fetcher_parts import apply as apply_part
+        from src.core.services.detail_fetcher_parts import orchestrator
 
         self.assertIs(facade.fetch_mobile_article_detail,
                       orchestrator.fetch_mobile_article_detail)
@@ -67,11 +67,11 @@ class TestManagersFacade(unittest.TestCase):
                       schedule_defaults.DEFAULT_SETTINGS)
 
     def test_manager_classes_live_in_dedicated_parts(self):
+        import src.core.managers as facade
         from src.core.managers_parts.filter_preset import FilterPresetManager
         from src.core.managers_parts.recently_viewed import RecentlyViewedManager
         from src.core.managers_parts.search_history import SearchHistoryManager
         from src.core.managers_parts.settings_manager import SettingsManager
-        import src.core.managers as facade
 
         self.assertIs(facade.SettingsManager, SettingsManager)
         self.assertIs(facade.FilterPresetManager, FilterPresetManager)

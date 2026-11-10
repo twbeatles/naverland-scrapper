@@ -4,7 +4,6 @@ import unittest
 
 import src.core.engines.playwright_engine as pe
 
-
 REQUIRED_GLOBALS = (
     "HOST_NEW",
     "HOST_FIN",

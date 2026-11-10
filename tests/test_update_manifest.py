@@ -4,7 +4,11 @@ from datetime import datetime, timedelta, timezone
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from src.utils.update_manifest import NoUpdateAvailableError, canonical_manifest_payload, verify_release_manifest
+from src.utils.update_manifest import (
+    NoUpdateAvailableError,
+    canonical_manifest_payload,
+    verify_release_manifest,
+)
 
 
 def _document(version="15.1"):

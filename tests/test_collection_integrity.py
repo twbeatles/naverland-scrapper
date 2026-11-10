@@ -3,18 +3,21 @@ import asyncio
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 from src.core.cache import CrawlCache
 from src.core.database import ComplexDatabase
 from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 from src.core.services.collection_result import (
-    article_list_from_payload, collection_fingerprint, result_is_complete, snapshot_block_reason,
+    article_list_from_payload,
+    collection_fingerprint,
     observation_date,
+    result_is_complete,
+    snapshot_block_reason,
 )
 from src.core.services.detail_fetcher_parts.hydration import _decode_rsc_frames
 from src.core.services.price_snapshots import build_price_snapshot_rows

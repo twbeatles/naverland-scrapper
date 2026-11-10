@@ -5,7 +5,6 @@ import time
 import unittest
 from unittest.mock import patch
 
-
 # Ensure headless-friendly Qt platform for CI runners.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -39,6 +38,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
 
     def test_app_guide_tab_contains_moved_help_content(self):
         from PySide6.QtWidgets import QTextBrowser
+
         from src.ui.app import RealEstateApp
 
         w = RealEstateApp()
@@ -227,7 +227,11 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                 self._qt_app.processEvents()
 
     def test_dialogs_instantiation(self):
-        from src.ui.dialogs import URLBatchDialog, AdvancedFilterDialog, KeywordSearchDialog
+        from src.ui.dialogs import (
+            AdvancedFilterDialog,
+            KeywordSearchDialog,
+            URLBatchDialog,
+        )
 
         d1 = URLBatchDialog()
         d2 = AdvancedFilterDialog()
@@ -239,6 +243,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
 
     def test_url_batch_dialog_unverified_defaults_unchecked(self):
         from PySide6.QtWidgets import QCheckBox
+
         from src.ui.dialogs.batch import URLBatchDialog
 
         with (
@@ -366,6 +371,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
 
     def test_url_batch_dialog_resolves_article_only_url(self):
         from PySide6.QtWidgets import QCheckBox
+
         from src.ui.dialogs.batch import URLBatchDialog
 
         article_entry = {
@@ -421,6 +427,7 @@ class TestUIRuntimeSmoke(unittest.TestCase):
 
     def test_url_batch_dialog_leaves_failed_article_lookup_unchecked(self):
         from PySide6.QtWidgets import QCheckBox
+
         from src.ui.dialogs.batch import URLBatchDialog
 
         article_entry = {
@@ -515,9 +522,10 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         self.assertEqual(progress[1][2], "102")
 
     def test_crawler_tab_batch_render_smoke(self):
+        from PySide6.QtWidgets import QLabel
+
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
-        from PySide6.QtWidgets import QLabel
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ComplexDatabase(os.path.join(tmp, "test_ui_batch.db"))

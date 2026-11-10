@@ -1,13 +1,15 @@
-import sys
 import os
-import unittest
+import sys
 import time
+import unittest
+
 from bs4 import BeautifulSoup
 
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.core.item_parser import ItemParser
+
 
 class TestItemParser(unittest.TestCase):
     def test_parse_simple_item(self):

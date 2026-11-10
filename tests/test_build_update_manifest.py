@@ -1,11 +1,11 @@
+import base64
 from datetime import datetime, timedelta, timezone
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from scripts.build_update_manifest import build_manifest
 from src.utils.update_manifest import verify_release_manifest
-from cryptography.hazmat.primitives import serialization
-import base64
 
 
 def test_build_manifest_contains_verifiable_artifact_metadata(tmp_path):

@@ -1,6 +1,8 @@
 import unittest
 
-from src.ui.widgets.crawler_tab_parts.crawl_control_parts.finish import CrawlerTabFinishMixin
+from src.ui.widgets.crawler_tab_parts.crawl_control_parts.finish import (
+    CrawlerTabFinishMixin,
+)
 
 
 class _Harness(CrawlerTabFinishMixin):

@@ -1,11 +1,11 @@
 import json
 import os
+import sys
 import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-import sys
 
 # Headless-friendly default for benchmark environments.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

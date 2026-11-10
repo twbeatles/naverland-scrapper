@@ -1,8 +1,8 @@
+import json
 import os
 import sys
 import tempfile
 import unittest
-import json
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -12,10 +12,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.core.cache import CrawlCache
 from src.core.managers import (
     DEFAULT_SETTINGS,
-    SettingsManager,
     FilterPresetManager,
-    SearchHistoryManager,
     RecentlyViewedManager,
+    SearchHistoryManager,
+    SettingsManager,
     _sanitize_settings_payload,
     get_settings,
     settings,
@@ -223,7 +223,9 @@ class TestCacheAndManagers(unittest.TestCase):
         self.assertEqual(explicit["playwright_detail_workers"], 8)
 
     def test_light_defaults_migration_applies_once(self):
-        from src.core.managers_parts.settings_manager import _LIGHT_DEFAULTS_MIGRATION_KEY
+        from src.core.managers_parts.settings_manager import (
+            _LIGHT_DEFAULTS_MIGRATION_KEY,
+        )
 
         settings_path = self.tmp_path / "settings.json"
         legacy = dict(DEFAULT_SETTINGS)

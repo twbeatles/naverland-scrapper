@@ -17,6 +17,7 @@ class TestPerformanceSmoke(unittest.TestCase):
 
     def test_result_filter_miss_10k_smoke(self):
         from PySide6.QtWidgets import QTableWidgetItem
+
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
 

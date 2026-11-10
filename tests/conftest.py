@@ -9,13 +9,12 @@ from pathlib import Path
 
 import pytest
 
-
 _SESSION_ROOT = Path(tempfile.mkdtemp(prefix="naverland-pytest-session-"))
 _ORIGINAL_DATA_DIR = os.environ.get("NAVERLAND_DATA_DIR")
 
 
 def pytest_configure(config):
-    from src.utils.paths import configure_paths, bootstrap_runtime_paths
+    from src.utils.paths import bootstrap_runtime_paths, configure_paths
 
     os.environ["NAVERLAND_DATA_DIR"] = str(_SESSION_ROOT)
     configure_paths(_SESSION_ROOT)
@@ -24,8 +23,8 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def isolated_runtime_data(tmp_path, monkeypatch):
-    from src.utils.paths import configure_paths
     from src.core.managers import SettingsManager
+    from src.utils.paths import configure_paths
 
     monkeypatch.setenv("NAVERLAND_DATA_DIR", str(tmp_path))
     configure_paths(tmp_path)

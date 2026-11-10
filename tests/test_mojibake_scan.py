@@ -1,7 +1,6 @@
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SCAN_ROOTS = (ROOT / "src", ROOT / "tests")
 ROOT_FIXED_TEXT_FILES = (

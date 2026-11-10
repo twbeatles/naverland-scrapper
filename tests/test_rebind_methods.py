@@ -20,6 +20,13 @@ class TestMixinMethodRebinding(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_all_mixin_methods_are_rebound_to_runtime_classes(self):
+        from src.core.crawler import (
+            CrawlerDomScrollParseMixin,
+            CrawlerHistoryAlertsMixin,
+            CrawlerSeleniumFlowMixin,
+            CrawlerStateRuntimeMixin,
+            CrawlerThread,
+        )
         from src.core.database import (
             ComplexDatabase,
             ComplexDatabaseAlertOpsMixin,
@@ -29,13 +36,6 @@ class TestMixinMethodRebinding(unittest.TestCase):
             ComplexDatabaseComplexGroupOpsMixin,
             ComplexDatabaseCrawlSnapshotOpsMixin,
             ComplexDatabaseSchemaMixin,
-        )
-        from src.core.crawler import (
-            CrawlerDomScrollParseMixin,
-            CrawlerHistoryAlertsMixin,
-            CrawlerSeleniumFlowMixin,
-            CrawlerStateRuntimeMixin,
-            CrawlerThread,
         )
         from src.core.engines.playwright_engine import (
             PlaywrightComplexModeMixin,
@@ -162,17 +162,30 @@ class TestMixinMethodRebinding(unittest.TestCase):
 
     def test_facade_modules_keep_public_imports(self):
         from src.core.database_parts.article_ops import ComplexDatabaseArticleOpsMixin
-        from src.core.database_parts.crawl_snapshot_ops import ComplexDatabaseCrawlSnapshotOpsMixin
+        from src.core.database_parts.crawl_snapshot_ops import (
+            ComplexDatabaseCrawlSnapshotOpsMixin,
+        )
         from src.core.database_parts.schema import ComplexDatabaseSchemaMixin
-        from src.core.engines.playwright_parts.complex_mode import PlaywrightComplexModeMixin
+        from src.core.engines.playwright_parts.complex_mode import (
+            PlaywrightComplexModeMixin,
+        )
         from src.core.engines.playwright_parts.geo_mode import PlaywrightGeoModeMixin
         from src.core.engines.playwright_parts.runtime import PlaywrightRuntimeMixin
         from src.core.parser import ArticleLookupBrowserFallbackSession, NaverURLParser
         from src.ui.styles import COLORS, get_stylesheet
-        from src.ui.widgets.crawler_tab_parts.crawl_control import CrawlerTabCrawlControlMixin
-        from src.ui.widgets.crawler_tab_parts.result_render import CrawlerTabResultRenderMixin
+        from src.ui.widgets.crawler_tab_parts.crawl_control import (
+            CrawlerTabCrawlControlMixin,
+        )
+        from src.ui.widgets.crawler_tab_parts.result_render import (
+            CrawlerTabResultRenderMixin,
+        )
         from src.ui.widgets.crawler_tab_parts.ui_setup import CrawlerTabUISetupMixin
-        from src.ui.widgets.dashboard import ArticleCard, CardViewWidget, DashboardWidget, StatCard
+        from src.ui.widgets.dashboard import (
+            ArticleCard,
+            CardViewWidget,
+            DashboardWidget,
+            StatCard,
+        )
         from src.utils.live_smoke import default_live_smoke_urls, run_live_smoke
 
         public_objects = [

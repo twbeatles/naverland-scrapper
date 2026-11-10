@@ -128,6 +128,7 @@ class TestArticleCardTheme(unittest.TestCase):
 
     def test_light_article_card_enables_styled_background_and_paints_light_pixel(self):
         from PySide6.QtCore import Qt
+
         from src.ui.styles_parts.colors import COLORS
         from src.ui.widgets.cards import ArticleCard
 
@@ -147,11 +148,13 @@ class TestArticleCardTheme(unittest.TestCase):
 
     def test_crawler_set_theme_forces_light_groupbox_surfaces(self):
         import tempfile
+
+        from PySide6.QtWidgets import QGroupBox
+
         from src.core.database import ComplexDatabase
         from src.ui.styles_parts.colors import COLORS
         from src.ui.styles_parts.surfaces import apply_theme_surfaces
         from src.ui.widgets.crawler_tab import CrawlerTab
-        from PySide6.QtWidgets import QGroupBox
 
         with tempfile.TemporaryDirectory() as tmp:
             db = ComplexDatabase(os.path.join(tmp, "theme_cards.db"))

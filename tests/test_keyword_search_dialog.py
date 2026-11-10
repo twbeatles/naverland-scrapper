@@ -4,8 +4,8 @@ import json
 import os
 import time
 import unittest
-from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -545,6 +545,7 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
 
     def test_located_region_name_replaces_coordinate_label(self):
         from PySide6.QtCore import Qt
+
         from src.ui.dialogs.search import KeywordSearchDialog
 
         dlg = KeywordSearchDialog(mode="region", session_factory=lambda: None)

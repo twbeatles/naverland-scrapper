@@ -5,7 +5,6 @@ import unittest
 from typing import Any
 from unittest.mock import patch
 
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.core.crawler import CrawlerThread
