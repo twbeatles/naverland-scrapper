@@ -177,7 +177,8 @@ class TestNavigationExpanded(unittest.TestCase):
         from src.ui.fluent.navigation import ROUTE_CRAWLER, ROUTE_SETTINGS
         self.assertIn(ROUTE_CRAWLER, items)
         self.assertIn(ROUTE_SETTINGS, items)
-        text_of = lambda w: getattr(w, "text", lambda: "")()
+        def text_of(w):
+            return getattr(w, "text", lambda: "")()
         labels = [text_of(entry.widget) for entry in items.values()]
         self.assertIn("매물 수집", labels)
         self.assertIn("설정", labels)

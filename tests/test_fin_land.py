@@ -1,6 +1,5 @@
 """fin.land front-api contract (live samples trimmed from 2026-10-22 probe)."""
 
-import asyncio
 import json
 import unittest
 

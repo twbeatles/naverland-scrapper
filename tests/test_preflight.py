@@ -219,7 +219,7 @@ class TestPreflight(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             sandbox = Path(tmp) / "preflight-sandbox"
             data_dir = sandbox / "data"
-            log_dir = sandbox / "logs"
+            _log_dir = sandbox / "logs"
             data_dir.mkdir(parents=True, exist_ok=True)
             (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
             with (

@@ -14,15 +14,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from bs4 import BeautifulSoup
-from PySide6.QtWidgets import QApplication
+from bs4 import BeautifulSoup  # noqa: E402  # sys.path/env bootstrap above
+from PySide6.QtWidgets import QApplication  # noqa: E402  # sys.path/env bootstrap above
 
-from src.core.cache import CrawlCache
-from src.core.item_parser import ItemParser
-from src.ui.app import RealEstateApp
-from src.ui.widgets.cards import CardViewWidget
-from src.utils.paths import LOG_DIR, ensure_directories
-from src.utils.preflight import run_preflight_checks
+from src.core.cache import CrawlCache  # noqa: E402  # sys.path/env bootstrap above
+from src.core.item_parser import ItemParser  # noqa: E402  # sys.path/env bootstrap above
+from src.ui.app import RealEstateApp  # noqa: E402  # sys.path/env bootstrap above
+from src.ui.widgets.cards import CardViewWidget  # noqa: E402  # sys.path/env bootstrap above
+from src.utils.paths import LOG_DIR, ensure_directories  # noqa: E402  # sys.path/env bootstrap above
+from src.utils.preflight import run_preflight_checks  # noqa: E402  # sys.path/env bootstrap above
 
 
 def _benchmark_parser():

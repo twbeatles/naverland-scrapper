@@ -21,6 +21,9 @@ def test_signed_manifest_is_accepted():
 
 def test_non_newer_signed_manifest_is_rejected():
     document, public = _document("15.0")
-    try: verify_release_manifest(document, public_key_b64=public, current_version="15.0")
-    except NoUpdateAvailableError: pass
-    else: raise AssertionError("expected NoUpdateAvailableError")
+    try:
+        verify_release_manifest(document, public_key_b64=public, current_version="15.0")
+    except NoUpdateAvailableError:
+        pass
+    else:
+        raise AssertionError("expected NoUpdateAvailableError")
