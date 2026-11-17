@@ -30,9 +30,15 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(rows[0]["asset_type"], "APT")
 
     def test_add_complex_same_complex_id_different_asset_type(self):
-        s1 = self.db.add_complex("ComplexA", "30003", asset_type="APT", return_status=True)
-        s2 = self.db.add_complex("ComplexB", "30003", asset_type="VL", return_status=True)
-        s3 = self.db.add_complex("ComplexA", "30003", asset_type="APT", return_status=True)
+        s1 = self.db.add_complex(
+            "ComplexA", "30003", asset_type="APT", return_status=True
+        )
+        s2 = self.db.add_complex(
+            "ComplexB", "30003", asset_type="VL", return_status=True
+        )
+        s3 = self.db.add_complex(
+            "ComplexA", "30003", asset_type="APT", return_status=True
+        )
 
         self.assertEqual(s1, "inserted")
         self.assertEqual(s2, "inserted")
@@ -85,7 +91,9 @@ class TestComplexDatabase(unittest.TestCase):
             patch.object(self.db._pool, "return_connection", return_value=None),
             patch("src.core.database.time.sleep", return_value=None),
         ):
-            status = self.db.add_complex("RetryComplex", "R-100", asset_type="APT", return_status=True)
+            status = self.db.add_complex(
+                "RetryComplex", "R-100", asset_type="APT", return_status=True
+            )
 
         self.assertEqual(status, "inserted")
         self.assertTrue(conn_stub.cursor_stub.inserted)
@@ -121,7 +129,11 @@ class TestComplexDatabase(unittest.TestCase):
         with (
             patch.object(self.db._pool, "get_connection", return_value=conn_stub),
             patch.object(self.db._pool, "return_connection", return_value=None),
-            patch.object(self.db, "_purge_related_for_complex_refs", side_effect=RuntimeError("purge failed")),
+            patch.object(
+                self.db,
+                "_purge_related_for_complex_refs",
+                side_effect=RuntimeError("purge failed"),
+            ),
         ):
             self.assertFalse(self.db.delete_complex(1, purge_related=True))
 
@@ -160,9 +172,15 @@ class TestComplexDatabase(unittest.TestCase):
         with (
             patch.object(self.db._pool, "get_connection", return_value=conn_stub),
             patch.object(self.db._pool, "return_connection", return_value=None),
-            patch.object(self.db, "_purge_related_for_complex_refs", side_effect=RuntimeError("purge failed")),
+            patch.object(
+                self.db,
+                "_purge_related_for_complex_refs",
+                side_effect=RuntimeError("purge failed"),
+            ),
         ):
-            self.assertEqual(self.db.delete_complexes_bulk([1, 2], purge_related=True), 0)
+            self.assertEqual(
+                self.db.delete_complexes_bulk([1, 2], purge_related=True), 0
+            )
 
         self.assertEqual(conn_stub.commits, 0)
         self.assertEqual(conn_stub.rollbacks, 1)
@@ -188,7 +206,9 @@ class TestComplexDatabase(unittest.TestCase):
     def test_get_complexes_for_stats_returns_partial_when_one_source_fails(self):
         def _fake_fetchall_safe(_conn, _query, params=(), context=""):
             if "complexes" in context:
-                return [{"name": "ComplexA", "asset_type": "APT", "complex_id": "11111"}]
+                return [
+                    {"name": "ComplexA", "asset_type": "APT", "complex_id": "11111"}
+                ]
             if "crawl_history" in context:
                 return []
             if "price_snapshots" in context:
@@ -236,7 +256,9 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(int(apt_rows[0][5]), 33000)
         self.assertEqual(int(vl_rows[0][5]), 22000)
 
-    def test_monthly_price_snapshots_support_metric_filters_and_hide_legacy_by_default(self):
+    def test_monthly_price_snapshots_support_metric_filters_and_hide_legacy_by_default(
+        self,
+    ):
         saved = self.db.add_price_snapshots_bulk(
             [
                 ("72001", "월세", 24.0, 50000, 55000, 52500, 2, "APT", "deposit", 0),
@@ -247,8 +269,12 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(saved, 3)
 
         default_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT")
-        deposit_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT", price_metric="deposit")
-        rent_rows = self.db.get_price_snapshots("72001", "월세", asset_type="APT", price_metric="rent")
+        deposit_rows = self.db.get_price_snapshots(
+            "72001", "월세", asset_type="APT", price_metric="deposit"
+        )
+        rent_rows = self.db.get_price_snapshots(
+            "72001", "월세", asset_type="APT", price_metric="rent"
+        )
         legacy_rows = self.db.get_price_snapshots(
             "72001",
             "월세",
@@ -267,10 +293,14 @@ class TestComplexDatabase(unittest.TestCase):
         self.assertEqual(len(legacy_rows), 2)
         self.assertTrue(any(int(row[8]) == 1 for row in legacy_rows))
 
-        pyeongs = self.db.get_price_snapshot_pyeongs("72001", asset_type="APT", trade_type="월세")
+        pyeongs = self.db.get_price_snapshot_pyeongs(
+            "72001", asset_type="APT", trade_type="월세"
+        )
         self.assertEqual(pyeongs, [24.0])
 
-    def test_monthly_snapshot_migration_marks_only_deposit_rows_without_rent_pair_as_legacy(self):
+    def test_monthly_snapshot_migration_marks_only_deposit_rows_without_rent_pair_as_legacy(
+        self,
+    ):
         legacy_path = os.path.join(self.tmp.name, "legacy_monthly_snapshots.db")
         conn = sqlite3.connect(legacy_path)
         try:
@@ -300,9 +330,42 @@ class TestComplexDatabase(unittest.TestCase):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    ("LEG-1", "월세", 24.0, 50000, 52000, 51000, 1, "APT", "price", "2026-03-01"),
-                    ("NEW-1", "월세", 24.0, 60000, 62000, 61000, 1, "APT", "deposit", "2026-03-02"),
-                    ("NEW-1", "월세", 24.0, 90, 100, 95, 1, "APT", "rent", "2026-03-02"),
+                    (
+                        "LEG-1",
+                        "월세",
+                        24.0,
+                        50000,
+                        52000,
+                        51000,
+                        1,
+                        "APT",
+                        "price",
+                        "2026-03-01",
+                    ),
+                    (
+                        "NEW-1",
+                        "월세",
+                        24.0,
+                        60000,
+                        62000,
+                        61000,
+                        1,
+                        "APT",
+                        "deposit",
+                        "2026-03-02",
+                    ),
+                    (
+                        "NEW-1",
+                        "월세",
+                        24.0,
+                        90,
+                        100,
+                        95,
+                        1,
+                        "APT",
+                        "rent",
+                        "2026-03-02",
+                    ),
                 ],
             )
             conn.commit()
@@ -325,7 +388,9 @@ class TestComplexDatabase(unittest.TestCase):
                 price_metric="deposit",
                 include_legacy_monthly=True,
             )
-            current_default_rows = migrated_db.get_price_snapshots("NEW-1", "월세", asset_type="APT")
+            current_default_rows = migrated_db.get_price_snapshots(
+                "NEW-1", "월세", asset_type="APT"
+            )
 
             self.assertEqual(len(legacy_rows), 1)
             self.assertEqual(legacy_rows[0][7], "deposit")
@@ -368,8 +433,32 @@ class TestComplexDatabase(unittest.TestCase):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    ("DUP-1", "매매", 34.0, 10000, 12000, 11000, 1, "", "", 0, "2026-03-01"),
-                    ("DUP-1", "매매", 34.0, 13000, 15000, 14000, 2, "APT", "price", 0, "2026-03-01"),
+                    (
+                        "DUP-1",
+                        "매매",
+                        34.0,
+                        10000,
+                        12000,
+                        11000,
+                        1,
+                        "",
+                        "",
+                        0,
+                        "2026-03-01",
+                    ),
+                    (
+                        "DUP-1",
+                        "매매",
+                        34.0,
+                        13000,
+                        15000,
+                        14000,
+                        2,
+                        "APT",
+                        "price",
+                        0,
+                        "2026-03-01",
+                    ),
                 ],
             )
             conn.commit()
@@ -384,10 +473,18 @@ class TestComplexDatabase(unittest.TestCase):
 
             conn = migrated_db._pool.get_connection()
             try:
-                indexes = conn.cursor().execute("PRAGMA index_list(price_snapshots)").fetchall()
+                indexes = (
+                    conn.cursor()
+                    .execute("PRAGMA index_list(price_snapshots)")
+                    .fetchall()
+                )
             finally:
                 migrated_db._pool.return_connection(conn)
-            self.assertTrue(any(row["name"] == "idx_price_snapshots_daily_unique" for row in indexes))
+            self.assertTrue(
+                any(
+                    row["name"] == "idx_price_snapshots_daily_unique" for row in indexes
+                )
+            )
         finally:
             migrated_db.close()
 
@@ -395,7 +492,11 @@ class TestComplexDatabase(unittest.TestCase):
         self.db.add_complex("ScopeApt", "88008", asset_type="APT")
         self.db.add_complex("ScopeVl", "88008", asset_type="VL")
         rows = self.db.get_all_complexes()
-        apt_db_id = next(int(row["id"]) for row in rows if row["complex_id"] == "88008" and row["asset_type"] == "APT")
+        apt_db_id = next(
+            int(row["id"])
+            for row in rows
+            if row["complex_id"] == "88008" and row["asset_type"] == "APT"
+        )
 
         saved = self.db.add_price_snapshots_bulk(
             [
@@ -420,8 +521,12 @@ class TestComplexDatabase(unittest.TestCase):
         keys = {str(cid) for _name, cid in rows if "30003" in str(cid)}
         self.assertIn("APT:30003", keys)
         self.assertIn("VL:30003", keys)
-        self.assertTrue(any("(APT)" in str(name) for name, cid in rows if str(cid) == "APT:30003"))
-        self.assertTrue(any("(VL)" in str(name) for name, cid in rows if str(cid) == "VL:30003"))
+        self.assertTrue(
+            any("(APT)" in str(name) for name, cid in rows if str(cid) == "APT:30003")
+        )
+        self.assertTrue(
+            any("(VL)" in str(name) for name, cid in rows if str(cid) == "VL:30003")
+        )
 
     def test_write_circuit_breaker_blocks_core_writes(self):
         self.db._disable_writes("database_corruption")
@@ -487,7 +592,9 @@ class TestComplexDatabase(unittest.TestCase):
             timed_out=True,
             still_leased=1,
         )
-        with patch.object(self.db._pool, "close_all", return_value=close_result) as mock_close:
+        with patch.object(
+            self.db._pool, "close_all", return_value=close_result
+        ) as mock_close:
             restored = self.db.restore_database(restore_path)
 
         self.assertFalse(restored)
@@ -517,7 +624,9 @@ class TestComplexDatabase(unittest.TestCase):
             notice = recovered_db.get_startup_recovery_notice()
             self.assertIn("손상된 DB를 분리", notice)
             self.assertEqual(len(recovered_db.get_all_complexes()), 0)
-            self.assertTrue(recovered_db.add_complex("Recovered", "99001", asset_type="APT"))
+            self.assertTrue(
+                recovered_db.add_complex("Recovered", "99001", asset_type="APT")
+            )
 
             backup_dir = Path(self.tmp.name) / "backups"
             backups = list(backup_dir.glob("malformed_schema.startup_corrupt_*.db"))
@@ -525,7 +634,9 @@ class TestComplexDatabase(unittest.TestCase):
 
             check_conn = sqlite3.connect(str(corrupt_path))
             try:
-                integrity = check_conn.cursor().execute("PRAGMA integrity_check").fetchone()
+                integrity = (
+                    check_conn.cursor().execute("PRAGMA integrity_check").fetchone()
+                )
             finally:
                 check_conn.close()
             self.assertEqual(str(integrity[0]).lower(), "ok")
@@ -558,10 +669,14 @@ class TestComplexDatabase(unittest.TestCase):
 
         conn = self.db._pool.get_connection()
         try:
-            cnt = conn.cursor().execute(
-                "SELECT COUNT(*) FROM group_complexes WHERE complex_id IN (?, ?)",
-                (ids[0], ids[1]),
-            ).fetchone()[0]
+            cnt = (
+                conn.cursor()
+                .execute(
+                    "SELECT COUNT(*) FROM group_complexes WHERE complex_id IN (?, ?)",
+                    (ids[0], ids[1]),
+                )
+                .fetchone()[0]
+            )
         finally:
             self.db._pool.return_connection(conn)
         self.assertEqual(cnt, 0)
@@ -630,13 +745,48 @@ class TestComplexDatabase(unittest.TestCase):
         verify_conn = self.db._pool.get_connection()
         try:
             c = verify_conn.cursor()
-            self.assertGreater(c.execute("SELECT COUNT(*) FROM article_history WHERE complex_id = '50005'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM article_history WHERE complex_id = '60006'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM crawl_history WHERE complex_id = '60006'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM price_snapshots WHERE complex_id = '60006'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM alert_settings WHERE complex_id = '60006'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM article_favorites WHERE complex_id = '60006'").fetchone()[0], 0)
-            self.assertEqual(c.execute("SELECT COUNT(*) FROM article_alert_log WHERE complex_id = '60006'").fetchone()[0], 0)
+            self.assertGreater(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_history WHERE complex_id = '50005'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_history WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM crawl_history WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM price_snapshots WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM alert_settings WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_favorites WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                c.execute(
+                    "SELECT COUNT(*) FROM article_alert_log WHERE complex_id = '60006'"
+                ).fetchone()[0],
+                0,
+            )
         finally:
             self.db._pool.return_connection(verify_conn)
 
@@ -680,15 +830,21 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             self.db._pool.return_connection(conn)
 
-        updated = self.db.mark_disappeared_articles_for_targets([("APT", "30003", "SALE")])
+        updated = self.db.mark_disappeared_articles_for_targets(
+            [("APT", "30003", "SALE")]
+        )
         self.assertEqual(updated, 1)
 
         conn = self.db._pool.get_connection()
         try:
-            rows = conn.cursor().execute(
-                "SELECT article_id, asset_type, status FROM article_history WHERE article_id IN (?, ?) ORDER BY article_id",
-                ("E1", "E2"),
-            ).fetchall()
+            rows = (
+                conn.cursor()
+                .execute(
+                    "SELECT article_id, asset_type, status FROM article_history WHERE article_id IN (?, ?) ORDER BY article_id",
+                    ("E1", "E2"),
+                )
+                .fetchall()
+            )
         finally:
             self.db._pool.return_connection(conn)
 
@@ -733,10 +889,14 @@ class TestComplexDatabase(unittest.TestCase):
 
         conn = self.db._pool.get_connection()
         try:
-            disappeared_count = conn.cursor().execute(
-                "SELECT COUNT(*) FROM article_history WHERE article_id IN (?, ?, ?) AND status='disappeared'",
-                ("L0", "L1", "L2"),
-            ).fetchone()[0]
+            disappeared_count = (
+                conn.cursor()
+                .execute(
+                    "SELECT COUNT(*) FROM article_history WHERE article_id IN (?, ?, ?) AND status='disappeared'",
+                    ("L0", "L1", "L2"),
+                )
+                .fetchone()[0]
+            )
         finally:
             self.db._pool.return_connection(conn)
         self.assertEqual(disappeared_count, 3)
@@ -781,10 +941,17 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             self.db._pool.return_connection(conn)
 
-        self.assertEqual(self.db.count_disappeared_articles_for_targets([("APT", "32001", "SALE")]), 1)
-        self.assertEqual(self.db.count_disappeared_articles_for_targets([("VL", "32001", "SALE")]), 1)
         self.assertEqual(
-            self.db.count_disappeared_articles_for_targets([("APT", "32001", "SALE"), ("VL", "32001", "SALE")]),
+            self.db.count_disappeared_articles_for_targets([("APT", "32001", "SALE")]),
+            1,
+        )
+        self.assertEqual(
+            self.db.count_disappeared_articles_for_targets([("VL", "32001", "SALE")]), 1
+        )
+        self.assertEqual(
+            self.db.count_disappeared_articles_for_targets(
+                [("APT", "32001", "SALE"), ("VL", "32001", "SALE")]
+            ),
             2,
         )
 
@@ -825,10 +992,14 @@ class TestComplexDatabase(unittest.TestCase):
 
     def test_get_enabled_alert_rules_respects_asset_scope_and_all(self):
         self.assertTrue(
-            self.db.add_alert_setting("88008", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT")
+            self.db.add_alert_setting(
+                "88008", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT"
+            )
         )
         self.assertTrue(
-            self.db.add_alert_setting("88008", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL")
+            self.db.add_alert_setting(
+                "88008", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL"
+            )
         )
         conn = self.db._pool.get_connection()
         try:
@@ -922,9 +1093,11 @@ class TestComplexDatabase(unittest.TestCase):
         try:
             integrity = check_conn.cursor().execute("PRAGMA integrity_check").fetchone()
             self.assertEqual(str(integrity[0]).lower(), "ok")
-            table_rows = check_conn.cursor().execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            table_rows = (
+                check_conn.cursor()
+                .execute("SELECT name FROM sqlite_master WHERE type='table'")
+                .fetchall()
+            )
         finally:
             self.db._pool.return_connection(check_conn)
         table_names = {r[0] for r in table_rows}
@@ -1044,7 +1217,9 @@ class TestComplexDatabase(unittest.TestCase):
         finally:
             migrated_db.close()
 
-    def test_migrate_legacy_article_history_and_favorites_asset_scope_schema_creates_backup(self):
+    def test_migrate_legacy_article_history_and_favorites_asset_scope_schema_creates_backup(
+        self,
+    ):
         legacy_path = os.path.join(self.tmp.name, "legacy_article_scope.db")
         conn = sqlite3.connect(legacy_path)
         try:
@@ -1091,7 +1266,17 @@ class TestComplexDatabase(unittest.TestCase):
                     article_id, complex_id, complex_name, trade_type, price, price_text, area_pyeong, floor_info, feature
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                ("A-LEG", "90001", "LegacyComplex", "매매", 12000, "12000", 33.0, "10층", "legacy"),
+                (
+                    "A-LEG",
+                    "90001",
+                    "LegacyComplex",
+                    "매매",
+                    12000,
+                    "12000",
+                    33.0,
+                    "10층",
+                    "legacy",
+                ),
             )
             c.execute(
                 """
@@ -1112,28 +1297,45 @@ class TestComplexDatabase(unittest.TestCase):
 
             check_conn = migrated_db._pool.get_connection()
             try:
-                rows = check_conn.cursor().execute(
-                    """
+                rows = (
+                    check_conn.cursor()
+                    .execute(
+                        """
                     SELECT asset_type, article_id, complex_id
                     FROM article_history
                     WHERE article_id = ?
                     """,
-                    ("A-LEG",),
-                ).fetchall()
-                fav_rows = check_conn.cursor().execute(
-                    """
+                        ("A-LEG",),
+                    )
+                    .fetchall()
+                )
+                fav_rows = (
+                    check_conn.cursor()
+                    .execute(
+                        """
                     SELECT asset_type, article_id, complex_id
                     FROM article_favorites
                     WHERE article_id = ?
                     """,
-                    ("A-LEG",),
-                ).fetchall()
+                        ("A-LEG",),
+                    )
+                    .fetchall()
+                )
             finally:
                 migrated_db._pool.return_connection(check_conn)
 
-            self.assertEqual([(row["asset_type"], row["article_id"], row["complex_id"]) for row in rows], [("APT", "A-LEG", "90001")])
             self.assertEqual(
-                [(row["asset_type"], row["article_id"], row["complex_id"]) for row in fav_rows],
+                [
+                    (row["asset_type"], row["article_id"], row["complex_id"])
+                    for row in rows
+                ],
+                [("APT", "A-LEG", "90001")],
+            )
+            self.assertEqual(
+                [
+                    (row["asset_type"], row["article_id"], row["complex_id"])
+                    for row in fav_rows
+                ],
                 [("APT", "A-LEG", "90001")],
             )
         finally:
@@ -1173,24 +1375,32 @@ class TestComplexDatabase(unittest.TestCase):
 
         conn = self.db._pool.get_connection()
         try:
-            history_rows = conn.cursor().execute(
-                """
+            history_rows = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT asset_type, price
                 FROM article_history
                 WHERE article_id = ? AND complex_id = ?
                 ORDER BY asset_type
                 """,
-                ("A-100", "C-100"),
-            ).fetchall()
-            favorite_rows = conn.cursor().execute(
-                """
+                    ("A-100", "C-100"),
+                )
+                .fetchall()
+            )
+            favorite_rows = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT asset_type, is_favorite
                 FROM article_favorites
                 WHERE article_id = ? AND complex_id = ?
                 ORDER BY asset_type
                 """,
-                ("A-100", "C-100"),
-            ).fetchall()
+                    ("A-100", "C-100"),
+                )
+                .fetchall()
+            )
         finally:
             self.db._pool.return_connection(conn)
 
@@ -1203,7 +1413,9 @@ class TestComplexDatabase(unittest.TestCase):
             [("APT", 1), ("VL", 1)],
         )
 
-    def test_delete_complex_purge_related_respects_favorites_alerts_and_logs_by_asset_type(self):
+    def test_delete_complex_purge_related_respects_favorites_alerts_and_logs_by_asset_type(
+        self,
+    ):
         self.db.add_complex("ScopeApt", "99001", asset_type="APT")
         self.db.add_complex("ScopeVl", "99001", asset_type="VL")
         rows = self.db.get_all_complexes()
@@ -1243,9 +1455,21 @@ class TestComplexDatabase(unittest.TestCase):
         )
         self.assertTrue(self.db.toggle_favorite("APT-1", "99001", "APT", True))
         self.assertTrue(self.db.toggle_favorite("VL-1", "99001", "VL", True))
-        self.assertTrue(self.db.add_alert_setting("99001", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT"))
-        self.assertTrue(self.db.add_alert_setting("99001", "ScopeVl", "매매", 0, 100, 0, 999999, asset_type="VL"))
-        self.assertTrue(self.db.add_alert_setting("99001", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL"))
+        self.assertTrue(
+            self.db.add_alert_setting(
+                "99001", "ScopeApt", "매매", 0, 100, 0, 999999, asset_type="APT"
+            )
+        )
+        self.assertTrue(
+            self.db.add_alert_setting(
+                "99001", "ScopeVl", "매매", 0, 100, 0, 999999, asset_type="VL"
+            )
+        )
+        self.assertTrue(
+            self.db.add_alert_setting(
+                "99001", "ScopeCommon", "매매", 0, 100, 0, 999999, asset_type="ALL"
+            )
+        )
         self.assertTrue(
             self.db.record_alert_notification(
                 alert_id=1,
@@ -1366,10 +1590,20 @@ class TestComplexDatabase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(self.db.check_article_history("SAME-1", "88001", 12000, asset_type="APT"), (False, 2000, 10000))
-        self.assertEqual(self.db.check_article_history("SAME-1", "88001", 12000, asset_type="VL"), (False, -8000, 20000))
-        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="APT")["total"], 1)
-        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1)
+        self.assertEqual(
+            self.db.check_article_history("SAME-1", "88001", 12000, asset_type="APT"),
+            (False, 2000, 10000),
+        )
+        self.assertEqual(
+            self.db.check_article_history("SAME-1", "88001", 12000, asset_type="VL"),
+            (False, -8000, 20000),
+        )
+        self.assertEqual(
+            self.db.get_article_history_stats("88001", asset_type="APT")["total"], 1
+        )
+        self.assertEqual(
+            self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1
+        )
         self.assertEqual(self.db.get_article_history_stats("88001")["total"], 2)
 
         conn = self.db._pool.get_connection()
@@ -1383,8 +1617,12 @@ class TestComplexDatabase(unittest.TestCase):
             self.db._pool.return_connection(conn)
 
         self.assertEqual(self.db.cleanup_old_articles(days=30, asset_type="APT"), 1)
-        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="APT")["total"], 0)
-        self.assertEqual(self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1)
+        self.assertEqual(
+            self.db.get_article_history_stats("88001", asset_type="APT")["total"], 0
+        )
+        self.assertEqual(
+            self.db.get_article_history_stats("88001", asset_type="VL")["total"], 1
+        )
 
         self.db.update_article_history(
             "SAME-2",
@@ -1410,8 +1648,18 @@ class TestComplexDatabase(unittest.TestCase):
 
         self.assertEqual(self.db.mark_disappeared_articles(asset_type="VL"), 1)
         disappeared = self.db.get_disappeared_articles(limit=10)
-        self.assertTrue(any(row["asset_type"] == "VL" and row["article_id"] == "SAME-1" for row in disappeared))
-        self.assertFalse(any(row["asset_type"] == "APT" and row["article_id"] == "SAME-2" for row in disappeared))
+        self.assertTrue(
+            any(
+                row["asset_type"] == "VL" and row["article_id"] == "SAME-1"
+                for row in disappeared
+            )
+        )
+        self.assertFalse(
+            any(
+                row["asset_type"] == "APT" and row["article_id"] == "SAME-2"
+                for row in disappeared
+            )
+        )
 
     def test_price_snapshot_same_day_key_updates_latest_value(self):
         saved = self.db.add_price_snapshots_bulk(

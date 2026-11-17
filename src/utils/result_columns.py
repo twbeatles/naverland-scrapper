@@ -20,7 +20,9 @@ RESULT_EXTRA_COLUMN_DEFS: tuple[dict[str, str], ...] = (
     {"id": "broker_phone", "header": "전화", "key": "전화1"},
 )
 
-RESULT_EXTRA_COLUMN_IDS: frozenset[str] = frozenset(d["id"] for d in RESULT_EXTRA_COLUMN_DEFS)
+RESULT_EXTRA_COLUMN_IDS: frozenset[str] = frozenset(
+    d["id"] for d in RESULT_EXTRA_COLUMN_DEFS
+)
 
 # Excel / export field keys for list meta (default off in template).
 EXPORT_META_COLUMN_KEYS: tuple[str, ...] = (

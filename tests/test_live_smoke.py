@@ -92,14 +92,20 @@ class _DetailFieldPage:
 
 class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_navigate_probe_converts_navigation_exception_to_failure(self):
-        result = await live_smoke._navigate_probe(_NavigationFailPage(), "https://example.com", 5)
+        result = await live_smoke._navigate_probe(
+            _NavigationFailPage(), "https://example.com", 5
+        )
 
         self.assertFalse(result["ok"])
         self.assertIn("navigation_exception:TimeoutError", result["reason"])
         self.assertEqual(result["final_url"], "")
 
-    async def test_complex_probe_returns_failure_line_without_raising_on_navigation_timeout(self):
-        ok, line = await live_smoke._run_complex_probe(_NavigationFailPage(), "102378", 5)
+    async def test_complex_probe_returns_failure_line_without_raising_on_navigation_timeout(
+        self,
+    ):
+        ok, line = await live_smoke._run_complex_probe(
+            _NavigationFailPage(), "102378", 5
+        )
 
         self.assertFalse(ok)
         self.assertIn("[fail] [complex]", line)
@@ -116,7 +122,12 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-        ok, line, sample_article_id, article_count = await live_smoke._run_complex_probe_detail(page, "3833", 1000)
+        (
+            ok,
+            line,
+            sample_article_id,
+            article_count,
+        ) = await live_smoke._run_complex_probe_detail(page, "3833", 1000)
 
         self.assertTrue(ok)
         self.assertEqual(sample_article_id, "2625154515")
@@ -134,7 +145,12 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
             }
         )
 
-        ok, line, sample_article_id, article_count = await live_smoke._run_article_api_probe(
+        (
+            ok,
+            line,
+            sample_article_id,
+            article_count,
+        ) = await live_smoke._run_article_api_probe(
             context,
             "3833",
             1000,
@@ -149,7 +165,12 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
     async def test_complex_probe_fails_when_article_list_is_empty(self):
         page = _ArticleListPage("102378", {"articleList": []})
 
-        ok, line, sample_article_id, article_count = await live_smoke._run_complex_probe_detail(
+        (
+            ok,
+            line,
+            sample_article_id,
+            article_count,
+        ) = await live_smoke._run_complex_probe_detail(
             page,
             "102378",
             1000,
@@ -178,7 +199,9 @@ class TestLiveSmoke(unittest.IsolatedAsyncioTestCase):
                 }
             ),
         ):
-            ok, line = await live_smoke._run_detail_field_probe(_DetailFieldPage(), "2625154515", 1000)
+            ok, line = await live_smoke._run_detail_field_probe(
+                _DetailFieldPage(), "2625154515", 1000
+            )
 
         self.assertTrue(ok)
         self.assertIn("[ok] [detail-fields]", line)
@@ -204,19 +227,64 @@ class _FinProbePage:
 
 class TestFinContractProbe(unittest.IsolatedAsyncioTestCase):
     async def test_fin_contract_probe_reads_search_and_article_list(self):
-        page = _FinProbePage([
-            (200, {"isSuccess": True, "result": {"list": [{"complexNumber": 111515}]}}),
-            (200, {"isSuccess": True, "detailCode": "success", "result": {
-                "hasNextPage": False, "lastInfo": [], "totalCount": 1,
-                "list": [{"representativeArticleInfo": {"articleNumber": "2656920495", "tradeType": "A1"}}],
-            }}),
-            (200, {"isSuccess": True, "detailCode": "success", "result": {
-                "hasNextPage": False, "lastInfo": [], "list": [{"type": "COMPLEX", "complex": {
-                    "complexInfo": {"complexNumber": 3833, "name": "남산타운", "type": "A01"},
-                    "articleCountInfoDto": {"dealCount": 12}}}],
-            }}),
-        ])
-        ok, line, sample, count = await live_smoke._run_fin_contract_probe(page, "111515", 1000)
+        page = _FinProbePage(
+            [
+                (
+                    200,
+                    {
+                        "isSuccess": True,
+                        "result": {"list": [{"complexNumber": 111515}]},
+                    },
+                ),
+                (
+                    200,
+                    {
+                        "isSuccess": True,
+                        "detailCode": "success",
+                        "result": {
+                            "hasNextPage": False,
+                            "lastInfo": [],
+                            "totalCount": 1,
+                            "list": [
+                                {
+                                    "representativeArticleInfo": {
+                                        "articleNumber": "2656920495",
+                                        "tradeType": "A1",
+                                    }
+                                }
+                            ],
+                        },
+                    },
+                ),
+                (
+                    200,
+                    {
+                        "isSuccess": True,
+                        "detailCode": "success",
+                        "result": {
+                            "hasNextPage": False,
+                            "lastInfo": [],
+                            "list": [
+                                {
+                                    "type": "COMPLEX",
+                                    "complex": {
+                                        "complexInfo": {
+                                            "complexNumber": 3833,
+                                            "name": "남산타운",
+                                            "type": "A01",
+                                        },
+                                        "articleCountInfoDto": {"dealCount": 12},
+                                    },
+                                }
+                            ],
+                        },
+                    },
+                ),
+            ]
+        )
+        ok, line, sample, count = await live_smoke._run_fin_contract_probe(
+            page, "111515", 1000
+        )
         self.assertTrue(ok)
         self.assertEqual(sample, "2656920495")
         self.assertEqual(count, 1)
@@ -225,12 +293,16 @@ class TestFinContractProbe(unittest.IsolatedAsyncioTestCase):
         self.assertIn("robots.txt", page.url)
 
     async def test_fin_contract_probe_fails_on_rate_limit(self):
-        page = _FinProbePage([
-            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
-            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
-            (429, {"detailCode": "TOO_MANY_REQUESTS"}),
-        ])
-        ok, line, _sample, count = await live_smoke._run_fin_contract_probe(page, "111515", 1000)
+        page = _FinProbePage(
+            [
+                (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+                (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+                (429, {"detailCode": "TOO_MANY_REQUESTS"}),
+            ]
+        )
+        ok, line, _sample, count = await live_smoke._run_fin_contract_probe(
+            page, "111515", 1000
+        )
         self.assertFalse(ok)
         self.assertEqual(count, 0)
         self.assertIn("fin_article_list_invalid:429", line)
@@ -244,17 +316,28 @@ class TestRunLiveSmoke(unittest.TestCase):
                 "src.utils.live_smoke._run_live_smoke_async",
                 side_effect=RuntimeError("boom"),
             ):
-                ok, messages = live_smoke.run_live_smoke(["https://example.com"], json_log_path=log_path)
+                ok, messages = live_smoke.run_live_smoke(
+                    ["https://example.com"], json_log_path=log_path
+                )
 
             self.assertFalse(ok)
             self.assertTrue(messages)
-            self.assertTrue(any("unexpected_exception=RuntimeError" in message for message in messages))
+            self.assertTrue(
+                any(
+                    "unexpected_exception=RuntimeError" in message
+                    for message in messages
+                )
+            )
             with open(log_path, "r", encoding="utf-8") as fp:
                 payload = json.load(fp)
 
         self.assertFalse(payload["ok"])
-        self.assertEqual(payload["requested_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID)
-        self.assertEqual(payload["effective_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID)
+        self.assertEqual(
+            payload["requested_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID
+        )
+        self.assertEqual(
+            payload["effective_article_id"], live_smoke.DEFAULT_SMOKE_ARTICLE_ID
+        )
         self.assertIn(payload["runtime_source"], {"source", "frozen"})
         self.assertIn("executable", payload)
         self.assertIn("data_dir", payload)

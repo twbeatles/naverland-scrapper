@@ -176,5 +176,5 @@ COLORS = {
         "card_border_hover": "#0ea5e9",
         # StatCard (Dashboard)
         "stat_card_bg": "#ffffff",
-    }
+    },
 }

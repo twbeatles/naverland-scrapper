@@ -8,9 +8,12 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseAlertOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
-    def add_alert_setting(self, cid, name, ttype, amin, amax, pmin, pmax, asset_type="ALL"):
+    def add_alert_setting(
+        self, cid, name, ttype, amin, amax, pmin, pmax, asset_type="ALL"
+    ):
         conn = self._pool.get_connection()
         try:
             asset_scope = self._normalize_alert_asset_scope(asset_type, default="ALL")
@@ -116,8 +119,10 @@ class ComplexDatabaseAlertOpsMixin:
     def get_all_alert_settings(self):
         conn = self._pool.get_connection()
         try:
-            return conn.cursor().execute(
-                """
+            return (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT
                     id, complex_id, complex_name,
                     COALESCE(NULLIF(asset_type, ''), 'ALL') AS asset_type,
@@ -125,7 +130,9 @@ class ComplexDatabaseAlertOpsMixin:
                 FROM alert_settings
                 ORDER BY created_at DESC
                 """
-            ).fetchall()
+                )
+                .fetchall()
+            )
         except Exception as e:
             logger.error(f"alert settings lookup failed: {e}")
             return []
@@ -135,7 +142,10 @@ class ComplexDatabaseAlertOpsMixin:
     def toggle_alert_setting(self, aid, enabled):
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("UPDATE alert_settings SET enabled = ? WHERE id = ?", (1 if enabled else 0, aid))
+            conn.cursor().execute(
+                "UPDATE alert_settings SET enabled = ? WHERE id = ?",
+                (1 if enabled else 0, aid),
+            )
             conn.commit()
         except Exception as e:
             logger.error(f"alert setting toggle failed: {e}")

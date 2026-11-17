@@ -8,6 +8,7 @@ Single-responsibility owners live in
   migrations/normalization.
 - ``value_coerce`` — row/value coercion primitives.
 """
+
 from __future__ import annotations
 
 import re
@@ -34,6 +35,8 @@ class ComplexDatabaseCoercionMixin(
     ComplexDatabaseValueCoerceMixin,
 ):
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
         _pool: ConnectionPool
     _NUMERIC_RE = re.compile(r"-?\d+(?:\.\d+)?")

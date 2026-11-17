@@ -31,6 +31,7 @@ class ConnectionPoolCloseResult:
 
 class ConnectionPool:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def __init__(self, db_path, pool_size=5):
@@ -44,7 +45,7 @@ class ConnectionPool:
         self._closing = False
         logger.info(f"ConnectionPool initialized: {self.db_path}")
         self._initialize_pool()
-    
+
     def _initialize_pool(self):
         for i in range(self.pool_size):
             try:
@@ -53,15 +54,19 @@ class ConnectionPool:
                     self._all_connections[id(conn)] = conn
                 self._pool.put(conn)
             except Exception as e:
-                logger.error(f"Connection creation failed ({i+1}/{self.pool_size}): {e}")
-    
+                logger.error(
+                    f"Connection creation failed ({i + 1}/{self.pool_size}): {e}"
+                )
+
     def _create_connection(self):
         # Ensure parent directory exists before opening SQLite file.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         conn = None
         try:
-            conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=30)
+            conn = sqlite3.connect(
+                str(self.db_path), check_same_thread=False, timeout=30
+            )
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=30000")
             conn.execute("PRAGMA synchronous=NORMAL")
@@ -84,18 +89,24 @@ class ConnectionPool:
                 except Exception:
                     pass
             raise
-    
+
     def get_connection(self):
         with self._lease_lock:
             if self._closing:
-                raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
+                raise RuntimeError(
+                    "ConnectionPool is closing; cannot lease new connection"
+                )
         try:
             conn = self._pool.get(timeout=10)
         except Exception as e:
             with self._lease_lock:
                 if self._closing:
-                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection") from e
-            logger.warning(f"Pool acquisition failed, creating fallback connection: {e}")
+                    raise RuntimeError(
+                        "ConnectionPool is closing; cannot lease new connection"
+                    ) from e
+            logger.warning(
+                f"Pool acquisition failed, creating fallback connection: {e}"
+            )
             conn = self._create_connection()
             with self._lease_lock:
                 if self._closing:
@@ -103,7 +114,9 @@ class ConnectionPool:
                         conn.close()
                     except Exception:
                         pass
-                    raise RuntimeError("ConnectionPool is closing; cannot lease new connection") from e
+                    raise RuntimeError(
+                        "ConnectionPool is closing; cannot lease new connection"
+                    ) from e
                 self._all_connections[id(conn)] = conn
         with self._lease_lock:
             if self._closing:
@@ -112,10 +125,12 @@ class ConnectionPool:
                 except Exception:
                     pass
                 self._all_connections.pop(id(conn), None)
-                raise RuntimeError("ConnectionPool is closing; cannot lease new connection")
+                raise RuntimeError(
+                    "ConnectionPool is closing; cannot lease new connection"
+                )
             self._leased_ids.add(id(conn))
         return conn
-    
+
     def return_connection(self, conn):
         if conn is None:
             return
@@ -141,7 +156,7 @@ class ConnectionPool:
                 logger.debug(f"Connection close ignored: {e}")
             with self._lease_lock:
                 self._all_connections.pop(conn_id, None)
-    
+
     def close_all(self, timeout_ms=8000, force_after_timeout=True):
         """Close all tracked pool/leased connections."""
         logger.info("ConnectionPool shutdown started...")

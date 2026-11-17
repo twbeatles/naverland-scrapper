@@ -18,7 +18,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Run dependency/import/fs checks and exit without starting the GUI.",
     )
     parser.add_argument("--apply-update", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--update-parent-pid", type=int, default=0, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--update-parent-pid", type=int, default=0, help=argparse.SUPPRESS
+    )
     parser.add_argument("--update-token", default="", help=argparse.SUPPRESS)
     parser.add_argument(
         "--live-smoke",
@@ -86,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.apply_update:
         from src.utils.update_installer import apply_update
+
         apply_update(token=args.update_token, parent_pid=args.update_parent_pid)
         return 0
 
@@ -126,4 +129,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

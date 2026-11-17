@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppStatsScheduleRunMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _snapshot_crawler_tasks(self: Any) -> tuple[list[tuple[str, str, str]], int]:
         rows: list[tuple[str, str, str]] = []
         table = getattr(getattr(self, "crawler_tab", None), "table_list", None)
@@ -18,7 +20,9 @@ class AppStatsScheduleRunMixin:
             name_item = table.item(row, 0)
             cid_item = table.item(row, 1)
             asset_item = table.item(row, 2)
-            asset_type = str(asset_item.text() if asset_item else "APT").strip().upper() or "APT"
+            asset_type = (
+                str(asset_item.text() if asset_item else "APT").strip().upper() or "APT"
+            )
             if asset_type not in {"APT", "VL"}:
                 asset_type = "APT"
             rows.append(
@@ -30,7 +34,9 @@ class AppStatsScheduleRunMixin:
             )
         return rows, table.currentRow()
 
-    def _restore_crawler_tasks(self: Any, rows: list[tuple[str, ...]], current_row: int = -1) -> None:
+    def _restore_crawler_tasks(
+        self: Any, rows: list[tuple[str, ...]], current_row: int = -1
+    ) -> None:
         if not hasattr(self, "crawler_tab"):
             return
         self.crawler_tab.clear_tasks()
@@ -44,7 +50,9 @@ class AppStatsScheduleRunMixin:
         elif getattr(self.crawler_tab, "table_list", None) is not None:
             self.crawler_tab.table_list.clearSelection()
 
-    def _mark_schedule_run_started(self: Any, config: dict[str, Any], slot: str) -> None:
+    def _mark_schedule_run_started(
+        self: Any, config: dict[str, Any], slot: str
+    ) -> None:
         config["last_run_slot"] = slot
         config["last_run_at"] = DateTimeHelper.now_string()
         self._schedule_skip_notice_key = None
@@ -69,7 +77,9 @@ class AppStatsScheduleRunMixin:
             return
 
         current_dt = datetime.now()
-        target_time = QTime.fromString(str(config.get("time", "09:00") or "09:00"), "HH:mm")
+        target_time = QTime.fromString(
+            str(config.get("time", "09:00") or "09:00"), "HH:mm"
+        )
         if not target_time.isValid():
             target_time = QTime(9, 0)
         target_dt = current_dt.replace(
@@ -78,7 +88,9 @@ class AppStatsScheduleRunMixin:
             second=0,
             microsecond=0,
         )
-        catchup_deadline = target_dt + timedelta(minutes=self.SCHEDULE_CATCHUP_WINDOW_MINUTES)
+        catchup_deadline = target_dt + timedelta(
+            minutes=self.SCHEDULE_CATCHUP_WINDOW_MINUTES
+        )
         if current_dt < target_dt or current_dt >= catchup_deadline:
             self.is_scheduled_run = False
             self._schedule_skip_notice_key = None
@@ -137,8 +149,12 @@ class AppStatsScheduleRunMixin:
                 lon=float(geo.get("lon", self.schedule_geo_lon.value())),
                 zoom=int(geo.get("zoom", settings.get("geo_default_zoom", 15) or 15)),
                 rings=int(geo.get("rings", settings.get("geo_grid_rings", 1) or 1)),
-                step_px=int(geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)),
-                dwell_ms=int(geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600)),
+                step_px=int(
+                    geo.get("step_px", settings.get("geo_grid_step_px", 480) or 480)
+                ),
+                dwell_ms=int(
+                    geo.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600) or 600)
+                ),
                 asset_types=asset_types,
                 persist_last=False,
             )
@@ -150,7 +166,11 @@ class AppStatsScheduleRunMixin:
 
         gid = config.get("group_id", self.schedule_group_combo.currentData())
         if gid is None:
-            self._remember_schedule_skip(active_slot, "missing_group", "예약 수집을 시작하지 못했습니다. 「예약 수집」에서 수집할 묶음을 골라 주세요.")
+            self._remember_schedule_skip(
+                active_slot,
+                "missing_group",
+                "예약 수집을 시작하지 못했습니다. 「예약 수집」에서 수집할 묶음을 골라 주세요.",
+            )
             return False
 
         previous_rows, previous_current_row = self._snapshot_crawler_tasks()
@@ -158,7 +178,12 @@ class AppStatsScheduleRunMixin:
         self.crawler_tab.clear_tasks()
         excluded_vl = 0
         loaded_count = 0
-        engine_name = str(settings.get("crawl_engine", "playwright") or "playwright").strip().lower() or "playwright"
+        engine_name = (
+            str(settings.get("crawl_engine", "playwright") or "playwright")
+            .strip()
+            .lower()
+            or "playwright"
+        )
         for _, name, asset_type, cid, _ in self.db.get_complexes_in_group(gid):
             asset_token = str(asset_type or "APT").strip().upper() or "APT"
             if asset_token not in {"APT", "VL"}:

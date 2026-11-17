@@ -38,7 +38,9 @@ def theme_from_settings(theme_name: str | None) -> Theme:
     return Theme.AUTO
 
 
-def apply_app_theme(theme_name: str | None = "auto", *, accent: str | None = None) -> Theme:
+def apply_app_theme(
+    theme_name: str | None = "auto", *, accent: str | None = None
+) -> Theme:
     """Apply qfluentwidgets theme. Returns the resolved Theme enum."""
     global _PINNED_THEME
     theme = theme_from_settings(theme_name)
@@ -50,7 +52,9 @@ def apply_app_theme(theme_name: str | None = "auto", *, accent: str | None = Non
 
         hints = QGuiApplication.styleHints()
         if hints is not None and theme != Theme.AUTO:
-            scheme = Qt.ColorScheme.Light if theme == Theme.LIGHT else Qt.ColorScheme.Dark
+            scheme = (
+                Qt.ColorScheme.Light if theme == Theme.LIGHT else Qt.ColorScheme.Dark
+            )
             hints.setColorScheme(scheme)
     except Exception:
         pass
@@ -200,7 +204,11 @@ class DialogThemer(QObject):
 
     def eventFilter(self, a0, a1):
         try:
-            if a1 is not None and a1.type() == QEvent.Type.Polish and isinstance(a0, QDialog):
+            if (
+                a1 is not None
+                and a1.type() == QEvent.Type.Polish
+                and isinstance(a0, QDialog)
+            ):
                 self._apply(a0)
         except Exception:
             pass

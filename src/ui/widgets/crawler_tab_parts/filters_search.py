@@ -23,6 +23,7 @@ class CrawlerTabFiltersSearchMixin:
     )
 
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _on_search_text_changed(self: Any, text):
@@ -47,7 +48,9 @@ class CrawlerTabFiltersSearchMixin:
             self._row_search_cache.append(" ".join(values).lower())
             url_item = self.result_table.item(r, self.COL_URL)
             row_url = url_item.text().strip() if url_item else ""
-            payload = payload_lookup.get(row_url) or self._build_row_payload_from_table(r)
+            payload = payload_lookup.get(row_url) or self._build_row_payload_from_table(
+                r
+            )
             self._row_payload_cache.append(payload)
 
     @staticmethod
@@ -98,8 +101,9 @@ class CrawlerTabFiltersSearchMixin:
             return True
         if keyword in text_blob:
             return True
-        return CrawlerTabFiltersSearchMixin._normalize_search_text(keyword) in \
-            CrawlerTabFiltersSearchMixin._normalize_search_text(text_blob)
+        return CrawlerTabFiltersSearchMixin._normalize_search_text(
+            keyword
+        ) in CrawlerTabFiltersSearchMixin._normalize_search_text(text_blob)
 
     @staticmethod
     def _floor_category(floor_text: str):
@@ -153,7 +157,9 @@ class CrawlerTabFiltersSearchMixin:
         if isinstance(price_change, str):
             try:
                 sign = -1 if str(price_change).strip().startswith("-") else 1
-                price_change = sign * PriceConverter.to_int(str(price_change).strip().lstrip("+-"))
+                price_change = sign * PriceConverter.to_int(
+                    str(price_change).strip().lstrip("+-")
+                )
             except Exception:
                 price_change = 0
 
@@ -172,7 +178,9 @@ class CrawlerTabFiltersSearchMixin:
                 return False
             if include_mode != "all" and not matched:
                 return False
-        if exclude_keywords and any(self._match_keyword(k, text_blob) for k in exclude_keywords):
+        if exclude_keywords and any(
+            self._match_keyword(k, text_blob) for k in exclude_keywords
+        ):
             return False
         return True
 
@@ -187,7 +195,9 @@ class CrawlerTabFiltersSearchMixin:
         for item in base:
             trade_type, _, price_int = self._extract_price_values(item)
             area_val = self._area_float(item.get("면적(평)", 0))
-            price_change = self._normalize_price_change(item.get("price_change", item.get("가격변동", 0)))
+            price_change = self._normalize_price_change(
+                item.get("price_change", item.get("가격변동", 0))
+            )
             is_new = bool(item.get("is_new") or item.get("신규여부"))
             payload = self._build_row_payload_from_data(
                 data=item,
@@ -233,7 +243,9 @@ class CrawlerTabFiltersSearchMixin:
                             values.append(item.text())
                     self._row_search_cache.append(" ".join(values).lower())
                 if r >= len(self._row_payload_cache):
-                    self._row_payload_cache.append(self._build_row_payload_from_table(r))
+                    self._row_payload_cache.append(
+                        self._build_row_payload_from_table(r)
+                    )
                 self._apply_current_filter_to_row(r)
         finally:
             self.result_table.setUpdatesEnabled(updates_enabled)

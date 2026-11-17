@@ -12,6 +12,7 @@ Single-responsibility owners live in
 - ``notify`` — toast and desktop-notification helpers.
 - ``shutdown`` — graceful shutdown and close-event handling.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -42,4 +43,5 @@ class AppLifecycleMixin(
     AppLifecycleShutdownMixin,
 ):
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...

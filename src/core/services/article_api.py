@@ -36,7 +36,9 @@ def build_article_api_query_params(
 ) -> dict[str, str]:
     page_num = max(1, int(page or 1))
     return {
-        "realEstateType": article_api_real_estate_type(path_asset, include_pre=include_pre),
+        "realEstateType": article_api_real_estate_type(
+            path_asset, include_pre=include_pre
+        ),
         "tradeType": trade_type_to_code(trade_type),
         "tag": "::::::::",
         "rentPriceMin": "0",
@@ -99,4 +101,6 @@ def article_api_has_more_pages(
         return bool(payload.get("isMoreData"))
     if "moreData" in payload:
         return bool(payload.get("moreData"))
-    return int(articles_on_page or 0) >= max(1, int(page_size or DEFAULT_ARTICLE_API_PAGE_SIZE))
+    return int(articles_on_page or 0) >= max(
+        1, int(page_size or DEFAULT_ARTICLE_API_PAGE_SIZE)
+    )

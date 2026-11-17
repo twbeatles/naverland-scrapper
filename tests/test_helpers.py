@@ -40,7 +40,12 @@ class TestURLHelpers(unittest.TestCase):
             "https://fin.land.naver.com/articles/2513105556",
         )
         self.assertEqual(
-            build_article_url("999999999", complex_id="654321", asset_type="VL", preferred_family="new"),
+            build_article_url(
+                "999999999",
+                complex_id="654321",
+                asset_type="VL",
+                preferred_family="new",
+            ),
             "https://new.land.naver.com/houses/654321?articleId=999999999",
         )
 

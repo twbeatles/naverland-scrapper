@@ -77,7 +77,9 @@ class MarketAnalyzer:
         first_half = sum(prices[: len(prices) // 2]) / (len(prices) // 2)
         second_half = sum(prices[len(prices) // 2 :]) / (len(prices) - len(prices) // 2)
 
-        change_rate = ((second_half - first_half) / first_half * 100) if first_half > 0 else 0
+        change_rate = (
+            ((second_half - first_half) / first_half * 100) if first_half > 0 else 0
+        )
 
         if change_rate > 3:
             return "상승"
@@ -124,12 +126,20 @@ class ComplexComparator:
         return token if token in {"APT", "VL"} else ""
 
     @classmethod
-    def _normalize_target(cls, target: Any, default_asset_type=None) -> tuple[str, str, bool]:
+    def _normalize_target(
+        cls, target: Any, default_asset_type=None
+    ) -> tuple[str, str, bool]:
         default_asset = cls._normalize_asset_type(default_asset_type)
         if isinstance(target, dict):
             cid = str(target.get("complex_id", target.get("cid", "")) or "").strip()
-            target_asset = cls._normalize_asset_type(target.get("asset_type", default_asset))
-            return cid, target_asset or default_asset, bool(target_asset or default_asset)
+            target_asset = cls._normalize_asset_type(
+                target.get("asset_type", default_asset)
+            )
+            return (
+                cid,
+                target_asset or default_asset,
+                bool(target_asset or default_asset),
+            )
 
         if isinstance(target, (tuple, list)) and len(target) >= 2:
             first = cls._normalize_asset_type(target[0])
@@ -137,12 +147,18 @@ class ComplexComparator:
                 return str(target[1] or "").strip(), first, True
             cid = str(target[0] or "").strip()
             target_asset = cls._normalize_asset_type(target[1])
-            return cid, target_asset or default_asset, bool(target_asset or default_asset)
+            return (
+                cid,
+                target_asset or default_asset,
+                bool(target_asset or default_asset),
+            )
 
         cid = str(target or "").strip()
         return cid, default_asset, bool(default_asset)
 
-    def compare(self, complex_ids: List[Any], trade_type: str = "매매", asset_type=None) -> dict:
+    def compare(
+        self, complex_ids: List[Any], trade_type: str = "매매", asset_type=None
+    ) -> dict:
         """여러 단지의 시세 비교 데이터 반환"""
         result = {}
         for target in complex_ids:
@@ -150,7 +166,9 @@ class ComplexComparator:
             if not cid:
                 continue
             if target_asset:
-                history = self.db.get_complex_price_history(cid, trade_type, asset_type=target_asset)
+                history = self.db.get_complex_price_history(
+                    cid, trade_type, asset_type=target_asset
+                )
             else:
                 history = self.db.get_complex_price_history(cid, trade_type)
             if history:

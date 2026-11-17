@@ -6,4 +6,11 @@ from src.ui.widgets.dashboard_parts.dashboard_widget import (
     settings,
 )
 
-__all__ = ["ArticleCard", "CardViewWidget", "DashboardWidget", "StatCard", "logger", "settings"]
+__all__ = [
+    "ArticleCard",
+    "CardViewWidget",
+    "DashboardWidget",
+    "StatCard",
+    "logger",
+    "settings",
+]

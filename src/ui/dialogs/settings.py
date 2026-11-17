@@ -128,11 +128,18 @@ class SettingsDialog(QDialog):
 
         system_group = QGroupBox("앱 동작")
         system_layout = QVBoxLayout()
-        self.check_tray = QCheckBox("창을 닫아도 끄지 않고 작업 표시줄 알림 영역(트레이)에 두기")
+        self.check_tray = QCheckBox(
+            "창을 닫아도 끄지 않고 작업 표시줄 알림 영역(트레이)에 두기"
+        )
         self.check_notify = QCheckBox("가격 알림을 윈도우 알림으로 받기")
         self.check_confirm = QCheckBox("종료 전 확인 창 띄우기")
         self.check_sound = QCheckBox("수집이 끝나면 소리로 알리기")
-        for w in (self.check_tray, self.check_notify, self.check_confirm, self.check_sound):
+        for w in (
+            self.check_tray,
+            self.check_notify,
+            self.check_confirm,
+            self.check_sound,
+        ):
             system_layout.addWidget(w)
         system_group.setLayout(system_layout)
         layout.addWidget(system_group)
@@ -144,15 +151,25 @@ class SettingsDialog(QDialog):
         crawl_layout.addWidget(QLabel("수집 속도"), 0, 0)
         crawl_layout.addWidget(self.combo_speed, 0, 1)
         crawl_layout.addWidget(
-            _hint("너무 빠르면 네이버에서 잠시 접속을 막을 수 있습니다. 보통을 권장합니다."), 1, 0, 1, 2
+            _hint(
+                "너무 빠르면 네이버에서 잠시 접속을 막을 수 있습니다. 보통을 권장합니다."
+            ),
+            1,
+            0,
+            1,
+            2,
         )
 
         self.check_include_pre = QCheckBox("분양권 매물도 함께 수집")
         self.check_include_pre.setToolTip("켜면 목록 건수가 늘 수 있습니다.")
         crawl_layout.addWidget(self.check_include_pre, 2, 0, 1, 2)
 
-        self.check_detail_enrichment = QCheckBox("중개소·기존 전세금 등 상세 정보도 가져오기")
-        self.check_detail_enrichment.setToolTip("끄면 수집이 훨씬 빨라지지만 중개소·전화·기존 전세금 칸이 비게 됩니다.")
+        self.check_detail_enrichment = QCheckBox(
+            "중개소·기존 전세금 등 상세 정보도 가져오기"
+        )
+        self.check_detail_enrichment.setToolTip(
+            "끄면 수집이 훨씬 빨라지지만 중개소·전화·기존 전세금 칸이 비게 됩니다."
+        )
         crawl_layout.addWidget(self.check_detail_enrichment, 3, 0, 1, 2)
 
         self.check_compact_duplicates = QCheckBox("같은 매물은 하나로 묶어 보기")
@@ -190,7 +207,9 @@ class SettingsDialog(QDialog):
         self.spin_geo_zoom.setRange(12, 18)
         self.spin_geo_rings = QSpinBox()
         self.spin_geo_rings.setRange(0, 6)
-        self.spin_geo_rings.setToolTip("0이면 현재 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다.")
+        self.spin_geo_rings.setToolTip(
+            "0이면 현재 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다."
+        )
         geo_layout.addWidget(QLabel("지도 확대 단계"), 0, 0)
         geo_layout.addWidget(self.spin_geo_zoom, 0, 1)
         geo_layout.addWidget(QLabel("주변까지 넓히기(단계)"), 1, 0)
@@ -207,7 +226,9 @@ class SettingsDialog(QDialog):
         layout.addWidget(geo_group)
 
         layout.addWidget(
-            _hint("수집이 자주 실패할 때 조정하는 세부 항목은 「고급」 탭에 있습니다. 평소에는 건드리지 않아도 됩니다.")
+            _hint(
+                "수집이 자주 실패할 때 조정하는 세부 항목은 「고급」 탭에 있습니다. 평소에는 건드리지 않아도 됩니다."
+            )
         )
         layout.addStretch()
         return page
@@ -241,20 +262,26 @@ class SettingsDialog(QDialog):
         self.spin_max_retry_count = QSpinBox()
         self.spin_max_retry_count.setRange(0, 10)
         engine_layout.addWidget(self.spin_max_retry_count, 2, 1)
-        self.check_fallback_engine = QCheckBox("기본 엔진이 실패하면 보조 엔진으로 이어서 수집")
+        self.check_fallback_engine = QCheckBox(
+            "기본 엔진이 실패하면 보조 엔진으로 이어서 수집"
+        )
         engine_layout.addWidget(self.check_fallback_engine, 3, 0, 1, 2)
         engine_group.setLayout(engine_layout)
         layout.addWidget(engine_group)
 
         detail_group = QGroupBox("")
         detail_layout = QGridLayout()
-        self.check_detail_front_api = QCheckBox("중개 정보를 빠른 경로로 먼저 가져오기 (권장)")
+        self.check_detail_front_api = QCheckBox(
+            "중개 정보를 빠른 경로로 먼저 가져오기 (권장)"
+        )
         self.check_detail_front_api.setToolTip(
             "매물 상세 화면을 열기 전에 네이버 API로 중개소·중개사·전화를 먼저 가져옵니다.\n"
             "같은 정보를 약 7배 빠르게 받고, 못 받은 매물만 상세 화면을 엽니다."
         )
         detail_layout.addWidget(self.check_detail_front_api, 0, 0, 1, 2)
-        self.check_detail_front_api_only = QCheckBox("빠른 경로로 못 받아도 상세 화면은 열지 않기")
+        self.check_detail_front_api_only = QCheckBox(
+            "빠른 경로로 못 받아도 상세 화면은 열지 않기"
+        )
         self.check_detail_front_api_only.setToolTip(
             "상세 화면이 열리지 않거나 너무 느릴 때 켜 보세요.\n"
             "빠른 경로로 받지 못한 매물은 중개 정보가 빈 채로 남습니다."
@@ -277,7 +304,9 @@ class SettingsDialog(QDialog):
             "매물 목록을 다음 장으로 넘길 때 쉬는 시간입니다. 새 네이버 목록은 최소 400ms를 지킵니다."
         )
         detail_layout.addWidget(self.spin_article_page_delay, 3, 1)
-        self.check_article_api_fast_path = QCheckBox("예전 목록 경로에서도 빠른 조회 사용 (권장)")
+        self.check_article_api_fast_path = QCheckBox(
+            "예전 목록 경로에서도 빠른 조회 사용 (권장)"
+        )
         self.check_article_api_fast_path.setToolTip(
             "매물 목록은 새 네이버(fin.land)에서 먼저 받습니다.\n"
             "그게 안 될 때 쓰는 예전 경로(new.land)에서 화면 대신 빠른 조회를 씁니다."
@@ -299,9 +328,15 @@ class SettingsDialog(QDialog):
         self.spin_max_log_lines.setSingleStep(100)
         self.spin_playwright_workers = QSpinBox()
         self.spin_playwright_workers.setRange(1, 16)
-        self.spin_playwright_workers.setToolTip("동시에 띄우는 상세 페이지 수입니다. 낮을수록 가볍습니다 (권장 2~4).")
-        self.check_playwright_headless = QCheckBox("수집용 브라우저 창을 화면에 띄우지 않기")
-        self.check_block_heavy_resources = QCheckBox("이미지·글꼴은 불러오지 않아 더 빠르게 수집")
+        self.spin_playwright_workers.setToolTip(
+            "동시에 띄우는 상세 페이지 수입니다. 낮을수록 가볍습니다 (권장 2~4)."
+        )
+        self.check_playwright_headless = QCheckBox(
+            "수집용 브라우저 창을 화면에 띄우지 않기"
+        )
+        self.check_block_heavy_resources = QCheckBox(
+            "이미지·글꼴은 불러오지 않아 더 빠르게 수집"
+        )
         self.spin_playwright_drain_timeout = QSpinBox()
         self.spin_playwright_drain_timeout.setRange(100, 20000)
         self.spin_playwright_drain_timeout.setSingleStep(100)
@@ -321,9 +356,21 @@ class SettingsDialog(QDialog):
             (2, "진행 기록 최대 줄 수", self.spin_max_log_lines),
             (3, "상세 정보를 동시에 가져오는 수", self.spin_playwright_workers),
             (6, "응답을 기다리는 최대 시간 (ms)", self.spin_playwright_drain_timeout),
-            (7, "페이지가 열리기를 기다리는 최대 시간 (ms)", self.spin_playwright_navigation_timeout),
-            (8, "빠른 목록 조회를 기다리는 최대 시간 (ms)", self.spin_article_api_timeout),
-            (9, "목록 응답이 없을 때 넘어가기까지 대기 (ms)", self.spin_article_response_wait),
+            (
+                7,
+                "페이지가 열리기를 기다리는 최대 시간 (ms)",
+                self.spin_playwright_navigation_timeout,
+            ),
+            (
+                8,
+                "빠른 목록 조회를 기다리는 최대 시간 (ms)",
+                self.spin_article_api_timeout,
+            ),
+            (
+                9,
+                "목록 응답이 없을 때 넘어가기까지 대기 (ms)",
+                self.spin_article_response_wait,
+            ),
         ]
         for row, label, widget in rows:
             perf_layout.addWidget(QLabel(label), row, 0)
@@ -345,9 +392,13 @@ class SettingsDialog(QDialog):
             "탐색이 중간에 끊기면 그 결과를 가격 기록에 반영하지 않기 (권장)"
         )
         self.spin_geo_step.setSuffix(" px")
-        self.spin_geo_step.setToolTip("주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다.")
+        self.spin_geo_step.setToolTip(
+            "주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다."
+        )
         self.spin_geo_dwell.setSuffix(" ms")
-        self.spin_geo_dwell.setToolTip("한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)")
+        self.spin_geo_dwell.setToolTip(
+            "한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)"
+        )
         geo_layout.addWidget(QLabel("지도 탐색 구역 간격"), 0, 0)
         geo_layout.addWidget(self.spin_geo_step, 0, 1)
         geo_layout.addWidget(QLabel("구역마다 쉬는 시간"), 1, 0)
@@ -365,11 +416,7 @@ class SettingsDialog(QDialog):
 
         extra_group = QGroupBox("결과 표에 더 보여 줄 항목")
         extra_layout = QVBoxLayout()
-        extra_layout.addWidget(
-            _hint(
-                "체크한 항목이 결과 표에 추가로 나타납니다."
-            )
-        )
+        extra_layout.addWidget(_hint("체크한 항목이 결과 표에 추가로 나타납니다."))
         self._extra_column_checks = {}
         for defn in RESULT_EXTRA_COLUMN_DEFS:
             cb = QCheckBox(str(defn["header"]))
@@ -406,8 +453,12 @@ class SettingsDialog(QDialog):
         self.check_retry_on_error.setChecked(bool(settings.get("retry_on_error", True)))
         self.spin_max_retry_count.setValue(max(0, _int_setting("max_retry_count", 3)))
         self.spin_max_retry_count.setEnabled(self.check_retry_on_error.isChecked())
-        self.check_fallback_engine.setChecked(bool(settings.get("fallback_engine_enabled", True)))
-        self.check_include_pre.setChecked(bool(settings.get("include_pre_sale_rights", False)))
+        self.check_fallback_engine.setChecked(
+            bool(settings.get("fallback_engine_enabled", True))
+        )
+        self.check_include_pre.setChecked(
+            bool(settings.get("include_pre_sale_rights", False))
+        )
         self.check_detail_enrichment.setChecked(
             bool(settings.get("detail_enrichment_enabled", True))
         )
@@ -417,24 +468,34 @@ class SettingsDialog(QDialog):
         self.check_detail_front_api_only.setChecked(
             bool(settings.get("detail_front_api_only", False))
         )
-        self.spin_detail_max.setValue(max(0, _int_setting("detail_enrichment_max_per_complex", 0)))
-        self.spin_article_page_delay.setValue(max(0, _int_setting("article_api_page_delay_ms", 150)))
+        self.spin_detail_max.setValue(
+            max(0, _int_setting("detail_enrichment_max_per_complex", 0))
+        )
+        self.spin_article_page_delay.setValue(
+            max(0, _int_setting("article_api_page_delay_ms", 150))
+        )
         self.combo_sort_col.setCurrentText(settings.get("default_sort_column", "가격"))
         self.combo_sort_order.setCurrentIndex(
             0 if settings.get("default_sort_order", "asc") == "asc" else 1
         )
-        self.spin_history_batch.setValue(int(settings.get("history_batch_size", 200) or 200))
+        self.spin_history_batch.setValue(
+            int(settings.get("history_batch_size", 200) or 200)
+        )
         self.spin_filter_debounce.setValue(
             int(settings.get("result_filter_debounce_ms", 220) or 220)
         )
-        self.spin_max_log_lines.setValue(int(settings.get("max_log_lines", 1500) or 1500))
+        self.spin_max_log_lines.setValue(
+            int(settings.get("max_log_lines", 1500) or 1500)
+        )
         self.check_compact_duplicates.setChecked(
             bool(settings.get("compact_duplicate_listings", True))
         )
         self.spin_playwright_workers.setValue(
             int(settings.get("playwright_detail_workers", 4) or 4)
         )
-        self.check_playwright_headless.setChecked(bool(settings.get("playwright_headless", True)))
+        self.check_playwright_headless.setChecked(
+            bool(settings.get("playwright_headless", True))
+        )
         self.check_block_heavy_resources.setChecked(
             bool(settings.get("playwright_block_heavy_resources", True))
         )
@@ -456,7 +517,9 @@ class SettingsDialog(QDialog):
         self.spin_geo_zoom.setValue(int(settings.get("geo_default_zoom", 15) or 15))
         self.spin_geo_rings.setValue(max(0, _int_setting("geo_grid_rings", 1)))
         self.spin_geo_step.setValue(int(settings.get("geo_grid_step_px", 480) or 480))
-        self.spin_geo_dwell.setValue(int(settings.get("geo_sweep_dwell_ms", 600) or 600))
+        self.spin_geo_dwell.setValue(
+            int(settings.get("geo_sweep_dwell_ms", 600) or 600)
+        )
         asset_types = settings.get("geo_asset_types", ["APT", "VL"]) or ["APT", "VL"]
         self.check_geo_asset_apt.setChecked("APT" in asset_types)
         self.check_geo_asset_vl.setChecked("VL" in asset_types)
@@ -464,8 +527,12 @@ class SettingsDialog(QDialog):
             bool(settings.get("geo_incomplete_safety_mode", True))
         )
         self.check_show_new_badge.setChecked(bool(settings.get("show_new_badge", True)))
-        self.check_show_price_change.setChecked(bool(settings.get("show_price_change", True)))
-        self.check_card_extra_meta.setChecked(bool(settings.get("card_show_extra_meta", True)))
+        self.check_show_price_change.setChecked(
+            bool(settings.get("show_price_change", True))
+        )
+        self.check_card_extra_meta.setChecked(
+            bool(settings.get("card_show_extra_meta", True))
+        )
         enabled_extra = set(settings.get("result_extra_columns", []) or [])
         for col_id, cb in self._extra_column_checks.items():
             cb.setChecked(col_id in enabled_extra)
@@ -478,7 +545,9 @@ class SettingsDialog(QDialog):
             asset_types.append("VL")
         if not asset_types:
             QMessageBox.warning(
-                self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요."
+                self,
+                "주택 종류를 선택해 주세요",
+                "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.",
             )
             return
 
@@ -505,7 +574,9 @@ class SettingsDialog(QDialog):
             "detail_enrichment_max_per_complex": self.spin_detail_max.value(),
             "article_api_page_delay_ms": self.spin_article_page_delay.value(),
             "default_sort_column": self.combo_sort_col.currentText(),
-            "default_sort_order": "asc" if self.combo_sort_order.currentIndex() == 0 else "desc",
+            "default_sort_order": "asc"
+            if self.combo_sort_order.currentIndex() == 0
+            else "desc",
             "history_batch_size": self.spin_history_batch.value(),
             "result_filter_debounce_ms": self.spin_filter_debounce.value(),
             "max_log_lines": self.spin_max_log_lines.value(),
@@ -557,11 +628,17 @@ class AlertSettingDialog(QDialog):
         add_layout = QGridLayout()
         add_layout.addWidget(QLabel("단지"), 0, 0)
         self.combo_complex = QComboBox()
-        for _, name, asset_type, cid, _ in (self.db.get_all_complexes() if self.db else []):
+        for _, name, asset_type, cid, _ in (
+            self.db.get_all_complexes() if self.db else []
+        ):
             asset_token = str(asset_type or "APT").strip().upper() or "APT"
             self.combo_complex.addItem(
                 f"{name}  ·  {asset_label(asset_token)}",
-                {"cid": str(cid or ""), "name": str(name or ""), "asset_type": asset_token},
+                {
+                    "cid": str(cid or ""),
+                    "name": str(name or ""),
+                    "asset_type": asset_token,
+                },
             )
         add_layout.addWidget(self.combo_complex, 0, 1, 1, 3)
 
@@ -601,10 +678,14 @@ class AlertSettingDialog(QDialog):
         add_group.setLayout(add_layout)
         layout.addWidget(add_group)
 
-        layout.addWidget(QLabel("만들어 둔 알림 (수집할 때 조건에 맞는 매물이 나오면 알려 줍니다)"))
+        layout.addWidget(
+            QLabel("만들어 둔 알림 (수집할 때 조건에 맞는 매물이 나오면 알려 줍니다)")
+        )
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["단지", "주택 종류", "거래 종류", "면적", "가격", "켜기", "삭제"])
+        self.table.setHorizontalHeaderLabels(
+            ["단지", "주택 종류", "거래 종류", "면적", "가격", "켜기", "삭제"]
+        )
         alert_header = self.table.horizontalHeader()
         if alert_header is not None:
             alert_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -662,7 +743,9 @@ class AlertSettingDialog(QDialog):
             row = self.table.rowCount()
             self.table.insertRow(row)
             self.table.setItem(row, 0, QTableWidgetItem(str(name or cid)))
-            self.table.setItem(row, 1, QTableWidgetItem(self._format_alert_scope(asset_type)))
+            self.table.setItem(
+                row, 1, QTableWidgetItem(self._format_alert_scope(asset_type))
+            )
             self.table.setItem(row, 2, QTableWidgetItem(tt))
             self.table.setItem(row, 3, QTableWidgetItem(f"{amin}~{amax}평"))
             self.table.setItem(row, 4, QTableWidgetItem(f"{pmin:,}~{pmax:,}만"))

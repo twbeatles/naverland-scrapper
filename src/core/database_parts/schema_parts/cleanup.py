@@ -13,6 +13,7 @@ logger = get_logger("DB")
 
 class ComplexDatabaseSchemaCleanupMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _cleanup_schema_data(self, conn, c):
@@ -60,7 +61,9 @@ class ComplexDatabaseSchemaCleanupMixin:
                     """,
                     updates,
                 )
-                logger.info(f"migration complete: normalized price_snapshots rows={len(updates)}")
+                logger.info(
+                    f"migration complete: normalized price_snapshots rows={len(updates)}"
+                )
             c.execute(
                 """
                 UPDATE price_snapshots
@@ -119,9 +122,15 @@ class ComplexDatabaseSchemaCleanupMixin:
                 WHERE TRIM(COALESCE(price_metric, '')) = ''
                 """
             )
-            c.execute("UPDATE price_snapshots SET legacy_monthly = 0 WHERE legacy_monthly IS NULL")
-            c.execute("UPDATE price_snapshots SET complex_id = '' WHERE complex_id IS NULL")
-            c.execute("UPDATE price_snapshots SET trade_type = '' WHERE trade_type IS NULL")
+            c.execute(
+                "UPDATE price_snapshots SET legacy_monthly = 0 WHERE legacy_monthly IS NULL"
+            )
+            c.execute(
+                "UPDATE price_snapshots SET complex_id = '' WHERE complex_id IS NULL"
+            )
+            c.execute(
+                "UPDATE price_snapshots SET trade_type = '' WHERE trade_type IS NULL"
+            )
             c.execute("UPDATE price_snapshots SET pyeong = 0 WHERE pyeong IS NULL")
             duplicate_count = c.execute(
                 """
@@ -161,7 +170,9 @@ class ComplexDatabaseSchemaCleanupMixin:
                     )
                     """
                 )
-                logger.info(f"migration complete: deduped price_snapshots rows={int(duplicate_count or 0)}")
+                logger.info(
+                    f"migration complete: deduped price_snapshots rows={int(duplicate_count or 0)}"
+                )
             c.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_price_snapshots_daily_unique

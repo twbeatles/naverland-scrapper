@@ -8,23 +8,31 @@ if TYPE_CHECKING:
 
 class PlaywrightContextRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _create_context(self, browser, label: str, **kwargs):
         import os
 
         storage_state_path = self._storage_state_path(label)
-        storage_state = storage_state_path if os.path.exists(storage_state_path) else None
+        storage_state = (
+            storage_state_path if os.path.exists(storage_state_path) else None
+        )
         if storage_state:
             try:
-                context = await browser.new_context(storage_state=storage_state, **kwargs)
+                context = await browser.new_context(
+                    storage_state=storage_state, **kwargs
+                )
                 self.thread.stats["playwright_session_reused"] = (
                     int(self.thread.stats.get("playwright_session_reused", 0)) + 1
                 )
                 self.thread.log(f"Playwright 세션 재사용: {label}", 10)
                 return context
             except Exception as exc:
-                self.thread.log(f"Playwright storage_state 로드 실패({label}), 새 세션으로 진행: {exc}", 30)
+                self.thread.log(
+                    f"Playwright storage_state 로드 실패({label}), 새 세션으로 진행: {exc}",
+                    30,
+                )
         return await browser.new_context(**kwargs)
 
     async def _save_context_state(self, context, label: str):
@@ -51,7 +59,11 @@ class PlaywrightContextRuntimeMixin:
 
     async def _warmup_page(self, page, url: str, *, label: str) -> bool:
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=self._navigation_timeout_ms())
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=self._navigation_timeout_ms(),
+            )
             try:
                 await page.wait_for_load_state("networkidle", timeout=2500)
             except Exception:

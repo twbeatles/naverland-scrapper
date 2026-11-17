@@ -42,9 +42,17 @@ class TrendSummaryStrip(QFrame):
         self._subs: dict[str, QLabel] = {}
         specs = (
             ("latest", "최근 평균", "가장 최근 기록일의 평균 가격입니다."),
-            ("period", "기간 변화", "고른 기간의 첫 기록 대비 최근 평균 가격 변화입니다."),
+            (
+                "period",
+                "기간 변화",
+                "고른 기간의 첫 기록 대비 최근 평균 가격 변화입니다.",
+            ),
             ("prev", "직전 기록 대비", "바로 이전 기록일 대비 평균 가격 변화입니다."),
-            ("range", "기간 최저~최고", "고른 기간에 나온 매물 가격의 최저와 최고입니다."),
+            (
+                "range",
+                "기간 최저~최고",
+                "고른 기간에 나온 매물 가격의 최저와 최고입니다.",
+            ),
             ("records", "기록", "가격이 기록된 날짜 수와 기간입니다."),
         )
         for key, title, tip in specs:
@@ -86,10 +94,16 @@ class TrendSummaryStrip(QFrame):
     def _apply_colors(self) -> None:
         c = COLORS[self._theme]
         for key in self.KEYS:
-            self._titles[key].setStyleSheet(f"color: {c['text_secondary']}; font-size: 11px; font-weight: 500;")
-            self._subs[key].setStyleSheet(f"color: {c['text_secondary']}; font-size: 11px;")
+            self._titles[key].setStyleSheet(
+                f"color: {c['text_secondary']}; font-size: 11px; font-weight: 500;"
+            )
+            self._subs[key].setStyleSheet(
+                f"color: {c['text_secondary']}; font-size: 11px;"
+            )
             color = self._direction_color(self._directions.get(key, 0))
-            self._values[key].setStyleSheet(f"color: {color}; font-size: 17px; font-weight: 700;")
+            self._values[key].setStyleSheet(
+                f"color: {color}; font-size: 17px; font-weight: 700;"
+            )
         self.hint_label.setStyleSheet(f"color: {c['text_secondary']}; font-size: 12px;")
 
     # --- content ---------------------------------------------------------
@@ -113,12 +127,18 @@ class TrendSummaryStrip(QFrame):
             self.clear(hint or "요약할 가격 기록이 없습니다.")
             return
         to_s = PriceConverter.to_string
-        self._set("latest", to_s(summary.latest_avg), f"{summary.latest_date} · 매물 {summary.latest_count}건")
+        self._set(
+            "latest",
+            to_s(summary.latest_avg),
+            f"{summary.latest_date} · 매물 {summary.latest_count}건",
+        )
         if summary.record_days >= 2:
             self._set(
                 "period",
                 _signed_price(summary.period_change),
-                f"{format_pct(summary.period_change_pct)} · {summary.first_date}부터".lstrip(" ·"),
+                f"{format_pct(summary.period_change_pct)} · {summary.first_date}부터".lstrip(
+                    " ·"
+                ),
                 (summary.period_change > 0) - (summary.period_change < 0),
             )
             prev = summary.prev_change or 0
@@ -132,7 +152,11 @@ class TrendSummaryStrip(QFrame):
             self._set("period", "-", "기록이 하루치뿐입니다")
             self._set("prev", "-", "")
         self._set("range", f"{to_s(summary.period_low)} ~ {to_s(summary.period_high)}")
-        span = summary.first_date if summary.first_date == summary.latest_date else f"{summary.first_date} ~ {summary.latest_date}"
+        span = (
+            summary.first_date
+            if summary.first_date == summary.latest_date
+            else f"{summary.first_date} ~ {summary.latest_date}"
+        )
         self._set("records", f"{summary.record_days}일", span)
         self.hint_label.setText(hint)
         self.hint_label.setVisible(bool(hint))

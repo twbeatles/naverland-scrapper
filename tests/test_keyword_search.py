@@ -25,13 +25,13 @@ from src.core.services.site_contract import (
 
 # Live fixture: GET /api/autocomplete?keyword=반포자이 (status 200).
 AUTOCOMPLETE_BANPO_RAW = (
-    '["<strong class=\'text_input\'>반포</strong>동 '
-    '<strong class=\'text_input\'>반포</strong>'
+    "[\"<strong class='text_input'>반포</strong>동 "
+    "<strong class='text_input'>반포</strong>"
     "<strong class='text_input'>자이</strong>\","
-    '"잠원동 메이플<strong class=\'text_input\'>자이</strong>",'
-    '"잠원동 <strong class=\'text_input\'>반포</strong>센트럴'
+    "\"잠원동 메이플<strong class='text_input'>자이</strong>\","
+    "\"잠원동 <strong class='text_input'>반포</strong>센트럴"
     "<strong class='text_input'>자이</strong>\","
-    '"잠원동 신<strong class=\'text_input\'>반포</strong>'
+    "\"잠원동 신<strong class='text_input'>반포</strong>"
     "<strong class='text_input'>자이</strong>\"]"
 )
 
@@ -95,7 +95,9 @@ SEARCH_HAPJEONG_REGIONS = {
 }
 
 # Live fixture: GET /api/search?keyword=empty-query-zzz&page=1 (status 200).
-SEARCH_EMPTY_RAW = '{"isShown":false,"isMoreData":false,"keyword":"empty-query-zzz","totalCount":0}'
+SEARCH_EMPTY_RAW = (
+    '{"isShown":false,"isMoreData":false,"keyword":"empty-query-zzz","totalCount":0}'
+)
 
 
 class TestKeywordSearchContract(unittest.TestCase):
@@ -126,7 +128,9 @@ class TestKeywordSearchContract(unittest.TestCase):
 class TestKeywordSearchParsing(unittest.TestCase):
     def test_strip_highlight(self):
         self.assertEqual(
-            strip_autocomplete_highlight("약사동 <strong class='text_input'>래미안</strong>2단지"),
+            strip_autocomplete_highlight(
+                "약사동 <strong class='text_input'>래미안</strong>2단지"
+            ),
             "약사동 래미안2단지",
         )
         self.assertEqual(strip_autocomplete_highlight("plain"), "plain")
@@ -185,9 +189,7 @@ class TestKeywordSearchFetch(unittest.TestCase):
 
     def test_fetch_suggestions_empty_keyword_skips_network(self):
         calls = []
-        names = fetch_suggestions(
-            "  ", lambda url: (calls.append(url), (200, "[]"))[1]
-        )
+        names = fetch_suggestions("  ", lambda url: (calls.append(url), (200, "[]"))[1])
         self.assertEqual(names, [])
         self.assertEqual(calls, [])
 
@@ -210,8 +212,12 @@ class TestKeywordSearchFetch(unittest.TestCase):
         self.assertFalse(result["is_more_data"])
 
     def test_fetch_search_page_empty(self):
-        result = fetch_search_page("empty-query-zzz", self._ok(SEARCH_EMPTY_RAW), page=1)
-        self.assertEqual(result, {"complexes": [], "regions": [], "is_more_data": False})
+        result = fetch_search_page(
+            "empty-query-zzz", self._ok(SEARCH_EMPTY_RAW), page=1
+        )
+        self.assertEqual(
+            result, {"complexes": [], "regions": [], "is_more_data": False}
+        )
 
     def test_fetch_search_page_bad_status_raises(self):
         with self.assertRaises(KeywordSearchError) as ctx:
@@ -245,8 +251,12 @@ class TestAddressQueryVariants(unittest.TestCase):
     def test_bunji_number_stripped_then_dong(self):
         self.assertEqual(
             address_query_variants("경기도 성남시 분당구 정자동 123"),
-            ["경기도 성남시 분당구 정자동 123", "경기도 성남시 분당구 정자동",
-             "분당구 정자동", "정자동"],
+            [
+                "경기도 성남시 분당구 정자동 123",
+                "경기도 성남시 분당구 정자동",
+                "분당구 정자동",
+                "정자동",
+            ],
         )
 
     def test_road_name_number_stripped(self):
@@ -275,7 +285,8 @@ class TestFetchSearchFallback(unittest.TestCase):
     def test_raw_hit_needs_no_extra_fetch(self):
         calls = []
         result = fetch_search_page_with_fallback(
-            "반포자이", self._fetch_by_keyword(calls, {"반포자이": (200, SEARCH_BANPO_RAW)})
+            "반포자이",
+            self._fetch_by_keyword(calls, {"반포자이": (200, SEARCH_BANPO_RAW)}),
         )
         self.assertEqual(len(result["complexes"]), 2)
         self.assertEqual(result["effective_query"], "반포자이")
@@ -289,9 +300,7 @@ class TestFetchSearchFallback(unittest.TestCase):
         )
         self.assertEqual(len(result["complexes"]), 2)
         self.assertEqual(result["effective_query"], "반포동")
-        self.assertEqual(
-            calls, ["서울특별시 서초구 반포동", "서초구 반포동", "반포동"]
-        )
+        self.assertEqual(calls, ["서울특별시 서초구 반포동", "서초구 반포동", "반포동"])
 
     def test_all_empty_reports_raw_effective_query(self):
         calls = []

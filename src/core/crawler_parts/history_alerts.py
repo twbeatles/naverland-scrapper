@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerHistoryAlertsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def register_discovered_complex(self, payload: dict):
@@ -49,7 +50,9 @@ class CrawlerHistoryAlertsMixin:
                         self.db.add_complex(
                             str(payload.get("complex_name", "") or ""),
                             str(payload.get("complex_id", "") or ""),
-                            asset_type=str(payload.get("asset_type", "APT") or "APT").upper(),
+                            asset_type=str(
+                                payload.get("asset_type", "APT") or "APT"
+                            ).upper(),
                             return_status=True,
                         )
                         or "skipped"
@@ -97,12 +100,22 @@ class CrawlerHistoryAlertsMixin:
                 "run_id": getattr(self, "run_id", ""),
                 "date_basis": "UTC",
                 "observed_on": observation_date(),
-                "filter_fingerprint": filter_fingerprint(self.area_filter, self.price_filter),
-                "filtered": bool(self.area_filter.get("enabled") or self.price_filter.get("enabled")),
-                "history_save_failed": bool(self.stats.get("history_save_failed", False)),
+                "filter_fingerprint": filter_fingerprint(
+                    self.area_filter, self.price_filter
+                ),
+                "filtered": bool(
+                    self.area_filter.get("enabled") or self.price_filter.get("enabled")
+                ),
+                "history_save_failed": bool(
+                    self.stats.get("history_save_failed", False)
+                ),
                 "invalid_row_count": int(self.stats.get("invalid_row_count", 0)),
-                "results": [r for r in self.stats.get("collection_results", [])
-                            if r.get("complex_id") == str(cid) and r.get("asset_type") == str(asset_type)],
+                "results": [
+                    r
+                    for r in self.stats.get("collection_results", [])
+                    if r.get("complex_id") == str(cid)
+                    and r.get("asset_type") == str(asset_type)
+                ],
             }
             saved = self.db.add_crawl_history(
                 name,
@@ -132,7 +145,9 @@ class CrawlerHistoryAlertsMixin:
             self.log("   이력 저장 실패로 소멸 판정을 생략합니다.", 30)
             return
         if self.crawl_mode == "geo_sweep" and not self._should_persist_geo_results():
-            self.log("   geo incomplete safety mode active: disappeared marking skipped", 30)
+            self.log(
+                "   geo incomplete safety mode active: disappeared marking skipped", 30
+            )
             return
         if not processed_target_pairs:
             self.log("   disappeared marking skipped: no successful target pairs", 10)
@@ -151,7 +166,10 @@ class CrawlerHistoryAlertsMixin:
                 if disappeared > 0:
                     self.log(f"🗑️ 소멸 매물 {disappeared}건 처리")
             except Exception as e:
-                if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                if (
+                    hasattr(self.db, "is_write_disabled")
+                    and self.db.is_write_disabled()
+                ):
                     self._notify_db_write_disabled()
                 self.log(f"⚠️ 소멸 매물 처리 실패: {e}", 30)
 
@@ -162,7 +180,9 @@ class CrawlerHistoryAlertsMixin:
             if not isinstance(raw_item, dict):
                 continue
             item = dict(raw_item)
-            trade_type = str(item.get("거래유형", requested_trade_type) or requested_trade_type)
+            trade_type = str(
+                item.get("거래유형", requested_trade_type) or requested_trade_type
+            )
             if not self._check_filters(item, trade_type):
                 self.stats["filtered_out"] += 1
                 continue
@@ -207,14 +227,20 @@ class CrawlerHistoryAlertsMixin:
             allowed_pairs = {
                 pair
                 for pair in set(self._remaining_pairs())
-                if not isinstance(pair, tuple) or len(pair) < 4 or str(pair[0] or "APT").strip().upper() == "APT"
+                if not isinstance(pair, tuple)
+                or len(pair) < 4
+                or str(pair[0] or "APT").strip().upper() == "APT"
             }
             if start_name and start_cid and start_trade:
                 allowed_pairs.add(self._pair_key(start_name, start_cid, start_trade))
 
             prefill_complexes: dict[tuple[str, str], dict[str, Any]] = {}
             for key, payload in dict(original_prefill_complexes or {}).items():
-                if not isinstance(key, tuple) or len(key) < 2 or not isinstance(payload, dict):
+                if (
+                    not isinstance(key, tuple)
+                    or len(key) < 2
+                    or not isinstance(payload, dict)
+                ):
                     continue
                 ttypes = payload.get("trade_types", [])
                 prefill_complexes[(str(key[0]), str(key[1]))] = {
@@ -236,7 +262,9 @@ class CrawlerHistoryAlertsMixin:
                     }
                     incoming_count = int(prefill_complex.get("count", 0) or 0)
                     if isinstance(existing, dict):
-                        existing["count"] = int(existing.get("count", 0) or 0) + incoming_count
+                        existing["count"] = (
+                            int(existing.get("count", 0) or 0) + incoming_count
+                        )
                         existing_types = {
                             str(x)
                             for x in (existing.get("trade_types", []) or [])
@@ -271,7 +299,9 @@ class CrawlerHistoryAlertsMixin:
             self._fallback_allowed_pairs = allowed_pairs
             self._fallback_prefill_complexes = prefill_complexes
             self._fallback_prefill_processed_target_pairs = prefill_pairs
-            self.stats["fallback_trigger_count"] = int(self.stats.get("fallback_trigger_count", 0)) + 1
+            self.stats["fallback_trigger_count"] = (
+                int(self.stats.get("fallback_trigger_count", 0)) + 1
+            )
             self.stats["fallback_last_reason"] = str(reason or "unknown_error")
             self.emit_stats()
             self.engine_name = "selenium"
@@ -307,7 +337,9 @@ class CrawlerHistoryAlertsMixin:
         rules = []
         if self.db and complex_id and trade_type:
             try:
-                rules = self.db.get_enabled_alert_rules(complex_id, trade_type, asset_type=asset_type)
+                rules = self.db.get_enabled_alert_rules(
+                    complex_id, trade_type, asset_type=asset_type
+                )
             except Exception as e:
                 self.log(f"   ⚠️ 알림 룰 로드 실패: {e}", 30)
         self._alert_rules_cache[key] = rules or []
@@ -392,14 +424,19 @@ class CrawlerHistoryAlertsMixin:
         saved = self._flush_history_updates_fallback(rows)
         if saved != len(rows):
             self.stats["history_save_failed"] = True
-            self.log(f"   이력 저장 실패: {saved}/{len(rows)}. 소멸·통계 갱신을 생략합니다.", 40)
+            self.log(
+                f"   이력 저장 실패: {saved}/{len(rows)}. 소멸·통계 갱신을 생략합니다.",
+                40,
+            )
         return saved
 
     def _enrich_item_with_history_and_alerts(self, data):
         if not isinstance(data, dict):
             return data
 
-        def _representative_price_value(price_text: str, current_trade_type: str, fallback: int = 0) -> int:
+        def _representative_price_value(
+            price_text: str, current_trade_type: str, fallback: int = 0
+        ) -> int:
             raw = str(price_text or "").strip()
             fallback_value = int(fallback or 0)
             if not raw:
@@ -446,11 +483,15 @@ class CrawlerHistoryAlertsMixin:
         is_new = False
         raw_price_change = 0
         if article_id and complex_id and price_int > 0:
-            history_map = self._get_history_state_map(complex_id, trade_type, asset_type)
+            history_map = self._get_history_state_map(
+                complex_id, trade_type, asset_type
+            )
             prev = history_map.get(article_id)
             prev_price = int(self._row_get(prev, "price", 0) or 0)
             prev_price_text = str(self._row_get(prev, "price_text", "") or "")
-            prev_comparable_price = _representative_price_value(prev_price_text, trade_type, fallback=prev_price)
+            prev_comparable_price = _representative_price_value(
+                prev_price_text, trade_type, fallback=prev_price
+            )
             is_new = prev is None
             raw_price_change = 0 if is_new else price_int - prev_comparable_price
 
@@ -458,7 +499,9 @@ class CrawlerHistoryAlertsMixin:
                 "price": price_int,
                 "price_text": price_text,
                 "status": "active",
-                "last_price": prev_comparable_price if prev_comparable_price > 0 else price_int,
+                "last_price": prev_comparable_price
+                if prev_comparable_price > 0
+                else price_int,
                 "price_change": raw_price_change,
             }
 
@@ -473,9 +516,13 @@ class CrawlerHistoryAlertsMixin:
                     "area": area_pyeong,
                     "floor": str(data.get("층/방향", "") or ""),
                     "feature": str(data.get("타입/특징", "") or ""),
-                    "last_price": prev_comparable_price if prev_comparable_price > 0 else price_int,
+                    "last_price": prev_comparable_price
+                    if prev_comparable_price > 0
+                    else price_int,
                     "asset_type": asset_type,
-                    "source_mode": str(data.get("수집모드", self.crawl_mode) or self.crawl_mode),
+                    "source_mode": str(
+                        data.get("수집모드", self.crawl_mode) or self.crawl_mode
+                    ),
                     "source_lat": float(data.get("위도", 0.0) or 0.0),
                     "source_lon": float(data.get("경도", 0.0) or 0.0),
                     "source_zoom": int(data.get("줌", 0) or 0),
@@ -495,7 +542,10 @@ class CrawlerHistoryAlertsMixin:
             self._flush_history_updates(force=False)
 
         price_change = int(raw_price_change)
-        if self.price_change_threshold > 0 and abs(price_change) < self.price_change_threshold:
+        if (
+            self.price_change_threshold > 0
+            and abs(price_change) < self.price_change_threshold
+        ):
             price_change = 0
         if is_new:
             self.stats["new_count"] = int(self.stats.get("new_count", 0)) + 1
@@ -518,16 +568,23 @@ class CrawlerHistoryAlertsMixin:
                 area_min = float(self._row_get(rule, "area_min", 0) or 0)
                 area_max = float(self._row_get(rule, "area_max", 999999) or 999999)
                 price_min = int(self._row_get(rule, "price_min", 0) or 0)
-                price_max = int(self._row_get(rule, "price_max", 999999999) or 999999999)
+                price_max = int(
+                    self._row_get(rule, "price_max", 999999999) or 999999999
+                )
                 if not (area_min <= area_pyeong <= area_max):
                     continue
                 if not (price_min <= price_int <= price_max):
                     continue
                 alert_id = int(self._row_get(rule, "id", 0) or 0)
-                alert_name = str(self._row_get(rule, "complex_name", complex_name) or complex_name)
+                alert_name = str(
+                    self._row_get(rule, "complex_name", complex_name) or complex_name
+                )
                 should_emit = True
                 if alert_id > 0 and article_id:
-                    if hasattr(self.db, "is_write_disabled") and self.db.is_write_disabled():
+                    if (
+                        hasattr(self.db, "is_write_disabled")
+                        and self.db.is_write_disabled()
+                    ):
                         should_emit = True
                     else:
                         try:
@@ -556,4 +613,3 @@ class CrawlerHistoryAlertsMixin:
                 )
 
         return data
-    

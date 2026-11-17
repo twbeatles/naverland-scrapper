@@ -17,6 +17,7 @@ Responsibility groups live in :mod:`src.core.services.detail_fetcher_parts`:
 This module re-exports the full previous public surface so existing
 ``from src.core.services.detail_fetcher import ...`` imports keep working.
 """
+
 from __future__ import annotations
 
 from src.core.services.detail_fetcher_parts.apply import apply_mobile_detail

@@ -42,17 +42,27 @@ def detect_trade_type(article: dict[str, Any], requested_trade_type: str = "") -
     if trade_name in ("매매", "전세", "월세"):
         return trade_name
 
-    trade_code = str(_first(article, "tradeTypeCode", "tradeType", "tradTpCd", default="")).upper()
+    trade_code = str(
+        _first(article, "tradeTypeCode", "tradeType", "tradTpCd", default="")
+    ).upper()
     return TRADE_CODE_MAP.get(trade_code, requested_trade_type or "매매")
 
 
 def detect_asset_type(article: dict[str, Any], fallback: str = "") -> str:
     code = str(
-        _first(article, "realEstateTypeCode", "rletTpCd", "estateType", default=fallback or "")
+        _first(
+            article,
+            "realEstateTypeCode",
+            "rletTpCd",
+            "estateType",
+            default=fallback or "",
+        )
     ).upper()
     if code in {"APT", "VL"}:
         return code
-    name = str(_first(article, "realEstateTypeName", "rletTpNm", "estateTypeName", default=""))
+    name = str(
+        _first(article, "realEstateTypeName", "rletTpNm", "estateTypeName", default="")
+    )
     if any(token in name for token in ("빌라", "연립", "다세대")):
         return "VL"
     if any(token in name for token in ("아파트", "APT")):
@@ -60,7 +70,9 @@ def detect_asset_type(article: dict[str, Any], fallback: str = "") -> str:
     return fallback or "APT"
 
 
-def normalize_price_fields(article: dict[str, Any], trade_type: str) -> tuple[str, str, str]:
+def normalize_price_fields(
+    article: dict[str, Any], trade_type: str
+) -> tuple[str, str, str]:
     raw_price = str(
         _first(
             article,
@@ -94,7 +106,9 @@ def normalize_price_fields(article: dict[str, Any], trade_type: str) -> tuple[st
     return sale_price, deposit, monthly
 
 
-def normalize_marker_payload(marker: dict[str, Any], asset_type: str = "") -> dict[str, Any]:
+def normalize_marker_payload(
+    marker: dict[str, Any], asset_type: str = ""
+) -> dict[str, Any]:
     cid = str(_first(marker, "complexNo", "houseNo", default="")).strip()
     marker_id = str(_first(marker, "markerId", default="")).strip()
     if not cid:
@@ -104,7 +118,12 @@ def normalize_marker_payload(marker: dict[str, Any], asset_type: str = "") -> di
     name = str(_first(marker, "complexName", "houseName", default="")).strip()
     lat = _to_float(_first(marker, "latitude", "lat", default=0.0))
     lon = _to_float(_first(marker, "longitude", "lon", "lng", default=0.0))
-    count = int(_first(marker, "articleCount", "dealCount", "totalCount", "count", "cnt", default=0) or 0)
+    count = int(
+        _first(
+            marker, "articleCount", "dealCount", "totalCount", "count", "cnt", default=0
+        )
+        or 0
+    )
     kind = detect_asset_type(marker, fallback=asset_type)
     return {
         "complex_id": cid,
@@ -133,11 +152,17 @@ def normalize_article_payload(
     trade_type = detect_trade_type(article, requested_trade_type=requested_trade_type)
     sale_price, deposit, monthly = normalize_price_fields(article, trade_type)
 
-    area_sqm = _to_float(_first(article, "area1", "spc1", "supplyArea", "articleArea", default=0.0))
+    area_sqm = _to_float(
+        _first(article, "area1", "spc1", "supplyArea", "articleArea", default=0.0)
+    )
     supply_sqm = area_sqm
-    exclusive_sqm = _to_float(_first(article, "area2", "spc2", "exclusiveArea", default=0.0))
+    exclusive_sqm = _to_float(
+        _first(article, "area2", "spc2", "exclusiveArea", default=0.0)
+    )
     if area_sqm <= 0:
-        area_sqm = _to_float(_first(article, "area2", "spc2", "exclusiveArea", default=0.0))
+        area_sqm = _to_float(
+            _first(article, "area2", "spc2", "exclusiveArea", default=0.0)
+        )
     pyeong = AreaConverter.sqm_to_pyeong(area_sqm) if area_sqm > 0 else 0.0
     price_text = sale_price if trade_type == "매매" else deposit
     price_int = PriceConverter.to_int(price_text)
@@ -155,10 +180,18 @@ def normalize_article_payload(
     if isinstance(feature, list):
         feature = ", ".join(str(x) for x in feature if x)
 
-    confirm_ymd = str(_first(article, "articleConfirmYmd", "confirmYmd", "atclCfmYmd", default="")).strip()
-    building_name = str(_first(article, "buildingName", "bildNm", "dongNm", default="")).strip()
-    area_name = str(_first(article, "areaName", "area1Name", "ptpNm", default="")).strip()
-    same_addr_cnt_raw = _first(article, "sameAddrCnt", "sameAddressCount", "sameAddrCount", default="")
+    confirm_ymd = str(
+        _first(article, "articleConfirmYmd", "confirmYmd", "atclCfmYmd", default="")
+    ).strip()
+    building_name = str(
+        _first(article, "buildingName", "bildNm", "dongNm", default="")
+    ).strip()
+    area_name = str(
+        _first(article, "areaName", "area1Name", "ptpNm", default="")
+    ).strip()
+    same_addr_cnt_raw = _first(
+        article, "sameAddrCnt", "sameAddressCount", "sameAddrCount", default=""
+    )
     try:
         same_addr_cnt = int(same_addr_cnt_raw or 0)
     except (TypeError, ValueError):
@@ -166,18 +199,39 @@ def normalize_article_payload(
     cp_name = str(_first(article, "cpName", "cpNm", "providerName", default="")).strip()
     # List API often includes realtorName — fill 부동산상호 without detail fetch (2026-08-12).
     realtor_name = str(
-        _first(article, "realtorName", "realtorNm", "agentName", "brokerageName", default="")
+        _first(
+            article,
+            "realtorName",
+            "realtorNm",
+            "agentName",
+            "brokerageName",
+            default="",
+        )
     ).strip()
-    realtor_id = str(_first(article, "realtorId", "realtorNo", "agentId", default="")).strip()
-    same_addr_max = str(_first(article, "sameAddrMaxPrc", "sameAddrMaxPrice", default="")).strip()
-    same_addr_min = str(_first(article, "sameAddrMinPrc", "sameAddrMinPrice", default="")).strip()
+    realtor_id = str(
+        _first(article, "realtorId", "realtorNo", "agentId", default="")
+    ).strip()
+    same_addr_max = str(
+        _first(article, "sameAddrMaxPrc", "sameAddrMaxPrice", default="")
+    ).strip()
+    same_addr_min = str(
+        _first(article, "sameAddrMinPrc", "sameAddrMinPrice", default="")
+    ).strip()
     verification_type = str(
-        _first(article, "verificationTypeCode", "verificationType", "confirmType", default="")
+        _first(
+            article,
+            "verificationTypeCode",
+            "verificationType",
+            "confirmType",
+            default="",
+        )
     ).strip()
     detail_address = str(
         _first(article, "detailAddress", "dtlAddr", "addressDetail", default="")
     ).strip()
-    direct_raw = _first(article, "isDirectTrade", "directTradeYn", "isDirect", default="")
+    direct_raw = _first(
+        article, "isDirectTrade", "directTradeYn", "isDirect", default=""
+    )
     if isinstance(direct_raw, bool):
         is_direct = "Y" if direct_raw else "N"
     else:
@@ -199,7 +253,9 @@ def normalize_article_payload(
         resolved_lon = article_lon
 
     item = {
-        "단지명": str(complex_name or _first(article, "articleName", default=f"단지_{complex_id}")),
+        "단지명": str(
+            complex_name or _first(article, "articleName", default=f"단지_{complex_id}")
+        ),
         "단지ID": str(complex_id or ""),
         "매물ID": str(_first(article, "articleNo", "atclNo", default="")),
         "거래유형": trade_type,
@@ -212,7 +268,9 @@ def normalize_article_payload(
         "면적소스": "list_api",
         "면적정밀도": "목록 표기값",
         "면적(평)": pyeong,
-        "평당가": PricePerPyeongCalculator.calculate(price_int, pyeong) if pyeong > 0 else 0,
+        "평당가": PricePerPyeongCalculator.calculate(price_int, pyeong)
+        if pyeong > 0
+        else 0,
         "평당가_표시": PricePerPyeongCalculator.format(
             PricePerPyeongCalculator.calculate(price_int, pyeong) if pyeong > 0 else 0
         ),
@@ -252,7 +310,9 @@ def normalize_article_payload(
         quality_errors.append("missing_article_id")
     if area_sqm <= 0:
         quality_errors.append("missing_area")
-    if price_int <= 0 and not (trade_type == "월세" and PriceConverter.to_int(monthly) > 0):
+    if price_int <= 0 and not (
+        trade_type == "월세" and PriceConverter.to_int(monthly) > 0
+    ):
         quality_errors.append("missing_price")
     item["데이터품질오류"] = quality_errors
     return enrich_gap_fields(item)

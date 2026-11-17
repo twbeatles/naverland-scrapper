@@ -21,7 +21,9 @@ class TestFinishSummary(unittest.TestCase):
     def test_format_api_failure_summary_empty(self):
         h = _Harness()
         self.assertEqual(h._format_api_failure_summary({}), "")
-        self.assertEqual(h._format_api_failure_summary({"article_api_failure_reasons": []}), "")
+        self.assertEqual(
+            h._format_api_failure_summary({"article_api_failure_reasons": []}), ""
+        )
 
 
 if __name__ == "__main__":

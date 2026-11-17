@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class AppStatsScheduleStatsHistoryMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     STATS_COMPARE_LIMIT = 5
@@ -51,7 +52,9 @@ class AppStatsScheduleStatsHistoryMixin:
     def _on_stats_type_changed(self: Any, *_args):
         # 사용자가 직접 고른 거래 종류는 자동으로 바꾸지 않는다.
         self._refresh_stats_metric_visibility()
-        self._on_stats_complex_changed(self.stats_complex_combo.currentIndex(), auto_trade=False)
+        self._on_stats_complex_changed(
+            self.stats_complex_combo.currentIndex(), auto_trade=False
+        )
 
     def _load_history(self: Any):
         self.history_table.blockSignals(True)
@@ -66,20 +69,34 @@ class AppStatsScheduleStatsHistoryMixin:
                 if isinstance(history_row, dict):
                     name = str(history_row.get("complex_name", "") or "")
                     cid = str(history_row.get("complex_id", "") or "")
-                    asset_type = str(history_row.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                    asset_type = (
+                        str(history_row.get("asset_type", "APT") or "APT")
+                        .strip()
+                        .upper()
+                        or "APT"
+                    )
                     engine = str(history_row.get("engine", "") or "")
                     mode = str(history_row.get("mode", "complex") or "complex")
-                    run_status = str(history_row.get("run_status", "success") or "success")
+                    run_status = str(
+                        history_row.get("run_status", "success") or "success"
+                    )
                     trade_types = str(history_row.get("trade_types", "") or "")
                     item_count = int(history_row.get("item_count", 0) or 0)
                     crawled_at = str(history_row.get("crawled_at", "") or "")
                 else:
                     name = str(history_row[0] if len(history_row) > 0 else "")
                     cid = str(history_row[1] if len(history_row) > 1 else "")
-                    asset_type = str(history_row[2] if len(history_row) > 2 else "APT").strip().upper() or "APT"
+                    asset_type = (
+                        str(history_row[2] if len(history_row) > 2 else "APT")
+                        .strip()
+                        .upper()
+                        or "APT"
+                    )
                     engine = str(history_row[3] if len(history_row) > 3 else "")
                     mode = str(history_row[4] if len(history_row) > 4 else "complex")
-                    run_status = str(history_row[5] if len(history_row) > 5 else "success")
+                    run_status = str(
+                        history_row[5] if len(history_row) > 5 else "success"
+                    )
                     trade_types = str(history_row[6] if len(history_row) > 6 else "")
                     item_count = int(history_row[7] if len(history_row) > 7 else 0)
                     crawled_at = str(history_row[8] if len(history_row) > 8 else "")
@@ -91,7 +108,9 @@ class AppStatsScheduleStatsHistoryMixin:
                 self.history_table.setItem(row_idx, 4, QTableWidgetItem(mode))
                 self.history_table.setItem(row_idx, 5, QTableWidgetItem(run_status))
                 self.history_table.setItem(row_idx, 6, QTableWidgetItem(trade_types))
-                self.history_table.setItem(row_idx, 7, QTableWidgetItem(str(item_count)))
+                self.history_table.setItem(
+                    row_idx, 7, QTableWidgetItem(str(item_count))
+                )
                 self.history_table.setItem(row_idx, 8, QTableWidgetItem(crawled_at))
         finally:
             self.history_table.blockSignals(False)
@@ -165,12 +184,17 @@ class AppStatsScheduleStatsHistoryMixin:
                 asset_token = str(asset_type or "APT").strip().upper() or "APT"
                 display_name = str(name or f"단지_{cid_text}")
                 combo_data = (asset_token, cid_text)
-                self.stats_complex_combo.addItem(f"{display_name} ({asset_token}:{cid_text})", combo_data)
+                self.stats_complex_combo.addItem(
+                    f"{display_name} ({asset_token}:{cid_text})", combo_data
+                )
             if current_key:
                 idx = self._find_stats_complex_index(current_key)
                 if idx >= 0:
                     self.stats_complex_combo.setCurrentIndex(idx)
-            if self.stats_complex_combo.count() > 0 and self.stats_complex_combo.currentIndex() < 0:
+            if (
+                self.stats_complex_combo.count() > 0
+                and self.stats_complex_combo.currentIndex() < 0
+            ):
                 self.stats_complex_combo.setCurrentIndex(0)
         except Exception as e:
             ui_logger.warning(f"통계 단지 목록 로드 실패: {e}")
@@ -183,7 +207,9 @@ class AppStatsScheduleStatsHistoryMixin:
         if idx >= 0:
             return idx
         want_asset, want_cid = self._split_stats_key(key)
-        strict_asset = isinstance(key, (tuple, list)) or (isinstance(key, str) and ":" in key)
+        strict_asset = isinstance(key, (tuple, list)) or (
+            isinstance(key, str) and ":" in key
+        )
         for i in range(self.stats_complex_combo.count()):
             data = self.stats_complex_combo.itemData(i)
             if not (isinstance(data, tuple) and len(data) >= 2):
@@ -201,7 +227,12 @@ class AppStatsScheduleStatsHistoryMixin:
             return
         has_complexes = self.stats_complex_combo.count() > 0
         empty.setVisible(not has_complexes)
-        for name in ("stats_filter_bar", "stats_compare_bar", "stats_summary", "stats_splitter"):
+        for name in (
+            "stats_filter_bar",
+            "stats_compare_bar",
+            "stats_summary",
+            "stats_splitter",
+        ):
             widget = getattr(self, name, None)
             if widget is not None:
                 widget.setVisible(has_complexes)
@@ -222,7 +253,10 @@ class AppStatsScheduleStatsHistoryMixin:
         if idx < 0:
             idx = self._find_stats_complex_index(cid)
         if idx < 0:
-            self.show_toast("이 단지는 아직 가격 기록이 없습니다. 먼저 수집해 주세요.", toast_type="warning")
+            self.show_toast(
+                "이 단지는 아직 가격 기록이 없습니다. 먼저 수집해 주세요.",
+                toast_type="warning",
+            )
             return
         self.stats_complex_combo.blockSignals(True)
         self.stats_complex_combo.setCurrentIndex(idx)
@@ -246,7 +280,9 @@ class AppStatsScheduleStatsHistoryMixin:
         for trade in ("매매", "전세", "월세"):
             metric = "rent" if trade == "월세" else "price"
             try:
-                if self.db.get_price_snapshot_pyeongs(cid, asset_type=asset_type, trade_type=trade, price_metric=metric):
+                if self.db.get_price_snapshot_pyeongs(
+                    cid, asset_type=asset_type, trade_type=trade, price_metric=metric
+                ):
                     available.append(trade)
             except Exception as e:
                 ui_logger.debug(f"거래 종류 확인 실패({trade}): {e}")
@@ -272,7 +308,9 @@ class AppStatsScheduleStatsHistoryMixin:
             self.stats_table.setRowCount(0)
             summary_widget = getattr(self, "stats_summary", None)
             if summary_widget is not None:
-                summary_widget.clear("단지를 고르면 최근 평균과 변화가 여기에 나타납니다.")
+                summary_widget.clear(
+                    "단지를 고르면 최근 평균과 변화가 여기에 나타납니다."
+                )
             return
         ttype = self.stats_type_combo.currentText()
         if ttype == "전체":
@@ -312,7 +350,9 @@ class AppStatsScheduleStatsHistoryMixin:
                 amount = int(round(float(value or 0)))
             except (TypeError, ValueError):
                 amount = 0
-            return _numeric_item(PriceConverter.to_string(amount) if amount > 0 else "-", amount)
+            return _numeric_item(
+                PriceConverter.to_string(amount) if amount > 0 else "-", amount
+            )
 
         self.stats_table.blockSignals(True)
         self.stats_table.setUpdatesEnabled(False)
@@ -322,7 +362,17 @@ class AppStatsScheduleStatsHistoryMixin:
             self.stats_table.setRowCount(0)
             self.stats_table.setRowCount(len(snapshots))
             for row, snapshot in enumerate(snapshots):
-                date, typ, py, min_p, max_p, avg_p, cnt, _row_metric, _legacy_monthly = snapshot
+                (
+                    date,
+                    typ,
+                    py,
+                    min_p,
+                    max_p,
+                    avg_p,
+                    cnt,
+                    _row_metric,
+                    _legacy_monthly,
+                ) = snapshot
                 parsed_py = self._parse_pyeong_value(py)
                 py_text = (
                     f"{self._format_pyeong_value(parsed_py)}평"
@@ -331,26 +381,38 @@ class AppStatsScheduleStatsHistoryMixin:
                 )
                 self.stats_table.setItem(row, 0, QTableWidgetItem(str(date)))
                 self.stats_table.setItem(row, 1, QTableWidgetItem(str(typ)))
-                self.stats_table.setItem(row, 2, _numeric_item(py_text, float(parsed_py or 0)))
+                self.stats_table.setItem(
+                    row, 2, _numeric_item(py_text, float(parsed_py or 0))
+                )
                 self.stats_table.setItem(row, 3, _price_item(min_p))
                 self.stats_table.setItem(row, 4, _price_item(max_p))
                 self.stats_table.setItem(row, 5, _price_item(avg_p))
-                self.stats_table.setItem(row, 6, _numeric_item(f"{int(cnt or 0)}건", int(cnt or 0)))
+                self.stats_table.setItem(
+                    row, 6, _numeric_item(f"{int(cnt or 0)}건", int(cnt or 0))
+                )
 
-                prev_avg = prev_map.get((str(typ or ""), float(parsed_py or 0), str(date)[:10]))
+                prev_avg = prev_map.get(
+                    (str(typ or ""), float(parsed_py or 0), str(date)[:10])
+                )
                 try:
                     delta = int(round(float(avg_p or 0))) - prev_avg if prev_avg else 0
                 except (TypeError, ValueError):
                     delta = 0
                 if prev_avg:
                     pct = format_pct(delta / prev_avg * 100.0)
-                    delta_text = "변동 없음" if delta == 0 else f"{PriceConverter.to_signed_string(delta)} ({pct})"
+                    delta_text = (
+                        "변동 없음"
+                        if delta == 0
+                        else f"{PriceConverter.to_signed_string(delta)} ({pct})"
+                    )
                 else:
                     delta_text = "-"
                 delta_item = _numeric_item(delta_text, delta)
                 if delta:
                     # 국내 시세 표기 관례: 상승 빨강, 하락 파랑.
-                    delta_item.setForeground(QColor("#ef4444" if delta > 0 else "#3b82f6"))
+                    delta_item.setForeground(
+                        QColor("#ef4444" if delta > 0 else "#3b82f6")
+                    )
                 self.stats_table.setItem(row, 7, delta_item)
         finally:
             self.stats_table.blockSignals(False)
@@ -390,7 +452,11 @@ class AppStatsScheduleStatsHistoryMixin:
                 f"{self._format_pyeong_value(series.pyeong)}평 "
                 f"{self._stats_metric_display_name(series.metric or price_metric)} 흐름"
             )
-            hint = "" if len(series.points) >= 2 else "기록이 하루치뿐입니다. 며칠 더 수집하면 흐름이 보입니다."
+            hint = (
+                ""
+                if len(series.points) >= 2
+                else "기록이 하루치뿐입니다. 며칠 더 수집하면 흐름이 보입니다."
+            )
             if summary_widget is not None:
                 summary_widget.set_summary(summarize(series), hint=hint)
             if self._render_stats_compare(ttype, price_metric, period_days):
@@ -455,7 +521,12 @@ class AppStatsScheduleStatsHistoryMixin:
         current = self._current_stats_key_text()
         keys = []
         for key in list(getattr(self, "_stats_compare_keys", []) or []):
-            if key and key != current and key not in keys and self._find_stats_complex_index(key) >= 0:
+            if (
+                key
+                and key != current
+                and key not in keys
+                and self._find_stats_complex_index(key) >= 0
+            ):
                 keys.append(key)
         return keys
 
@@ -480,13 +551,18 @@ class AppStatsScheduleStatsHistoryMixin:
         current = self._current_stats_key_text()
         items = []
         for i in range(self.stats_complex_combo.count()):
-            asset_type, cid = self._split_stats_key(self.stats_complex_combo.itemData(i))
+            asset_type, cid = self._split_stats_key(
+                self.stats_complex_combo.itemData(i)
+            )
             key = f"{asset_type or 'APT'}:{cid}"
             if not cid or key == current:
                 continue
             items.append((str(self.stats_complex_combo.itemText(i)), key))
         if not items:
-            self.show_toast("비교할 다른 단지가 없습니다. 다른 단지도 수집해 주세요.", toast_type="warning")
+            self.show_toast(
+                "비교할 다른 단지가 없습니다. 다른 단지도 수집해 주세요.",
+                toast_type="warning",
+            )
             return
         dlg = MultiSelectDialog(
             "함께 비교할 단지 고르기",
@@ -541,7 +617,9 @@ class AppStatsScheduleStatsHistoryMixin:
         for key, name in entries:
             asset_type, cid = self._split_stats_key(key)
             try:
-                rows = self.db.get_price_snapshots(cid, ttype, asset_type=asset_type, price_metric=price_metric)
+                rows = self.db.get_price_snapshots(
+                    cid, ttype, asset_type=asset_type, price_metric=price_metric
+                )
             except Exception as e:
                 ui_logger.warning(f"비교 단지 가격 조회 실패({key}): {e}")
                 rows = []
@@ -565,7 +643,9 @@ class AppStatsScheduleStatsHistoryMixin:
                 f"{ttype} 기록이 없어 비교에서 빠진 단지: {', '.join(missing)}", 6000
             )
         if not chart_series:
-            self.chart_widget.clear(f"비교할 단지들에 고른 조건의 {ttype} 가격 기록이 없습니다.")
+            self.chart_widget.clear(
+                f"비교할 단지들에 고른 조건의 {ttype} 가격 기록이 없습니다."
+            )
             return True
         metric_name = self._stats_metric_display_name(price_metric)
         self.chart_widget.update_series(
@@ -595,7 +675,8 @@ class AppStatsScheduleStatsHistoryMixin:
                     self.stats_type_combo.blockSignals(False)
                     self._refresh_stats_metric_visibility()
                     self.status_bar.showMessage(
-                        f"이 단지에는 {current_trade} 기록이 없어 {available[0]} 흐름을 보여 줍니다.", 5000
+                        f"이 단지에는 {current_trade} 기록이 없어 {available[0]} 흐름을 보여 줍니다.",
+                        5000,
                     )
 
         try:
@@ -617,7 +698,11 @@ class AppStatsScheduleStatsHistoryMixin:
             pyeongs = []
 
         prev_text = self.stats_pyeong_combo.currentText()
-        prev_value = self._parse_pyeong_value(prev_text) if prev_text and prev_text != "전체" else None
+        prev_value = (
+            self._parse_pyeong_value(prev_text)
+            if prev_text and prev_text != "전체"
+            else None
+        )
 
         self.stats_pyeong_combo.blockSignals(True)
         self.stats_pyeong_combo.clear()

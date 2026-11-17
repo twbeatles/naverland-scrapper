@@ -40,7 +40,9 @@ class _FakeRequestContext:
 
 
 class _FakePage:
-    def __init__(self, bodies, *, html=None, hydration=None, responses=None, request_routes=None):
+    def __init__(
+        self, bodies, *, html=None, hydration=None, responses=None, request_routes=None
+    ):
         self._bodies = dict(bodies)
         self._html = dict(html or {})
         self._hydration = dict(hydration or {})
@@ -62,7 +64,9 @@ class _FakePage:
     async def goto(self, url, wait_until="domcontentloaded", timeout=None):
         self.url = url
         self.visited.append(url)
-        self.goto_calls.append({"url": url, "wait_until": wait_until, "timeout": timeout})
+        self.goto_calls.append(
+            {"url": url, "wait_until": wait_until, "timeout": timeout}
+        )
         for response in list(self._responses.get(url, []) or []):
             for handler in list(self._handlers.get("response", [])):
                 handler(response)
@@ -85,7 +89,10 @@ class _FakePage:
         # In-page front-api fetch (2026-10): route through the fake request routes.
         if isinstance(arg, list) and arg and "/front-api/" in str(arg[0]):
             response = await self.request.get(arg[0])
-            return {"status": response.status, "body": json.dumps(await response.json())}
+            return {
+                "status": response.status,
+                "body": json.dumps(await response.json()),
+            }
         return self._hydration.get(self.url, {})
 
     def locator(self, query):
@@ -140,7 +147,10 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                     "result": {
                         "brokerageName": "송파로얄공인중개사사무소",
                         "brokerName": "이수영",
-                        "phone": {"brokerage": "02-430-4500", "mobile": "010-4542-4501"},
+                        "phone": {
+                            "brokerage": "02-430-4500",
+                            "mobile": "010-4542-4501",
+                        },
                     },
                 }
             },
@@ -173,7 +183,13 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                 fin_url: [
                     _FakeResponse(
                         "https://fin.land.naver.com/front-api/v1/complex?complexNumber=111515",
-                        {"isSuccess": True, "result": {"name": "헬리오시티", "managementOfficeContact": "02-403-8330"}},
+                        {
+                            "isSuccess": True,
+                            "result": {
+                                "name": "헬리오시티",
+                                "managementOfficeContact": "02-403-8330",
+                            },
+                        },
                     )
                 ]
             },
@@ -183,7 +199,10 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                     "result": {
                         "brokerageName": "삼천공인중개사사무소",
                         "brokerName": "홍순화",
-                        "phone": {"brokerage": "02-415-3000", "mobile": "010-1111-2222"},
+                        "phone": {
+                            "brokerage": "02-415-3000",
+                            "mobile": "010-1111-2222",
+                        },
                     },
                 }
             },
@@ -204,16 +223,33 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         article_no = "2657059949"
         agent_url = build_front_api_agent_url(article_no)
         key_url = build_front_api_article_key_url(article_no)
-        basic_url = build_front_api_basic_info_url(article_no, real_estate_type="A01", trade_type="A1")
+        basic_url = build_front_api_basic_info_url(
+            article_no, real_estate_type="A01", trade_type="A1"
+        )
         page = _FakePage(
             {},
             request_routes={
-                agent_url: {"isSuccess": True, "result": {
-                    "brokerageName": "API중개", "brokerName": "김중개",
-                    "phone": {"brokerage": "02-111-2222"},
-                }},
-                key_url: {"isSuccess": True, "result": {"type": {"realEstateType": "A01", "tradeType": "A1"}}},
-                basic_url: {"isSuccess": True, "result": {"priceInfo": {"price": 2880000000, "previousDeposit": 1300000000}}},
+                agent_url: {
+                    "isSuccess": True,
+                    "result": {
+                        "brokerageName": "API중개",
+                        "brokerName": "김중개",
+                        "phone": {"brokerage": "02-111-2222"},
+                    },
+                },
+                key_url: {
+                    "isSuccess": True,
+                    "result": {"type": {"realEstateType": "A01", "tradeType": "A1"}},
+                },
+                basic_url: {
+                    "isSuccess": True,
+                    "result": {
+                        "priceInfo": {
+                            "price": 2880000000,
+                            "previousDeposit": 1300000000,
+                        }
+                    },
+                },
             },
         )
 
@@ -233,8 +269,14 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         page = _FakePage(
             {},
             request_routes={
-                build_front_api_agent_url(article_no): {"isSuccess": True, "result": {"brokerageName": "전세중개"}},
-                key_url: {"isSuccess": True, "result": {"type": {"realEstateType": "A01", "tradeType": "B1"}}},
+                build_front_api_agent_url(article_no): {
+                    "isSuccess": True,
+                    "result": {"brokerageName": "전세중개"},
+                },
+                key_url: {
+                    "isSuccess": True,
+                    "result": {"type": {"realEstateType": "A01", "tradeType": "B1"}},
+                },
             },
         )
 
@@ -307,10 +349,15 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
             front_api_enabled=True,
         )
         self.assertEqual(detail.get("부동산상호"), "API중개")
-        self.assertEqual(detail.get("_detail_meta", {}).get("detail_source"), "front_api")
+        self.assertEqual(
+            detail.get("_detail_meta", {}).get("detail_source"), "front_api"
+        )
         # Session warm may park on fin robots.txt once; never open fin article HTML in API-only mode.
         self.assertFalse(
-            any("fin.land.naver.com/articles" in str(call.get("url", "")) for call in page.goto_calls)
+            any(
+                "fin.land.naver.com/articles" in str(call.get("url", ""))
+                for call in page.goto_calls
+            )
         )
         self.assertLessEqual(len(page.goto_calls), 1)
 
@@ -338,7 +385,10 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
                         "https://fin.land.naver.com/front-api/article/2529610450",
                         {
                             "prevJeonse": "1억 1,000만",
-                            "phone": {"brokerage": "02-987-6543", "mobile": "010-1234-5678"},
+                            "phone": {
+                                "brokerage": "02-987-6543",
+                                "mobile": "010-1234-5678",
+                            },
                         },
                     )
                 ]
@@ -416,9 +466,15 @@ class TestDetailFetcher(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail["부동산상호"], "남산중개")
         self.assertEqual(detail["중개사이름"], "이공인")
         self.assertEqual(detail["전화1"], "02-555-6666")
-        self.assertIn(detail["_detail_meta"]["detail_parse_state"], {"partial", "success"})
-        self.assertGreaterEqual(int(detail["_detail_meta"]["network_response_count"]), 1)
-        self.assertTrue(any(agent_url in str(call.get("url", "")) for call in page.request.calls))
+        self.assertIn(
+            detail["_detail_meta"]["detail_parse_state"], {"partial", "success"}
+        )
+        self.assertGreaterEqual(
+            int(detail["_detail_meta"]["network_response_count"]), 1
+        )
+        self.assertTrue(
+            any(agent_url in str(call.get("url", "")) for call in page.request.calls)
+        )
 
 
 if __name__ == "__main__":

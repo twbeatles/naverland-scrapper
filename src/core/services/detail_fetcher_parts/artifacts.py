@@ -12,7 +12,9 @@ from src.core.services.detail_fetcher_parts.page_primitives import (
 from src.core.services.detail_fetcher_parts.text_extract import _build_detail_corpus
 
 
-async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout_ms: int | None = None) -> dict:
+async def _collect_detail_artifacts(
+    detail_page, url: str, *, navigation_timeout_ms: int | None = None
+) -> dict:
     responses: list[dict] = []
     pending_tasks: set[asyncio.Task] = set()
 
@@ -23,7 +25,14 @@ async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout
         lower_url = response_url.lower()
         if not any(
             token in lower_url
-            for token in ("land.naver.com", "/api/", "front-api", "article", "realtor", "agent")
+            for token in (
+                "land.naver.com",
+                "/api/",
+                "front-api",
+                "article",
+                "realtor",
+                "agent",
+            )
         ):
             return
         try:
@@ -46,7 +55,9 @@ async def _collect_detail_artifacts(detail_page, url: str, *, navigation_timeout
         except Exception:
             can_listen = False
     try:
-        await _goto_detail_url(detail_page, url, navigation_timeout_ms=navigation_timeout_ms)
+        await _goto_detail_url(
+            detail_page, url, navigation_timeout_ms=navigation_timeout_ms
+        )
         body_text = await _read_body_text(detail_page)
         try:
             html_text = await detail_page.content()

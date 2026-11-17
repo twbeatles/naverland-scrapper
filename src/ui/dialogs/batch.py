@@ -36,10 +36,14 @@ class _NameLookupWorker(QObject):
         if isinstance(entry, dict):
             source = str(entry.get("source", "") or "")
             cid = str(entry.get("complex_id", entry.get("cid", "")) or "").strip()
-            asset_type = str(entry.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+            asset_type = (
+                str(entry.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+            )
             article_id = str(entry.get("article_id", "") or "").strip()
             url = str(entry.get("url", "") or "").strip()
-            needs_article_lookup = bool(entry.get("needs_article_lookup")) or bool(article_id and not cid)
+            needs_article_lookup = bool(entry.get("needs_article_lookup")) or bool(
+                article_id and not cid
+            )
             return {
                 "source": source,
                 "complex_id": cid,
@@ -51,7 +55,10 @@ class _NameLookupWorker(QObject):
         if isinstance(entry, (list, tuple)):
             source = str(entry[0] if len(entry) >= 1 else "" or "")
             cid = str(entry[1] if len(entry) >= 2 else "" or "").strip()
-            asset_type = str(entry[2] if len(entry) >= 3 else "APT" or "APT").strip().upper() or "APT"
+            asset_type = (
+                str(entry[2] if len(entry) >= 3 else "APT" or "APT").strip().upper()
+                or "APT"
+            )
             return {
                 "source": source,
                 "complex_id": cid,
@@ -78,7 +85,10 @@ class _NameLookupWorker(QObject):
             for idx, entry in enumerate(self._results):
                 normalized = self._normalize_result_entry(entry)
                 cid = str(normalized.get("complex_id", "") or "").strip()
-                asset_type = str(normalized.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(normalized.get("asset_type", "APT") or "APT").strip().upper()
+                    or "APT"
+                )
                 article_id = str(normalized.get("article_id", "") or "").strip()
                 if self._cancelled:
                     break
@@ -95,10 +105,21 @@ class _NameLookupWorker(QObject):
                         break
                     except Exception:
                         resolved = {}
-                    cid = str(resolved.get("complex_id", "") if isinstance(resolved, dict) else "").strip()
-                    asset_type = str(
-                        resolved.get("asset_type", asset_type) if isinstance(resolved, dict) else asset_type
-                    ).strip().upper() or "APT"
+                    cid = str(
+                        resolved.get("complex_id", "")
+                        if isinstance(resolved, dict)
+                        else ""
+                    ).strip()
+                    asset_type = (
+                        str(
+                            resolved.get("asset_type", asset_type)
+                            if isinstance(resolved, dict)
+                            else asset_type
+                        )
+                        .strip()
+                        .upper()
+                        or "APT"
+                    )
                     if asset_type not in {"APT", "VL"}:
                         asset_type = "APT"
                     if not cid:
@@ -127,7 +148,15 @@ class _NameLookupWorker(QObject):
 
                 is_verified = not str(name).startswith("단지_")
                 status = "확인됨" if is_verified else "이름 미확인"
-                self.progress.emit(idx, total, str(cid), str(name), bool(is_verified), asset_type, status)
+                self.progress.emit(
+                    idx,
+                    total,
+                    str(cid),
+                    str(name),
+                    bool(is_verified),
+                    asset_type,
+                    status,
+                )
                 processed += 1
         finally:
             try:
@@ -195,7 +224,9 @@ class URLBatchDialog(QDialog):
 
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(4)
-        self.result_table.setHorizontalHeaderLabels(["", "단지 번호", "단지 이름", "확인 결과"])
+        self.result_table.setHorizontalHeaderLabels(
+            ["", "단지 번호", "단지 이름", "확인 결과"]
+        )
         batch_header = self.result_table.horizontalHeader()
         if batch_header is not None:
             batch_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -232,7 +263,10 @@ class URLBatchDialog(QDialog):
         for entry in results:
             normalized = _NameLookupWorker._normalize_result_entry(entry)
             cid = str(normalized.get("complex_id", "") or "").strip()
-            asset_type = str(normalized.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+            asset_type = (
+                str(normalized.get("asset_type", "APT") or "APT").strip().upper()
+                or "APT"
+            )
             article_id = str(normalized.get("article_id", "") or "").strip()
             self._parsed_entries.append(
                 {
@@ -240,7 +274,9 @@ class URLBatchDialog(QDialog):
                     "asset_type": str(asset_type or "APT").strip().upper() or "APT",
                     "article_id": article_id,
                     "url": str(normalized.get("url", "") or ""),
-                    "needs_article_lookup": bool(normalized.get("needs_article_lookup")),
+                    "needs_article_lookup": bool(
+                        normalized.get("needs_article_lookup")
+                    ),
                 }
             )
             row = self.result_table.rowCount()
@@ -250,8 +286,16 @@ class URLBatchDialog(QDialog):
             chk.setChecked(False)
             self.result_table.setCellWidget(row, 0, chk)
             display_id = str(cid or (f"매물 {article_id}" if article_id else ""))
-            display_name = f"단지_{cid}" if cid else (f"매물_{article_id}" if article_id else "단지_")
-            status = "매물 단지 역조회 중..." if not cid and article_id else f"{asset_type} 조회 중..."
+            display_name = (
+                f"단지_{cid}"
+                if cid
+                else (f"매물_{article_id}" if article_id else "단지_")
+            )
+            status = (
+                "매물 단지 역조회 중..."
+                if not cid and article_id
+                else f"{asset_type} 조회 중..."
+            )
             self.result_table.setItem(row, 1, QTableWidgetItem(display_id))
             self.result_table.setItem(row, 2, QTableWidgetItem(display_name))
             self.result_table.setItem(row, 3, QTableWidgetItem(status))
@@ -267,15 +311,19 @@ class URLBatchDialog(QDialog):
 
         self._worker_thread.started.connect(self._worker.run)
         self._worker.progress.connect(
-            lambda *args, lookup_generation=generation: self._on_lookup_progress_for_generation(
-                lookup_generation,
-                *args,
+            lambda *args, lookup_generation=generation: (
+                self._on_lookup_progress_for_generation(
+                    lookup_generation,
+                    *args,
+                )
             )
         )
         self._worker.finished.connect(
-            lambda *args, lookup_generation=generation: self._on_lookup_finished_for_generation(
-                lookup_generation,
-                *args,
+            lambda *args, lookup_generation=generation: (
+                self._on_lookup_finished_for_generation(
+                    lookup_generation,
+                    *args,
+                )
             )
         )
         self._worker.finished.connect(self._worker_thread.quit)
@@ -290,16 +338,26 @@ class URLBatchDialog(QDialog):
 
         text = self.input_text.toPlainText()
         if not text.strip():
-            QMessageBox.warning(self, "주소를 붙여 넣어 주세요", "네이버 부동산 주소나 단지 번호를 입력해 주세요.")
+            QMessageBox.warning(
+                self,
+                "주소를 붙여 넣어 주세요",
+                "네이버 부동산 주소나 단지 번호를 입력해 주세요.",
+            )
             return
 
         results = NaverURLParser.extract_from_text(text)
         if not results:
-            QMessageBox.warning(self, "단지를 찾지 못했습니다", "입력한 내용에서 단지를 찾지 못했습니다.\n네이버 부동산 단지·매물 페이지의 주소인지 확인해 주세요.")
+            QMessageBox.warning(
+                self,
+                "단지를 찾지 못했습니다",
+                "입력한 내용에서 단지를 찾지 못했습니다.\n네이버 부동산 단지·매물 페이지의 주소인지 확인해 주세요.",
+            )
             return
 
         self._prepare_rows(results)
-        self.status_label.setText(f"단지 {len(results)}곳을 찾았습니다. 이름을 확인하는 중…")
+        self.status_label.setText(
+            f"단지 {len(results)}곳을 찾았습니다. 이름을 확인하는 중…"
+        )
         self._set_parsing_state(True)
         self._start_lookup_worker(results)
 
@@ -315,7 +373,9 @@ class URLBatchDialog(QDialog):
         self._on_lookup_progress(*args)
 
     @Slot(int, int, str, str, bool, str, str)
-    def _on_lookup_progress(self, row, total, cid, name, is_verified, asset_type, status):
+    def _on_lookup_progress(
+        self, row, total, cid, name, is_verified, asset_type, status
+    ):
         if row < 0 or row >= self.result_table.rowCount():
             return
 
@@ -331,7 +391,9 @@ class URLBatchDialog(QDialog):
             self._parsed_entries[row]["complex_id"] = str(cid or "")
             self._parsed_entries[row]["asset_type"] = asset_token
         status_text = str(status or ("확인됨" if is_verified else "이름 미확인"))
-        self.result_table.setItem(row, 3, QTableWidgetItem(f"{status_text} ({asset_token})"))
+        self.result_table.setItem(
+            row, 3, QTableWidgetItem(f"{status_text} ({asset_token})")
+        )
         self.status_label.setText(f"이름을 확인하는 중… ({row + 1}/{total})")
         QApplication.processEvents()
 
@@ -347,7 +409,9 @@ class URLBatchDialog(QDialog):
         if cancelled:
             self.status_label.setText(f"확인을 멈췄습니다. ({processed}/{total})")
         else:
-            self.status_label.setText(f"단지 {processed}곳을 확인했습니다. 추가할 단지를 체크해 주세요.")
+            self.status_label.setText(
+                f"단지 {processed}곳을 확인했습니다. 추가할 단지를 체크해 주세요."
+            )
         self._cleanup_worker(wait=False)
 
     def _cleanup_worker(self, wait: bool):
@@ -395,9 +459,12 @@ class URLBatchDialog(QDialog):
                     continue
                 asset_type = "APT"
                 if row < len(self._parsed_entries):
-                    asset_type = str(
-                        self._parsed_entries[row].get("asset_type", "APT") or "APT"
-                    ).strip().upper() or "APT"
+                    asset_type = (
+                        str(self._parsed_entries[row].get("asset_type", "APT") or "APT")
+                        .strip()
+                        .upper()
+                        or "APT"
+                    )
                 selected.append((name_item.text(), cid_text, asset_type))
 
         if selected:
@@ -415,10 +482,15 @@ class URLBatchDialog(QDialog):
         for item in self._selected_complexes:
             if isinstance(item, dict):
                 cid = str(item.get("cid", item.get("complex_id", "")) or "").strip()
-                asset_type = str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                )
             elif isinstance(item, (list, tuple)):
                 cid = str(item[1] if len(item) >= 2 else "" or "").strip()
-                asset_type = str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper()
+                    or "APT"
+                )
             else:
                 continue
             if cid:

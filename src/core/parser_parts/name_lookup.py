@@ -11,7 +11,6 @@ logger = get_logger("Parser")
 
 
 class NaverNameLookupMixin:
-
     @classmethod
     def _name_cache_key(cls, complex_id, asset_type="APT") -> str:
         return f"{runtime_contract(cls)._normalize_asset_type(asset_type)}:{str(complex_id or '').strip()}"
@@ -30,7 +29,11 @@ class NaverNameLookupMixin:
         def _name_from_payload(data) -> str:
             if not isinstance(data, dict):
                 return ""
-            detail = data.get("complexDetail", {}) if isinstance(data.get("complexDetail"), dict) else {}
+            detail = (
+                data.get("complexDetail", {})
+                if isinstance(data.get("complexDetail"), dict)
+                else {}
+            )
             name_candidates = (
                 data.get("complexName"),
                 data.get("name"),
@@ -52,7 +55,9 @@ class NaverNameLookupMixin:
         except Exception:
             pass
         entity_path = "houses" if asset_token == "VL" else "complexes"
-        urls.append(f"https://new.land.naver.com/api/{entity_path}/{cid}?sameAddressGroup=false")
+        urls.append(
+            f"https://new.land.naver.com/api/{entity_path}/{cid}?sameAddressGroup=false"
+        )
 
         last_error = None
         for url in urls:
@@ -73,7 +78,9 @@ class NaverNameLookupMixin:
         return f"단지_{complex_id}"
 
     @classmethod
-    def _fetch_name_browser_fallback(cls, complex_id, asset_type="APT", cancel_checker=None):
+    def _fetch_name_browser_fallback(
+        cls, complex_id, asset_type="APT", cancel_checker=None
+    ):
         cid = str(complex_id or "").strip()
         if not cid or cls._is_cancelled(cancel_checker):
             return ""
@@ -82,19 +89,25 @@ class NaverNameLookupMixin:
 
             from src.utils.helpers import ChromeParamHelper, build_complex_url
         except Exception as e:
-            get_logger("NaverURLParser").debug(f"단지명 browser fallback 사용 불가: {e}")
+            get_logger("NaverURLParser").debug(
+                f"단지명 browser fallback 사용 불가: {e}"
+            )
             return ""
 
         asset_token = runtime_contract(cls)._normalize_asset_type(asset_type)
         expected_entity = "houses" if asset_token == "VL" else "complexes"
         expected_detail = f"/api/{expected_entity}/{cid}"
-        expected_articles = f"/api/articles/{'house' if asset_token == 'VL' else 'complex'}/{cid}"
+        expected_articles = (
+            f"/api/articles/{'house' if asset_token == 'VL' else 'complex'}/{cid}"
+        )
         captured_name = ""
 
         def _extract_name_from_payload(payload) -> str:
             if not isinstance(payload, dict):
                 return ""
-            detail = payload.get("complexDetail", {}) if isinstance(payload, dict) else {}
+            detail = (
+                payload.get("complexDetail", {}) if isinstance(payload, dict) else {}
+            )
             candidates = (
                 detail.get("complexName") if isinstance(detail, dict) else "",
                 detail.get("name") if isinstance(detail, dict) else "",
@@ -110,7 +123,9 @@ class NaverNameLookupMixin:
                 for article in article_list:
                     if not isinstance(article, dict):
                         continue
-                    token = str(article.get("articleName") or article.get("atclNm") or "").strip()
+                    token = str(
+                        article.get("articleName") or article.get("atclNm") or ""
+                    ).strip()
                     if token:
                         return token
             return ""
@@ -119,17 +134,23 @@ class NaverNameLookupMixin:
             chrome_path = ChromeParamHelper.get_chrome_executable_path()
             with sync_playwright() as playwright:
                 if chrome_path:
-                    browser = playwright.chromium.launch(executable_path=chrome_path, headless=True)
+                    browser = playwright.chromium.launch(
+                        executable_path=chrome_path, headless=True
+                    )
                 else:
                     browser = playwright.chromium.launch(headless=True)
                 try:
                     from src.core.services.site_contract import DESKTOP_USER_AGENT
 
-                    page = browser.new_page(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
+                    page = browser.new_page(
+                        locale="ko-KR", user_agent=DESKTOP_USER_AGENT
+                    )
                     page.add_init_script(
                         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
                     )
-                    fin_name = cls._fetch_name_via_fin_page(page, cid, asset_type=asset_token)
+                    fin_name = cls._fetch_name_via_fin_page(
+                        page, cid, asset_type=asset_token
+                    )
                     if fin_name:
                         return fin_name
 
@@ -149,7 +170,9 @@ class NaverNameLookupMixin:
 
                     page.on("response", _handle)
                     page.goto(
-                        build_complex_url(cid, asset_type=asset_token, preferred_family="new"),
+                        build_complex_url(
+                            cid, asset_type=asset_token, preferred_family="new"
+                        ),
                         wait_until="domcontentloaded",
                         timeout=12000,
                     )
@@ -165,7 +188,9 @@ class NaverNameLookupMixin:
         except RetryCancelledError:
             raise
         except Exception as e:
-            get_logger("NaverURLParser").debug(f"단지명 browser fallback 실패 ({asset_token}:{cid}): {e}")
+            get_logger("NaverURLParser").debug(
+                f"단지명 browser fallback 실패 ({asset_token}:{cid}): {e}"
+            )
             return ""
 
     @classmethod
@@ -187,9 +212,16 @@ class NaverNameLookupMixin:
             )
             if not isinstance(result, dict) or int(result.get("status", 0) or 0) != 200:
                 return ""
-            return str(parse_fin_complex_info(json.loads(result.get("body") or "")).get("name", "") or "")
+            return str(
+                parse_fin_complex_info(json.loads(result.get("body") or "")).get(
+                    "name", ""
+                )
+                or ""
+            )
         except Exception as e:
-            get_logger("NaverURLParser").debug(f"단지명 fin 조회 실패 ({complex_id}): {e}")
+            get_logger("NaverURLParser").debug(
+                f"단지명 fin 조회 실패 ({complex_id}): {e}"
+            )
             return ""
 
     @classmethod
@@ -244,9 +276,13 @@ class NaverNameLookupMixin:
             return cached
 
         logger = get_logger("NaverURLParser")
-        direct_lookup_cooling_down = time.monotonic() < float(runtime_cls._name_lookup_cooldown_until or 0.0)
+        direct_lookup_cooling_down = time.monotonic() < float(
+            runtime_cls._name_lookup_cooldown_until or 0.0
+        )
         if direct_lookup_cooling_down:
-            logger.debug(f"단지명 direct 조회 cooldown 중, browser fallback 시도 ({asset_token}:{cid})")
+            logger.debug(
+                f"단지명 direct 조회 cooldown 중, browser fallback 시도 ({asset_token}:{cid})"
+            )
             browser_name = str(
                 cls._fetch_name_browser_fallback(
                     cid,
@@ -261,7 +297,10 @@ class NaverNameLookupMixin:
             return fallback_name
 
         try:
-            name = str(cls._fetch_name_impl(cid, asset_type=asset_token) or "").strip() or fallback_name
+            name = (
+                str(cls._fetch_name_impl(cid, asset_type=asset_token) or "").strip()
+                or fallback_name
+            )
             if name and not name.startswith("단지_"):
                 runtime_cls._name_cache[cache_key] = name
             return name
@@ -275,7 +314,9 @@ class NaverNameLookupMixin:
                 status = int(getattr(e, "code", 0) or 0)
                 if status == 429 or "TOO_MANY_REQUESTS" in response_body:
                     cls._activate_name_lookup_cooldown()
-                    logger.warning(f"단지명 조회 rate limit ({asset_token}:{cid}): status={status}")
+                    logger.warning(
+                        f"단지명 조회 rate limit ({asset_token}:{cid}): status={status}"
+                    )
                     browser_name = str(
                         cls._fetch_name_browser_fallback(
                             cid,

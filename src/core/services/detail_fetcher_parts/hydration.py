@@ -11,7 +11,12 @@ def _decode_rsc_frames(frames) -> list:
     chunks = []
     size = 0
     for frame in frames[:2000]:
-        if not isinstance(frame, list) or len(frame) < 2 or frame[0] != 1 or not isinstance(frame[1], str):
+        if (
+            not isinstance(frame, list)
+            or len(frame) < 2
+            or frame[0] != 1
+            or not isinstance(frame[1], str)
+        ):
             continue
         size += len(frame[1])
         if size > 2_000_000:

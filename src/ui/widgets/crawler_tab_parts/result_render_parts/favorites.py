@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabFavoriteRenderMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     @staticmethod
@@ -65,7 +66,9 @@ class CrawlerTabFavoriteRenderMixin:
                 item["is_favorite"] = favorite_state
 
         if self._compact_duplicates:
-            affected_compact_keys = set(self._compact_key_by_article.get(favorite_key) or set())
+            affected_compact_keys = set(
+                self._compact_key_by_article.get(favorite_key) or set()
+            )
             for compact_key in affected_compact_keys:
                 self._recompute_compact_row_favorite(compact_key)
                 self._compact_dirty_keys.add(compact_key)
@@ -74,7 +77,9 @@ class CrawlerTabFavoriteRenderMixin:
                 self.card_view.update_favorite_state(
                     lambda item: self._get_compact_key(item) in affected_compact_keys,
                     lambda item: bool(
-                        self._compact_items_by_key.get(self._get_compact_key(item), {}).get("is_favorite")
+                        self._compact_items_by_key.get(
+                            self._get_compact_key(item), {}
+                        ).get("is_favorite")
                     ),
                 )
             return

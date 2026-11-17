@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppStatsScheduleGroupStateMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _update_group_empty_state(self: Any):
         has_groups = self.group_list.count() > 0
         if hasattr(self, "group_empty_label"):

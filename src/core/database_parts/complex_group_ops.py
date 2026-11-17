@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseComplexGroupOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     @staticmethod
@@ -78,7 +79,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
                             continue
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"단지 추가 실패(operational): {name} ({complex_id}) - {e}")
+                        logger.error(
+                            f"단지 추가 실패(operational): {name} ({complex_id}) - {e}"
+                        )
                         return "error" if return_status else False
                     except sqlite3.DatabaseError as e:
                         try:
@@ -87,7 +90,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
                             pass
                         if self._is_corruption_sqlite_error(e):
                             self._disable_writes("database_corruption", e)
-                        logger.error(f"단지 추가 실패(database): {name} ({complex_id}) - {e}")
+                        logger.error(
+                            f"단지 추가 실패(database): {name} ({complex_id}) - {e}"
+                        )
                         return "error" if return_status else False
         except Exception as e:
             self._rollback_write_transaction(conn, "단지 추가")
@@ -99,7 +104,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             except Exception:
                 pass
             self._pool.return_connection(conn)
-    
+
     def get_all_complexes(self):
         """모든 단지를 조회한다."""
         conn = self._pool.get_connection()
@@ -149,7 +154,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             # 2) 크롤링 이력(최신 이름 우선)
             history_rows = self._fetchall_safe(
                 conn,
-                '''
+                """
                 SELECT
                     ch.complex_id,
                     ch.complex_name,
@@ -167,7 +172,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
                     FROM crawl_history
                 ) ch
                 WHERE ch.row_num = 1
-                ''',
+                """,
                 context="통계 단지 조회(crawl_history)",
             )
             for row in history_rows:
@@ -182,7 +187,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
             for row in snapshot_rows:
                 _upsert(row["asset_type"], row["complex_id"], "")
 
-            collided_cids = {cid for cid, assets in cid_assets.items() if len(assets) > 1}
+            collided_cids = {
+                cid for cid, assets in cid_assets.items() if len(assets) > 1
+            }
             result: list[tuple[str, str]] = []
             for (asset_type, cid), name in complex_map.items():
                 data_key = cid
@@ -200,9 +207,11 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return []
         finally:
             self._pool.return_connection(conn)
-    
+
     @classmethod
-    def _asset_scoped_predicate(cls, refs: list[tuple[str, str]], *, include_legacy_empty_for_apt: bool = True):
+    def _asset_scoped_predicate(
+        cls, refs: list[tuple[str, str]], *, include_legacy_empty_for_apt: bool = True
+    ):
         clauses: list[str] = []
         params: list[str] = []
         for asset_type, complex_id in refs:
@@ -211,7 +220,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
             if not cid:
                 continue
             if include_legacy_empty_for_apt and asset_token == "APT":
-                clauses.append("(complex_id = ? AND (asset_type = ? OR COALESCE(asset_type, '') = ''))")
+                clauses.append(
+                    "(complex_id = ? AND (asset_type = ? OR COALESCE(asset_type, '') = ''))"
+                )
                 params.extend([cid, "APT"])
             else:
                 clauses.append("(complex_id = ? AND asset_type = ?)")
@@ -233,7 +244,11 @@ class ComplexDatabaseComplexGroupOpsMixin:
             cursor.execute(f"DELETE FROM article_alert_log WHERE {where_asset}", params)
 
         unique_complex_ids = sorted(
-            {str(complex_id or "").strip() for _, complex_id in refs if str(complex_id or "").strip()}
+            {
+                str(complex_id or "").strip()
+                for _, complex_id in refs
+                if str(complex_id or "").strip()
+            }
         )
         if not unique_complex_ids:
             return
@@ -247,7 +262,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
             str(row["complex_id"]) if hasattr(row, "keys") else str(row[0])
             for row in remaining_rows
         }
-        fully_removed_ids = [cid for cid in unique_complex_ids if cid not in remaining_ids]
+        fully_removed_ids = [
+            cid for cid in unique_complex_ids if cid not in remaining_ids
+        ]
         if not fully_removed_ids:
             return
 
@@ -269,7 +286,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
             fully_removed_ids,
         )
 
-    def _fetch_complex_refs_by_db_ids(self, cursor, db_ids: list[int]) -> list[tuple[str, str]]:
+    def _fetch_complex_refs_by_db_ids(
+        self, cursor, db_ids: list[int]
+    ) -> list[tuple[str, str]]:
         if not db_ids:
             return []
         placeholders = ",".join("?" * len(db_ids))
@@ -280,7 +299,9 @@ class ComplexDatabaseComplexGroupOpsMixin:
         refs = []
         for row in rows:
             try:
-                refs.append((str(row["asset_type"] or "APT"), str(row["complex_id"] or "")))
+                refs.append(
+                    (str(row["asset_type"] or "APT"), str(row["complex_id"] or ""))
+                )
             except Exception:
                 try:
                     refs.append((str(row[0] or "APT"), str(row[1] or "")))
@@ -292,7 +313,11 @@ class ComplexDatabaseComplexGroupOpsMixin:
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            refs = self._fetch_complex_refs_by_db_ids(c, [int(db_id)]) if purge_related else []
+            refs = (
+                self._fetch_complex_refs_by_db_ids(c, [int(db_id)])
+                if purge_related
+                else []
+            )
             c.execute("DELETE FROM group_complexes WHERE complex_id = ?", (db_id,))
             c.execute("DELETE FROM complexes WHERE id = ?", (db_id,))
             if purge_related:
@@ -306,7 +331,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return False
         finally:
             self._pool.return_connection(conn)
-    
+
     def delete_complexes_bulk(self, db_ids, *, purge_related: bool = False):
         conn = self._pool.get_connection()
         try:
@@ -314,15 +339,26 @@ class ComplexDatabaseComplexGroupOpsMixin:
                 return 0
             normalized_ids = [int(x) for x in db_ids]
             c = conn.cursor()
-            refs = self._fetch_complex_refs_by_db_ids(c, normalized_ids) if purge_related else []
+            refs = (
+                self._fetch_complex_refs_by_db_ids(c, normalized_ids)
+                if purge_related
+                else []
+            )
             placeholders = ",".join("?" * len(normalized_ids))
-            c.execute(f"DELETE FROM group_complexes WHERE complex_id IN ({placeholders})", normalized_ids)
-            c.execute(f"DELETE FROM complexes WHERE id IN ({placeholders})", normalized_ids)
+            c.execute(
+                f"DELETE FROM group_complexes WHERE complex_id IN ({placeholders})",
+                normalized_ids,
+            )
+            c.execute(
+                f"DELETE FROM complexes WHERE id IN ({placeholders})", normalized_ids
+            )
             deleted_count = int(c.rowcount or 0)
             if purge_related:
                 self._purge_related_for_complex_refs(c, refs)
             conn.commit()
-            logger.info(f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}")
+            logger.info(
+                f"bulk delete complexes: {deleted_count}, purge_related={bool(purge_related)}"
+            )
             return deleted_count
         except Exception as e:
             self._rollback_write_transaction(conn, "단지 일괄 삭제")
@@ -330,11 +366,13 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return 0
         finally:
             self._pool.return_connection(conn)
-    
+
     def update_complex_memo(self, db_id, memo):
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("UPDATE complexes SET memo = ? WHERE id = ?", (memo, db_id))
+            conn.cursor().execute(
+                "UPDATE complexes SET memo = ? WHERE id = ?", (memo, db_id)
+            )
             conn.commit()
             return True
         except Exception as e:
@@ -343,11 +381,13 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return False
         finally:
             self._pool.return_connection(conn)
-    
+
     def create_group(self, name, desc=""):
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("INSERT INTO groups (name, description) VALUES (?, ?)", (name, desc))
+            conn.cursor().execute(
+                "INSERT INTO groups (name, description) VALUES (?, ?)", (name, desc)
+            )
             conn.commit()
             logger.info(f"그룹 생성: {name}")
             return True
@@ -357,7 +397,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return False
         finally:
             self._pool.return_connection(conn)
-    
+
     def get_all_groups(self):
         conn = self._pool.get_connection()
         try:
@@ -374,7 +414,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return []
         finally:
             self._pool.return_connection(conn)
-    
+
     def delete_group(self, group_id):
         conn = self._pool.get_connection()
         try:
@@ -390,7 +430,7 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return False
         finally:
             self._pool.return_connection(conn)
-    
+
     def add_complexes_to_group(self, group_id, complex_db_ids):
         conn = self._pool.get_connection()
         try:
@@ -398,7 +438,10 @@ class ComplexDatabaseComplexGroupOpsMixin:
             count = 0
             for cid in complex_db_ids:
                 try:
-                    c.execute("INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)", (group_id, cid))
+                    c.execute(
+                        "INSERT OR IGNORE INTO group_complexes (group_id, complex_id) VALUES (?, ?)",
+                        (group_id, cid),
+                    )
                     count += c.rowcount
                 except Exception as e:
                     logger.warning(f"그룹 단지 추가 실패: {cid} - {e}")
@@ -411,11 +454,14 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return 0
         finally:
             self._pool.return_connection(conn)
-    
+
     def remove_complex_from_group(self, group_id, complex_db_id):
         conn = self._pool.get_connection()
         try:
-            conn.cursor().execute("DELETE FROM group_complexes WHERE group_id = ? AND complex_id = ?", (group_id, complex_db_id))
+            conn.cursor().execute(
+                "DELETE FROM group_complexes WHERE group_id = ? AND complex_id = ?",
+                (group_id, complex_db_id),
+            )
             conn.commit()
             return True
         except Exception as e:
@@ -424,19 +470,23 @@ class ComplexDatabaseComplexGroupOpsMixin:
             return False
         finally:
             self._pool.return_connection(conn)
-    
+
     def get_complexes_in_group(self, group_id):
         conn = self._pool.get_connection()
         try:
-            result = conn.cursor().execute(
-                'SELECT c.id, c.name, c.asset_type, c.complex_id, c.memo FROM complexes c '
-                'JOIN group_complexes gc ON c.id = gc.complex_id '
-                'WHERE gc.group_id = ? ORDER BY c.name', (group_id,)
-            ).fetchall()
+            result = (
+                conn.cursor()
+                .execute(
+                    "SELECT c.id, c.name, c.asset_type, c.complex_id, c.memo FROM complexes c "
+                    "JOIN group_complexes gc ON c.id = gc.complex_id "
+                    "WHERE gc.group_id = ? ORDER BY c.name",
+                    (group_id,),
+                )
+                .fetchall()
+            )
             return result
         except Exception as e:
             logger.error(f"그룹 내 단지 조회 실패: {e}")
             return []
         finally:
             self._pool.return_connection(conn)
-    

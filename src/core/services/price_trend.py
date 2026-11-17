@@ -133,13 +133,17 @@ def _trade_rank(trade_type: str) -> int:
         return len(TRADE_TYPE_PRIORITY)
 
 
-def period_cutoff(days: Optional[int], *, today: Optional[date] = None) -> Optional[date]:
+def period_cutoff(
+    days: Optional[int], *, today: Optional[date] = None
+) -> Optional[date]:
     if not days:
         return None
     return (today or date.today()) - timedelta(days=int(days))
 
 
-def filter_period(snapshots: Iterable[Sequence], days: Optional[int], *, today: Optional[date] = None) -> list:
+def filter_period(
+    snapshots: Iterable[Sequence], days: Optional[int], *, today: Optional[date] = None
+) -> list:
     """``days`` 이내 스냅샷만 남긴다. 날짜를 못 읽는 행은 전체 기간에서만 유지."""
     rows = list(snapshots)
     cutoff = period_cutoff(days, today=today)
@@ -167,8 +171,12 @@ def summarize(series: TrendSeries) -> Optional[TrendSummary]:
     prev = points[-2] if len(points) >= 2 else None
     period_change = last.avg_price - first.avg_price
     prev_change = (last.avg_price - prev.avg_price) if prev is not None else None
-    lows = [p.min_price for p in points if p.min_price > 0] or [p.avg_price for p in points]
-    highs = [p.max_price for p in points if p.max_price > 0] or [p.avg_price for p in points]
+    lows = [p.min_price for p in points if p.min_price > 0] or [
+        p.avg_price for p in points
+    ]
+    highs = [p.max_price for p in points if p.max_price > 0] or [
+        p.avg_price for p in points
+    ]
     return TrendSummary(
         latest_avg=last.avg_price,
         latest_date=last.date_text,
@@ -178,14 +186,18 @@ def summarize(series: TrendSeries) -> Optional[TrendSummary]:
         period_change=period_change,
         period_change_pct=_pct(period_change, first.avg_price),
         prev_change=prev_change,
-        prev_change_pct=_pct(prev_change, prev.avg_price) if prev is not None and prev_change is not None else None,
+        prev_change_pct=_pct(prev_change, prev.avg_price)
+        if prev is not None and prev_change is not None
+        else None,
         period_low=min(lows),
         period_high=max(highs),
         record_days=len(points),
     )
 
 
-def previous_avg_map(series_list: Iterable[TrendSeries]) -> dict[tuple[str, float, str], int]:
+def previous_avg_map(
+    series_list: Iterable[TrendSeries],
+) -> dict[tuple[str, float, str], int]:
     """(거래 종류, 평형, 날짜) → 직전 기록일 평균가. 표의 '직전 대비' 칸에 쓴다."""
     result: dict[tuple[str, float, str], int] = {}
     for series in series_list:
@@ -206,7 +218,9 @@ def format_pct(value: Optional[float]) -> str:
     return f"{value:+.1f}%"
 
 
-def per_pyeong_series(snapshots: Iterable[Sequence], trade_type: str = "") -> Optional[TrendSeries]:
+def per_pyeong_series(
+    snapshots: Iterable[Sequence], trade_type: str = ""
+) -> Optional[TrendSeries]:
     """날짜별 평당 평균가(만원/평) 시리즈. 면적이 다른 단지끼리 비교할 때 쓴다.
 
     같은 날의 여러 면적은 매물 수로 가중 평균한다. ``pyeong`` 은 0으로 둔다.
@@ -258,7 +272,11 @@ def per_pyeong_series(snapshots: Iterable[Sequence], trade_type: str = "") -> Op
     return series
 
 
-def pick_chart_series(series_list: Sequence[TrendSeries], limit: int = 6) -> list[TrendSeries]:
+def pick_chart_series(
+    series_list: Sequence[TrendSeries], limit: int = 6
+) -> list[TrendSeries]:
     """기록이 많은 순으로 최대 ``limit`` 개를 고르고 평형 순으로 돌려준다."""
-    ranked = sorted(series_list, key=lambda s: (-len(s.points), s.pyeong))[: max(1, int(limit))]
+    ranked = sorted(series_list, key=lambda s: (-len(s.points), s.pyeong))[
+        : max(1, int(limit))
+    ]
     return sorted(ranked, key=lambda s: s.pyeong)

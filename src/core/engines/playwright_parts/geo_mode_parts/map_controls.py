@@ -12,6 +12,7 @@ _TRADE_TO_CODE: dict[str, str] = {value: key for key, value in TRADE_CODE_MAP.it
 
 class PlaywrightGeoMapControlMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _get_ms(self):

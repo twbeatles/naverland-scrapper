@@ -40,7 +40,9 @@ REQUIRED_GLOBALS = (
 class TestPlaywrightEngineGlobals(unittest.TestCase):
     def test_required_rebind_symbols_present(self):
         missing = [name for name in REQUIRED_GLOBALS if name not in pe.__dict__]
-        self.assertEqual(missing, [], f"playwright_engine missing rebind globals: {missing}")
+        self.assertEqual(
+            missing, [], f"playwright_engine missing rebind globals: {missing}"
+        )
 
     def test_site_contract_builders_callable(self):
         self.assertTrue(callable(pe.build_geo_map_url))

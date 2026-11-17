@@ -84,7 +84,9 @@ class PriceSnapshotSaveThread(QThread):
     def __init__(self, db, items, parent=None):
         super().__init__(parent)
         self._db = db
-        self._items = [dict(item or {}) for item in (items or []) if isinstance(item, dict)]
+        self._items = [
+            dict(item or {}) for item in (items or []) if isinstance(item, dict)
+        ]
 
     def run(self):
         try:
@@ -133,6 +135,7 @@ class CrawlerTab(
     QWidget,
 ):
     """크롤링 및 데이터 수집 탭"""
+
     COL_COMPLEX = 0
     COL_TRADE = 1
     COL_PRICE = 2
@@ -169,7 +172,7 @@ class CrawlerTab(
         "broker_office": COL_BROKER_OFFICE,
         "broker_phone": COL_BROKER_PHONE,
     }
-    
+
     # Signals
     data_collected = Signal(list)  # 수집 완료 시 데이터 전송
     crawling_started = Signal()
@@ -178,7 +181,6 @@ class CrawlerTab(
     alert_triggered = Signal(str, str, str, float, int)
     # (asset_type, complex_id) — 앱이 「시세 흐름」으로 이동해 이 단지를 고른다.
     trend_requested = Signal(str, str)
-    
 
 
 rebind_inherited_methods(

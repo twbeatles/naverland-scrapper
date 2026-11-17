@@ -27,7 +27,9 @@ def _flatten_text_fragments(value, sink: list[str], *, limit: int = 4000) -> Non
         return
 
 
-def _build_detail_corpus(body_text: str, html_text: str, hydration_state: dict, responses: list[dict]) -> str:
+def _build_detail_corpus(
+    body_text: str, html_text: str, hydration_state: dict, responses: list[dict]
+) -> str:
     chunks: list[str] = []
     if body_text:
         chunks.append(str(body_text))

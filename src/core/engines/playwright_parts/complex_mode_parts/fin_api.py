@@ -44,6 +44,7 @@ class PlaywrightFinApiMixin:
     FIN_MIN_PAGE_DELAY_SEC = 0.4
 
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _fin_front_api_enabled(self, asset_type: str) -> bool:
@@ -58,7 +59,9 @@ class PlaywrightFinApiMixin:
         import json
 
         try:
-            status, text = await self._fin_fetch(build_fin_complex_info_url(cid, asset_type=asset_type))
+            status, text = await self._fin_fetch(
+                build_fin_complex_info_url(cid, asset_type=asset_type)
+            )
         except Exception:
             return None
         if status != 200:
@@ -95,7 +98,9 @@ class PlaywrightFinApiMixin:
         self._fin_api_page = page
         return page
 
-    async def _fin_fetch(self, url: str, *, method: str = "GET", body: dict | None = None) -> tuple[int, str]:
+    async def _fin_fetch(
+        self, url: str, *, method: str = "GET", body: dict | None = None
+    ) -> tuple[int, str]:
         page = await self._ensure_fin_api_page()
         if page is None:
             return 0, "fin api page unavailable"
@@ -143,7 +148,9 @@ class PlaywrightFinApiMixin:
         last_successful_page = 0
         failure_reason = ""
         has_next = False
-        delay_sec = max(float(self.FIN_MIN_PAGE_DELAY_SEC), self._article_api_page_delay_sec())
+        delay_sec = max(
+            float(self.FIN_MIN_PAGE_DELAY_SEC), self._article_api_page_delay_sec()
+        )
         list_url = fin_article_list_url(path_asset)
 
         while page_no < MAX_ARTICLE_API_PAGES:
@@ -154,12 +161,16 @@ class PlaywrightFinApiMixin:
             page_no += 1
             if page_no > 1:
                 await asyncio.sleep(delay_sec)
-            body = build_fin_article_list_body(cid, trade_type, last_info=last_info, seed=seed)
+            body = build_fin_article_list_body(
+                cid, trade_type, last_info=last_info, seed=seed
+            )
             status, text = 0, ""
             # Retry transport/5xx once at the same cursor; never retry 429.
             for attempt in range(2):
                 try:
-                    status, text = await self._fin_fetch(list_url, method="POST", body=body)
+                    status, text = await self._fin_fetch(
+                        list_url, method="POST", body=body
+                    )
                 except Exception as exc:
                     status, text = 0, type(exc).__name__
                 if status == 429 or (0 < status < 500):

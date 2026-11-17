@@ -13,6 +13,7 @@ logger = get_logger("DB")
 
 class ComplexDatabaseSchemaMigrationMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
         @staticmethod
         def _column_names(cursor: Any, table_name: str) -> set[str]: ...
@@ -133,7 +134,10 @@ class ComplexDatabaseSchemaMigrationMixin:
 
         backup_dir = db_path.parent / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_path = backup_dir / f"{db_path.stem}.schema_migration_{DateTimeHelper.file_timestamp()}.db"
+        backup_path = (
+            backup_dir
+            / f"{db_path.stem}.schema_migration_{DateTimeHelper.file_timestamp()}.db"
+        )
         backup_conn = None
         try:
             backup_conn = sqlite3.connect(str(backup_path), timeout=30)
@@ -194,6 +198,7 @@ class ComplexDatabaseSchemaMigrationMixin:
             """
         )
         legacy_columns = cls._column_names(cursor, "article_history_legacy")
+
         def _legacy_expr(column_name: str, fallback_sql: str) -> str:
             if column_name in legacy_columns:
                 return f"COALESCE({column_name}, {fallback_sql})"
@@ -289,8 +294,12 @@ class ComplexDatabaseSchemaMigrationMixin:
         if not cls._article_favorites_requires_migration(cursor):
             return
 
-        logger.info("article_favorites schema migration start: add asset_type + scoped unique")
-        cursor.execute("ALTER TABLE article_favorites RENAME TO article_favorites_legacy")
+        logger.info(
+            "article_favorites schema migration start: add asset_type + scoped unique"
+        )
+        cursor.execute(
+            "ALTER TABLE article_favorites RENAME TO article_favorites_legacy"
+        )
         cursor.execute(
             """
             CREATE TABLE article_favorites (
@@ -307,6 +316,7 @@ class ComplexDatabaseSchemaMigrationMixin:
             """
         )
         legacy_columns = cls._column_names(cursor, "article_favorites_legacy")
+
         def _legacy_expr(column_name: str, fallback_sql: str) -> str:
             if column_name in legacy_columns:
                 return f"COALESCE({column_name}, {fallback_sql})"
@@ -393,8 +403,12 @@ class ComplexDatabaseSchemaMigrationMixin:
         if not cls._article_alert_log_requires_migration(cursor):
             return
 
-        logger.info("article_alert_log schema migration start: add asset_type + scoped unique")
-        cursor.execute("ALTER TABLE article_alert_log RENAME TO article_alert_log_legacy")
+        logger.info(
+            "article_alert_log schema migration start: add asset_type + scoped unique"
+        )
+        cursor.execute(
+            "ALTER TABLE article_alert_log RENAME TO article_alert_log_legacy"
+        )
         cursor.execute(
             """
             CREATE TABLE article_alert_log (

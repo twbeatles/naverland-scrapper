@@ -1,4 +1,5 @@
 """Shared completeness contract for network, cache and persistence boundaries."""
+
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +13,9 @@ COLLECTION_SCHEMA_VERSION = 3
 
 def observation_date(now: datetime | None = None) -> str:
     """Match SQLite CURRENT_DATE (UTC); scheduling remains local wall time."""
-    return (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
+    return (
+        (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
+    )
 
 
 class CollectionResult(TypedDict, total=False):
@@ -64,18 +67,31 @@ def collection_fingerprint(*, include_pre: bool = False) -> str:
     return f"articles-v{COLLECTION_SCHEMA_VERSION}:pre={int(include_pre)}"
 
 
-def record_collection_result(stats: dict, result: dict, *, cid: str, asset_type: str,
-                             trade_type: str, count: int, raw_count: int) -> None:
+def record_collection_result(
+    stats: dict,
+    result: dict,
+    *,
+    cid: str,
+    asset_type: str,
+    trade_type: str,
+    count: int,
+    raw_count: int,
+) -> None:
     """Keep only lineage/quality counters; never persist authentication or contact data."""
-    stats.setdefault("collection_results", []).append({
-        "complex_id": str(cid), "asset_type": asset_type, "trade_type": trade_type,
-        "collection_status": result.get("collection_status", "failed"),
-        "raw_count": raw_count, "matched_count": count,
-        "failure_reason": str(result.get("failure_reason", "")),
-        "last_successful_page": int(result.get("last_successful_page", 0)),
-        "failed_page": int(result.get("failed_page", 0)),
-        "cache_hit": bool(result.get("cache_hit", False)),
-    })
+    stats.setdefault("collection_results", []).append(
+        {
+            "complex_id": str(cid),
+            "asset_type": asset_type,
+            "trade_type": trade_type,
+            "collection_status": result.get("collection_status", "failed"),
+            "raw_count": raw_count,
+            "matched_count": count,
+            "failure_reason": str(result.get("failure_reason", "")),
+            "last_successful_page": int(result.get("last_successful_page", 0)),
+            "failed_page": int(result.get("failed_page", 0)),
+            "cache_hit": bool(result.get("cache_hit", False)),
+        }
+    )
 
 
 def filter_fingerprint(area_filter: dict, price_filter: dict) -> str:
@@ -83,14 +99,22 @@ def filter_fingerprint(area_filter: dict, price_filter: dict) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
-def snapshot_block_reason(*, stopped=False, stats=None, area_filter=None, price_filter=None) -> str:
+def snapshot_block_reason(
+    *, stopped=False, stats=None, area_filter=None, price_filter=None
+) -> str:
     stats = stats or {}
     if stopped:
         return "수집이 중단되어 기존 가격 통계를 유지합니다."
     if (area_filter or {}).get("enabled") or (price_filter or {}).get("enabled"):
         return "수집 필터가 적용되어 기존 전체 가격 통계를 유지합니다."
-    if (stats.get("collection_incomplete_count", 0) or stats.get("history_save_failed", False)
-            or any(r.get("collection_status") != "complete" for r in stats.get("collection_results", []))):
+    if (
+        stats.get("collection_incomplete_count", 0)
+        or stats.get("history_save_failed", False)
+        or any(
+            r.get("collection_status") != "complete"
+            for r in stats.get("collection_results", [])
+        )
+    ):
         return "일부 수집·저장이 완료되지 않아 기존 가격 통계를 유지합니다."
     if stats.get("geo_incomplete", False):
         return "지도 탐색이 완료되지 않아 기존 가격 통계를 유지합니다."

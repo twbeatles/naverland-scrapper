@@ -15,7 +15,9 @@ class TestMainPaths(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             sandbox = Path(tmp) / "bootstrap-root"
             try:
-                with patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False):
+                with patch.dict(
+                    os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False
+                ):
                     base = paths.bootstrap_runtime_paths()
                     self.assertEqual(base, sandbox)
                     self.assertTrue(paths.get_data_dir().exists())
@@ -33,10 +35,18 @@ class TestMainPaths(unittest.TestCase):
                 self.assertEqual(paths.get_data_dir(), sandbox / "data")
                 self.assertEqual(paths.get_log_dir(), sandbox / "logs")
                 self.assertEqual(paths.get_db_path(), sandbox / "data" / "complexes.db")
-                self.assertEqual(paths.get_settings_path(), sandbox / "data" / "settings.json")
-                self.assertEqual(paths.get_presets_path(), sandbox / "data" / "presets.json")
-                self.assertEqual(paths.get_cache_path(), sandbox / "data" / "crawl_cache.json")
-                self.assertEqual(paths.get_history_path(), sandbox / "data" / "search_history.json")
+                self.assertEqual(
+                    paths.get_settings_path(), sandbox / "data" / "settings.json"
+                )
+                self.assertEqual(
+                    paths.get_presets_path(), sandbox / "data" / "presets.json"
+                )
+                self.assertEqual(
+                    paths.get_cache_path(), sandbox / "data" / "crawl_cache.json"
+                )
+                self.assertEqual(
+                    paths.get_history_path(), sandbox / "data" / "search_history.json"
+                )
             finally:
                 paths.reset_configured_paths()
 

@@ -88,7 +88,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.btn_find_region = QPushButton("지역 찾기")
         self.btn_find_region.setIcon(FIF.SEARCH.icon())
         self.btn_find_region.setObjectName("secondaryBtn")
-        self.btn_find_region.setToolTip("동·구 이름이나 실제 주소로 검색해 탐색할 위치를 정합니다. (예: 반포동, 분당구, 서울특별시 서초구 반포동)")
+        self.btn_find_region.setToolTip(
+            "동·구 이름이나 실제 주소로 검색해 탐색할 위치를 정합니다. (예: 반포동, 분당구, 서울특별시 서초구 반포동)"
+        )
         self.btn_find_region.clicked.connect(self._show_region_search_dialog)
         place_row.addWidget(self.btn_find_region)
         self.lbl_geo_place = QLabel("")
@@ -156,7 +158,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_zoom = QSpinBox()
         self.spin_zoom.setRange(12, 18)
         self.spin_zoom.setValue(self._int_setting("geo_default_zoom", 15))
-        self.spin_zoom.setToolTip("숫자가 클수록 지도를 더 가깝게(좁은 범위를 자세히) 봅니다.")
+        self.spin_zoom.setToolTip(
+            "숫자가 클수록 지도를 더 가깝게(좁은 범위를 자세히) 봅니다."
+        )
         adv_grid.addWidget(self._field_label("지도 확대 단계"), 2, 0)
         adv_grid.addWidget(self.spin_zoom, 2, 1)
 
@@ -165,7 +169,9 @@ class GeoCrawlerTab(CrawlerTab):
         self.spin_step.setSingleStep(40)
         self.spin_step.setValue(self._int_setting("geo_grid_step_px", 480))
         self.spin_step.setSuffix(" px")
-        self.spin_step.setToolTip("주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다.")
+        self.spin_step.setToolTip(
+            "주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다."
+        )
         adv_grid.addWidget(self._field_label("구역 간격"), 3, 0)
         adv_grid.addWidget(self.spin_step, 3, 1)
 
@@ -182,12 +188,16 @@ class GeoCrawlerTab(CrawlerTab):
 
         save_defaults = QPushButton("지금 값을 기본으로 저장")
         save_defaults.setObjectName("secondaryBtn")
-        save_defaults.setToolTip("확대 단계·범위·주택 종류를 다음에도 같은 값으로 시작합니다.")
+        save_defaults.setToolTip(
+            "확대 단계·범위·주택 종류를 다음에도 같은 값으로 시작합니다."
+        )
         save_defaults.clicked.connect(self._on_save_geo_defaults_clicked)
         adv_grid.addWidget(save_defaults, 5, 0, 1, 2)
 
         self.geo_adv_panel = adv
-        self.btn_geo_adv_toggle = self._make_disclosure("좌표 직접 입력·세부 설정", adv, expanded=False)
+        self.btn_geo_adv_toggle = self._make_disclosure(
+            "좌표 직접 입력·세부 설정", adv, expanded=False
+        )
         outer.addWidget(self.btn_geo_adv_toggle)
         outer.addWidget(adv)
 
@@ -195,7 +205,9 @@ class GeoCrawlerTab(CrawlerTab):
         found_title = QLabel("찾은 단지")
         found_title.setStyleSheet("font-weight: 600; margin-top: 4px;")
         outer.addWidget(found_title)
-        self.lbl_discovered_placeholder = QLabel("탐색을 시작하면 그 지역에서 찾은 단지가 여기에 쌓입니다.")
+        self.lbl_discovered_placeholder = QLabel(
+            "탐색을 시작하면 그 지역에서 찾은 단지가 여기에 쌓입니다."
+        )
         self.lbl_discovered_placeholder.setObjectName("listPlaceholder")
         self.lbl_discovered_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_discovered_placeholder.setWordWrap(True)
@@ -208,14 +220,20 @@ class GeoCrawlerTab(CrawlerTab):
         )
         discovered_header = self.discovered_table.horizontalHeader()
         if discovered_header is not None:
-            discovered_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+            discovered_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
             discovered_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         discovered_vheader = self.discovered_table.verticalHeader()
         if discovered_vheader is not None:
             discovered_vheader.setVisible(False)
         self.discovered_table.setMinimumHeight(140)
-        self.discovered_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.discovered_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.discovered_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.discovered_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         from src.ui.widgets.components import install_token_labels
         from src.utils.ui_labels import asset_label
 
@@ -227,9 +245,15 @@ class GeoCrawlerTab(CrawlerTab):
 
         discovered_model = self.discovered_table.model()
         if discovered_model is not None:
-            discovered_model.rowsInserted.connect(lambda *_: self._update_discovered_state())
-            discovered_model.rowsRemoved.connect(lambda *_: self._update_discovered_state())
-            discovered_model.modelReset.connect(lambda *_: self._update_discovered_state())
+            discovered_model.rowsInserted.connect(
+                lambda *_: self._update_discovered_state()
+            )
+            discovered_model.rowsRemoved.connect(
+                lambda *_: self._update_discovered_state()
+            )
+            discovered_model.modelReset.connect(
+                lambda *_: self._update_discovered_state()
+            )
         self._update_discovered_state()
 
         self._geo_place_name = str(settings.get("geo_last_region_name", "") or "")
@@ -251,12 +275,19 @@ class GeoCrawlerTab(CrawlerTab):
 
     def _is_default_geo_center(self) -> bool:
         lat, lon = self.DEFAULT_GEO_CENTER
-        return abs(self.spin_lat.value() - lat) < 1e-6 and abs(self.spin_lon.value() - lon) < 1e-6
+        return (
+            abs(self.spin_lat.value() - lat) < 1e-6
+            and abs(self.spin_lon.value() - lon) < 1e-6
+        )
 
     def _confirm_start(self) -> bool:
         if not super()._confirm_start():
             return False
-        if self._is_crawl_running() or self._geo_place_name or not self._is_default_geo_center():
+        if (
+            self._is_crawl_running()
+            or self._geo_place_name
+            or not self._is_default_geo_center()
+        ):
             return True
         # 위치를 한 번도 고르지 않은 채 시작하면 엉뚱한 지역을 훑게 된다.
         answer = QMessageBox.question(
@@ -291,7 +322,9 @@ class GeoCrawlerTab(CrawlerTab):
         if name:
             label.setText(f"{name} 주변을 탐색합니다.")
         elif self._is_default_geo_center():
-            label.setText("기본 위치(서울 중구) 주변을 탐색합니다. 「지역 찾기」로 원하는 곳을 고르세요.")
+            label.setText(
+                "기본 위치(서울 중구) 주변을 탐색합니다. 「지역 찾기」로 원하는 곳을 고르세요."
+            )
         else:
             label.setText(
                 f"직접 입력한 좌표 ({self.spin_lat.value():.4f}, {self.spin_lon.value():.4f}) 주변을 탐색합니다."
@@ -325,12 +358,16 @@ class GeoCrawlerTab(CrawlerTab):
             lon = float(str(region.get("longitude")))
         except (TypeError, ValueError):
             QMessageBox.information(
-                self, "위치를 알 수 없습니다", "이 지역은 위치 정보가 없어 사용할 수 없습니다. 다른 지역을 골라 주세요."
+                self,
+                "위치를 알 수 없습니다",
+                "이 지역은 위치 정보가 없어 사용할 수 없습니다. 다른 지역을 골라 주세요.",
             )
             return
         if not (33.0 <= lat <= 39.5 and 124.0 <= lon <= 132.1):
             QMessageBox.information(
-                self, "위치를 알 수 없습니다", "이 지역의 위치가 올바르지 않습니다. 다른 지역을 골라 주세요."
+                self,
+                "위치를 알 수 없습니다",
+                "이 지역의 위치가 올바르지 않습니다. 다른 지역을 골라 주세요.",
             )
             return
         self._applying_geo_profile = True
@@ -341,7 +378,9 @@ class GeoCrawlerTab(CrawlerTab):
             self._applying_geo_profile = False
         self._set_geo_place_name(str(region.get("name", "") or "선택한 지역"))
         self._save_last_geo_coordinates()
-        self.status_message.emit(f"탐색 위치를 '{self._geo_place_name}'(으)로 정했습니다.")
+        self.status_message.emit(
+            f"탐색 위치를 '{self._geo_place_name}'(으)로 정했습니다."
+        )
 
     def _on_save_geo_defaults_clicked(self):
         if self._save_geo_defaults():
@@ -354,7 +393,11 @@ class GeoCrawlerTab(CrawlerTab):
         if self.check_asset_vl.isChecked():
             asset_types.append("VL")
         if not asset_types:
-            QMessageBox.warning(self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.")
+            QMessageBox.warning(
+                self,
+                "주택 종류를 선택해 주세요",
+                "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.",
+            )
             return False
         settings.update(
             {
@@ -391,7 +434,9 @@ class GeoCrawlerTab(CrawlerTab):
         if asset_types is None:
             asset_tokens = {"APT", "VL"}
         else:
-            asset_tokens = {str(asset or "").strip().upper() for asset in (asset_types or [])}
+            asset_tokens = {
+                str(asset or "").strip().upper() for asset in (asset_types or [])
+            }
         self._applying_geo_profile = True
         try:
             self.spin_lat.setValue(float(lat))
@@ -438,7 +483,9 @@ class GeoCrawlerTab(CrawlerTab):
             )
             return False
         if self.crawler_thread and self.crawler_thread.isRunning():
-            QMessageBox.information(self, "이미 탐색 중입니다", "지도 탐색이 이미 진행 중입니다.")
+            QMessageBox.information(
+                self, "이미 탐색 중입니다", "지도 탐색이 이미 진행 중입니다."
+            )
             return False
         if not self._validate_filter_ranges():
             return False
@@ -466,7 +513,11 @@ class GeoCrawlerTab(CrawlerTab):
         if not trade_types:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "거래 종류를 선택해 주세요", "매매·전세·월세 중 하나 이상을 선택해 주세요.")
+            QMessageBox.warning(
+                self,
+                "거래 종류를 선택해 주세요",
+                "매매·전세·월세 중 하나 이상을 선택해 주세요.",
+            )
             return False
 
         asset_types = []
@@ -477,7 +528,11 @@ class GeoCrawlerTab(CrawlerTab):
         if not asset_types:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.")
+            QMessageBox.warning(
+                self,
+                "주택 종류를 선택해 주세요",
+                "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.",
+            )
             return False
         skip_last_geo_save_once = bool(getattr(self, "_skip_last_geo_save_once", False))
         self._skip_last_geo_save_once = False
@@ -509,8 +564,14 @@ class GeoCrawlerTab(CrawlerTab):
         }
         price_filter = {
             "enabled": self.check_price_filter.isChecked(),
-            "매매": {"min": self.spin_trade_min.value(), "max": self.spin_trade_max.value()},
-            "전세": {"min": self.spin_jeonse_min.value(), "max": self.spin_jeonse_max.value()},
+            "매매": {
+                "min": self.spin_trade_min.value(),
+                "max": self.spin_trade_max.value(),
+            },
+            "전세": {
+                "min": self.spin_jeonse_min.value(),
+                "max": self.spin_jeonse_max.value(),
+            },
             "월세": {
                 "deposit_min": self.spin_monthly_deposit_min.value(),
                 "deposit_max": self.spin_monthly_deposit_max.value(),
@@ -525,7 +586,9 @@ class GeoCrawlerTab(CrawlerTab):
             cache_cls = _get_crawl_cache_cls()
             self.crawl_cache = cache_cls(
                 ttl_minutes=settings.get("cache_ttl_minutes", 30),
-                write_back_interval_sec=settings.get("cache_write_back_interval_sec", 2),
+                write_back_interval_sec=settings.get(
+                    "cache_write_back_interval_sec", 2
+                ),
                 max_entries=settings.get("cache_max_entries", 2000),
             )
 
@@ -574,22 +637,38 @@ class GeoCrawlerTab(CrawlerTab):
             fallback_engine_enabled=False,
             playwright_headless=settings.get("playwright_headless", True),
             playwright_detail_workers=settings.get("playwright_detail_workers", 4),
-            block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
-            playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
-            playwright_navigation_timeout_ms=settings.get("playwright_navigation_timeout_ms", 15000),
-            playwright_article_api_fast_path=settings.get("playwright_article_api_fast_path", True),
-            playwright_article_api_timeout_ms=settings.get("playwright_article_api_timeout_ms", 2500),
-            playwright_article_response_wait_ms=settings.get("playwright_article_response_wait_ms", 1200),
+            block_heavy_resources=settings.get(
+                "playwright_block_heavy_resources", True
+            ),
+            playwright_response_drain_timeout_ms=settings.get(
+                "playwright_response_drain_timeout_ms", 3000
+            ),
+            playwright_navigation_timeout_ms=settings.get(
+                "playwright_navigation_timeout_ms", 15000
+            ),
+            playwright_article_api_fast_path=settings.get(
+                "playwright_article_api_fast_path", True
+            ),
+            playwright_article_api_timeout_ms=settings.get(
+                "playwright_article_api_timeout_ms", 2500
+            ),
+            playwright_article_response_wait_ms=settings.get(
+                "playwright_article_response_wait_ms", 1200
+            ),
             geo_incomplete_safety_mode=settings.get("geo_incomplete_safety_mode", True),
             **collection_runtime_kwargs(settings),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
-        self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
+        self.crawler_thread.progress_signal.connect(
+            self.progress_widget.update_progress
+        )
         self.crawler_thread.items_signal.connect(self._on_items_batch)
         self.crawler_thread.stats_signal.connect(self._update_stats_ui)
         self.crawler_thread.complex_finished_signal.connect(self._on_complex_finished)
         self.crawler_thread.alert_triggered_signal.connect(self._on_alert_triggered)
-        self.crawler_thread.discovered_complex_signal.connect(self._on_discovered_complex)
+        self.crawler_thread.discovered_complex_signal.connect(
+            self._on_discovered_complex
+        )
         self.crawler_thread.error_signal.connect(self._on_crawl_error)
         self.crawler_thread.finished_signal.connect(self._on_crawl_finished)
         try:
@@ -605,7 +684,9 @@ class GeoCrawlerTab(CrawlerTab):
             return False
         self._update_result_empty_state()
         self.progress_widget.status_label.setText("지도 탐색을 준비하고 있습니다…")
-        self.status_message.emit("지도 탐색을 시작했습니다. 찾은 단지가 왼쪽에 쌓입니다.")
+        self.status_message.emit(
+            "지도 탐색을 시작했습니다. 찾은 단지가 왼쪽에 쌓입니다."
+        )
         self.crawling_started.emit()
         return True
 
@@ -626,9 +707,13 @@ class GeoCrawlerTab(CrawlerTab):
         status = self.DISCOVERED_STATUS_LABELS.get(status, status)
         self.discovered_table.setItem(row, 0, QTableWidgetItem(status))
         self.discovered_table.setItem(row, 1, QTableWidgetItem(asset_type))
-        self.discovered_table.setItem(row, 2, QTableWidgetItem(str(payload.get("complex_name", ""))))
+        self.discovered_table.setItem(
+            row, 2, QTableWidgetItem(str(payload.get("complex_name", "")))
+        )
         self.discovered_table.setItem(row, 3, QTableWidgetItem(complex_id))
-        self.discovered_table.setItem(row, 4, QTableWidgetItem(str(payload.get("count", 0))))
+        self.discovered_table.setItem(
+            row, 4, QTableWidgetItem(str(payload.get("count", 0)))
+        )
 
     @staticmethod
     def _format_geo_diagnostics(stats, *, joiner: str = " / ") -> str:
@@ -665,7 +750,11 @@ class GeoCrawlerTab(CrawlerTab):
         if block_reason:
             parts.append(f"reason {block_reason}")
         if bool(stats.get("geo_incomplete", False)):
-            reasons = ", ".join(str(x) for x in (stats.get("geo_incomplete_reasons", []) or []) if str(x))
+            reasons = ", ".join(
+                str(x)
+                for x in (stats.get("geo_incomplete_reasons", []) or [])
+                if str(x)
+            )
             parts.append(f"incomplete {reasons or 'unknown'}")
         return joiner.join(parts)
 
@@ -687,7 +776,9 @@ class GeoCrawlerTab(CrawlerTab):
         )
         message = f"지도 탐색 중 · 단지 {discovered}곳 발견 · 매물 {total}건"
         if blocked > 0:
-            message += " · 네이버가 접속을 제한하는 것 같습니다. 속도를 낮추면 도움이 됩니다."
+            message += (
+                " · 네이버가 접속을 제한하는 것 같습니다. 속도를 낮추면 도움이 됩니다."
+            )
         self.status_message.emit(message)
 
     def _on_crawl_finished(self, data):
@@ -708,9 +799,12 @@ class GeoCrawlerTab(CrawlerTab):
             item_count = len(data or [])
         except TypeError:
             item_count = 0
-        finish_word = "중지했습니다" if getattr(self, "_stop_requested", False) else "마쳤습니다"
+        finish_word = (
+            "중지했습니다" if getattr(self, "_stop_requested", False) else "마쳤습니다"
+        )
         if not getattr(self, "_stop_requested", False) and (
-            final_stats.get("collection_incomplete_count", 0) or final_stats.get("history_save_failed", False)
+            final_stats.get("collection_incomplete_count", 0)
+            or final_stats.get("history_save_failed", False)
         ):
             finish_word = "일부만 진행했습니다"
         self.status_message.emit(
@@ -718,8 +812,14 @@ class GeoCrawlerTab(CrawlerTab):
         )
 
         if bool(final_stats.get("geo_incomplete", False)):
-            safety_mode = bool(getattr(thread, "geo_incomplete_safety_mode", False)) if thread else False
-            incomplete_message = "지도 탐색이 중간에 끊겨 일부 지역은 확인하지 못했습니다."
+            safety_mode = (
+                bool(getattr(thread, "geo_incomplete_safety_mode", False))
+                if thread
+                else False
+            )
+            incomplete_message = (
+                "지도 탐색이 중간에 끊겨 일부 지역은 확인하지 못했습니다."
+            )
             if safety_mode:
                 incomplete_message += " 잘못된 기록을 막기 위해 소멸 판정과 전체 가격 통계를 갱신하지 않았습니다."
             incomplete_message += " 잠시 후 다시 시도하거나 탐색 범위를 줄여 보세요."

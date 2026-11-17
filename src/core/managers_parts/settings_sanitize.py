@@ -18,7 +18,9 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
 
     sanitized = deepcopy(DEFAULT_SETTINGS)
     if not isinstance(value, dict):
-        sanitized["schedule_config"] = _normalize_schedule_config(sanitized.get("schedule_config"))
+        sanitized["schedule_config"] = _normalize_schedule_config(
+            sanitized.get("schedule_config")
+        )
         return sanitized
 
     for key, raw in value.items():
@@ -30,13 +32,25 @@ def _sanitize_settings_payload(value: Any) -> dict[str, Any]:
         sanitized[key] = raw
 
     sanitized.pop("result_tab_mode", None)
-    sanitized["schedule_config"] = _normalize_schedule_config(sanitized.get("schedule_config"))
+    sanitized["schedule_config"] = _normalize_schedule_config(
+        sanitized.get("schedule_config")
+    )
 
-    sanitized["include_pre_sale_rights"] = bool(sanitized.get("include_pre_sale_rights", False))
-    sanitized["detail_enrichment_enabled"] = bool(sanitized.get("detail_enrichment_enabled", True))
-    sanitized["detail_front_api_enabled"] = bool(sanitized.get("detail_front_api_enabled", True))
-    sanitized["detail_front_api_only"] = bool(sanitized.get("detail_front_api_only", False))
-    sanitized["card_show_extra_meta"] = bool(sanitized.get("card_show_extra_meta", True))
+    sanitized["include_pre_sale_rights"] = bool(
+        sanitized.get("include_pre_sale_rights", False)
+    )
+    sanitized["detail_enrichment_enabled"] = bool(
+        sanitized.get("detail_enrichment_enabled", True)
+    )
+    sanitized["detail_front_api_enabled"] = bool(
+        sanitized.get("detail_front_api_enabled", True)
+    )
+    sanitized["detail_front_api_only"] = bool(
+        sanitized.get("detail_front_api_only", False)
+    )
+    sanitized["card_show_extra_meta"] = bool(
+        sanitized.get("card_show_extra_meta", True)
+    )
     sanitized["detail_enrichment_max_per_complex"] = _clamp_int(
         sanitized.get("detail_enrichment_max_per_complex", 0), 0, 0, 500
     )

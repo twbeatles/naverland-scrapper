@@ -26,9 +26,13 @@ class TestDatabaseEngineExtensions(unittest.TestCase):
             )
             conn = db._pool.get_connection()
             try:
-                row = conn.cursor().execute(
-                    "SELECT engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status FROM crawl_history LIMIT 1"
-                ).fetchone()
+                row = (
+                    conn.cursor()
+                    .execute(
+                        "SELECT engine, mode, source_lat, source_lon, source_zoom, asset_type, run_status FROM crawl_history LIMIT 1"
+                    )
+                    .fetchone()
+                )
             finally:
                 db._pool.return_connection(conn)
             self.assertEqual(row["engine"], "playwright")
@@ -75,13 +79,17 @@ class TestDatabaseEngineExtensions(unittest.TestCase):
             self.assertEqual(saved, 1)
             conn = db._pool.get_connection()
             try:
-                row = conn.cursor().execute(
-                    """
+                row = (
+                    conn.cursor()
+                    .execute(
+                        """
                     SELECT asset_type, source_mode, broker_office, broker_name,
                            prev_jeonse_won, gap_amount_won, gap_ratio
                     FROM article_history WHERE article_id='A1'
                     """
-                ).fetchone()
+                    )
+                    .fetchone()
+                )
             finally:
                 db._pool.return_connection(conn)
             self.assertEqual(row["asset_type"], "VL")

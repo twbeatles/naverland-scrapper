@@ -7,7 +7,6 @@ logger = get_logger("Parser")
 
 
 class NaverURLExtractMixin:
-
     @classmethod
     def extract_complex_id(cls, url):
         """URL에서 단지 ID를 추출한다."""
@@ -61,9 +60,17 @@ class NaverURLExtractMixin:
             complex_group = entry.get("complex_group")
             article_group = entry.get("article_group")
             complex_id = match.group(complex_group) if complex_group else ""
-            article_id = match.group(article_group) if article_group and match.lastindex and match.lastindex >= article_group else ""
+            article_id = (
+                match.group(article_group)
+                if article_group
+                and match.lastindex
+                and match.lastindex >= article_group
+                else ""
+            )
             if not article_id:
-                article_match = re.search(r"article(?:Id|No|Number)=(\d+)", token, re.IGNORECASE)
+                article_match = re.search(
+                    r"article(?:Id|No|Number)=(\d+)", token, re.IGNORECASE
+                )
                 if article_match:
                     article_id = article_match.group(1)
             entity_type = str(entry.get("entity_type", "") or "")
@@ -108,7 +115,9 @@ class NaverURLExtractMixin:
             "url": token,
             "family": "fin",
             "entity_type": "article" if article_id else "complex",
-            "asset_type": str(parsed.get("asset_type", "") or ("APT" if complex_id else "")),
+            "asset_type": str(
+                parsed.get("asset_type", "") or ("APT" if complex_id else "")
+            ),
             "complex_id": complex_id,
             "article_id": article_id,
         }
@@ -125,7 +134,9 @@ class NaverURLExtractMixin:
         for url in urls:
             parsed = cls.parse_url_info(url)
             cid = str(parsed.get("complex_id", "") or "").strip()
-            asset_type = runtime_cls._normalize_asset_type(parsed.get("asset_type", "APT"))
+            asset_type = runtime_cls._normalize_asset_type(
+                parsed.get("asset_type", "APT")
+            )
             dedupe_key = (asset_type, cid)
             if cid and dedupe_key not in seen:
                 results.append(

@@ -13,7 +13,6 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 
-
 def _configure_stdio_encoding() -> None:
     """Align stdout/stderr encoding with the current terminal on Windows."""
     for stream_name in ("stdout", "stderr"):
@@ -67,7 +66,10 @@ def _configure_high_dpi() -> None:
     try:
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QGuiApplication
-        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
+        QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
     except Exception:
         pass
 
@@ -104,6 +106,7 @@ def main():
     try:
         from src.core.managers import settings as _settings
         from src.ui.fluent.theme import setup_app_theme as _setup_theme
+
         _setup_theme(app, _settings.get("theme", "dark"))
     except Exception:
         pass

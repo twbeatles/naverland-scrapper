@@ -66,7 +66,9 @@ def _make_factory(bodies, sessions):
     return _factory
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestKeywordSearchCrashGuard(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -107,7 +109,9 @@ class TestKeywordSearchCrashGuard(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, "not-json{{{")}, sessions)
+            session_factory=_make_factory(
+                {"api/search": (200, "not-json{{{")}, sessions
+            )
         )
         try:
             self._run_search_text(dlg, "반포자이")
@@ -168,7 +172,9 @@ class TestKeywordSearchCrashGuard(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, SEARCH_BANPO_RAW)}, sessions)
+            session_factory=_make_factory(
+                {"api/search": (200, SEARCH_BANPO_RAW)}, sessions
+            )
         )
         try:
             with patch(
@@ -186,7 +192,9 @@ class TestKeywordSearchCrashGuard(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, SEARCH_BANPO_RAW)}, sessions)
+            session_factory=_make_factory(
+                {"api/search": (200, SEARCH_BANPO_RAW)}, sessions
+            )
         )
         try:
             with (

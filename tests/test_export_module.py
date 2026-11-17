@@ -97,10 +97,22 @@ class TestExportModule(unittest.TestCase):
         self.assertEqual(rows[0]["갭비율"], "0.2500")
 
     def test_csv_explicit_template_can_enable_optional_columns(self):
-        data = [{"단지명": "A", "상세수집상태": "success", "매물ID": "A1", "price_change": -1500}]
+        data = [
+            {
+                "단지명": "A",
+                "상세수집상태": "success",
+                "매물ID": "A1",
+                "price_change": -1500,
+            }
+        ]
         template = {
             "order": ["단지명", "상세수집상태", "매물ID", "가격변동"],
-            "columns": {"단지명": True, "상세수집상태": True, "매물ID": True, "가격변동": True},
+            "columns": {
+                "단지명": True,
+                "상세수집상태": True,
+                "매물ID": True,
+                "가격변동": True,
+            },
         }
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "export.csv")
@@ -125,7 +137,14 @@ class TestExportModule(unittest.TestCase):
             }
         ]
         template = {
-            "order": ["단지명", "부동산상호", "중개사이름", "전화1", "타입/특징", "가격변동"],
+            "order": [
+                "단지명",
+                "부동산상호",
+                "중개사이름",
+                "전화1",
+                "타입/특징",
+                "가격변동",
+            ],
             "columns": {
                 "단지명": True,
                 "부동산상호": True,
@@ -174,7 +193,14 @@ class TestExportModule(unittest.TestCase):
     def test_excel_default_columns_use_default_template(self):
         from openpyxl import load_workbook
 
-        data = [{"단지명": "A", "자산유형": "APT", "거래유형": "매매", "갭금액(원)": 10000000}]
+        data = [
+            {
+                "단지명": "A",
+                "자산유형": "APT",
+                "거래유형": "매매",
+                "갭금액(원)": 10000000,
+            }
+        ]
         expected = [col for col, enabled in ExcelTemplate.DEFAULT_COLUMNS if enabled]
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "export.xlsx")
@@ -183,7 +209,9 @@ class TestExportModule(unittest.TestCase):
             wb = load_workbook(path, data_only=True)
             ws = wb.active
             assert ws is not None
-            headers = [ws.cell(row=1, column=i).value for i in range(1, len(expected) + 1)]
+            headers = [
+                ws.cell(row=1, column=i).value for i in range(1, len(expected) + 1)
+            ]
             wb.close()
 
         self.assertEqual(headers, expected)

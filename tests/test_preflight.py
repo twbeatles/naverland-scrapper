@@ -44,7 +44,12 @@ class TestPreflight(unittest.TestCase):
     def test_find_browser_executable_accepts_headless_shell_layout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            exe = root / "chromium_headless_shell-1223" / "chrome-headless-shell-win64" / "chrome-headless-shell.exe"
+            exe = (
+                root
+                / "chromium_headless_shell-1223"
+                / "chrome-headless-shell-win64"
+                / "chrome-headless-shell.exe"
+            )
             exe.parent.mkdir(parents=True, exist_ok=True)
             exe.write_text("", encoding="utf-8")
 
@@ -68,7 +73,9 @@ class TestPreflight(unittest.TestCase):
             self.assertFalse(ok)
             self.assertTrue(any("머지 충돌" in err for err in errors))
 
-    def test_get_effective_crawl_engine_defaults_to_playwright_on_missing_or_invalid_settings(self):
+    def test_get_effective_crawl_engine_defaults_to_playwright_on_missing_or_invalid_settings(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as tmp:
             settings_path = Path(tmp) / "settings.json"
             self.assertEqual(get_effective_crawl_engine(settings_path), "playwright")
@@ -80,13 +87,23 @@ class TestPreflight(unittest.TestCase):
             base = Path(tmp)
             data_dir = base / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            (data_dir / "settings.json").write_text(
+                '{"crawl_engine": "playwright"}', encoding="utf-8"
+            )
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="chromium",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
                 patch.dict(
                     os.environ,
                     {
@@ -104,19 +121,34 @@ class TestPreflight(unittest.TestCase):
             self.assertFalse(ok)
             self.assertTrue(any("Playwright 브라우저" in err for err in errors))
 
-    def test_run_preflight_checks_accepts_local_chrome_without_playwright_chromium(self):
+    def test_run_preflight_checks_accepts_local_chrome_without_playwright_chromium(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             data_dir = base / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            (data_dir / "settings.json").write_text(
+                '{"crawl_engine": "playwright"}', encoding="utf-8"
+            )
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.ChromeParamHelper.get_chrome_executable_path",
+                    return_value="C:\\Chrome\\chrome.exe",
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
                 patch.dict(
                     os.environ,
                     {
@@ -139,13 +171,23 @@ class TestPreflight(unittest.TestCase):
             base = Path(tmp)
             data_dir = base / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "settings.json").write_text('{"crawl_engine": "selenium"}', encoding="utf-8")
+            (data_dir / "settings.json").write_text(
+                '{"crawl_engine": "selenium"}', encoding="utf-8"
+            )
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value="chromium"),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="chromium",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
                 patch.dict(
                     os.environ,
                     {
@@ -168,13 +210,22 @@ class TestPreflight(unittest.TestCase):
             base = Path(tmp)
             data_dir = base / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            (data_dir / "settings.json").write_text(
+                '{"crawl_engine": "playwright"}', encoding="utf-8"
+            )
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.find_missing_playwright_browser") as browser_check,
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser"
+                ) as browser_check,
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
                 patch.dict(
                     os.environ,
                     {
@@ -201,9 +252,17 @@ class TestPreflight(unittest.TestCase):
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures") as import_smoke,
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures"
+                ) as import_smoke,
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
@@ -221,14 +280,26 @@ class TestPreflight(unittest.TestCase):
             data_dir = sandbox / "data"
             _log_dir = sandbox / "logs"
             data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "settings.json").write_text('{"crawl_engine": "playwright"}', encoding="utf-8")
+            (data_dir / "settings.json").write_text(
+                '{"crawl_engine": "playwright"}', encoding="utf-8"
+            )
             with (
-                patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False),
+                patch.dict(
+                    os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False
+                ),
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
             ):
                 ok, errors = run_preflight_checks(profile="startup")
             self.assertTrue(ok)
@@ -247,9 +318,17 @@ class TestPreflight(unittest.TestCase):
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]) as import_smoke,
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
-                patch("src.utils.preflight.find_qfluentwidgets_binding_mismatch", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ) as import_smoke,
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="",
+                ),
+                patch(
+                    "src.utils.preflight.find_qfluentwidgets_binding_mismatch",
+                    return_value="",
+                ),
             ):
                 ok, errors = run_preflight_checks(
                     base_dir=base,
@@ -301,7 +380,9 @@ class TestPreflight(unittest.TestCase):
                 '"""PySide6-Fluent-Widgets based on PySide6."""\n',
                 encoding="utf-8",
             )
-            self.assertEqual(find_qfluentwidgets_binding_mismatch(init_path=init_path), "")
+            self.assertEqual(
+                find_qfluentwidgets_binding_mismatch(init_path=init_path), ""
+            )
 
     def test_run_preflight_checks_fails_on_pyqt6_qfluentwidgets(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -316,8 +397,13 @@ class TestPreflight(unittest.TestCase):
             with (
                 patch("src.utils.preflight.find_conflict_markers", return_value=[]),
                 patch("src.utils.preflight.find_missing_dependencies", return_value=[]),
-                patch("src.utils.preflight.find_internal_import_failures", return_value=[]),
-                patch("src.utils.preflight.find_missing_playwright_browser", return_value=""),
+                patch(
+                    "src.utils.preflight.find_internal_import_failures", return_value=[]
+                ),
+                patch(
+                    "src.utils.preflight.find_missing_playwright_browser",
+                    return_value="",
+                ),
                 patch(
                     "src.utils.preflight.resolve_qfluentwidgets_init_path",
                     return_value=init_path,
@@ -330,7 +416,9 @@ class TestPreflight(unittest.TestCase):
                     profile="startup",
                 )
             self.assertFalse(ok)
-            self.assertTrue(any("qfluentwidgets" in err and "PySide6" in err for err in errors))
+            self.assertTrue(
+                any("qfluentwidgets" in err and "PySide6" in err for err in errors)
+            )
 
 
 if __name__ == "__main__":

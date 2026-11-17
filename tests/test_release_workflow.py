@@ -42,7 +42,9 @@ class TestReleaseWorkflow(unittest.TestCase):
         for path in ISOLATED_SNIPPET_FILES:
             with self.subTest(file=path.name):
                 self.assertTrue(path.is_file(), f"{path} is missing")
-                payloads = [p for p in _isolated_payloads(path) if _SRC_IMPORT.search(p)]
+                payloads = [
+                    p for p in _isolated_payloads(path) if _SRC_IMPORT.search(p)
+                ]
                 self.assertGreater(
                     len(payloads),
                     0,

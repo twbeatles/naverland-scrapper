@@ -42,10 +42,16 @@ _RESULT_TIPS = (
 )
 
 _SETTINGS_NOTES = (
-    ("기본 / 고급", "평소 쓰는 항목은 <b>기본</b> 탭에 있습니다. <b>고급</b>은 수집이 자주 실패할 때만 조정하세요."),
+    (
+        "기본 / 고급",
+        "평소 쓰는 항목은 <b>기본</b> 탭에 있습니다. <b>고급</b>은 수집이 자주 실패할 때만 조정하세요.",
+    ),
     ("분양권 매물", "기본은 꺼져 있습니다. 켜면 목록이 늘어납니다."),
     ("상세 정보 가져오기", "끄면 중개소·기존 전세금 없이 더 빠르게 수집합니다."),
-    ("표에 보일 항목", "확인일·동·타입명 등은 결과의 <b>정렬·필터</b> 또는 설정 → 고급에서 켭니다."),
+    (
+        "표에 보일 항목",
+        "확인일·동·타입명 등은 결과의 <b>정렬·필터</b> 또는 설정 → 고급에서 켭니다.",
+    ),
 )
 
 _SHORTCUTS = (
@@ -60,15 +66,30 @@ _SHORTCUTS = (
 )
 
 _SCREENS = (
-    ("매물 수집", "단지를 골라 매물을 수집하는 기본 화면입니다. 단지 추가 → 거래 종류 선택 → 수집 시작 → 결과 저장 순서입니다."),
+    (
+        "매물 수집",
+        "단지를 골라 매물을 수집하는 기본 화면입니다. 단지 추가 → 거래 종류 선택 → 수집 시작 → 결과 저장 순서입니다.",
+    ),
     ("지도로 찾기", "지역을 고르면 그 주변의 단지와 매물을 자동으로 찾습니다."),
     ("내 단지", "저장해 둔 단지 목록입니다. 수집할 때 불러오기로 바로 가져옵니다."),
-    ("단지 묶음", "함께 수집할 단지 모음입니다. 한 번에 불러오거나 예약 수집에 씁니다."),
+    (
+        "단지 묶음",
+        "함께 수집할 단지 모음입니다. 한 번에 불러오거나 예약 수집에 씁니다.",
+    ),
     ("즐겨찾기", "눈여겨볼 매물을 모아 두고 메모를 남깁니다."),
     ("대시보드", "방금 수집한 결과를 한눈에 요약합니다."),
-    ("시세 흐름", "단지별 평균·최저·최고 가격이 날짜에 따라 어떻게 움직였는지 그래프와 변화율로 봅니다. 「다른 단지와 비교」로 여러 단지의 평당 평균가를 겹쳐 볼 수 있습니다. 「내 단지」의 「시세 흐름 보기」, 「수집 기록」 두 번 누르기, 수집 결과·단지 목록 오른쪽 클릭으로 바로 이동합니다."),
-    ("수집 기록", "지금까지 언제 어떤 단지를 수집했는지 보여 줍니다. 줄을 두 번 누르면 그 단지의 시세 흐름을 엽니다."),
-    ("예약 수집", "매일 정한 시간에 자동으로 수집합니다. 앱이 켜져 있어야 합니다(트레이에 두어도 됩니다)."),
+    (
+        "시세 흐름",
+        "단지별 평균·최저·최고 가격이 날짜에 따라 어떻게 움직였는지 그래프와 변화율로 봅니다. 「다른 단지와 비교」로 여러 단지의 평당 평균가를 겹쳐 볼 수 있습니다. 「내 단지」의 「시세 흐름 보기」, 「수집 기록」 두 번 누르기, 수집 결과·단지 목록 오른쪽 클릭으로 바로 이동합니다.",
+    ),
+    (
+        "수집 기록",
+        "지금까지 언제 어떤 단지를 수집했는지 보여 줍니다. 줄을 두 번 누르면 그 단지의 시세 흐름을 엽니다.",
+    ),
+    (
+        "예약 수집",
+        "매일 정한 시간에 자동으로 수집합니다. 앱이 켜져 있어야 합니다(트레이에 두어도 됩니다).",
+    ),
 )
 
 _MENUS = (
@@ -108,7 +129,7 @@ def _palette(theme: str) -> dict[str, str]:
 
 
 def _section(title: str) -> str:
-    return f'<h2>{escape(title)}</h2>'
+    return f"<h2>{escape(title)}</h2>"
 
 
 def _steps(c: dict[str, str]) -> str:
@@ -123,7 +144,9 @@ def _steps(c: dict[str, str]) -> str:
             f'<span style="color: {c["muted"]};">{desc}</span>'
             "</td></tr>"
         )
-    return f'<table width="100%" cellspacing="0" cellpadding="0">{"".join(rows)}</table>'
+    return (
+        f'<table width="100%" cellspacing="0" cellpadding="0">{"".join(rows)}</table>'
+    )
 
 
 def _note(c: dict[str, str], html: str) -> str:
@@ -133,7 +156,9 @@ def _note(c: dict[str, str], html: str) -> str:
     )
 
 
-def _two_column(c: dict[str, str], rows, *, first_width: int, key_style: bool = False) -> str:
+def _two_column(
+    c: dict[str, str], rows, *, first_width: int, key_style: bool = False
+) -> str:
     out = []
     for left, right in rows:
         if key_style:
@@ -204,18 +229,18 @@ def build_guide_html(theme: str = "dark") -> str:
 body {{
     font-family: 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif;
     font-size: 13px;
-    color: {c['fg']};
-    background-color: {c['bg']};
+    color: {c["fg"]};
+    background-color: {c["bg"]};
 }}
 h2 {{
     font-size: 16px;
     font-weight: 700;
-    color: {c['strong']};
+    color: {c["strong"]};
     margin-top: 28px;
     margin-bottom: 8px;
 }}
 p {{ margin-top: 6px; margin-bottom: 6px; }}
-b {{ color: {c['strong']}; font-weight: 700; }}
+b {{ color: {c["strong"]}; font-weight: 700; }}
 </style>
 </head>
 <body>

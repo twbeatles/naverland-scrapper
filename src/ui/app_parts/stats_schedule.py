@@ -9,6 +9,7 @@ Single-responsibility owners live in
 - ``schedule_run`` — schedule triggering and scheduled-run execution.
 - ``group_state`` — group/complex empty- and action-state refresh.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -43,4 +44,5 @@ class AppStatsScheduleMixin(
     SCHEDULE_CATCHUP_WINDOW_MINUTES = 10
 
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...

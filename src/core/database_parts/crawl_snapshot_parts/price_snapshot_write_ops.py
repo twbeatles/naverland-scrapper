@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabasePriceSnapshotWriteOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def add_price_snapshot(
@@ -30,7 +31,9 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
         conn = self._pool.get_connection()
         try:
             asset_token = self._normalize_asset_type(asset_type)
-            metric_token = self._normalize_price_metric(price_metric, trade_type=trade_type)
+            metric_token = self._normalize_price_metric(
+                price_metric, trade_type=trade_type
+            )
             self._upsert_price_snapshot_row(
                 conn.cursor(),
                 (
@@ -75,20 +78,51 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                     continue
                 values = list(row)
                 if len(values) == 7:
-                    complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count = values
+                    (
+                        complex_id,
+                        trade_type,
+                        pyeong,
+                        min_price,
+                        max_price,
+                        avg_price,
+                        item_count,
+                    ) = values
                     asset_token = "APT"
-                    metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                    metric_token = self._normalize_price_metric(
+                        None, trade_type=trade_type
+                    )
                     legacy_monthly = 0
                 elif len(values) == 8:
                     first_token = str(values[0] or "").strip().upper()
                     if first_token in {"APT", "VL"}:
                         asset_token = values[0]
-                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count = values[1:8]
-                        metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                        (
+                            complex_id,
+                            trade_type,
+                            pyeong,
+                            min_price,
+                            max_price,
+                            avg_price,
+                            item_count,
+                        ) = values[1:8]
+                        metric_token = self._normalize_price_metric(
+                            None, trade_type=trade_type
+                        )
                         legacy_monthly = 0
                     else:
-                        complex_id, trade_type, pyeong, min_price, max_price, avg_price, item_count, asset_token = values
-                        metric_token = self._normalize_price_metric(None, trade_type=trade_type)
+                        (
+                            complex_id,
+                            trade_type,
+                            pyeong,
+                            min_price,
+                            max_price,
+                            avg_price,
+                            item_count,
+                            asset_token,
+                        ) = values
+                        metric_token = self._normalize_price_metric(
+                            None, trade_type=trade_type
+                        )
                         legacy_monthly = 0
                 elif len(values) == 10:
                     first_token = str(values[0] or "").strip().upper()
@@ -136,7 +170,9 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                         self._coerce_price(avg_price, default=0),
                         max(0, self._coerce_int(item_count, default=0)),
                         self._normalize_asset_type(asset_token),
-                        self._normalize_price_metric(metric_token, trade_type=trade_type),
+                        self._normalize_price_metric(
+                            metric_token, trade_type=trade_type
+                        ),
                         max(0, self._coerce_int(legacy_monthly, default=0)),
                     )
                 )
@@ -159,7 +195,14 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                     price_metric,
                     legacy_monthly,
                 ) = row
-                key = (asset_type, complex_id, trade_type, pyeong, price_metric, legacy_monthly)
+                key = (
+                    asset_type,
+                    complex_id,
+                    trade_type,
+                    pyeong,
+                    price_metric,
+                    legacy_monthly,
+                )
                 deduped_rows[key] = row
             with self._write_lock:
                 # Replace the entire successful target, including groups now empty.
@@ -170,7 +213,9 @@ class ComplexDatabasePriceSnapshotWriteOpsMixin:
                         "AND asset_type=? AND complex_id=? AND trade_type=? AND legacy_monthly=0",
                         (self._normalize_asset_type(asset), str(cid), str(trade)),
                     )
-                cursor.executemany(self._price_snapshot_upsert_sql(), list(deduped_rows.values()))
+                cursor.executemany(
+                    self._price_snapshot_upsert_sql(), list(deduped_rows.values())
+                )
                 conn.commit()
             if skipped:
                 logger.debug(f"price snapshot bulk skipped malformed rows: {skipped}")

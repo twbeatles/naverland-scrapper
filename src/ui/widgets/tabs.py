@@ -19,17 +19,25 @@ from src.utils.logger import get_logger
 
 logger = get_logger("FavoritesTab")
 
+
 class FavoritesTab(QWidget):
     """즐겨찾기 탭 (v13.0)"""
-    
-    def __init__(self, db, theme="dark", parent=None, favorite_toggled=None, article_open_handler=None):
+
+    def __init__(
+        self,
+        db,
+        theme="dark",
+        parent=None,
+        favorite_toggled=None,
+        article_open_handler=None,
+    ):
         super().__init__(parent)
         self.db = db
         self._theme = theme
         self._favorite_toggled = favorite_toggled
         self._article_open_handler = article_open_handler
         self._setup_ui()
-    
+
     def _setup_ui(self):
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
         from src.ui.fluent.design_tokens import SPACE_XS as _XS
@@ -41,7 +49,10 @@ class FavoritesTab(QWidget):
 
         header = QHBoxLayout()
         header.addWidget(
-            build_page_header("즐겨찾기", "눈여겨볼 매물을 모아 두고 메모를 남길 수 있습니다."), 1
+            build_page_header(
+                "즐겨찾기", "눈여겨볼 매물을 모아 두고 메모를 남길 수 있습니다."
+            ),
+            1,
         )
         refresh_btn = QPushButton("새로고침")
         refresh_btn.setObjectName("secondaryBtn")
@@ -52,9 +63,9 @@ class FavoritesTab(QWidget):
 
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "단지 이름", "거래 종류", "가격", "면적", "층/방향", "메모", "담은 날"
-        ])
+        self.table.setHorizontalHeaderLabels(
+            ["단지 이름", "거래 종류", "가격", "면적", "층/방향", "메모", "담은 날"]
+        )
         favorites_header = self.table.horizontalHeader()
         if favorites_header is not None:
             favorites_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -102,7 +113,7 @@ class FavoritesTab(QWidget):
     def set_theme(self, theme: str):
         """테마 변경"""
         self._theme = theme
-    
+
     def refresh(self):
         """즐겨찾기 목록 새로고침"""
         try:
@@ -112,25 +123,37 @@ class FavoritesTab(QWidget):
         except Exception as e:
             logger.error(f"즐겨찾기 로드 실패: {e}")
             favorites = []
-        
+
         self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
         prev_sorting = self.table.isSortingEnabled()
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(favorites))
         self._update_empty_state(len(favorites))
-        
+
         try:
             for row, fav in enumerate(favorites):
                 complex_item = QTableWidgetItem(str(fav.get("complex_name", "")))
                 complex_item.setData(Qt.ItemDataRole.UserRole, fav)
                 self.table.setItem(row, 0, complex_item)
-                self.table.setItem(row, 1, QTableWidgetItem(str(fav.get("trade_type", ""))))
-                self.table.setItem(row, 2, QTableWidgetItem(str(fav.get("price_text", ""))))
-                self.table.setItem(row, 3, QTableWidgetItem(f"{fav.get('area_pyeong', 0)}평"))
-                self.table.setItem(row, 4, QTableWidgetItem(str(fav.get("floor_info", ""))))
+                self.table.setItem(
+                    row, 1, QTableWidgetItem(str(fav.get("trade_type", "")))
+                )
+                self.table.setItem(
+                    row, 2, QTableWidgetItem(str(fav.get("price_text", "")))
+                )
+                self.table.setItem(
+                    row, 3, QTableWidgetItem(f"{fav.get('area_pyeong', 0)}평")
+                )
+                self.table.setItem(
+                    row, 4, QTableWidgetItem(str(fav.get("floor_info", "")))
+                )
                 self.table.setItem(row, 5, QTableWidgetItem(str(fav.get("note", ""))))
-                created = fav.get("favorite_created_at") or fav.get("created_at") or fav.get("first_seen", "")
+                created = (
+                    fav.get("favorite_created_at")
+                    or fav.get("created_at")
+                    or fav.get("first_seen", "")
+                )
                 self.table.setItem(row, 6, QTableWidgetItem(str(created)[:10]))
         finally:
             self.table.blockSignals(False)
@@ -156,24 +179,23 @@ class FavoritesTab(QWidget):
         self.empty_label.setVisible(is_empty)
         self.table.setVisible(not is_empty)
         self.action_row.setVisible(not is_empty)
-    
+
     def _edit_note(self):
         """메모 편집"""
         row = self.table.currentRow()
         if row < 0:
             return
-        
+
         item = self.table.item(row, 0)
         if not item:
             return
-        
+
         item_data = item.data(Qt.ItemDataRole.UserRole)
         if not item_data:
             return
-        
+
         note, ok = QInputDialog.getText(
-            self, "메모 고치기", "이 매물에 남길 메모", 
-            text=item_data.get("note", "")
+            self, "메모 고치기", "이 매물에 남길 메모", text=item_data.get("note", "")
         )
         if ok:
             try:
@@ -187,57 +209,64 @@ class FavoritesTab(QWidget):
                 logger.error(f"메모 저장 실패: {e}")
                 return
             self.refresh()
-    
+
     def _remove_favorite(self):
         """즐겨찾기 해제"""
         row = self.table.currentRow()
         if row < 0:
             return
-        
+
         item = self.table.item(row, 0)
         if not item:
             return
-        
+
         item_data = item.data(Qt.ItemDataRole.UserRole)
         if not item_data:
             return
-        
+
         if self._favorite_toggled:
             self._favorite_toggled(
                 item_data.get("article_id", ""),
                 item_data.get("complex_id", ""),
                 item_data.get("asset_type", "APT"),
-                False
+                False,
             )
         else:
             self.db.toggle_favorite(
                 item_data.get("article_id", ""),
                 item_data.get("complex_id", ""),
                 item_data.get("asset_type", "APT"),
-                False
+                False,
             )
         self.refresh()
-    
+
     def _open_article(self):
         """매물 페이지 열기"""
         row = self.table.currentRow()
         if row < 0:
             return
-        
+
         item = self.table.item(row, 0)
         if not item:
             return
-        
+
         item_data = item.data(Qt.ItemDataRole.UserRole)
         if item_data:
             article_payload = {
                 "단지명": str(item_data.get("complex_name", "") or ""),
                 "단지ID": str(item_data.get("complex_id", "") or ""),
                 "매물ID": str(item_data.get("article_id", "") or ""),
-                "자산유형": str(item_data.get("asset_type", "APT") or "APT").strip().upper() or "APT",
+                "자산유형": str(item_data.get("asset_type", "APT") or "APT")
+                .strip()
+                .upper()
+                or "APT",
                 "거래유형": str(item_data.get("trade_type", "") or ""),
-                "매매가": str(item_data.get("price_text", "") or "") if str(item_data.get("trade_type", "") or "") == "매매" else "",
-                "보증금": str(item_data.get("price_text", "") or "") if str(item_data.get("trade_type", "") or "") != "매매" else "",
+                "매매가": str(item_data.get("price_text", "") or "")
+                if str(item_data.get("trade_type", "") or "") == "매매"
+                else "",
+                "보증금": str(item_data.get("price_text", "") or "")
+                if str(item_data.get("trade_type", "") or "") != "매매"
+                else "",
                 "월세": "",
                 "면적(평)": item_data.get("area_pyeong", 0),
                 "층/방향": str(item_data.get("floor_info", "") or ""),

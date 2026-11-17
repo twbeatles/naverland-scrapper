@@ -38,7 +38,8 @@ def _apply_light_defaults_migration(payload: dict[str, Any]) -> dict[str, Any]:
     payload[_LIGHT_DEFAULTS_MIGRATION_KEY] = True
     if migrated:
         get_logger("SettingsManager").info(
-            "경량 기본값 1회 적용 (%s). 설정에서 되돌릴 수 있습니다." % ", ".join(migrated)
+            "경량 기본값 1회 적용 (%s). 설정에서 되돌릴 수 있습니다."
+            % ", ".join(migrated)
         )
     return payload
 
@@ -111,7 +112,9 @@ class SettingsManager:
         for key in DEPRECATED_SETTINGS_KEYS:
             payload.pop(key, None)
         if "schedule_config" in payload:
-            payload["schedule_config"] = _normalize_schedule_config(payload["schedule_config"])
+            payload["schedule_config"] = _normalize_schedule_config(
+                payload["schedule_config"]
+            )
         self._settings.update(payload)
         self._settings.pop("result_tab_mode", None)
         self._save()

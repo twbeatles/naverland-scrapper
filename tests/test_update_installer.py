@@ -34,7 +34,12 @@ def _sha_size(data: bytes) -> tuple[str, int]:
 
 
 def _setup_apply(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, target_data: bytes | None, staged_data: bytes | None, backup_data: bytes | None = None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    target_data: bytes | None,
+    staged_data: bytes | None,
+    backup_data: bytes | None = None,
 ) -> dict[str, Any]:
     """Create root/target/staged/helper/ticket for apply_update tests."""
     root = tmp_path / "updates"
@@ -66,14 +71,31 @@ def _setup_apply(
     token = "b" * 32
     ticket = root / f"update-{token}.json"
     ticket.write_text(
-        json.dumps({"token": token, "target": str(target), "staged": str(staged), "sha256": sha, "size": size}),
+        json.dumps(
+            {
+                "token": token,
+                "target": str(target),
+                "staged": str(staged),
+                "sha256": sha,
+                "size": size,
+            }
+        ),
         encoding="utf-8",
     )
 
     # Parent already exited: skip the 45s wait.
-    monkeypatch.setattr(os, "kill", lambda pid, sig: (_ for _ in ()).throw(OSError("no such process")))
+    monkeypatch.setattr(
+        os, "kill", lambda pid, sig: (_ for _ in ()).throw(OSError("no such process"))
+    )
 
-    return {"root": root, "target": target, "staged": staged, "backup": backup, "helper": helper, "token": token}
+    return {
+        "root": root,
+        "target": target,
+        "staged": staged,
+        "backup": backup,
+        "helper": helper,
+        "token": token,
+    }
 
 
 def _mock_success_processes(monkeypatch: pytest.MonkeyPatch) -> dict[str, list]:
@@ -116,7 +138,9 @@ def test_clean_bootloader_env_strips_pyinstaller_vars():
 
 
 def test_apply_update_uses_two_renames_without_copy_overwrite(tmp_path, monkeypatch):
-    ctx = _setup_apply(tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build")
+    ctx = _setup_apply(
+        tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build"
+    )
     _mock_success_processes(monkeypatch)
 
     calls: list[tuple[str, str]] = []
@@ -147,15 +171,23 @@ def test_apply_update_uses_two_renames_without_copy_overwrite(tmp_path, monkeypa
     assert calls[0] == (str(target), str(ctx["backup"]))
     assert calls[1] == (str(ctx["staged"]), str(target))
     # Installed EXE must never be copied over in place (WinError 5 path).
-    assert not any(Path(dst) == ctx["backup"] and Path(src) == target for src, dst in copied)
+    assert not any(
+        Path(dst) == ctx["backup"] and Path(src) == target for src, dst in copied
+    )
     assert not ctx["backup"].exists()
-    result = json.loads((ctx["root"] / "last-update-result.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (ctx["root"] / "last-update-result.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "applied"
 
 
 def test_apply_update_overwrites_stale_backup(tmp_path, monkeypatch):
     ctx = _setup_apply(
-        tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build", backup_data=b"stale-backup"
+        tmp_path,
+        monkeypatch,
+        target_data=b"old-build",
+        staged_data=b"new-build",
+        backup_data=b"stale-backup",
     )
     # Legacy token-style leftover from the pre-fix layout must not block us.
     legacy = ctx["target"].parent / f"{ctx['target'].name}.{'c' * 32}.bak"
@@ -167,12 +199,20 @@ def test_apply_update_overwrites_stale_backup(tmp_path, monkeypatch):
     assert ctx["target"].read_bytes() == b"new-build"
     assert not ctx["backup"].exists()
     assert not legacy.exists()
-    result = json.loads((ctx["root"] / "last-update-result.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (ctx["root"] / "last-update-result.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "applied"
 
 
 def test_apply_update_recovers_interrupted_swap(tmp_path, monkeypatch):
-    ctx = _setup_apply(tmp_path, monkeypatch, target_data=None, staged_data=b"new-build", backup_data=b"old-build")
+    ctx = _setup_apply(
+        tmp_path,
+        monkeypatch,
+        target_data=None,
+        staged_data=b"new-build",
+        backup_data=b"old-build",
+    )
     assert not ctx["target"].exists()
     _mock_success_processes(monkeypatch)
 
@@ -180,12 +220,16 @@ def test_apply_update_recovers_interrupted_swap(tmp_path, monkeypatch):
 
     assert ctx["target"].read_bytes() == b"new-build"
     assert not ctx["backup"].exists()
-    result = json.loads((ctx["root"] / "last-update-result.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (ctx["root"] / "last-update-result.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "applied"
 
 
 def test_apply_update_first_move_failure_keeps_installed(tmp_path, monkeypatch):
-    ctx = _setup_apply(tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build")
+    ctx = _setup_apply(
+        tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build"
+    )
     _mock_success_processes(monkeypatch)
 
     real_replace = os.replace
@@ -202,28 +246,40 @@ def test_apply_update_first_move_failure_keeps_installed(tmp_path, monkeypatch):
 
     assert ctx["target"].read_bytes() == b"old-build"
     assert ctx["staged"].exists()
-    result = json.loads((ctx["root"] / "last-update-result.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (ctx["root"] / "last-update-result.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "rolled_back"
 
 
 def test_apply_update_smoke_failure_restores_via_rename_even_when_overwrite_locked(
     tmp_path, monkeypatch
 ):
-    ctx = _setup_apply(tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build")
+    ctx = _setup_apply(
+        tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build"
+    )
 
     class Completed:
         returncode = 1
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: Completed())
     popen_calls: list = []
-    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: popen_calls.append((a, k)) or type("P", (), {"pid": 1})())
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *a, **k: popen_calls.append((a, k)) or type("P", (), {"pid": 1})(),
+    )
 
     real_replace = os.replace
 
     def windows_like_replace(src, dst, *args, **kwargs):
         # Simulate Windows: overwriting an existing (just-smoked, AV-scanned)
         # EXE in place fails, but renaming either file aside succeeds.
-        if str(src) == str(ctx["backup"]) and str(dst) == str(ctx["target"]) and Path(dst).exists():
+        if (
+            str(src) == str(ctx["backup"])
+            and str(dst) == str(ctx["target"])
+            and Path(dst).exists()
+        ):
             raise PermissionError(13, "Access is denied")
         return real_replace(src, dst, *args, **kwargs)
 
@@ -236,12 +292,16 @@ def test_apply_update_smoke_failure_restores_via_rename_even_when_overwrite_lock
     assert ctx["target"].read_bytes() == b"old-build"
     assert popen_calls == []
     assert not list(ctx["target"].parent.glob(ctx["target"].name + ".failed-*"))
-    result = json.loads((ctx["root"] / "last-update-result.json").read_text(encoding="utf-8"))
+    result = json.loads(
+        (ctx["root"] / "last-update-result.json").read_text(encoding="utf-8")
+    )
     assert result["status"] == "rolled_back"
 
 
 def test_child_processes_use_clean_bootloader_env(tmp_path, monkeypatch):
-    ctx = _setup_apply(tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build")
+    ctx = _setup_apply(
+        tmp_path, monkeypatch, target_data=b"old-build", staged_data=b"new-build"
+    )
     monkeypatch.setenv("_MEIPASS2", "/tmp/stale-parent")
     monkeypatch.setenv("_PYI_ARCHIVE_FILE", "/tmp/stale-archive")
     monkeypatch.setenv("_PYINSTALLER_TEST", "1")
@@ -290,9 +350,13 @@ def test_launch_helper_uses_clean_bootloader_env(tmp_path, monkeypatch):
         artifact_url="https://example.com/app.exe",
         artifact_sha256="0" * 64,
         artifact_size=6,
-        expires_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        expires_at=__import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ),
     )
-    update_installer.launch_update_helper(target=target, staged=staged, manifest=manifest, parent_pid=1234)
+    update_installer.launch_update_helper(
+        target=target, staged=staged, manifest=manifest, parent_pid=1234
+    )
 
     env = captured.get("env")
     assert isinstance(env, dict)

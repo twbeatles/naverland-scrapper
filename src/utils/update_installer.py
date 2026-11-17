@@ -1,4 +1,5 @@
 """Verified, recoverable installation of one-file Windows updates."""
+
 from __future__ import annotations
 
 import hashlib
@@ -22,6 +23,7 @@ from src.utils.update_manifest import (
 
 def staging_root() -> Path:
     from src.utils.paths import get_base_dir
+
     return (get_base_dir() / "updates").resolve()
 
 
@@ -112,7 +114,16 @@ def download_verified_artifact(manifest: ReleaseManifest) -> Path:
     digest = hashlib.sha256()
     total = 0
     try:
-        with urlopen(Request(manifest.artifact_url, headers={"User-Agent": "NaverlandScrapper-Updater"}), timeout=REQUEST_TIMEOUT_SECONDS) as response, staged.open("xb") as output:
+        with (
+            urlopen(
+                Request(
+                    manifest.artifact_url,
+                    headers={"User-Agent": "NaverlandScrapper-Updater"},
+                ),
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            ) as response,
+            staged.open("xb") as output,
+        ):
             final = urlsplit(response.geturl())
             if final.scheme != "https" or not final.hostname:
                 raise ValueError("Artifact redirect must remain HTTPS")
@@ -124,7 +135,10 @@ def download_verified_artifact(manifest: ReleaseManifest) -> Path:
                 output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
-        if total != manifest.artifact_size or digest.hexdigest().lower() != manifest.artifact_sha256:
+        if (
+            total != manifest.artifact_size
+            or digest.hexdigest().lower() != manifest.artifact_sha256
+        ):
             raise ValueError("Update artifact integrity check failed")
         return staged
     except Exception:
@@ -137,7 +151,9 @@ def discard_staged_update(staged: Path) -> None:
         staged.unlink(missing_ok=True)
 
 
-def launch_update_helper(*, target: Path, staged: Path, manifest: ReleaseManifest, parent_pid: int) -> None:
+def launch_update_helper(
+    *, target: Path, staged: Path, manifest: ReleaseManifest, parent_pid: int
+) -> None:
     root = staging_root()
     target, staged = target.resolve(), staged.resolve()
     if not _is_child(staged, root) or target != Path(sys.executable).resolve():
@@ -145,10 +161,31 @@ def launch_update_helper(*, target: Path, staged: Path, manifest: ReleaseManifes
     token = uuid4().hex
     helper = root / f"update-helper-{token}.exe"
     ticket = root / f"update-{token}.json"
-    _write_json(ticket, {"token": token, "target": str(target), "staged": str(staged), "sha256": manifest.artifact_sha256, "size": manifest.artifact_size})
+    _write_json(
+        ticket,
+        {
+            "token": token,
+            "target": str(target),
+            "staged": str(staged),
+            "sha256": manifest.artifact_sha256,
+            "size": manifest.artifact_size,
+        },
+    )
     try:
         shutil.copy2(target, helper)
-        subprocess.Popen([str(helper), "--apply-update", "--update-token", token, "--update-parent-pid", str(parent_pid)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
+        subprocess.Popen(
+            [
+                str(helper),
+                "--apply-update",
+                "--update-token",
+                token,
+                "--update-parent-pid",
+                str(parent_pid),
+            ],
+            close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            env=clean_bootloader_env(),
+        )
     except Exception:
         helper.unlink(missing_ok=True)
         ticket.unlink(missing_ok=True)
@@ -183,12 +220,26 @@ def _verify_staged(staged: Path, expected_sha256: str, expected_size: int) -> No
 def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> None:
     root = staging_root()
     ticket, data = _load_ticket(token)
-    target_value, staged_value, sha_value, size_value = data.get("target"), data.get("staged"), data.get("sha256"), data.get("size")
-    if not isinstance(target_value, str) or not isinstance(staged_value, str) or not isinstance(sha_value, str) or not isinstance(size_value, int):
+    target_value, staged_value, sha_value, size_value = (
+        data.get("target"),
+        data.get("staged"),
+        data.get("sha256"),
+        data.get("size"),
+    )
+    if (
+        not isinstance(target_value, str)
+        or not isinstance(staged_value, str)
+        or not isinstance(sha_value, str)
+        or not isinstance(size_value, int)
+    ):
         raise ValueError("Invalid update ticket")
     target, staged = Path(target_value).resolve(), Path(staged_value).resolve()
     helper = Path(sys.executable).resolve()
-    if helper.parent != root or not _is_child(staged, root) or target.suffix.lower() != ".exe":
+    if (
+        helper.parent != root
+        or not _is_child(staged, root)
+        or target.suffix.lower() != ".exe"
+    ):
         raise ValueError("Invalid update paths")
     _cleanup_legacy_token_backups(target)
     backup = backup_path_for(target)
@@ -200,7 +251,9 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
             try:
                 os.replace(backup, target)
             except OSError as exc:
-                raise ValueError(f"Installed executable is missing and backup recovery failed: {exc}") from exc
+                raise ValueError(
+                    f"Installed executable is missing and backup recovery failed: {exc}"
+                ) from exc
         else:
             raise ValueError("Invalid update paths")
     if not target.is_file() or not staged.is_file():
@@ -212,7 +265,7 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
             os.kill(parent_pid, 0)
         except OSError:
             break
-        time.sleep(.2)
+        time.sleep(0.2)
     else:
         raise TimeoutError("Application did not exit before update")
     status: dict[str, object] = {"version": staged.name, "backup": str(backup)}
@@ -228,7 +281,9 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
         try:
             os.replace(target, backup)
         except OSError as exc:
-            raise RuntimeError(f"Could not move installed executable to backup: {exc}") from exc
+            raise RuntimeError(
+                f"Could not move installed executable to backup: {exc}"
+            ) from exc
         moved_to_backup = True
         try:
             os.replace(staged, target)
@@ -238,12 +293,27 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
                     os.replace(backup, target)
             except OSError:
                 pass
-            raise RuntimeError(f"Update swap failed, previous version restored: {exc}") from exc
+            raise RuntimeError(
+                f"Update swap failed, previous version restored: {exc}"
+            ) from exc
         swapped = True
-        smoke = subprocess.run([str(target), "--preflight"], timeout=smoke_timeout, check=False, capture_output=True, env=clean_bootloader_env())
+        smoke = subprocess.run(
+            [str(target), "--preflight"],
+            timeout=smoke_timeout,
+            check=False,
+            capture_output=True,
+            env=clean_bootloader_env(),
+        )
         if smoke.returncode != 0:
-            raise RuntimeError(f"Updated executable preflight failed ({smoke.returncode})")
-        subprocess.Popen([str(target)], close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=clean_bootloader_env())
+            raise RuntimeError(
+                f"Updated executable preflight failed ({smoke.returncode})"
+            )
+        subprocess.Popen(
+            [str(target)],
+            close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            env=clean_bootloader_env(),
+        )
         status["status"] = "applied"
     except Exception as exc:
         if swapped:
@@ -265,7 +335,10 @@ def apply_update(*, token: str, parent_pid: int, smoke_timeout: int = 60) -> Non
                 except OSError:
                     pass
             except OSError as rollback_exc:
-                status.update(status="rolled_back", error=f"{exc} (rollback failed: {rollback_exc}; backup kept at {backup})")
+                status.update(
+                    status="rolled_back",
+                    error=f"{exc} (rollback failed: {rollback_exc}; backup kept at {backup})",
+                )
                 raise
         elif moved_to_backup:
             try:

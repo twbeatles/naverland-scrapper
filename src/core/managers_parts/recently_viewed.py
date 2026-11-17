@@ -35,9 +35,18 @@ class RecentlyViewedManager:
 
     @staticmethod
     def _article_identity(article: dict[str, Any]) -> tuple[str, str, str]:
-        asset_type = str(article.get("자산유형", article.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
-        complex_id = str(article.get("단지ID", article.get("complex_id", "")) or "").strip()
-        article_id = str(article.get("매물ID", article.get("article_id", "")) or "").strip()
+        asset_type = (
+            str(article.get("자산유형", article.get("asset_type", "APT")) or "APT")
+            .strip()
+            .upper()
+            or "APT"
+        )
+        complex_id = str(
+            article.get("단지ID", article.get("complex_id", "")) or ""
+        ).strip()
+        article_id = str(
+            article.get("매물ID", article.get("article_id", "")) or ""
+        ).strip()
         return asset_type, complex_id, article_id
 
     def _load(self):
@@ -48,7 +57,9 @@ class RecentlyViewedManager:
             logger_name="RecentlyViewedManager",
             label="recently_viewed",
         )
-        self._items = list(payload[: self.max_items]) if isinstance(payload, list) else []
+        self._items = (
+            list(payload[: self.max_items]) if isinstance(payload, list) else []
+        )
 
     def _save(self):
         """파일에 저장"""
@@ -73,7 +84,8 @@ class RecentlyViewedManager:
 
             article_key = self._article_identity(article_copy)
             self._items = [
-                item for item in self._items
+                item
+                for item in self._items
                 if self._article_identity(item) != article_key
             ]
 

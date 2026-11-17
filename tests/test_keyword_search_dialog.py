@@ -11,13 +11,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # Fixtures mirror tests/test_keyword_search.py (live responses, 2026-10-04).
 AUTOCOMPLETE_BANPO_RAW = (
-    '["<strong class=\'text_input\'>반포</strong>동 '
-    '<strong class=\'text_input\'>반포</strong>'
+    "[\"<strong class='text_input'>반포</strong>동 "
+    "<strong class='text_input'>반포</strong>"
     "<strong class='text_input'>자이</strong>\","
-    '"잠원동 메이플<strong class=\'text_input\'>자이</strong>",'
-    '"잠원동 <strong class=\'text_input\'>반포</strong>센트럴'
+    "\"잠원동 메이플<strong class='text_input'>자이</strong>\","
+    "\"잠원동 <strong class='text_input'>반포</strong>센트럴"
     "<strong class='text_input'>자이</strong>\","
-    '"잠원동 신<strong class=\'text_input\'>반포</strong>'
+    "\"잠원동 신<strong class='text_input'>반포</strong>"
     "<strong class='text_input'>자이</strong>\"]"
 )
 SEARCH_BANPO_RAW = json.dumps(
@@ -90,7 +90,9 @@ def _make_factory(bodies, sessions):
     return _factory
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestKeywordSearchDialog(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -114,7 +116,10 @@ class TestKeywordSearchDialog(unittest.TestCase):
         sessions = []
         dlg = KeywordSearchDialog(
             session_factory=_make_factory(
-                {"autocomplete": (200, AUTOCOMPLETE_BANPO_RAW), "api/search": (200, SEARCH_BANPO_RAW)},
+                {
+                    "autocomplete": (200, AUTOCOMPLETE_BANPO_RAW),
+                    "api/search": (200, SEARCH_BANPO_RAW),
+                },
                 sessions,
             )
         )
@@ -143,7 +148,9 @@ class TestKeywordSearchDialog(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, SEARCH_BANPO_RAW)}, sessions)
+            session_factory=_make_factory(
+                {"api/search": (200, SEARCH_BANPO_RAW)}, sessions
+            )
         )
         emitted = []
         try:
@@ -166,7 +173,12 @@ class TestKeywordSearchDialog(unittest.TestCase):
         sessions = []
         dlg = KeywordSearchDialog(
             session_factory=_make_factory(
-                {"api/search": (200, json.dumps(SEARCH_HAPJEONG_REGIONS, ensure_ascii=False))},
+                {
+                    "api/search": (
+                        200,
+                        json.dumps(SEARCH_HAPJEONG_REGIONS, ensure_ascii=False),
+                    )
+                },
                 sessions,
             )
         )
@@ -190,7 +202,8 @@ class TestKeywordSearchDialog(unittest.TestCase):
         sessions = []
         dlg = KeywordSearchDialog(
             session_factory=_make_factory(
-                {"api/search": (200, '{"isShown":false,"isMoreData":false}')} , sessions)
+                {"api/search": (200, '{"isShown":false,"isMoreData":false}')}, sessions
+            )
         )
         try:
             dlg.input_keyword.setText("empty-query-zzz")
@@ -205,7 +218,9 @@ class TestKeywordSearchDialog(unittest.TestCase):
             dlg.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestKeywordWorkerSessionCleanup(unittest.TestCase):
     """ISSUE-001: failed __enter__ must still release acquired resources."""
 
@@ -235,7 +250,8 @@ class TestKeywordWorkerSessionCleanup(unittest.TestCase):
         worker = _KeywordWorker(session_factory=_FailingSession)
         try:
             worker.failed.connect(
-                lambda msg, gen, kind: calls["failed"].append((msg, gen, kind)))
+                lambda msg, gen, kind: calls["failed"].append((msg, gen, kind))
+            )
             worker.suggest("test", 1)
             self._qt_app.processEvents()
             self.assertEqual(calls["enter"], 1)
@@ -272,7 +288,9 @@ class TestKeywordWorkerSessionCleanup(unittest.TestCase):
             worker.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestKeywordWorkerResilience(unittest.TestCase):
     """Retry-once, cooldown, and generation guards (audit §5)."""
 
@@ -304,12 +322,18 @@ class TestKeywordWorkerResilience(unittest.TestCase):
         from src.ui.dialogs.search import _KeywordWorker
 
         sessions = []
-        factory, state = self._flaky_session([(429, ""), (200, SEARCH_BANPO_RAW)], sessions)
+        factory, state = self._flaky_session(
+            [(429, ""), (200, SEARCH_BANPO_RAW)], sessions
+        )
         worker = _KeywordWorker(session_factory=factory, retry_delay_sec=0.0)
         ready, failed = [], []
         try:
-            worker.search_ready.connect(lambda result, gen, append: ready.append((result, gen)))
-            worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
+            worker.search_ready.connect(
+                lambda result, gen, append: ready.append((result, gen))
+            )
+            worker.failed.connect(
+                lambda msg, gen, kind: failed.append((msg, gen, kind))
+            )
             worker.search("반포자이", 1, 7, False)
             self._qt_app.processEvents()
             # 429, then the retry: fin rejects the legacy-shaped body, new.land parses it.
@@ -328,8 +352,12 @@ class TestKeywordWorkerResilience(unittest.TestCase):
         worker = _KeywordWorker(session_factory=factory, retry_delay_sec=0.0)
         ready, failed = [], []
         try:
-            worker.search_ready.connect(lambda result, gen, append: ready.append(result))
-            worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
+            worker.search_ready.connect(
+                lambda result, gen, append: ready.append(result)
+            )
+            worker.failed.connect(
+                lambda msg, gen, kind: failed.append((msg, gen, kind))
+            )
             worker.search("a", 1, 3, False)
             self._qt_app.processEvents()
             # Two attempts, each trying fin then the legacy new.land fallback.
@@ -347,10 +375,13 @@ class TestKeywordWorkerResilience(unittest.TestCase):
         sessions = []
         factory, state = self._flaky_session([(429, "")], sessions)
         worker = _KeywordWorker(
-            session_factory=factory, retry_delay_sec=0.0, rate_limit_cooldown_sec=3600.0)
+            session_factory=factory, retry_delay_sec=0.0, rate_limit_cooldown_sec=3600.0
+        )
         failed = []
         try:
-            worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
+            worker.failed.connect(
+                lambda msg, gen, kind: failed.append((msg, gen, kind))
+            )
             worker.search("a", 1, 1, False)
             first_calls = state["calls"]
             self.assertGreater(first_calls, 0)
@@ -369,12 +400,15 @@ class TestKeywordWorkerResilience(unittest.TestCase):
         sessions = []
         factory, state = self._flaky_session([(200, SEARCH_BANPO_RAW)], sessions)
         worker = _KeywordWorker(
-            session_factory=factory, retry_delay_sec=0.0, rate_limit_cooldown_sec=3600.0)
+            session_factory=factory, retry_delay_sec=0.0, rate_limit_cooldown_sec=3600.0
+        )
         worker._note_rate_limit()
         ready, failed = [], []
         try:
             worker.suggestions_ready.connect(lambda names, gen: ready.append(names))
-            worker.failed.connect(lambda msg, gen, kind: failed.append((msg, gen, kind)))
+            worker.failed.connect(
+                lambda msg, gen, kind: failed.append((msg, gen, kind))
+            )
             worker.suggest("a", 1)
             self._qt_app.processEvents()
             self.assertEqual(ready, [])
@@ -388,7 +422,10 @@ class TestKeywordWorkerResilience(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, SEARCH_BANPO_RAW)}, sessions))
+            session_factory=_make_factory(
+                {"api/search": (200, SEARCH_BANPO_RAW)}, sessions
+            )
+        )
         try:
             dlg._busy = True
             dlg._search_generation = 5
@@ -407,7 +444,10 @@ class TestKeywordWorkerResilience(unittest.TestCase):
 
         sessions = []
         dlg = KeywordSearchDialog(
-            session_factory=_make_factory({"api/search": (200, SEARCH_BANPO_RAW)}, sessions))
+            session_factory=_make_factory(
+                {"api/search": (200, SEARCH_BANPO_RAW)}, sessions
+            )
+        )
         try:
             dlg._busy = True
             dlg._generation = 9
@@ -417,7 +457,9 @@ class TestKeywordWorkerResilience(unittest.TestCase):
             dlg.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestKeywordSearchDialogHardening(unittest.TestCase):
     """Refactor guards: null payloads, address fallback, map links, shutdown."""
 
@@ -462,17 +504,30 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
         from src.ui.dialogs.search import KeywordSearchDialog
 
         second_page = json.dumps(
-            {"complexes": [], "regions": [], "isShown": False,
-             "isMoreData": False, "keyword": "반포동"},
+            {
+                "complexes": [],
+                "regions": [],
+                "isShown": False,
+                "isMoreData": False,
+                "keyword": "반포동",
+            },
             ensure_ascii=False,
         )
         first_page = json.dumps(
-            {"complexes": [
-                {"complexNo": "22853", "complexName": "반포자이",
-                 "realEstateTypeCode": "APT",
-                 "cortarAddress": "서울시 서초구 반포동",
-                 "deepLink": "/complexes/22853"}],
-             "isShown": True, "isMoreData": True, "keyword": "반포동"},
+            {
+                "complexes": [
+                    {
+                        "complexNo": "22853",
+                        "complexName": "반포자이",
+                        "realEstateTypeCode": "APT",
+                        "cortarAddress": "서울시 서초구 반포동",
+                        "deepLink": "/complexes/22853",
+                    }
+                ],
+                "isShown": True,
+                "isMoreData": True,
+                "keyword": "반포동",
+            },
             ensure_ascii=False,
         )
         calls = []
@@ -550,10 +605,13 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
 
         dlg = KeywordSearchDialog(mode="region", session_factory=lambda: None)
         try:
-            dlg.input_keyword.setText("https://fin.land.naver.com/map?center=3zkT1e-2AM2FA&zoom=15")
+            dlg.input_keyword.setText(
+                "https://fin.land.naver.com/map?center=3zkT1e-2AM2FA&zoom=15"
+            )
             dlg._run_search()
             dlg._on_region_located(
-                {"cortar_no": "1123010500", "name": "서울시 동대문구 답십리동"}, dlg._search_generation
+                {"cortar_no": "1123010500", "name": "서울시 동대문구 답십리동"},
+                dlg._search_generation,
             )
             item = dlg.region_list.item(0)
             self.assertIn("답십리동", item.text())
@@ -561,7 +619,9 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
             self.assertEqual(data["cortar_no"], "1123010500")
             self.assertAlmostEqual(data["latitude"], 37.566377, places=5)
             # A stale generation must not rename rows of a newer search.
-            dlg._on_region_located({"cortar_no": "1", "name": "다른 곳"}, dlg._search_generation - 1)
+            dlg._on_region_located(
+                {"cortar_no": "1", "name": "다른 곳"}, dlg._search_generation - 1
+            )
             self.assertIn("답십리동", dlg.region_list.item(0).text())
         finally:
             dlg.reject()
@@ -642,10 +702,20 @@ class TestKeywordSearchDialogHardening(unittest.TestCase):
             dlg._keyword = "반포자이"
             dlg._busy = True
             dlg._on_search_ready(
-                {"complexes": [{"complex_id": "22853", "name": "반포자이",
-                                "address": "", "asset_type": "APT"}],
-                 "regions": [], "is_more_data": False},
-                2, False,
+                {
+                    "complexes": [
+                        {
+                            "complex_id": "22853",
+                            "name": "반포자이",
+                            "address": "",
+                            "asset_type": "APT",
+                        }
+                    ],
+                    "regions": [],
+                    "is_more_data": False,
+                },
+                2,
+                False,
             )
             self.assertIn("단지 1곳", dlg.status_label.text())
             dlg._generation = 5

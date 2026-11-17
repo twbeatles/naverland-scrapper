@@ -84,7 +84,9 @@ def run_live_smoke(
             messages = [f"[fail] [live-smoke] invalid_async_result={async_result!r}"]
     except Exception as exc:
         ok = False
-        messages = [f"[fail] [live-smoke] unexpected_exception={type(exc).__name__}: {exc}"]
+        messages = [
+            f"[fail] [live-smoke] unexpected_exception={type(exc).__name__}: {exc}"
+        ]
     messages.insert(0, _runtime_info_line(runtime_meta))
     messages.append(
         f"[info] requested_article_id={requested_article_id or '-'} "
@@ -102,8 +104,12 @@ def run_live_smoke(
                 {
                     "ok": bool(ok),
                     "complex_id": str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
-                    "article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
-                    "effective_article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
+                    "article_id": str(
+                        effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID
+                    ),
+                    "effective_article_id": str(
+                        effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID
+                    ),
                     "requested_article_id": str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
                     "runtime_source": runtime_meta["runtime_source"],
                     "executable": runtime_meta["executable"],
@@ -117,6 +123,7 @@ def run_live_smoke(
                 indent=2,
             )
     return ok, messages
+
 
 __all__ = [
     "DEFAULT_SMOKE_ARTICLE_ID",

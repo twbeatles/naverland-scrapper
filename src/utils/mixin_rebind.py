@@ -57,9 +57,7 @@ def rebind_inherited_methods(
     if method_names is None:
         if mixin_classes is None:
             mixin_classes = [
-                base
-                for base in target_cls.__mro__[1:]
-                if base is not object
+                base for base in target_cls.__mro__[1:] if base is not object
             ]
         method_names = iter_mixin_callable_names(
             *mixin_classes,
@@ -90,5 +88,9 @@ def rebind_inherited_methods(
                 ),
             )
         elif inspect.isfunction(raw):
-            setattr(target_cls, name, clone_function_with_globals(raw, globals_dict, module_name))
+            setattr(
+                target_cls,
+                name,
+                clone_function_with_globals(raw, globals_dict, module_name),
+            )
     return target_cls

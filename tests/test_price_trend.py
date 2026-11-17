@@ -25,13 +25,25 @@ ROWS = [
 
 def test_build_series_groups_by_trade_and_pyeong_sorted_by_date():
     series = build_series(ROWS)
-    assert [(s.trade_type, s.pyeong) for s in series] == [("매매", 25.0), ("매매", 34.0)]
+    assert [(s.trade_type, s.pyeong) for s in series] == [
+        ("매매", 25.0),
+        ("매매", 34.0),
+    ]
     big = series[1]
-    assert [p.date_text for p in big.points] == ["2026-01-01", "2026-02-01", "2026-03-01"]
+    assert [p.date_text for p in big.points] == [
+        "2026-01-01",
+        "2026-02-01",
+        "2026-03-01",
+    ]
 
 
 def test_build_series_skips_unparseable_rows():
-    series = build_series([("bad-date", "매매", 34.0, 1, 1, 1, 1, "price", 0), ("2026-01-01", "매매", None, 1, 1, 1, 1)])
+    series = build_series(
+        [
+            ("bad-date", "매매", 34.0, 1, 1, 1, 1, "price", 0),
+            ("2026-01-01", "매매", None, 1, 1, 1, 1),
+        ]
+    )
     assert series == []
 
 
@@ -88,7 +100,11 @@ def test_per_pyeong_series_weights_sizes_by_item_count():
     series = per_pyeong_series(ROWS, "매매")
     assert series is not None
     by_day = {p.date_text: p for p in series.points}
-    assert [p.date_text for p in series.points] == ["2026-01-01", "2026-02-01", "2026-03-01"]
+    assert [p.date_text for p in series.points] == [
+        "2026-01-01",
+        "2026-02-01",
+        "2026-03-01",
+    ]
     assert by_day["2026-01-01"].avg_price == round(100000 / 34)
     # 2/1: 34평(104000, 2건) + 25평(75000, 4건) 가중 평균
     expected = (104000 / 34 * 2 + 75000 / 25 * 4) / 6

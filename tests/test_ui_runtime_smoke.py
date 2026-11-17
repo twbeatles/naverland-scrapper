@@ -9,7 +9,9 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestUIRuntimeSmoke(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -152,7 +154,9 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                     }
                 ]
 
-                with patch.object(db, "count_disappeared_articles_for_targets", return_value=2):
+                with patch.object(
+                    db, "count_disappeared_articles_for_targets", return_value=2
+                ):
                     widget.set_data(sample_data)
 
                 total_label = getattr(widget.total_card, "_value_label", None)
@@ -184,7 +188,9 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                     return False
                 return default
 
-            with patch("src.ui.widgets.dashboard.settings.get", side_effect=_settings_get):
+            with patch(
+                "src.ui.widgets.dashboard.settings.get", side_effect=_settings_get
+            ):
                 widget = DashboardWidget(db)
                 widget.refresh()
 
@@ -247,8 +253,14 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         from src.ui.dialogs.batch import URLBatchDialog
 
         with (
-            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[("URL", "11111"), ("ID", "22222")]),
-            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=["단지_11111", "검증단지"]),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.extract_from_text",
+                return_value=[("URL", "11111"), ("ID", "22222")],
+            ),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.fetch_complex_name",
+                side_effect=["단지_11111", "검증단지"],
+            ),
         ):
             dlg = URLBatchDialog()
             dlg.input_text.setPlainText("dummy")
@@ -269,7 +281,9 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             dlg.deleteLater()
             self._qt_app.processEvents()
 
-    def test_url_batch_dialog_placeholder_and_get_urls_follow_current_family_rules(self):
+    def test_url_batch_dialog_placeholder_and_get_urls_follow_current_family_rules(
+        self,
+    ):
         from src.ui.dialogs.batch import URLBatchDialog
 
         dlg = URLBatchDialog()
@@ -277,7 +291,10 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         self.assertIn("https://new.land.naver.com/complexes/102378", placeholder)
         self.assertIn("https://fin.land.naver.com/articles/2539123450", placeholder)
         self.assertIn("https://fin.land.naver.com/complexes/111515", placeholder)
-        dlg._selected_complexes = [("테스트단지", "102378"), ("빌라단지", "202020", "VL")]
+        dlg._selected_complexes = [
+            ("테스트단지", "102378"),
+            ("빌라단지", "202020", "VL"),
+        ]
         self.assertEqual(
             dlg.get_urls(),
             [
@@ -300,8 +317,14 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             return f"단지_{cid}"
 
         with (
-            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[("URL", "11111"), ("ID", "22222")]),
-            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=_slow_fetch),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.extract_from_text",
+                return_value=[("URL", "11111"), ("ID", "22222")],
+            ),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.fetch_complex_name",
+                side_effect=_slow_fetch,
+            ),
         ):
             dlg = URLBatchDialog()
             dlg.input_text.setPlainText("dummy")
@@ -384,7 +407,10 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         }
 
         with (
-            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[article_entry]),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.extract_from_text",
+                return_value=[article_entry],
+            ),
             patch(
                 "src.ui.dialogs.batch.NaverURLParser.resolve_article_complex",
                 return_value={
@@ -395,10 +421,15 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                     "url": "https://fin.land.naver.com/articles/2513105556",
                 },
             ),
-            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", return_value="검증단지"),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.fetch_complex_name",
+                return_value="검증단지",
+            ),
         ):
             dlg = URLBatchDialog()
-            dlg.input_text.setPlainText("https://fin.land.naver.com/articles/2513105556")
+            dlg.input_text.setPlainText(
+                "https://fin.land.naver.com/articles/2513105556"
+            )
             dlg._parse_urls()
             for _ in range(80):
                 self._qt_app.processEvents()
@@ -440,12 +471,22 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         }
 
         with (
-            patch("src.ui.dialogs.batch.NaverURLParser.extract_from_text", return_value=[article_entry]),
-            patch("src.ui.dialogs.batch.NaverURLParser.resolve_article_complex", return_value={}),
-            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name") as mock_fetch_name,
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.extract_from_text",
+                return_value=[article_entry],
+            ),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.resolve_article_complex",
+                return_value={},
+            ),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.fetch_complex_name"
+            ) as mock_fetch_name,
         ):
             dlg = URLBatchDialog()
-            dlg.input_text.setPlainText("https://fin.land.naver.com/articles/2513105556")
+            dlg.input_text.setPlainText(
+                "https://fin.land.naver.com/articles/2513105556"
+            )
             dlg._parse_urls()
             for _ in range(80):
                 self._qt_app.processEvents()
@@ -473,7 +514,9 @@ class TestUIRuntimeSmoke(unittest.TestCase):
                 self.calls = []
                 self.closed = False
 
-            def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+            def resolve(
+                self, article_id, *, cancel_checker=None, fallback_asset_type="APT"
+            ):
                 self.calls.append((article_id, fallback_asset_type))
                 return {
                     "source": "injected:browser_fallback",
@@ -508,9 +551,18 @@ class TestUIRuntimeSmoke(unittest.TestCase):
         worker.progress.connect(lambda *args: progress.append(args))
 
         with (
-            patch("src.ui.dialogs.batch.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
-            patch("src.ui.dialogs.batch.NaverURLParser.create_article_browser_fallback", return_value=fallback) as mock_create,
-            patch("src.ui.dialogs.batch.NaverURLParser.fetch_complex_name", side_effect=lambda cid, **_kwargs: f"단지_{cid}"),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser._fetch_article_lookup_impl",
+                side_effect=OSError("down"),
+            ),
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.create_article_browser_fallback",
+                return_value=fallback,
+            ) as mock_create,
+            patch(
+                "src.ui.dialogs.batch.NaverURLParser.fetch_complex_name",
+                side_effect=lambda cid, **_kwargs: f"단지_{cid}",
+            ),
         ):
             worker.run()
 
@@ -565,12 +617,14 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             self.assertEqual(tab.result_table.rowCount(), 2)
             self.assertEqual(len(tab.collected_data), 2)
 
-            tab._update_stats_ui({
-                "total_found": 2,
-                "filtered_out": 0,
-                "cache_hits": 0,
-                "by_trade_type": {"매매": 1, "전세": 1, "월세": 0},
-            })
+            tab._update_stats_ui(
+                {
+                    "total_found": 2,
+                    "filtered_out": 0,
+                    "cache_hits": 0,
+                    "by_trade_type": {"매매": 1, "전세": 1, "월세": 0},
+                }
+            )
             total_value = tab.summary_card.total_widget.findChild(QLabel, "value")
             self.assertIsNotNone(total_value)
             assert total_value is not None
@@ -587,9 +641,13 @@ class TestUIRuntimeSmoke(unittest.TestCase):
             db = ComplexDatabase(os.path.join(tmp, "migration_check.db"))
             conn = db._pool.get_connection()
             try:
-                row = conn.cursor().execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='article_alert_log'"
-                ).fetchone()
+                row = (
+                    conn.cursor()
+                    .execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='article_alert_log'"
+                    )
+                    .fetchone()
+                )
             finally:
                 db._pool.return_connection(conn)
 

@@ -11,7 +11,9 @@ from src.core.crawler import CrawlerThread
 
 
 class _DBStub:
-    def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
+    def get_article_history_state_bulk(
+        self, _complex_id, trade_type=None, asset_type=None
+    ):
         return {}
 
     def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):
@@ -115,13 +117,25 @@ class TestCrawlerRegressions(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
+            def get_article_history_state_bulk(
+                self, _complex_id, trade_type=None, asset_type=None
+            ):
                 self.calls.append((trade_type, asset_type))
                 if trade_type == "매매":
-                    return {"A1": {"price": 10000, "price_text": "10000", "status": "active"}}
+                    return {
+                        "A1": {
+                            "price": 10000,
+                            "price_text": "10000",
+                            "status": "active",
+                        }
+                    }
                 if trade_type == "전세":
-                    return {"A1": {"price": 5000, "price_text": "5000", "status": "active"}}
-                return {"A1": {"price": 10000, "price_text": "10000", "status": "active"}}
+                    return {
+                        "A1": {"price": 5000, "price_text": "5000", "status": "active"}
+                    }
+                return {
+                    "A1": {"price": 10000, "price_text": "10000", "status": "active"}
+                }
 
         db = _TradeScopedDB()
         thread = CrawlerThread(
@@ -270,7 +284,9 @@ class TestCrawlerRegressions(unittest.TestCase):
         result = thread._crawl(None, "테스트단지", "12345", "매매")
         self.assertEqual(result["count"], 0)
         self.assertFalse(result["cache_hit"])
-        self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
+        self.assertTrue(
+            any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls)
+        )
 
     def test_negative_cache_skipped_when_empty_not_confirmed_in_selenium(self):
         cache = _CacheStub(None)
@@ -335,7 +351,9 @@ class TestCrawlerRegressions(unittest.TestCase):
         s2 = thread._record_blocked_event("단지A", "10001", "매매")
         self.assertTrue(bool(s2.get("pair_cooldown_started")))
         self.assertEqual(int(s2.get("pair_cooldown_seconds", 0)), 90)
-        self.assertGreater(thread._get_pair_blocked_cooldown_remaining("단지A", "10001", "매매"), 0.0)
+        self.assertGreater(
+            thread._get_pair_blocked_cooldown_remaining("단지A", "10001", "매매"), 0.0
+        )
 
         thread._record_blocked_event("단지B", "20002", "매매")
         thread._record_blocked_event("단지C", "30003", "매매")
@@ -387,10 +405,14 @@ class TestCrawlerRegressions(unittest.TestCase):
                 self.scoped_calls = 0
                 self.global_calls = 0
 
-            def get_article_history_state_bulk(self, _complex_id, trade_type=None, asset_type=None):
+            def get_article_history_state_bulk(
+                self, _complex_id, trade_type=None, asset_type=None
+            ):
                 return {}
 
-            def get_enabled_alert_rules(self, _complex_id, _trade_type, asset_type=None):
+            def get_enabled_alert_rules(
+                self, _complex_id, _trade_type, asset_type=None
+            ):
                 return []
 
             def upsert_article_history_bulk(self, rows):
@@ -431,7 +453,9 @@ class TestCrawlerRegressions(unittest.TestCase):
 
     def test_blocked_page_detection_signal(self):
         thread = self._build_thread(price_filter={"enabled": False})
-        signal = thread._detect_block_signal("Access Denied", "<html>captcha required</html>")
+        signal = thread._detect_block_signal(
+            "Access Denied", "<html>captcha required</html>"
+        )
         self.assertIsNotNone(signal)
 
     def test_scroll_container_fallback_smoke(self):
@@ -499,10 +523,14 @@ class TestCrawlerRegressions(unittest.TestCase):
         captured = {}
 
         def _fake_run(engine_self):
-            captured["allowed_pairs"] = set(engine_self.thread._fallback_allowed_pairs or set())
+            captured["allowed_pairs"] = set(
+                engine_self.thread._fallback_allowed_pairs or set()
+            )
 
         with patch("src.core.crawler.SeleniumCrawlerEngine.run", new=_fake_run):
-            thread._run_fallback_selenium(start_name="단지A", start_cid="10001", start_trade="전세")
+            thread._run_fallback_selenium(
+                start_name="단지A", start_cid="10001", start_trade="전세"
+            )
 
         expected = {
             thread._pair_key("단지A", "10001", "전세"),
@@ -522,7 +550,11 @@ class TestCrawlerRegressions(unittest.TestCase):
             cache=None,
             max_retry_count=0,
         )
-        setattr(thread, "_fallback_allowed_pairs", {thread._pair_key("단지A", "10001", "전세")})  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
+        setattr(  # noqa: B010  # stub patch; direct assign breaks pyright (do not simplify)
+            thread,
+            "_fallback_allowed_pairs",
+            {thread._pair_key("단지A", "10001", "전세")},
+        )
         thread._fallback_prefill_processed_target_pairs = {("APT", "10001", "매매")}
         thread._fallback_prefill_complexes = {
             ("단지A", "10001"): {
@@ -549,7 +581,9 @@ class TestCrawlerRegressions(unittest.TestCase):
 
         def _crawl(driver, name, cid, ttype, asset_type="APT"):
             self.assertIsNotNone(driver)
-            self.assertEqual((name, cid, ttype, asset_type), ("단지A", "10001", "전세", "APT"))
+            self.assertEqual(
+                (name, cid, ttype, asset_type), ("단지A", "10001", "전세", "APT")
+            )
             return {"count": 3, "collection_status": "complete"}
 
         thread.record_crawl_history = _record_history
@@ -570,7 +604,9 @@ class TestCrawlerRegressions(unittest.TestCase):
         self.assertEqual(args[:4], ("단지A", "10001", "매매,전세", 5))
         self.assertEqual(kwargs["engine"], "selenium")
         self.assertEqual(kwargs["run_status"], "success")
-        self.assertEqual(finalized["pairs"], {("APT", "10001", "매매"), ("APT", "10001", "전세")})
+        self.assertEqual(
+            finalized["pairs"], {("APT", "10001", "매매"), ("APT", "10001", "전세")}
+        )
         self.assertEqual(finished, [("단지A", "10001", "매매,전세", 5)])
 
     def test_push_item_dedupes_only_when_article_id_exists(self):
@@ -589,15 +625,28 @@ class TestCrawlerRegressions(unittest.TestCase):
     def test_push_item_keeps_asset_scoped_duplicates_separate(self):
         thread = self._build_thread(price_filter={"enabled": False})
 
-        apt_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "APT"}
-        vl_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "VL"}
+        apt_item = {
+            "단지ID": "12345",
+            "매물ID": "A-1",
+            "거래유형": "매매",
+            "자산유형": "APT",
+        }
+        vl_item = {
+            "단지ID": "12345",
+            "매물ID": "A-1",
+            "거래유형": "매매",
+            "자산유형": "VL",
+        }
 
         thread._push_item(dict(apt_item))
         thread._push_item(dict(vl_item))
 
         self.assertEqual(len(thread.collected_data), 2)
         self.assertEqual(
-            {(row.get("자산유형"), row.get("단지ID"), row.get("매물ID")) for row in thread.collected_data},
+            {
+                (row.get("자산유형"), row.get("단지ID"), row.get("매물ID"))
+                for row in thread.collected_data
+            },
             {("APT", "12345", "A-1"), ("VL", "12345", "A-1")},
         )
 
@@ -605,7 +654,12 @@ class TestCrawlerRegressions(unittest.TestCase):
         thread = self._build_thread(price_filter={"enabled": False})
 
         legacy_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매"}
-        apt_item = {"단지ID": "12345", "매물ID": "A-1", "거래유형": "매매", "자산유형": "APT"}
+        apt_item = {
+            "단지ID": "12345",
+            "매물ID": "A-1",
+            "거래유형": "매매",
+            "자산유형": "APT",
+        }
 
         thread._push_item(dict(legacy_item))
         thread._push_item(dict(apt_item))

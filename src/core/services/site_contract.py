@@ -123,7 +123,9 @@ def build_geo_map_url(
         kind = "houses"
     params = {
         GEO_QUERY_MS: f"{lat},{lon},{zoom}",
-        GEO_QUERY_ASSET: article_api_real_estate_type(asset_type, include_pre=include_pre),
+        GEO_QUERY_ASSET: article_api_real_estate_type(
+            asset_type, include_pre=include_pre
+        ),
         GEO_QUERY_TRADE: trade_type_to_code(trade_type),
         GEO_QUERY_PRICE_TYPE: "RETAIL",
     }
@@ -142,10 +144,17 @@ def build_complex_page_url(
     include_pre: bool = False,
 ) -> str:
     """Complex/house page URL used for navigation / response capture referer."""
-    kind = "houses" if str(base_kind or "") in {"houses", "house"} or str(path_asset or "").upper() == "VL" else "complexes"
+    kind = (
+        "houses"
+        if str(base_kind or "") in {"houses", "house"}
+        or str(path_asset or "").upper() == "VL"
+        else "complexes"
+    )
     params: dict[str, Any] = {
         GEO_QUERY_MS: f"{lat or 37.5},{lon or 127},{zoom or 16}",
-        GEO_QUERY_ASSET: article_api_real_estate_type(path_asset, include_pre=include_pre),
+        GEO_QUERY_ASSET: article_api_real_estate_type(
+            path_asset, include_pre=include_pre
+        ),
         GEO_QUERY_TRADE: trade_type_to_code(trade_type),
         GEO_QUERY_PRICE_TYPE: "RETAIL",
     }
@@ -154,7 +163,9 @@ def build_complex_page_url(
 
 def build_front_api_article_key_url(article_no: str) -> str:
     """``/article/key`` -> complex/building keys plus exact ``realEstateType``/``tradeType``."""
-    return f"{FRONT_API_BASE}/article/key?" + urlencode({"articleNumber": str(article_no or "").strip()})
+    return f"{FRONT_API_BASE}/article/key?" + urlencode(
+        {"articleNumber": str(article_no or "").strip()}
+    )
 
 
 def build_front_api_agent_url(article_no: str) -> str:
@@ -188,7 +199,11 @@ def build_fin_complex_info_url(complex_id: str, *, asset_type: str = "APT") -> s
 
 
 def fin_article_list_url(asset_type: str = "APT") -> str:
-    return FRONT_API_VILLA_ARTICLE_LIST if _is_villa(asset_type) else FRONT_API_COMPLEX_ARTICLE_LIST
+    return (
+        FRONT_API_VILLA_ARTICLE_LIST
+        if _is_villa(asset_type)
+        else FRONT_API_COMPLEX_ARTICLE_LIST
+    )
 
 
 def fin_real_estate_types(asset_type: str, *, include_pre: bool = False) -> list[str]:
@@ -224,7 +239,9 @@ def build_fin_bounded_complexes_body(
     return {
         "filter": {
             "tradeTypes": [trade_type_to_code(trade_type)],
-            "realEstateTypes": fin_real_estate_types(asset_type, include_pre=include_pre),
+            "realEstateTypes": fin_real_estate_types(
+                asset_type, include_pre=include_pre
+            ),
             "hasArticle": True,
         },
         "boundingBox": {
@@ -262,7 +279,9 @@ def build_fin_article_list_body(
     return body
 
 
-def build_fin_autocomplete_url(kind: str, keyword: str, *, page: int = 0, size: int = 10) -> str:
+def build_fin_autocomplete_url(
+    kind: str, keyword: str, *, page: int = 0, size: int = 10
+) -> str:
     """fin search autocomplete; ``kind`` is ``complexes`` or ``legalDivisions``.
 
     ``page`` is 0-based on fin (the legacy new.land search was 1-based).
@@ -361,7 +380,9 @@ def build_single_markers_url(
             "selectedComplexNo": "",
             "selectedComplexBuildingNo": "",
             "fakeComplexMarker": "",
-            "realEstateType": article_api_real_estate_type(asset_type, include_pre=include_pre),
+            "realEstateType": article_api_real_estate_type(
+                asset_type, include_pre=include_pre
+            ),
             "tradeType": trade_type_to_code(trade_type),
             "tag": "::::::::",
             "rentPriceMin": "0",

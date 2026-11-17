@@ -15,6 +15,7 @@ ResultRow = dict[str, Any]
 
 class CrawlerTabLayoutSetupMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def __init__(
@@ -45,7 +46,9 @@ class CrawlerTabLayoutSetupMixin:
         self._row_hidden_state: dict[int, bool] = {}
         self._advanced_filters: dict[str, Any] | None = None
         self._append_chunk_size: int = 200
-        self._compact_duplicates: bool = bool(settings.get("compact_duplicate_listings", True))
+        self._compact_duplicates: bool = bool(
+            settings.get("compact_duplicate_listings", True)
+        )
         self._compact_items_by_key: dict[CompactRowKey, ResultRow] = {}
         self._compact_rows_data: list[ResultRow] = []
         self._compact_row_index_by_key: dict[CompactRowKey, int] = {}
@@ -75,7 +78,7 @@ class CrawlerTabLayoutSetupMixin:
         self._splitter_save_timer.setSingleShot(True)
         self._splitter_save_timer.setInterval(250)
         self._splitter_save_timer.timeout.connect(self._save_splitter_state)
-        
+
         # UI Setup
         self._init_ui()
         self._load_state()
@@ -139,7 +142,9 @@ class CrawlerTabLayoutSetupMixin:
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setSizes(self.MAIN_SPLITTER_DEFAULT)
-        self.main_splitter.splitterMoved.connect(lambda *_: self._queue_splitter_state_save())
+        self.main_splitter.splitterMoved.connect(
+            lambda *_: self._queue_splitter_state_save()
+        )
         layout.addWidget(self.main_splitter)
 
     MAIN_SPLITTER_DEFAULT = [400, 880]
@@ -150,11 +155,15 @@ class CrawlerTabLayoutSetupMixin:
     def _save_splitter_state(self: Any):
         if not hasattr(self, "main_splitter"):
             return
-        settings.update({"crawler_main_splitter_sizes": list(self.main_splitter.sizes())})
+        settings.update(
+            {"crawler_main_splitter_sizes": list(self.main_splitter.sizes())}
+        )
 
     def _restore_splitter_state(self: Any):
         main_default = list(self.MAIN_SPLITTER_DEFAULT)
-        main_sizes = settings.get("crawler_main_splitter_sizes", main_default) or main_default
+        main_sizes = (
+            settings.get("crawler_main_splitter_sizes", main_default) or main_default
+        )
         try:
             main_values = [max(1, int(v)) for v in main_sizes]
         except (TypeError, ValueError):

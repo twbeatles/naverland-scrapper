@@ -31,7 +31,7 @@ class MultiSelectDialog(QDialog):
 
     def _setup_ui(self, items):
         layout = QVBoxLayout(self)
-        
+
         # 상단 버튼
         btn_layout = QHBoxLayout()
         btn_all = QPushButton("전체 선택")
@@ -55,7 +55,11 @@ class MultiSelectDialog(QDialog):
         self.list_widget.setAlternatingRowColors(True)
         self.list_widget.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         for item_data in items:
-            text, data = (item_data if isinstance(item_data, tuple) else (str(item_data), item_data))
+            text, data = (
+                item_data
+                if isinstance(item_data, tuple)
+                else (str(item_data), item_data)
+            )
             item = QListWidgetItem()
             checkbox = QCheckBox(text)
             checkbox.setProperty("data", data)
@@ -63,19 +67,21 @@ class MultiSelectDialog(QDialog):
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, checkbox)
         layout.addWidget(self.list_widget)
-        
+
         # 카운트
         self.count_label = QLabel("선택: 0개")
         self.count_label.setObjectName("selectCount")
         self.count_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(self.count_label)
-        
+
         # 버튼
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        
+
         for i in range(self.list_widget.count()):
             cb = self.list_widget.itemWidget(self.list_widget.item(i))
             if isinstance(cb, QCheckBox):
@@ -83,33 +89,52 @@ class MultiSelectDialog(QDialog):
         self._update_count()
 
     def _update_count(self):
-        count = sum(1 for i in range(self.list_widget.count())
-                   if isinstance(w := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox) and w.isChecked())
+        count = sum(
+            1
+            for i in range(self.list_widget.count())
+            if isinstance(
+                w := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox
+            )
+            and w.isChecked()
+        )
         self.count_label.setText(f"선택: {count}개")
-    
+
     def _select_all(self):
         for i in range(self.list_widget.count()):
-            if isinstance(cb := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox):
+            if isinstance(
+                cb := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox
+            ):
                 cb.setChecked(True)
-    
+
     def _deselect_all(self):
         for i in range(self.list_widget.count()):
-            if isinstance(cb := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox):
+            if isinstance(
+                cb := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox
+            ):
                 cb.setChecked(False)
-    
+
     def _on_accept(self):
         self._selected = []
         for i in range(self.list_widget.count()):
-            if isinstance(cb := self.list_widget.itemWidget(self.list_widget.item(i)), QCheckBox) and cb.isChecked():
+            if (
+                isinstance(
+                    cb := self.list_widget.itemWidget(self.list_widget.item(i)),
+                    QCheckBox,
+                )
+                and cb.isChecked()
+            ):
                 self._selected.append(cb.property("data"))
         self.accept()
-    
-    def selected_items(self): return self._selected
+
+    def selected_items(self):
+        return self._selected
+
 
 class AdvancedFilterDialog(QDialog):
     """고급 결과 필터 다이얼로그 (v7.3)"""
+
     filter_applied = Signal(dict)
-    
+
     def __init__(self, parent=None, current_filters=None):
         super().__init__(parent)
         self.setWindowTitle("결과 상세 필터")
@@ -118,10 +143,10 @@ class AdvancedFilterDialog(QDialog):
         self._setup_ui()
         if current_filters:
             self._apply_filters_to_ui(current_filters)
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        
+
         # 가격 필터
         price_group = QGroupBox("가격")
         pg = QGridLayout(price_group)
@@ -145,7 +170,7 @@ class AdvancedFilterDialog(QDialog):
         self.price_max.valueChanged.connect(self._refresh_price_hint)
         self._refresh_price_hint()
         layout.addWidget(price_group)
-        
+
         # 면적 필터
         area_group = QGroupBox("면적")
         ag = QGridLayout(area_group)
@@ -163,7 +188,7 @@ class AdvancedFilterDialog(QDialog):
         self.area_max.setSpecialValueText("제한 없음")
         ag.addWidget(self.area_max, 0, 3)
         layout.addWidget(area_group)
-        
+
         # 층수 필터
         floor_group = QGroupBox("층")
         fg = QHBoxLayout(floor_group)
@@ -178,7 +203,7 @@ class AdvancedFilterDialog(QDialog):
         fg.addWidget(self.floor_high)
         fg.addStretch()
         layout.addWidget(floor_group)
-        
+
         # 특수 필터
         special_group = QGroupBox("이런 매물만 보기")
         sg = QHBoxLayout(special_group)
@@ -190,7 +215,7 @@ class AdvancedFilterDialog(QDialog):
         sg.addWidget(self.only_price_change)
         sg.addStretch()
         layout.addWidget(special_group)
-        
+
         # 키워드 필터
         keyword_group = QGroupBox("단어로 거르기")
         kg = QVBoxLayout(keyword_group)
@@ -206,7 +231,7 @@ class AdvancedFilterDialog(QDialog):
         self.include_all.setToolTip("끄면 적은 단어 중 하나만 들어 있어도 보여 줍니다.")
         kg.addWidget(self.include_all)
         layout.addWidget(keyword_group)
-        
+
         # 버튼
         btn_layout = QHBoxLayout()
         btn_reset = QPushButton("처음 상태로")
@@ -220,14 +245,18 @@ class AdvancedFilterDialog(QDialog):
         btn_layout.addStretch()
         btn_layout.addWidget(btn_apply)
         layout.addLayout(btn_layout)
-    
+
     def _refresh_price_hint(self, *_args):
         from src.utils.helpers import PriceConverter
 
         low = self.price_min.value()
         high = self.price_max.value()
         low_text = PriceConverter.to_string(low) if low else "제한 없음"
-        high_text = PriceConverter.to_string(high) if 0 < high < self.price_max.maximum() else "제한 없음"
+        high_text = (
+            PriceConverter.to_string(high)
+            if 0 < high < self.price_max.maximum()
+            else "제한 없음"
+        )
         self.price_hint.setText(f"{low_text} ~ {high_text}  (10,000만원 = 1억)")
 
     def _reset(self):
@@ -245,7 +274,7 @@ class AdvancedFilterDialog(QDialog):
         self.exclude_keywords.clear()
         self.include_all.setChecked(False)
         self._filters = None
-    
+
     def _apply(self):
         # 최대 칸의 0은 화면에 「제한 없음」으로 보이므로 실제로도 제한 없이 다룬다.
         price_max = self.price_max.value() or self.price_max.maximum()
@@ -263,19 +292,23 @@ class AdvancedFilterDialog(QDialog):
             )
             return
         filters = {
-            'price_min': self.price_min.value(),
-            'price_max': price_max,
-            'area_min': self.area_min.value(),
-            'area_max': area_max,
-            'floor_low': self.floor_low.isChecked(),
-            'floor_mid': self.floor_mid.isChecked(),
-            'floor_high': self.floor_high.isChecked(),
-            'only_new': self.only_new.isChecked(),
-            'only_price_down': self.only_price_down.isChecked(),
-            'only_price_change': self.only_price_change.isChecked(),
-            'include_keywords': [k.strip() for k in self.include_keywords.text().split(',') if k.strip()],
-            'exclude_keywords': [k.strip() for k in self.exclude_keywords.text().split(',') if k.strip()],
-            'include_mode': 'all' if self.include_all.isChecked() else 'any',
+            "price_min": self.price_min.value(),
+            "price_max": price_max,
+            "area_min": self.area_min.value(),
+            "area_max": area_max,
+            "floor_low": self.floor_low.isChecked(),
+            "floor_mid": self.floor_mid.isChecked(),
+            "floor_high": self.floor_high.isChecked(),
+            "only_new": self.only_new.isChecked(),
+            "only_price_down": self.only_price_down.isChecked(),
+            "only_price_change": self.only_price_change.isChecked(),
+            "include_keywords": [
+                k.strip() for k in self.include_keywords.text().split(",") if k.strip()
+            ],
+            "exclude_keywords": [
+                k.strip() for k in self.exclude_keywords.text().split(",") if k.strip()
+            ],
+            "include_mode": "all" if self.include_all.isChecked() else "any",
         }
         self._filters = filters
         self.filter_applied.emit(filters)
@@ -283,19 +316,35 @@ class AdvancedFilterDialog(QDialog):
 
     def _apply_filters_to_ui(self, filters: dict):
         try:
-            self.price_min.setValue(int(filters.get("price_min", self.price_min.value())))
-            self.price_max.setValue(int(filters.get("price_max", self.price_max.value())))
-            self.area_min.setValue(float(filters.get("area_min", self.area_min.value())))
-            self.area_max.setValue(float(filters.get("area_max", self.area_max.value())))
+            self.price_min.setValue(
+                int(filters.get("price_min", self.price_min.value()))
+            )
+            self.price_max.setValue(
+                int(filters.get("price_max", self.price_max.value()))
+            )
+            self.area_min.setValue(
+                float(filters.get("area_min", self.area_min.value()))
+            )
+            self.area_max.setValue(
+                float(filters.get("area_max", self.area_max.value()))
+            )
             self.floor_low.setChecked(bool(filters.get("floor_low", True)))
             self.floor_mid.setChecked(bool(filters.get("floor_mid", True)))
             self.floor_high.setChecked(bool(filters.get("floor_high", True)))
             self.only_new.setChecked(bool(filters.get("only_new", False)))
             self.only_price_down.setChecked(bool(filters.get("only_price_down", False)))
-            self.only_price_change.setChecked(bool(filters.get("only_price_change", False)))
-            self.include_keywords.setText(", ".join(filters.get("include_keywords", [])))
-            self.exclude_keywords.setText(", ".join(filters.get("exclude_keywords", [])))
-            self.include_all.setChecked(str(filters.get("include_mode", "any") or "any").lower() == "all")
+            self.only_price_change.setChecked(
+                bool(filters.get("only_price_change", False))
+            )
+            self.include_keywords.setText(
+                ", ".join(filters.get("include_keywords", []))
+            )
+            self.exclude_keywords.setText(
+                ", ".join(filters.get("exclude_keywords", []))
+            )
+            self.include_all.setChecked(
+                str(filters.get("include_mode", "any") or "any").lower() == "all"
+            )
         except Exception:
             pass
 

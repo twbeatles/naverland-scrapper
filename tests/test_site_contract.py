@@ -68,7 +68,9 @@ class TestSiteContract(unittest.TestCase):
                 "요청하신 페이지를 찾을 수 없어요",
             )
         )
-        self.assertFalse(is_fin_html_dead_url("https://new.land.naver.com/complexes/3833", "매물"))
+        self.assertFalse(
+            is_fin_html_dead_url("https://new.land.naver.com/complexes/3833", "매물")
+        )
 
     def test_autocomplete_url_encodes_keyword(self):
         from src.core.services.site_contract import build_autocomplete_url

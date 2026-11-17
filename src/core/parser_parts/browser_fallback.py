@@ -7,7 +7,6 @@ logger = get_logger("Parser")
 
 
 class ArticleLookupBrowserFallbackSession:
-
     def __init__(self, parser_cls=None):
         if parser_cls is None:
             from src.core.parser import NaverURLParser
@@ -42,13 +41,17 @@ class ArticleLookupBrowserFallbackSession:
                     headless=True,
                 )
             except Exception as e:
-                self._logger.debug(f"매물 단지 browser fallback local Chrome 실행 실패: {e}")
+                self._logger.debug(
+                    f"매물 단지 browser fallback local Chrome 실행 실패: {e}"
+                )
                 self._browser = self._playwright.chromium.launch(headless=True)
         else:
             self._browser = self._playwright.chromium.launch(headless=True)
         from src.core.services.site_contract import DESKTOP_USER_AGENT
 
-        self._page = self._browser.new_page(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
+        self._page = self._browser.new_page(
+            locale="ko-KR", user_agent=DESKTOP_USER_AGENT
+        )
         try:
             self._page.add_init_script(
                 "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
@@ -65,8 +68,12 @@ class ArticleLookupBrowserFallbackSession:
         from src.core.services.site_contract import FIN_API_ORIGIN_PAGE, FRONT_API_BASE
 
         try:
-            if not str(getattr(page, "url", "") or "").startswith("https://fin.land.naver.com/"):
-                page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=8000)
+            if not str(getattr(page, "url", "") or "").startswith(
+                "https://fin.land.naver.com/"
+            ):
+                page.goto(
+                    FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=8000
+                )
             url = f"{FRONT_API_BASE}/search/articles?articleNumber={aid}&userChannelType=PC"
             result = page.evaluate(
                 """(url) => fetch(url, {headers: {accept: 'application/json'}})
@@ -88,7 +95,9 @@ class ArticleLookupBrowserFallbackSession:
             return {}
         from src.core.services.fin_article_api import fin_article_to_legacy
 
-        asset = str(fin_article_to_legacy(article).get("realEstateTypeCode", "") or "APT")
+        asset = str(
+            fin_article_to_legacy(article).get("realEstateTypeCode", "") or "APT"
+        )
         return {
             "source": "fin_search_articles:browser_fallback",
             "complex_id": cid,
@@ -109,7 +118,9 @@ class ArticleLookupBrowserFallbackSession:
             return resolved
         for source, url in self._parser_cls._article_lookup_urls(aid):
             if self._parser_cls._is_cancelled(cancel_checker):
-                raise RetryCancelledError("article lookup cancelled during browser fallback")
+                raise RetryCancelledError(
+                    "article lookup cancelled during browser fallback"
+                )
             captured_artifacts: list[str] = []
 
             def _capture_response(response, _artifacts=captured_artifacts):
@@ -156,7 +167,9 @@ class ArticleLookupBrowserFallbackSession:
             except RetryCancelledError:
                 raise
             except Exception as e:
-                self._logger.debug(f"매물 단지 browser fallback 실패 ({source}:{aid}): {e}")
+                self._logger.debug(
+                    f"매물 단지 browser fallback 실패 ({source}:{aid}): {e}"
+                )
                 continue
             finally:
                 if can_listen:

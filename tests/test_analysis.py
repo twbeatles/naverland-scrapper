@@ -27,7 +27,9 @@ class TestComplexComparator(unittest.TestCase):
 
     def test_compare_applies_default_asset_type_scope(self):
         db = _ComparatorDb()
-        result = ComplexComparator(db).compare(["12345"], trade_type="전세", asset_type="APT")
+        result = ComplexComparator(db).compare(
+            ["12345"], trade_type="전세", asset_type="APT"
+        )
 
         self.assertEqual(db.calls, [("12345", "전세", "APT")])
         self.assertIn("APT:12345", result)

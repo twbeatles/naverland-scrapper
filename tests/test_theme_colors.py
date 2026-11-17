@@ -70,7 +70,9 @@ class TestThemeColorSets(unittest.TestCase):
         self.assertGreater(_channel_luminance(COLORS["dark"]["text_primary"]), 0.70)
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestArticleCardTheme(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -139,7 +141,8 @@ class TestArticleCardTheme(unittest.TestCase):
         img = card.grab().toImage()
         pixel = img.pixelColor(24, 36)
         self.assertGreater(
-            (0.299 * pixel.red() + 0.587 * pixel.green() + 0.114 * pixel.blue()) / 255.0,
+            (0.299 * pixel.red() + 0.587 * pixel.green() + 0.114 * pixel.blue())
+            / 255.0,
             0.72,
             f"light card pixel {pixel.name()} should be a light surface",
         )

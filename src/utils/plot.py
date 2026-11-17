@@ -58,7 +58,9 @@ def setup_korean_font(force: bool = False) -> bool:
             rc("font", family=["DejaVu Sans"])
             rc("axes", unicode_minus=False)
             _HAS_KOREAN_FONT = False
-            logger.warning("Korean-capable matplotlib font not found; fallback to ASCII labels.")
+            logger.warning(
+                "Korean-capable matplotlib font not found; fallback to ASCII labels."
+            )
         _FONT_SETUP_DONE = True
         return _HAS_KOREAN_FONT
     except Exception as e:

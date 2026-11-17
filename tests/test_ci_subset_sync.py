@@ -46,7 +46,9 @@ class TestCiSubsetSync(unittest.TestCase):
         ps1_tests = _listed_tests(CI_CHECK_PS1)
         for required in sorted(REQUIRED_IN_CI):
             self.assertIn(required, yml_tests, f"{required} is missing from ci.yml")
-            self.assertIn(required, ps1_tests, f"{required} is missing from ci_check.ps1")
+            self.assertIn(
+                required, ps1_tests, f"{required} is missing from ci_check.ps1"
+            )
 
 
 if __name__ == "__main__":

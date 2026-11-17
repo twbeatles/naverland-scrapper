@@ -43,7 +43,11 @@ _ASSET_BY_REAL_ESTATE_TYPE = {
 }
 
 # articleCountInfoDto key per trade code (boundedComplexes, complex/article/stats).
-_TRADE_COUNT_KEYS = {"A1": "dealCount", "B1": "leaseDepositCount", "B2": "leaseMonthlyCount"}
+_TRADE_COUNT_KEYS = {
+    "A1": "dealCount",
+    "B1": "leaseDepositCount",
+    "B2": "leaseMonthlyCount",
+}
 
 
 def won_to_man(value: Any) -> int:
@@ -111,7 +115,9 @@ def fin_article_to_legacy(article: dict, *, group: dict | None = None) -> dict:
     group_info = _dict(group.get("duplicatedArticleInfo"))
     group_ads = group_info.get("articleInfoList")
     same_count = len(group_ads) if isinstance(group_ads, list) else 0
-    same_max, same_min = _group_price_range(_dict(group_info.get("representativePriceInfo")), trade_code)
+    same_max, same_min = _group_price_range(
+        _dict(group_info.get("representativePriceInfo")), trade_code
+    )
     confirm = str(verification.get("articleConfirmDate", "") or "").replace("-", "")
     real_estate = str(article.get("realEstateType", "") or "").strip().upper()
 
@@ -173,7 +179,9 @@ def parse_fin_article_list(payload: Any) -> dict | None:
         if not isinstance(ads, list) or not ads:
             ads = [group.get("representativeArticleInfo")]
         for ad in ads:
-            articles.append(fin_article_to_legacy(ad, group=group) if isinstance(ad, dict) else ad)
+            articles.append(
+                fin_article_to_legacy(ad, group=group) if isinstance(ad, dict) else ad
+            )
     last_info = result.get("lastInfo")
     return {
         "articles": articles,
@@ -194,10 +202,17 @@ def parse_fin_complex_info(payload: Any) -> dict:
         return {}
     address = _dict(result.get("address"))
     coords = _dict(result.get("coordinates"))
-    parts = [address.get("city"), address.get("division"), address.get("sector"), address.get("jibun")]
+    parts = [
+        address.get("city"),
+        address.get("division"),
+        address.get("sector"),
+        address.get("jibun"),
+    ]
     return {
         "name": str(result.get("name", "") or "").strip(),
-        "asset_type": _ASSET_BY_REAL_ESTATE_TYPE.get(str(result.get("type", "") or "").upper(), "APT"),
+        "asset_type": _ASSET_BY_REAL_ESTATE_TYPE.get(
+            str(result.get("type", "") or "").upper(), "APT"
+        ),
         "address": " ".join(str(p) for p in parts if p),
         "road_address": str(address.get("roadName", "") or ""),
         "legal_division_number": str(address.get("legalDivisionNumber", "") or ""),
@@ -242,11 +257,18 @@ def parse_fin_bounded_complexes(payload: Any, *, trade_code: str = "A1") -> dict
         if count <= 0:
             continue
         coords = _dict(_dict(info.get("address")).get("coordinates"))
-        asset = "VL" if is_villa else _ASSET_BY_REAL_ESTATE_TYPE.get(str(info.get("type", "") or "").upper(), "APT")
+        asset = (
+            "VL"
+            if is_villa
+            else _ASSET_BY_REAL_ESTATE_TYPE.get(
+                str(info.get("type", "") or "").upper(), "APT"
+            )
+        )
         markers.append(
             {
                 "complex_id": cid,
-                "complex_name": str(info.get("name", "") or "").strip() or f"단지_{cid}",
+                "complex_name": str(info.get("name", "") or "").strip()
+                or f"단지_{cid}",
                 "asset_type": asset,
                 "marker_id": cid,
                 "count": count,

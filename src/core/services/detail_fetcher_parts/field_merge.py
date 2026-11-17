@@ -87,7 +87,9 @@ _COMPLEX_LEVEL_PATH = "/front-api/v1/complex"
 
 
 def _is_complex_level_response(item) -> bool:
-    return isinstance(item, dict) and _COMPLEX_LEVEL_PATH in str(item.get("url", "") or "")
+    return isinstance(item, dict) and _COMPLEX_LEVEL_PATH in str(
+        item.get("url", "") or ""
+    )
 
 
 def _is_agent_response(item) -> bool:
@@ -96,7 +98,11 @@ def _is_agent_response(item) -> bool:
 
 def _backfill_fields_from_artifacts(fields: dict, artifacts: dict | None) -> dict:
     artifacts = dict(artifacts or {})
-    responses = [item for item in list(artifacts.get("responses", []) or []) if not _is_complex_level_response(item)]
+    responses = [
+        item
+        for item in list(artifacts.get("responses", []) or [])
+        if not _is_complex_level_response(item)
+    ]
     source_tree = {
         "hydration_state": artifacts.get("hydration_state", {}),
         "responses": responses,

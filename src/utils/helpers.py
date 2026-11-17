@@ -25,7 +25,9 @@ def build_complex_url(complex_id, *, asset_type="APT", preferred_family="fin"):
     path = "houses" if normalized_asset == "VL" else "complexes"
 
     if family in {"fin", "m"}:
-        suffix = "?tab=article&isVilla=true" if normalized_asset == "VL" else "?tab=article"
+        suffix = (
+            "?tab=article&isVilla=true" if normalized_asset == "VL" else "?tab=article"
+        )
         return f"https://fin.land.naver.com/complexes/{cid}{suffix}"
     return f"https://new.land.naver.com/{path}/{cid}"
 
@@ -53,6 +55,7 @@ def build_article_url(
         path = "houses" if normalized_asset == "VL" else "complexes"
         return f"https://new.land.naver.com/{path}/{cid}?articleId={aid}"
     return f"https://fin.land.naver.com/articles/{aid}"
+
 
 class PriceConverter:
     @staticmethod
@@ -85,7 +88,7 @@ class PriceConverter:
             except (ValueError, TypeError):
                 pass
         return total
-    
+
     @staticmethod
     def to_string(price_int):
         if price_int >= 10000:
@@ -112,44 +115,59 @@ class PriceConverter:
         """Return the comparable price in 만원 for a listing-like payload."""
         if not isinstance(item, dict):
             return 0
-        trade = str(trade_type or item.get("거래유형", item.get("trade_type", "")) or "").strip()
+        trade = str(
+            trade_type or item.get("거래유형", item.get("trade_type", "")) or ""
+        ).strip()
         if trade == "매매":
             return PriceConverter.to_int(item.get("매매가", item.get("price", "")))
         if trade == "월세":
-            rent_value = PriceConverter.to_int(item.get("월세", item.get("monthly", item.get("rent", ""))))
+            rent_value = PriceConverter.to_int(
+                item.get("월세", item.get("monthly", item.get("rent", "")))
+            )
             if rent_value > 0:
                 return rent_value
         return PriceConverter.to_int(item.get("보증금", item.get("deposit", "")))
 
+
 class AreaConverter:
     PYEONG_RATIO = 0.3025
+
     @classmethod
-    def sqm_to_pyeong(cls, sqm): return round(sqm * cls.PYEONG_RATIO, 1)
+    def sqm_to_pyeong(cls, sqm):
+        return round(sqm * cls.PYEONG_RATIO, 1)
+
     @classmethod
-    def pyeong_to_sqm(cls, pyeong): return round(pyeong / cls.PYEONG_RATIO, 2)
+    def pyeong_to_sqm(cls, pyeong):
+        return round(pyeong / cls.PYEONG_RATIO, 2)
+
 
 class DateTimeHelper:
     @staticmethod
-    def now_string(fmt="%Y-%m-%d %H:%M:%S"): return datetime.now().strftime(fmt)
+    def now_string(fmt="%Y-%m-%d %H:%M:%S"):
+        return datetime.now().strftime(fmt)
+
     @staticmethod
-    def file_timestamp(): return datetime.now().strftime("%Y%m%d_%H%M%S")
+    def file_timestamp():
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
 class PricePerPyeongCalculator:
     """평당가 계산기 (v12.0)"""
-    
+
     @staticmethod
     def calculate(price_int: int, pyeong: float) -> int:
         """평당가 계산 (만원 단위)"""
         if pyeong <= 0 or price_int <= 0:
             return 0
         return int(price_int / pyeong)
-    
+
     @staticmethod
     def format(price_per_pyeong: int) -> str:
         """평당가 문자열 포맷팅"""
         if price_per_pyeong <= 0:
             return "-"
         return PriceConverter.to_string(price_per_pyeong) + "/평"
+
 
 def get_complex_url(complex_id, asset_type="APT", preferred_family="fin"):
     """호환용 단지 URL 생성."""
@@ -169,10 +187,13 @@ def get_article_url(complex_id, article_id, asset_type="APT", preferred_family="
         preferred_family=preferred_family,
     )
 
+
 class ChromeParamHelper:
     @staticmethod
     def _skip_local_chrome():
-        return str(os.environ.get("NAVERLAND_SKIP_LOCAL_CHROME", "") or "").strip().lower() in {
+        return str(
+            os.environ.get("NAVERLAND_SKIP_LOCAL_CHROME", "") or ""
+        ).strip().lower() in {
             "1",
             "true",
             "yes",
@@ -257,23 +278,22 @@ class ChromeParamHelper:
         try:
             # 윈도우 레지스트리 경로
             key_path = r"SOFTWARE\Google\Chrome\BLBeacon"
-            
+
             # 레지스트리 열기 (HKEY_CURRENT_USER 우선 확인)
             try:
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path)
             except FileNotFoundError:
                 # 없으면 HKEY_LOCAL_MACHINE 확인
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path)
-            
+
             # 버전 값 읽기
             version, _ = winreg.QueryValueEx(key, "version")
             winreg.CloseKey(key)
-            
+
             # 메이저 버전 추출
-            major_version = int(version.split('.')[0])
+            major_version = int(version.split(".")[0])
             return major_version
         except Exception:
             # 실패 시 로그 출력 또는 None 반환 (호출 측에서 처리)
             # print(f"Chrome version detection failed: {e}")
             return None
-

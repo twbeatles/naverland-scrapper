@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseArticleBulkOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def touch_observed_articles(self, items: list[dict]) -> bool:
@@ -21,10 +22,13 @@ class ComplexDatabaseArticleBulkOpsMixin:
         if self.is_write_disabled():
             return False
         rows = {
-            (self._normalize_listing_asset_type(item.get("자산유형", "APT")),
-             str(item.get("단지ID", "") or ""), str(item.get("매물ID", "") or ""))
-            for item in items if isinstance(item, dict)
-            and item.get("단지ID") and item.get("매물ID")
+            (
+                self._normalize_listing_asset_type(item.get("자산유형", "APT")),
+                str(item.get("단지ID", "") or ""),
+                str(item.get("매물ID", "") or ""),
+            )
+            for item in items
+            if isinstance(item, dict) and item.get("단지ID") and item.get("매물ID")
         }
         if not rows:
             return True
@@ -36,7 +40,8 @@ class ComplexDatabaseArticleBulkOpsMixin:
                     with self._write_lock:
                         conn.executemany(
                             "UPDATE article_history SET last_seen=CURRENT_DATE, status='active' "
-                            "WHERE asset_type=? AND complex_id=? AND article_id=?", sorted(rows),
+                            "WHERE asset_type=? AND complex_id=? AND article_id=?",
+                            sorted(rows),
                         )
                         conn.commit()
                     return True
@@ -73,11 +78,21 @@ class ComplexDatabaseArticleBulkOpsMixin:
                     "trade_type": str(row.get("trade_type", "") or ""),
                     "price": int(row.get("price", 0) or 0),
                     "price_text": str(row.get("price_text", "") or ""),
-                    "area_pyeong": float(row.get("area", row.get("area_pyeong", 0)) or 0),
-                    "floor_info": str(row.get("floor", row.get("floor_info", "")) or ""),
+                    "area_pyeong": float(
+                        row.get("area", row.get("area_pyeong", 0)) or 0
+                    ),
+                    "floor_info": str(
+                        row.get("floor", row.get("floor_info", "")) or ""
+                    ),
                     "feature": str(row.get("feature", "") or ""),
-                    "last_price": int(row.get("last_price", row.get("price", 0)) or row.get("price", 0) or 0),
-                    "asset_type": self._normalize_listing_asset_type(row.get("asset_type", "APT")),
+                    "last_price": int(
+                        row.get("last_price", row.get("price", 0))
+                        or row.get("price", 0)
+                        or 0
+                    ),
+                    "asset_type": self._normalize_listing_asset_type(
+                        row.get("asset_type", "APT")
+                    ),
                     "source_mode": str(row.get("source_mode", "complex") or "complex"),
                     "source_lat": float(row.get("source_lat", 0) or 0),
                     "source_lon": float(row.get("source_lon", 0) or 0),
@@ -139,7 +154,11 @@ class ComplexDatabaseArticleBulkOpsMixin:
                     "gap_ratio": 0.0,
                 }
 
-            if not payload["article_id"] or not payload["complex_id"] or payload["price"] <= 0:
+            if (
+                not payload["article_id"]
+                or not payload["complex_id"]
+                or payload["price"] <= 0
+            ):
                 continue
             normalized.append(payload)
 

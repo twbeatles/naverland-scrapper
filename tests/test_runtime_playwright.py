@@ -21,7 +21,9 @@ class TestRuntimePlaywright(unittest.TestCase):
             with (
                 patch.dict(os.environ, {}, clear=True),
                 patch.object(runtime_playwright.sys, "frozen", True, create=True),
-                patch.object(runtime_playwright.sys, "executable", str(exe_dir / "naverland.exe")),
+                patch.object(
+                    runtime_playwright.sys, "executable", str(exe_dir / "naverland.exe")
+                ),
             ):
                 resolved = runtime_playwright.resolve_playwright_browsers_path()
 
@@ -35,9 +37,13 @@ class TestRuntimePlaywright(unittest.TestCase):
             user_cache.mkdir(parents=True, exist_ok=True)
 
             with (
-                patch.dict(os.environ, {"LOCALAPPDATA": str(root / "LocalAppData")}, clear=True),
+                patch.dict(
+                    os.environ, {"LOCALAPPDATA": str(root / "LocalAppData")}, clear=True
+                ),
                 patch.object(runtime_playwright.sys, "frozen", True, create=True),
-                patch.object(runtime_playwright.sys, "executable", str(exe_dir / "naverland.exe")),
+                patch.object(
+                    runtime_playwright.sys, "executable", str(exe_dir / "naverland.exe")
+                ),
             ):
                 resolved = runtime_playwright.resolve_playwright_browsers_path()
 
@@ -51,7 +57,11 @@ class TestRuntimePlaywright(unittest.TestCase):
 
             with (
                 patch.dict(os.environ, {}, clear=True),
-                patch.object(runtime_playwright, "_iter_browser_path_candidates", return_value=[bundled]),
+                patch.object(
+                    runtime_playwright,
+                    "_iter_browser_path_candidates",
+                    return_value=[bundled],
+                ),
             ):
                 resolved = runtime_playwright.configure_playwright_browsers_path()
                 configured = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")

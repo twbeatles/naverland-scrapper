@@ -62,7 +62,9 @@ class DatabaseTab(QWidget):
 
         self.btn_trend = QPushButton("시세 흐름 보기")
         self.btn_trend.setObjectName("primaryBtn")
-        self.btn_trend.setToolTip("고른 단지의 날짜별 가격 흐름을 「시세 흐름」 화면에서 봅니다.")
+        self.btn_trend.setToolTip(
+            "고른 단지의 날짜별 가격 흐름을 「시세 흐름」 화면에서 봅니다."
+        )
         self.btn_trend.clicked.connect(self._request_trend)
 
         btn_memo = QPushButton("메모 고치기")
@@ -71,7 +73,9 @@ class DatabaseTab(QWidget):
         btn_memo.clicked.connect(self._edit_memo)
         self.btn_delete_db = QPushButton("삭제")
         self.btn_delete_db.setObjectName("dangerBtn")
-        self.btn_delete_db.setToolTip("고른 단지를 「내 단지」에서 지웁니다. 여러 줄을 한꺼번에 고를 수 있습니다.")
+        self.btn_delete_db.setToolTip(
+            "고른 단지를 「내 단지」에서 지웁니다. 여러 줄을 한꺼번에 고를 수 있습니다."
+        )
         self.btn_delete_db.clicked.connect(self._delete_selected)
         self.btn_refresh_db = QPushButton("새로고침")
         self.btn_refresh_db.setObjectName("secondaryBtn")
@@ -91,7 +95,9 @@ class DatabaseTab(QWidget):
 
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "종류", "단지 이름", "단지 번호", "메모"])
+        self.table.setHorizontalHeaderLabels(
+            ["ID", "종류", "단지 이름", "단지 번호", "메모"]
+        )
         self.table.setColumnHidden(self.COL_ID, True)
         table_header = self.table.horizontalHeader()
         if table_header is not None:
@@ -128,7 +134,13 @@ class DatabaseTab(QWidget):
             seq = []
 
         if len(seq) >= 5:
-            db_id, name, asset_type, complex_id, memo = seq[0], seq[1], seq[2], seq[3], seq[4]
+            db_id, name, asset_type, complex_id, memo = (
+                seq[0],
+                seq[1],
+                seq[2],
+                seq[3],
+                seq[4],
+            )
         elif len(seq) >= 4:
             # Backward compatibility (old schema tuple)
             db_id, name, complex_id, memo = seq[0], seq[1], seq[2], seq[3]
@@ -153,12 +165,24 @@ class DatabaseTab(QWidget):
             self._update_empty_state(len(complexes))
             self.table.setRowCount(len(complexes))
             for row_idx, row_data in enumerate(complexes):
-                db_id, name, asset_type, complex_id, memo = self._normalize_complex_row(row_data)
+                db_id, name, asset_type, complex_id, memo = self._normalize_complex_row(
+                    row_data
+                )
                 self.table.setItem(row_idx, self.COL_ID, QTableWidgetItem(str(db_id)))
-                self.table.setItem(row_idx, self.COL_ASSET, QTableWidgetItem(str(asset_type or "")))
-                self.table.setItem(row_idx, self.COL_NAME, QTableWidgetItem(str(name or "")))
-                self.table.setItem(row_idx, self.COL_COMPLEX_ID, QTableWidgetItem(str(complex_id or "")))
-                self.table.setItem(row_idx, self.COL_MEMO, QTableWidgetItem(str(memo) if memo else ""))
+                self.table.setItem(
+                    row_idx, self.COL_ASSET, QTableWidgetItem(str(asset_type or ""))
+                )
+                self.table.setItem(
+                    row_idx, self.COL_NAME, QTableWidgetItem(str(name or ""))
+                )
+                self.table.setItem(
+                    row_idx,
+                    self.COL_COMPLEX_ID,
+                    QTableWidgetItem(str(complex_id or "")),
+                )
+                self.table.setItem(
+                    row_idx, self.COL_MEMO, QTableWidgetItem(str(memo) if memo else "")
+                )
         except Exception as e:
             logger.error(f"load failed: {e}")
             self._update_empty_state(0)
@@ -190,7 +214,9 @@ class DatabaseTab(QWidget):
         cid = cid_item.text().strip() if cid_item is not None else ""
         if not cid:
             return
-        asset_type = (asset_item.text().strip().upper() if asset_item is not None else "") or "APT"
+        asset_type = (
+            asset_item.text().strip().upper() if asset_item is not None else ""
+        ) or "APT"
         self.trend_requested.emit(asset_type, cid)
 
     def _confirm_delete(self, *, title: str, text: str) -> tuple[bool, bool]:
@@ -198,11 +224,15 @@ class DatabaseTab(QWidget):
         msg.setIcon(QMessageBox.Icon.Warning)
         msg.setWindowTitle(title)
         msg.setText(text)
-        msg.setInformativeText("단지와 묶음 연결만 지웁니다. 그동안 쌓인 가격 기록까지 지우려면 아래를 체크해 주세요.")
+        msg.setInformativeText(
+            "단지와 묶음 연결만 지웁니다. 그동안 쌓인 가격 기록까지 지우려면 아래를 체크해 주세요."
+        )
         purge_check = QCheckBox("가격 기록·수집 기록도 함께 지우기")
         purge_check.setChecked(False)
         msg.setCheckBox(purge_check)
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         msg.setDefaultButton(QMessageBox.StandardButton.No)
         accepted = msg.exec() == QMessageBox.StandardButton.Yes
         return accepted, bool(purge_check.isChecked())
@@ -233,7 +263,9 @@ class DatabaseTab(QWidget):
     def _delete_complexes_multi(self):
         rows = sorted(set(item.row() for item in self.table.selectedItems()))
         if not rows:
-            QMessageBox.information(self, "단지를 골라 주세요", "지울 단지를 먼저 골라 주세요.")
+            QMessageBox.information(
+                self, "단지를 골라 주세요", "지울 단지를 먼저 골라 주세요."
+            )
             return
 
         ids = []
@@ -274,7 +306,9 @@ class DatabaseTab(QWidget):
 
         db_id = int(db_id_item.text())
         old = old_item.text() if old_item else ""
-        new, ok = QInputDialog.getText(self, "메모 고치기", "이 단지에 남길 메모", text=old)
+        new, ok = QInputDialog.getText(
+            self, "메모 고치기", "이 단지에 남길 메모", text=old
+        )
         if ok:
             self.db.update_complex_memo(db_id, new)
             self.load_data()
@@ -282,11 +316,14 @@ class DatabaseTab(QWidget):
     def _filter_table(self, text):
         token = str(text or "").lower()
         for row in range(self.table.rowCount()):
+
             def _cell_text(col: int, _row=row) -> str:
                 cell = self.table.item(_row, col)
                 return cell.text().lower() if cell is not None else ""
 
-            match = any(token in _cell_text(col) for col in range(self.table.columnCount()))
+            match = any(
+                token in _cell_text(col) for col in range(self.table.columnCount())
+            )
             self.table.setRowHidden(row, not match)
 
     def _open_complex_url(self):

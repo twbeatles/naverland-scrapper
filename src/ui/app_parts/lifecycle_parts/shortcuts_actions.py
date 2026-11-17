@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppLifecycleShortcutsActionsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _init_shortcuts(self: Any):
         self._register_shortcut(SHORTCUTS["start_crawl"], self._start_crawling)
         self._register_shortcut(SHORTCUTS["stop_crawl"], self._stop_crawling)
@@ -30,7 +32,12 @@ class AppLifecycleShortcutsActionsMixin:
         except Exception:
             _old = None
         if _old is not None:
-            for _op in ("activated.disconnect", "setEnabled", "setParent", "deleteLater"):
+            for _op in (
+                "activated.disconnect",
+                "setEnabled",
+                "setParent",
+                "deleteLater",
+            ):
                 try:
                     if _op == "activated.disconnect":
                         _old.activated.disconnect()

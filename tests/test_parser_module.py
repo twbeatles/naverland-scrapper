@@ -119,7 +119,9 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertIn("1", ids)
         self.assertIn("22", ids)
 
-    def test_extract_from_text_preserves_house_asset_scope_separately_from_complex_urls(self):
+    def test_extract_from_text_preserves_house_asset_scope_separately_from_complex_urls(
+        self,
+    ):
         text = "\n".join(
             [
                 "https://new.land.naver.com/houses/54321?articleId=111",
@@ -143,14 +145,21 @@ class TestNaverURLParser(unittest.TestCase):
         )
         results = NaverURLParser.extract_from_text(text)
 
-        self.assertEqual([entry.get("article_id") for entry in results], ["2513105556", "2513105557"])
+        self.assertEqual(
+            [entry.get("article_id") for entry in results], ["2513105556", "2513105557"]
+        )
         self.assertTrue(all(entry.get("needs_article_lookup") for entry in results))
         self.assertTrue(all(entry.get("complex_id") == "" for entry in results))
 
     def test_resolve_article_complex_from_article_payload(self):
-        payload = '{"articleNo":"2513105556","complexNo":"102378","realEstateTypeCode":"APT"}'
+        payload = (
+            '{"articleNo":"2513105556","complexNo":"102378","realEstateTypeCode":"APT"}'
+        )
 
-        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+            return_value=payload,
+        ):
             resolved = NaverURLParser.resolve_article_complex("2513105556")
 
         self.assertEqual(resolved["complex_id"], "102378")
@@ -163,7 +172,10 @@ class TestNaverURLParser(unittest.TestCase):
             'pyeongTypeNumber=4">대출</a>'
         )
 
-        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+            return_value=payload,
+        ):
             resolved = NaverURLParser.resolve_article_complex("2625154515")
 
         self.assertEqual(resolved["complex_id"], "3833")
@@ -171,16 +183,21 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(resolved["article_id"], "2625154515")
 
     def test_resolve_article_complex_from_escaped_complex_number_state(self):
-        payload = r'{\"params\":{\"articleNumber\":\"2625154515\",\"complexNumber\":\"3833\"}}'
+        payload = r"{\"params\":{\"articleNumber\":\"2625154515\",\"complexNumber\":\"3833\"}}"
 
-        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+            return_value=payload,
+        ):
             resolved = NaverURLParser.resolve_article_complex("2625154515")
 
         self.assertEqual(resolved["complex_id"], "3833")
         self.assertEqual(resolved["asset_type"], "APT")
 
     def test_extract_article_complex_info_from_browser_response_url(self):
-        corpus = "https://fin.land.naver.com/front-api/v1/complex/photo?complexNumber=3833"
+        corpus = (
+            "https://fin.land.naver.com/front-api/v1/complex/photo?complexNumber=3833"
+        )
 
         cid, asset_type = NaverURLParser._extract_article_complex_info(corpus)
 
@@ -188,9 +205,14 @@ class TestNaverURLParser(unittest.TestCase):
         self.assertEqual(asset_type, "APT")
 
     def test_resolve_article_complex_detects_vl_building_payload(self):
-        payload = '{"articleNo":"2513105556","bildNo":"654321","realEstateTypeName":"빌라"}'
+        payload = (
+            '{"articleNo":"2513105556","bildNo":"654321","realEstateTypeName":"빌라"}'
+        )
 
-        with patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", return_value=payload):
+        with patch(
+            "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+            return_value=payload,
+        ):
             resolved = NaverURLParser.resolve_article_complex("2513105556")
 
         self.assertEqual(resolved["complex_id"], "654321")
@@ -198,14 +220,23 @@ class TestNaverURLParser(unittest.TestCase):
 
     def test_resolve_article_complex_returns_empty_on_lookup_failure(self):
         with (
-            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
-            patch("src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback", return_value={}),
+            patch(
+                "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+                side_effect=OSError("down"),
+            ),
+            patch(
+                "src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback",
+                return_value={},
+            ),
         ):
             self.assertEqual(NaverURLParser.resolve_article_complex("2513105556"), {})
 
     def test_resolve_article_complex_uses_browser_fallback_after_urllib_failure(self):
         with (
-            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
+            patch(
+                "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+                side_effect=OSError("down"),
+            ),
             patch(
                 "src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback",
                 return_value={
@@ -229,7 +260,9 @@ class TestNaverURLParser(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def resolve(self, article_id, *, cancel_checker=None, fallback_asset_type="APT"):
+            def resolve(
+                self, article_id, *, cancel_checker=None, fallback_asset_type="APT"
+            ):
                 self.calls.append((article_id, fallback_asset_type))
                 return {
                     "source": "injected:browser_fallback",
@@ -241,8 +274,13 @@ class TestNaverURLParser(unittest.TestCase):
 
         fallback = _Fallback()
         with (
-            patch("src.core.parser.NaverURLParser._fetch_article_lookup_impl", side_effect=OSError("down")),
-            patch("src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback") as mock_default_fallback,
+            patch(
+                "src.core.parser.NaverURLParser._fetch_article_lookup_impl",
+                side_effect=OSError("down"),
+            ),
+            patch(
+                "src.core.parser.NaverURLParser._resolve_article_complex_browser_fallback"
+            ) as mock_default_fallback,
         ):
             resolved = NaverURLParser.resolve_article_complex(
                 "2513105556",
@@ -288,7 +326,10 @@ class TestNaverURLParser(unittest.TestCase):
 
         controller = _FakeController()
         with (
-            patch("playwright.sync_api.sync_playwright", return_value=_FakeStarter(controller)),
+            patch(
+                "playwright.sync_api.sync_playwright",
+                return_value=_FakeStarter(controller),
+            ),
             patch(
                 "src.utils.helpers.ChromeParamHelper.get_chrome_executable_path",
                 return_value="C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -311,7 +352,9 @@ class TestNaverURLParser(unittest.TestCase):
         name = NaverURLParser.fetch_complex_name("99999")
         self.assertEqual(name, "단지_99999")
 
-    def test_fetch_complex_name_uses_browser_fallback_during_direct_lookup_cooldown(self):
+    def test_fetch_complex_name_uses_browser_fallback_during_direct_lookup_cooldown(
+        self,
+    ):
         class _RateLimitHTTPError(HTTPError):
             def __init__(self):
                 super().__init__(
@@ -328,7 +371,10 @@ class TestNaverURLParser(unittest.TestCase):
         with (
             patch(
                 "src.core.parser.NaverURLParser._fetch_name_impl",
-                side_effect=[_RateLimitHTTPError(), AssertionError("should not requery during cooldown")],
+                side_effect=[
+                    _RateLimitHTTPError(),
+                    AssertionError("should not requery during cooldown"),
+                ],
             ) as mock_fetch,
             patch(
                 "src.core.parser.NaverURLParser._fetch_name_browser_fallback",
@@ -360,8 +406,14 @@ class TestNaverURLParser(unittest.TestCase):
                 return b'{"success":false,"code":"TOO_MANY_REQUESTS"}'
 
         with (
-            patch("src.core.parser.NaverURLParser._fetch_name_impl", side_effect=_RateLimitHTTPError()),
-            patch("src.core.parser.NaverURLParser._fetch_name_browser_fallback", return_value="남산타운") as mock_browser,
+            patch(
+                "src.core.parser.NaverURLParser._fetch_name_impl",
+                side_effect=_RateLimitHTTPError(),
+            ),
+            patch(
+                "src.core.parser.NaverURLParser._fetch_name_browser_fallback",
+                return_value="남산타운",
+            ) as mock_browser,
         ):
             name = NaverURLParser.fetch_complex_name("3833")
 

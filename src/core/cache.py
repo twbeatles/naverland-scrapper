@@ -9,7 +9,7 @@ from src.utils.paths import CACHE_PATH
 
 class CrawlCache:
     """크롤링 결과 캐시 (v12.0)"""
-    
+
     def __init__(
         self,
         ttl_minutes: int = 30,
@@ -24,7 +24,7 @@ class CrawlCache:
         self._dirty = False
         self._last_flush_at = datetime.now()
         self._load()
-    
+
     @staticmethod
     def _normalize_float_token(value) -> str:
         try:
@@ -110,7 +110,7 @@ class CrawlCache:
         if ttl_seconds > 0:
             return timedelta(seconds=ttl_seconds)
         return self.ttl
-    
+
     def _load(self):
         """캐시 파일 로드"""
         data = load_json_with_recovery(
@@ -123,16 +123,16 @@ class CrawlCache:
             now = datetime.now()
             for key, entry in data.items():
                 try:
-                    cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
-                    has_payload = isinstance(entry.get("raw_items"), list) or isinstance(
-                        entry.get("items"), list
-                    )
+                    cached_at = datetime.fromisoformat(entry.get("cached_at", ""))
+                    has_payload = isinstance(
+                        entry.get("raw_items"), list
+                    ) or isinstance(entry.get("items"), list)
                     if now - cached_at < self._entry_ttl(entry) and has_payload:
                         self._cache[key] = entry
                 except (ValueError, TypeError):
                     continue
         self._evict_if_needed()
-    
+
     def _save(self):
         """캐시 파일 저장"""
         try:
@@ -140,7 +140,7 @@ class CrawlCache:
             self._dirty = False
             self._last_flush_at = datetime.now()
         except OSError as e:
-            get_logger('CrawlCache').warning(f"캐시 저장 실패: {e}")
+            get_logger("CrawlCache").warning(f"캐시 저장 실패: {e}")
 
     def _evict_if_needed(self):
         """최대 엔트리 수를 초과하면 오래된 항목부터 제거"""
@@ -154,7 +154,9 @@ class CrawlCache:
             except (ValueError, TypeError):
                 return datetime.min
 
-        sorted_keys = sorted(self._cache.keys(), key=lambda k: _cache_time(self._cache.get(k, {})))
+        sorted_keys = sorted(
+            self._cache.keys(), key=lambda k: _cache_time(self._cache.get(k, {}))
+        )
         for key in sorted_keys[:over]:
             self._cache.pop(key, None)
 
@@ -209,20 +211,26 @@ class CrawlCache:
                     key = legacy_key
             if not entry:
                 return None
-            
+
             try:
-                cached_at = datetime.fromisoformat(entry.get('cached_at', ''))
+                cached_at = datetime.fromisoformat(entry.get("cached_at", ""))
                 if datetime.now() - cached_at < self._entry_ttl(entry):
                     suffix = f", context={context_ns}" if context_ns else ""
-                    get_logger('CrawlCache').debug(f"캐시 히트: {complex_id} ({trade_type}{suffix})")
+                    get_logger("CrawlCache").debug(
+                        f"캐시 히트: {complex_id} ({trade_type}{suffix})"
+                    )
                     # v14.2: raw_items 우선 사용, legacy items 포맷과 호환 유지
                     # ISSUE-012: 내부 리스트 별칭 반환 금지 — 호출자 변이가 캐시를 오염시킨다.
                     raw_items = entry.get("raw_items")
                     if isinstance(raw_items, list):
-                        return [dict(i) if isinstance(i, dict) else i for i in raw_items]
+                        return [
+                            dict(i) if isinstance(i, dict) else i for i in raw_items
+                        ]
                     legacy_items = entry.get("items")
                     if isinstance(legacy_items, list):
-                        return [dict(i) if isinstance(i, dict) else i for i in legacy_items]
+                        return [
+                            dict(i) if isinstance(i, dict) else i for i in legacy_items
+                        ]
                     return []
                 else:
                     # 만료된 캐시 삭제
@@ -232,7 +240,7 @@ class CrawlCache:
                     return None
             except (ValueError, TypeError):
                 return None
-    
+
     def set(
         self,
         complex_id: str,
@@ -272,8 +280,8 @@ class CrawlCache:
                 query_fingerprint=query_fingerprint,
             )
             payload = {
-                'cached_at': datetime.now().isoformat(),
-                'raw_items': list(raw_items),
+                "cached_at": datetime.now().isoformat(),
+                "raw_items": list(raw_items),
             }
             if context_ns:
                 payload["context"] = context_ns
@@ -291,7 +299,7 @@ class CrawlCache:
             self._dirty = True
             self._flush_if_needed()
             suffix = f", context={context_ns}" if context_ns else ""
-            get_logger('CrawlCache').debug(
+            get_logger("CrawlCache").debug(
                 f"캐시 저장: {complex_id} ({trade_type}{suffix}) - {len(raw_items)}건"
             )
 
@@ -300,7 +308,7 @@ class CrawlCache:
         with self._lock:
             if self._dirty:
                 self._save()
-    
+
     def clear(self):
         """전체 캐시 삭제"""
         with self._lock:
@@ -310,15 +318,15 @@ class CrawlCache:
                 try:
                     CACHE_PATH.unlink()
                 except OSError as e:
-                    get_logger('CrawlCache').debug(f"캐시 파일 삭제 실패 (무시): {e}")
-            get_logger('CrawlCache').info("캐시 전체 삭제")
-    
+                    get_logger("CrawlCache").debug(f"캐시 파일 삭제 실패 (무시): {e}")
+            get_logger("CrawlCache").info("캐시 전체 삭제")
+
     def get_stats(self) -> dict:
         """캐시 통계"""
         return {
-            'total_entries': len(self._cache),
-            'ttl_minutes': self.ttl.total_seconds() / 60,
-            'dirty': self._dirty,
-            'write_back_interval_sec': self.write_back_interval_sec,
-            'max_entries': self.max_entries,
+            "total_entries": len(self._cache),
+            "ttl_minutes": self.ttl.total_seconds() / 60,
+            "dirty": self._dirty,
+            "write_back_interval_sec": self.write_back_interval_sec,
+            "max_entries": self.max_entries,
         }

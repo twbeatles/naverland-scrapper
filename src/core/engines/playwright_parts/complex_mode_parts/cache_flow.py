@@ -13,6 +13,7 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightComplexCacheFlowMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _crawl_target_with_cache(
@@ -38,7 +39,9 @@ class PlaywrightComplexCacheFlowMixin:
         mode_token = str(mode or "complex").strip().lower()
         is_complex_mode = mode_token == "complex"
         normalized_asset_type = str(asset_type or "APT").strip().upper() or "APT"
-        cache_asset_type = normalized_asset_type if is_complex_mode else str(asset_type or "")
+        cache_asset_type = (
+            normalized_asset_type if is_complex_mode else str(asset_type or "")
+        )
         cache_marker_id = "" if is_complex_mode else str(marker_id or cid or "")
         cache_ctx = {
             "mode": mode_token,
@@ -47,20 +50,30 @@ class PlaywrightComplexCacheFlowMixin:
             "source_lon": source_lon,
             "source_zoom": source_zoom,
             "marker_id": cache_marker_id,
-            "query_fingerprint": collection_fingerprint(include_pre=bool(getattr(self.thread, "include_pre_sale_rights", False))),
+            "query_fingerprint": collection_fingerprint(
+                include_pre=bool(getattr(self.thread, "include_pre_sale_rights", False))
+            ),
         }
         if cache:
             cached = cache.get(cid, trade_type, **cache_ctx)
             if cached is not None:
                 self.thread.log(f"   캐시 히트: {len(cached)}건 로드")
-                self.thread.stats["cache_hits"] = self.thread.stats.get("cache_hits", 0) + 1
+                self.thread.stats["cache_hits"] = (
+                    self.thread.stats.get("cache_hits", 0) + 1
+                )
                 matched = await self._process_raw_items_with_filtered_details(
                     list(cached or []),
                     trade_type,
                 )
-                record_collection_result(self.thread.stats, {"collection_status": "complete", "cache_hit": True},
-                                         cid=cid, asset_type=normalized_asset_type, trade_type=trade_type,
-                                         count=matched, raw_count=len(cached))
+                record_collection_result(
+                    self.thread.stats,
+                    {"collection_status": "complete", "cache_hit": True},
+                    cid=cid,
+                    asset_type=normalized_asset_type,
+                    trade_type=trade_type,
+                    count=matched,
+                    raw_count=len(cached),
+                )
                 return {
                     "count": matched,
                     "raw_count": len(cached),
@@ -85,7 +98,9 @@ class PlaywrightComplexCacheFlowMixin:
             source_zoom=source_zoom,
             marker_id=cache_marker_id if is_complex_mode else marker_id,
         )
-        if bool(collect_result.get("capture_failed", False)) or bool(collect_result.get("block_like_redirect", False)):
+        if bool(collect_result.get("capture_failed", False)) or bool(
+            collect_result.get("block_like_redirect", False)
+        ):
             recovery_reason = str(
                 collect_result.get("failure_reason", "")
                 or collect_result.get("block_reason", "")
@@ -114,20 +129,32 @@ class PlaywrightComplexCacheFlowMixin:
         capture_failed = bool(collect_result.get("capture_failed", False))
         failure_reason = str(collect_result.get("failure_reason", "") or "")
         if response_seen:
-            self.thread.stats["response_seen_count"] = int(self.thread.stats.get("response_seen_count", 0)) + 1
+            self.thread.stats["response_seen_count"] = (
+                int(self.thread.stats.get("response_seen_count", 0)) + 1
+            )
         if parse_success:
-            self.thread.stats["parse_success_count"] = int(self.thread.stats.get("parse_success_count", 0)) + 1
+            self.thread.stats["parse_success_count"] = (
+                int(self.thread.stats.get("parse_success_count", 0)) + 1
+            )
         elif response_seen:
-            self.thread.stats["parse_fail_count"] = int(self.thread.stats.get("parse_fail_count", 0)) + 1
-        self.thread.stats["response_match_count"] = int(self.thread.stats.get("response_match_count", 0)) + response_match_count
+            self.thread.stats["parse_fail_count"] = (
+                int(self.thread.stats.get("parse_fail_count", 0)) + 1
+            )
+        self.thread.stats["response_match_count"] = (
+            int(self.thread.stats.get("response_match_count", 0)) + response_match_count
+        )
         if final_url:
             self.thread.stats["playwright_last_final_url"] = final_url
         if block_reason:
             self.thread.stats["playwright_last_block_reason"] = block_reason
         if block_like_redirect:
-            self.thread.stats["block_like_redirect_count"] = int(self.thread.stats.get("block_like_redirect_count", 0)) + 1
+            self.thread.stats["block_like_redirect_count"] = (
+                int(self.thread.stats.get("block_like_redirect_count", 0)) + 1
+            )
         if capture_failed:
-            self.thread.stats["capture_failed_count"] = int(self.thread.stats.get("capture_failed_count", 0)) + 1
+            self.thread.stats["capture_failed_count"] = (
+                int(self.thread.stats.get("capture_failed_count", 0)) + 1
+            )
         complete = result_is_complete(collect_result)
         if cache and complete:
             if raw_items:
@@ -151,12 +178,25 @@ class PlaywrightComplexCacheFlowMixin:
                         **cache_ctx,
                     )
                 elif drain_timed_out:
-                    self.thread.log("   ⚠️ drain timeout detected, negative cache skipped", 30)
+                    self.thread.log(
+                        "   ⚠️ drain timeout detected, negative cache skipped", 30
+                    )
                 elif capture_failed or block_like_redirect:
-                    self.thread.log("   ⚠️ capture failure detected, negative cache skipped", 30)
-        matched = await self._process_raw_items_with_filtered_details(raw_items, trade_type)
-        record_collection_result(self.thread.stats, collect_result, cid=cid, asset_type=normalized_asset_type,
-                                 trade_type=trade_type, count=matched, raw_count=len(raw_items))
+                    self.thread.log(
+                        "   ⚠️ capture failure detected, negative cache skipped", 30
+                    )
+        matched = await self._process_raw_items_with_filtered_details(
+            raw_items, trade_type
+        )
+        record_collection_result(
+            self.thread.stats,
+            collect_result,
+            cid=cid,
+            asset_type=normalized_asset_type,
+            trade_type=trade_type,
+            count=matched,
+            raw_count=len(raw_items),
+        )
         return {
             "count": matched,
             "raw_count": len(raw_items),

@@ -6,7 +6,7 @@ import unittest
 from bs4 import BeautifulSoup
 
 # Add src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.core.item_parser import ItemParser
 
@@ -22,9 +22,9 @@ class TestItemParser(unittest.TestCase):
             <div class="item_direction">남향</div>
         </div>
         """
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
         item = soup.select_one(".item_inner")
-        
+
         data = ItemParser.parse_element(
             item,
             "Sample Complex",
@@ -48,7 +48,7 @@ class TestItemParser(unittest.TestCase):
             <div class="item_article">Item 2</div>
         </div>
         """
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
         items = ItemParser.find_items(soup)
         self.assertEqual(len(items), 2)
 
@@ -63,7 +63,9 @@ class TestItemParser(unittest.TestCase):
         """
         item = BeautifulSoup(html, "html.parser").select_one(".item_inner")
 
-        data = ItemParser.parse_element(item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00")
+        data = ItemParser.parse_element(
+            item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00"
+        )
 
         self.assertEqual(data["거래유형"], "월세")
         self.assertEqual(data["보증금"], "1억")
@@ -78,7 +80,9 @@ class TestItemParser(unittest.TestCase):
         """
         item = BeautifulSoup(html, "html.parser").select_one(".item_inner")
 
-        data = ItemParser.parse_element(item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00")
+        data = ItemParser.parse_element(
+            item, "Sample", "12345", "월세", captured_at="2026-04-16 12:00:00"
+        )
 
         self.assertEqual(data["거래유형"], "월세")
         self.assertEqual(data["보증금"], "1억")
@@ -99,11 +103,14 @@ class TestItemParser(unittest.TestCase):
         captured_at = "2026-04-16 12:00:00"
         start = time.perf_counter()
         for _ in range(n):
-            ItemParser.parse_element(item, "Sample", "12345", "매매", captured_at=captured_at)
+            ItemParser.parse_element(
+                item, "Sample", "12345", "매매", captured_at=captured_at
+            )
         elapsed = time.perf_counter() - start
         throughput = n / elapsed if elapsed > 0 else 0
         # 환경 편차를 고려한 스모크 하한
         self.assertGreater(throughput, 400)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

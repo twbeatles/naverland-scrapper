@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppLifecycleTrayMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _init_tray(self: Any):
         self.tray_icon = None
         if QSystemTrayIcon.isSystemTrayAvailable():
@@ -26,7 +28,12 @@ class AppLifecycleTrayMixin:
             self.status_bar.showMessage("시스템 트레이를 사용할 수 없습니다.")
             return
         self.hide()
-        self.tray_icon.showMessage("알림", "트레이로 최소화되었습니다.", QSystemTrayIcon.MessageIcon.Information, 2000)
+        self.tray_icon.showMessage(
+            "알림",
+            "트레이로 최소화되었습니다.",
+            QSystemTrayIcon.MessageIcon.Information,
+            2000,
+        )
 
     def _show_from_tray(self: Any):
         self.show()

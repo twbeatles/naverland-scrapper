@@ -34,7 +34,9 @@ FONT_BODY = 13
 FONT_SECONDARY = 12
 FONT_CAPTION = 11
 
-FONT_STACK = "'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+FONT_STACK = (
+    "'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+)
 
 # --- window (srtgo/ktrain parity: fit available geometry, never fixed coords) ---
 DEFAULT_WINDOW_WIDTH = 1200
@@ -46,8 +48,12 @@ SCREEN_MARGIN = 40
 
 def preferred_window_size(avail_width: int, avail_height: int) -> tuple[int, int]:
     """화면 가용 영역을 넘지 않는 기본 창 크기."""
-    width = min(DEFAULT_WINDOW_WIDTH, max(MIN_WINDOW_WIDTH, avail_width - SCREEN_MARGIN))
-    height = min(DEFAULT_WINDOW_HEIGHT, max(MIN_WINDOW_HEIGHT, avail_height - SCREEN_MARGIN))
+    width = min(
+        DEFAULT_WINDOW_WIDTH, max(MIN_WINDOW_WIDTH, avail_width - SCREEN_MARGIN)
+    )
+    height = min(
+        DEFAULT_WINDOW_HEIGHT, max(MIN_WINDOW_HEIGHT, avail_height - SCREEN_MARGIN)
+    )
     return width, height
 
 
@@ -64,6 +70,7 @@ def _resolve_theme_key(theme_name: str | None) -> str:
         return name
     try:
         import darkdetect
+
         return "light" if darkdetect.theme() == "Light" else "dark"
     except Exception:
         return "dark"

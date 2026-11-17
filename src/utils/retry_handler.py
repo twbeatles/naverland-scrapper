@@ -51,7 +51,9 @@ class RetryHandler:
 
                     if self.is_rate_limited(e):
                         wait_time = max(wait_time, 30)
-                        self._logger.warning(f"rate limit detected; waiting {wait_time:.1f}s")
+                        self._logger.warning(
+                            f"rate limit detected; waiting {wait_time:.1f}s"
+                        )
                     else:
                         self._logger.warning(
                             f"retry in {wait_time:.1f}s ({attempt + 1}/{self.max_retries}): {e}"

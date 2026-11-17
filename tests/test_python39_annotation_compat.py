@@ -31,7 +31,9 @@ def _annotation_contains_bitwise_union(node: Optional[ast.AST]) -> bool:
 
 def _module_uses_pep604_annotations(tree: ast.Module) -> bool:
     for node in ast.walk(tree):
-        if isinstance(node, ast.AnnAssign) and _annotation_contains_bitwise_union(node.annotation):
+        if isinstance(node, ast.AnnAssign) and _annotation_contains_bitwise_union(
+            node.annotation
+        ):
             return True
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if _annotation_contains_bitwise_union(node.returns):
@@ -43,9 +45,13 @@ def _module_uses_pep604_annotations(tree: ast.Module) -> bool:
             ):
                 if _annotation_contains_bitwise_union(arg.annotation):
                     return True
-            if _annotation_contains_bitwise_union(node.args.vararg.annotation if node.args.vararg else None):
+            if _annotation_contains_bitwise_union(
+                node.args.vararg.annotation if node.args.vararg else None
+            ):
                 return True
-            if _annotation_contains_bitwise_union(node.args.kwarg.annotation if node.args.kwarg else None):
+            if _annotation_contains_bitwise_union(
+                node.args.kwarg.annotation if node.args.kwarg else None
+            ):
                 return True
     return False
 

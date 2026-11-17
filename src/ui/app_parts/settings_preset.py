@@ -14,6 +14,7 @@ def _theme_label(token) -> str:
 
 class AppSettingsPresetMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _toggle_theme(self: Any, theme=None):
@@ -22,13 +23,13 @@ class AppSettingsPresetMixin:
         else:
             new_theme = "light" if self.current_theme == "dark" else "dark"
         self.current_theme = new_theme
-        
+
         # Fluent theme + domain stylesheet (+ guide HTML)
         if hasattr(self, "_apply_domain_stylesheet"):
             self._apply_domain_stylesheet(new_theme)
         else:
             self.setStyleSheet(get_stylesheet(new_theme))
-        
+
         # 개별 위젯 테마 업데이트
         if hasattr(self, "crawler_tab") and hasattr(self.crawler_tab, "set_theme"):
             self.crawler_tab.set_theme(new_theme)
@@ -45,15 +46,15 @@ class AppSettingsPresetMixin:
             self.action_theme_dark.setChecked(new_theme == "dark")
         if hasattr(self, "action_theme_light"):
             self.action_theme_light.setChecked(new_theme == "light")
-        
+
         settings.set("theme", new_theme)
         self.show_toast(f"{_theme_label(new_theme)}로 바꿨습니다.")
-    
+
     def _show_settings(self: Any):
         dlg = SettingsDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._apply_settings()
-    
+
     def _apply_settings(self: Any):
         """설정 변경 후 적용"""
         # 테마 변경 체크
@@ -64,59 +65,74 @@ class AppSettingsPresetMixin:
                 self._apply_domain_stylesheet(new_theme)
             else:
                 self.setStyleSheet(get_stylesheet(new_theme))
-            
+
             # 개별 위젯 테마 업데이트 (안전하게)
             try:
-                if hasattr(self, 'crawler_tab') and hasattr(self.crawler_tab, 'set_theme'):
+                if hasattr(self, "crawler_tab") and hasattr(
+                    self.crawler_tab, "set_theme"
+                ):
                     self.crawler_tab.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"crawler_tab 테마 적용 실패 (무시): {e}")
             try:
-                if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'set_theme'):
+                if hasattr(self, "geo_tab") and hasattr(self.geo_tab, "set_theme"):
                     self.geo_tab.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"geo_tab 테마 적용 실패 (무시): {e}")
-            
+
             try:
-                if self.dashboard_widget is not None and hasattr(self.dashboard_widget, 'set_theme'):
+                if self.dashboard_widget is not None and hasattr(
+                    self.dashboard_widget, "set_theme"
+                ):
                     self.dashboard_widget.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"dashboard_widget 테마 적용 실패 (무시): {e}")
-            
+
             try:
-                if hasattr(self, 'favorites_tab') and hasattr(self.favorites_tab, 'set_theme'):
+                if hasattr(self, "favorites_tab") and hasattr(
+                    self.favorites_tab, "set_theme"
+                ):
                     self.favorites_tab.set_theme(new_theme)
             except Exception as e:
                 ui_logger.debug(f"favorites_tab 테마 적용 실패 (무시): {e}")
-            
+
             # 메뉴 체크 상태 업데이트
-            if hasattr(self, 'action_theme_dark'):
+            if hasattr(self, "action_theme_dark"):
                 self.action_theme_dark.setChecked(new_theme == "dark")
-            if hasattr(self, 'action_theme_light'):
+            if hasattr(self, "action_theme_light"):
                 self.action_theme_light.setChecked(new_theme == "light")
-            
+
             self.show_toast(f"{_theme_label(new_theme)}로 바꿨습니다.")
-            
+
             # 위젯 테마 업데이트
-            if hasattr(self, 'crawler_tab'):
+            if hasattr(self, "crawler_tab"):
                 # CrawlerTab doesn't have explicit set_theme yet but standard widgets style updates automatically
                 # If specialized manual update is needed, invoke here
                 pass
 
-        
         # 속도값 갱신은 슬라이더에서 처리됨
         # 알림 설정 등은 즉시 반영됨
         if self.retry_handler:
             self.retry_handler.max_retries = settings.get("max_retry_count", 3)
-        if hasattr(self, 'crawler_tab') and hasattr(self.crawler_tab, 'update_runtime_settings'):
+        if hasattr(self, "crawler_tab") and hasattr(
+            self.crawler_tab, "update_runtime_settings"
+        ):
             self.crawler_tab.update_runtime_settings()
-        if hasattr(self, 'geo_tab') and hasattr(self.geo_tab, 'update_runtime_settings'):
+        if hasattr(self, "geo_tab") and hasattr(
+            self.geo_tab, "update_runtime_settings"
+        ):
             self.geo_tab.update_runtime_settings()
-        if hasattr(self, "recently_viewed") and hasattr(self.recently_viewed, "set_max_items"):
-            self.recently_viewed.set_max_items(settings.get("recently_viewed_count", 50))
-        if self.dashboard_widget is not None and hasattr(self.dashboard_widget, "refresh"):
+        if hasattr(self, "recently_viewed") and hasattr(
+            self.recently_viewed, "set_max_items"
+        ):
+            self.recently_viewed.set_max_items(
+                settings.get("recently_viewed_count", 50)
+            )
+        if self.dashboard_widget is not None and hasattr(
+            self.dashboard_widget, "refresh"
+        ):
             self.dashboard_widget.refresh()
-    
+
     def _save_preset(self: Any):
         name, ok = QInputDialog.getText(self, "지금 조건 저장", "이 조건에 붙일 이름:")
         if ok and name:
@@ -125,11 +141,17 @@ class AppSettingsPresetMixin:
                 "trade": ct.check_trade.isChecked(),
                 "jeonse": ct.check_jeonse.isChecked(),
                 "monthly": ct.check_monthly.isChecked(),
-                "area": {"enabled": ct.check_area_filter.isChecked(), "min": ct.spin_area_min.value(), "max": ct.spin_area_max.value()},
+                "area": {
+                    "enabled": ct.check_area_filter.isChecked(),
+                    "min": ct.spin_area_min.value(),
+                    "max": ct.spin_area_max.value(),
+                },
                 "price": {
                     "enabled": ct.check_price_filter.isChecked(),
-                    "trade_min": ct.spin_trade_min.value(), "trade_max": ct.spin_trade_max.value(),
-                    "jeonse_min": ct.spin_jeonse_min.value(), "jeonse_max": ct.spin_jeonse_max.value(),
+                    "trade_min": ct.spin_trade_min.value(),
+                    "trade_max": ct.spin_trade_max.value(),
+                    "jeonse_min": ct.spin_jeonse_min.value(),
+                    "jeonse_max": ct.spin_jeonse_max.value(),
                     # Legacy monthly keys (rent-based) for compatibility.
                     "monthly_min": ct.spin_monthly_rent_min.value(),
                     "monthly_max": ct.spin_monthly_rent_max.value(),
@@ -138,11 +160,13 @@ class AppSettingsPresetMixin:
                     "monthly_deposit_max": ct.spin_monthly_deposit_max.value(),
                     "monthly_rent_min": ct.spin_monthly_rent_min.value(),
                     "monthly_rent_max": ct.spin_monthly_rent_max.value(),
-                }
+                },
             }
             if self.preset_manager.save_preset(name, config):
-                self.show_toast(f"조건 '{name}'을(를) 저장했습니다.", toast_type="success")
-    
+                self.show_toast(
+                    f"조건 '{name}'을(를) 저장했습니다.", toast_type="success"
+                )
+
     def _load_preset(self: Any):
         dialog = PresetDialog(self, self.preset_manager)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_preset:
@@ -155,12 +179,12 @@ class AppSettingsPresetMixin:
             ct.check_trade.setChecked(config.get("trade", True))
             ct.check_jeonse.setChecked(config.get("jeonse", True))
             ct.check_monthly.setChecked(config.get("monthly", False))
-            
+
             area = config.get("area", {})
             ct.check_area_filter.setChecked(area.get("enabled", False))
             ct.spin_area_min.setValue(area.get("min", 0))
             ct.spin_area_max.setValue(area.get("max", 200))
-            
+
             p = config.get("price", {})
             ct.check_price_filter.setChecked(p.get("enabled", False))
             ct.spin_trade_min.setValue(p.get("trade_min", 0))
@@ -180,10 +204,10 @@ class AppSettingsPresetMixin:
                 p.get("monthly_rent_max", p.get("monthly_max", 5000))
             )
             self.show_toast("저장한 조건을 불러왔습니다.")
-    
+
     def _show_alert_settings(self: Any):
         AlertSettingDialog(self, self.db).exec()
-    
+
     def _show_advanced_filter(self: Any):
         if hasattr(self, "crawler_tab"):
             self.tabs.setCurrentWidget(self.crawler_tab)
@@ -243,7 +267,9 @@ class AppSettingsPresetMixin:
             for fav in favorites:
                 aid = fav.get("article_id")
                 cid = fav.get("complex_id")
-                asset_type = str(fav.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(fav.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                )
                 if aid and cid:
                     keys.add((asset_type, aid, cid))
             self.favorite_keys = keys
@@ -260,9 +286,13 @@ class AppSettingsPresetMixin:
             row = dict(item or {})
             article_id = str(row.get("매물ID", "") or "")
             complex_id = str(row.get("단지ID", "") or "")
-            asset_type = str(row.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+            asset_type = (
+                str(row.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+            )
             row["is_favorite"] = bool(
-                article_id and complex_id and (asset_type, article_id, complex_id) in favorite_keys
+                article_id
+                and complex_id
+                and (asset_type, article_id, complex_id) in favorite_keys
             )
             decorated.append(row)
         return decorated
@@ -298,19 +328,27 @@ class AppSettingsPresetMixin:
         except Exception as e:
             # ISSUE-003: DB failure must not update memory/UI state.
             try:
-                self._revert_favorite_key_visual((asset_token, article_id, complex_id), is_fav)
+                self._revert_favorite_key_visual(
+                    (asset_token, article_id, complex_id), is_fav
+                )
             except Exception:
                 pass
             try:
-                ui_logger.warning(f"favorite toggle failed (exception), skip UI update: {e}")
+                ui_logger.warning(
+                    f"favorite toggle failed (exception), skip UI update: {e}"
+                )
             except Exception:
                 pass
             self._notify_favorite_failure()
             return
         if not saved:
             try:
-                ui_logger.warning("favorite toggle failed (db returned False), skip UI update")
-                self._revert_favorite_key_visual((asset_token, article_id, complex_id), is_fav)
+                ui_logger.warning(
+                    "favorite toggle failed (db returned False), skip UI update"
+                )
+                self._revert_favorite_key_visual(
+                    (asset_token, article_id, complex_id), is_fav
+                )
             except Exception:
                 pass
             self._notify_favorite_failure()
@@ -324,7 +362,7 @@ class AppSettingsPresetMixin:
             self.crawler_tab._update_favorite_state_for_key(key, is_fav)
         if hasattr(self, "geo_tab"):
             self.geo_tab._update_favorite_state_for_key(key, is_fav)
-        if hasattr(self, 'favorites_tab'):
+        if hasattr(self, "favorites_tab"):
             if self.tabs.currentWidget() is self.favorites_tab:
                 self.favorites_tab.refresh()
                 if hasattr(self, "_noncritical_loaded"):
@@ -346,7 +384,7 @@ class AppSettingsPresetMixin:
             self.crawler_tab._show_url_batch_dialog()
             return
         ui_logger.warning("CrawlerTab unavailable for URL batch dialog.")
-    
+
     def _add_complexes_from_url(self: Any, urls):
         if hasattr(self, "crawler_tab"):
             self.crawler_tab._add_complexes_from_url(urls)
@@ -373,4 +411,3 @@ class AppSettingsPresetMixin:
     def _save_excel_template(self: Any, template):
         settings.set("excel_template", template)
         self.show_toast("엑셀 템플릿이 저장되었습니다")
-

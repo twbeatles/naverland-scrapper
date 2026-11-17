@@ -15,6 +15,7 @@ ResultRow = dict[str, Any]
 
 class CrawlerTabRuntimeSettingsSetupMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _default_sort_criterion(self: Any):

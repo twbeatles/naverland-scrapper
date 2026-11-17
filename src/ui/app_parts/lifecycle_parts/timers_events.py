@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppLifecycleTimersEventsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _init_timers(self: Any):
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self._check_schedule)
@@ -25,7 +27,9 @@ class AppLifecycleTimersEventsMixin:
             else "수집을 마쳤지만 조건에 맞는 매물이 없습니다."
         )
 
-    def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
+    def _on_alert_triggered(
+        self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id
+    ):
         try:
             area_text = f"{float(area_pyeong):.1f}평"
         except (TypeError, ValueError):

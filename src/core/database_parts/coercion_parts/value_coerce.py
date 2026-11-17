@@ -11,8 +11,11 @@ import re
 
 class ComplexDatabaseValueCoerceMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     _NUMERIC_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
     def _fetchall_safe(self, conn, query: str, params=(), context: str = ""):
         try:
             return conn.cursor().execute(query, params).fetchall()
@@ -84,6 +87,7 @@ class ComplexDatabaseValueCoerceMixin:
         if text in {"0", "0.0"}:
             return 0
         return cls._coerce_int(text, default=default)
+
     @staticmethod
     def _is_all_filter_value(value) -> bool:
         token = str(value or "").strip().lower()
@@ -105,18 +109,30 @@ class ComplexDatabaseValueCoerceMixin:
     def _normalize_snapshot_row(self, row):
         snapshot_date = str(self._row_value(row, "snapshot_date", 0, "") or "")
         trade_type = str(self._row_value(row, "trade_type", 1, "") or "")
-        pyeong = self._coerce_float(self._row_value(row, "pyeong", 2, None), default=None)
+        pyeong = self._coerce_float(
+            self._row_value(row, "pyeong", 2, None), default=None
+        )
         if pyeong is None:
             return None
-        min_price = self._coerce_price(self._row_value(row, "min_price", 3, 0), default=0)
-        max_price = self._coerce_price(self._row_value(row, "max_price", 4, 0), default=0)
-        avg_price = self._coerce_price(self._row_value(row, "avg_price", 5, 0), default=0)
-        item_count = max(0, self._coerce_int(self._row_value(row, "item_count", 6, 0), default=0))
+        min_price = self._coerce_price(
+            self._row_value(row, "min_price", 3, 0), default=0
+        )
+        max_price = self._coerce_price(
+            self._row_value(row, "max_price", 4, 0), default=0
+        )
+        avg_price = self._coerce_price(
+            self._row_value(row, "avg_price", 5, 0), default=0
+        )
+        item_count = max(
+            0, self._coerce_int(self._row_value(row, "item_count", 6, 0), default=0)
+        )
         price_metric = self._normalize_price_metric(
             self._row_value(row, "price_metric", 7, "price"),
             trade_type=trade_type,
         )
-        legacy_monthly = max(0, self._coerce_int(self._row_value(row, "legacy_monthly", 8, 0), default=0))
+        legacy_monthly = max(
+            0, self._coerce_int(self._row_value(row, "legacy_monthly", 8, 0), default=0)
+        )
         return (
             snapshot_date,
             trade_type,

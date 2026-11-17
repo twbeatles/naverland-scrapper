@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabIOActionsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def get_filter_state(self: Any):
@@ -64,7 +65,9 @@ class CrawlerTabIOActionsMixin:
         source_items = (
             list(self._compact_rows_data)
             if self._compact_duplicates
-            else self._decorate_favorite_state(self._apply_advanced_filter_items(self.collected_data))
+            else self._decorate_favorite_state(
+                self._apply_advanced_filter_items(self.collected_data)
+            )
         )
         if not source_items:
             return []
@@ -105,7 +108,9 @@ class CrawlerTabIOActionsMixin:
 
     def show_save_menu(self: Any):
         menu = QMenu(self)
-        menu.addAction("엑셀로 저장 (지금 보이는 목록)", lambda: self.save_excel("visible"))
+        menu.addAction(
+            "엑셀로 저장 (지금 보이는 목록)", lambda: self.save_excel("visible")
+        )
         other_visible = menu.addMenu("다른 형식으로 저장 (지금 보이는 목록)")
         if other_visible is not None:
             other_visible.addAction("CSV 파일", lambda: self.save_csv("visible"))
@@ -129,7 +134,9 @@ class CrawlerTabIOActionsMixin:
         scope_key = str(scope or "visible").lower()
         scope_label = "지금 보이는 목록" if scope_key != "raw" else "전체 원본"
         if not items:
-            QMessageBox.information(self, "저장할 매물이 없습니다", "먼저 매물을 수집해 주세요.")
+            QMessageBox.information(
+                self, "저장할 매물이 없습니다", "먼저 매물을 수집해 주세요."
+            )
             return
 
         suffix_map = {
@@ -168,7 +175,11 @@ class CrawlerTabIOActionsMixin:
                     result = exporter.to_json(Path(path))
 
             ok = bool(getattr(result, "ok", result))
-            error = str(getattr(result, "error", "") or getattr(exporter, "last_error", "") or "")
+            error = str(
+                getattr(result, "error", "")
+                or getattr(exporter, "last_error", "")
+                or ""
+            )
             if ok:
                 self._results_exported = True
                 message = f"매물 {len(items)}건을 저장했습니다."
@@ -182,10 +193,18 @@ class CrawlerTabIOActionsMixin:
 
             if not error:
                 error = "파일을 저장하지 못했습니다."
-            QMessageBox.critical(self, "저장하지 못했습니다", f"파일을 저장하지 못했습니다. 파일이 다른 프로그램에서 열려 있지 않은지 확인해 주세요.\n\n{error}")
+            QMessageBox.critical(
+                self,
+                "저장하지 못했습니다",
+                f"파일을 저장하지 못했습니다. 파일이 다른 프로그램에서 열려 있지 않은지 확인해 주세요.\n\n{error}",
+            )
             logger.error(f"{kind.upper()} save failed ({scope_key}): {error}")
         except Exception as exc:
-            QMessageBox.critical(self, "저장하지 못했습니다", f"파일을 저장하는 중 문제가 생겼습니다.\n\n{exc}")
+            QMessageBox.critical(
+                self,
+                "저장하지 못했습니다",
+                f"파일을 저장하는 중 문제가 생겼습니다.\n\n{exc}",
+            )
             logger.error(f"{kind.upper()} save error ({scope_key}): {exc}")
 
     def save_excel(self: Any, scope: str = "visible"):

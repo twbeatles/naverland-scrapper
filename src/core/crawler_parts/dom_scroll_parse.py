@@ -12,6 +12,7 @@ class BlockedPageError(RuntimeError):
 
 class CrawlerDomScrollParseMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _detect_block_signal(self, title, page_source):
@@ -134,19 +135,23 @@ class CrawlerDomScrollParseMixin:
                 pass
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight)")
         return False
-    
+
     def _scroll(self, driver):
         """v14.2: 내부 컨테이너 우선 + window 폴백 스크롤"""
         try:
-            selectors = ".item_article, .item_inner, .article_item, [class*='ArticleItem']"
+            selectors = (
+                ".item_article, .item_inner, .article_item, [class*='ArticleItem']"
+            )
             seen_ids = set()
             last_count = -1
             stable_count = 0
             max_scroll_attempts = 18
             use_container = self._detect_scroll_container(driver)
             if use_container:
-                self.log("   ℹ️ 내부 스크롤 컨테이너 감지, 컨테이너 스크롤 우선 적용", 10)
-            
+                self.log(
+                    "   ℹ️ 내부 스크롤 컨테이너 감지, 컨테이너 스크롤 우선 적용", 10
+                )
+
             for _ in range(max_scroll_attempts):
                 if self._should_stop():
                     break
@@ -170,15 +175,15 @@ class CrawlerDomScrollParseMixin:
 
                 if not self._sleep_interruptible(0.8):
                     break
-                
+
         except Exception as e:
             self.log(f"   ⚠️ 스크롤 오류: {e}", 30)
-    
+
     def _parse(self, soup, name, cid, ttype):
         raw_items = []
         found_items = ItemParser.find_items(soup)
         parse_error_count = 0
-        
+
         if found_items:
             # 선택자 로깅 (ItemParser 내부 디버그 로그와 별개로 사용자에게 진행상황 표시)
             self.log(f"   🔍 파싱 대상: {len(found_items)}개")
@@ -193,15 +198,17 @@ class CrawlerDomScrollParseMixin:
                 "empty_confirmed": False,
                 "blocked_detected": False,
             }
-        
+
         matched_count, skipped_type = 0, 0
         captured_at = DateTimeHelper.now_string()
-        
+
         for item in found_items:
             if self._should_stop():
                 break
             try:
-                data = ItemParser.parse_element(item, name, cid, ttype, captured_at=captured_at)
+                data = ItemParser.parse_element(
+                    item, name, cid, ttype, captured_at=captured_at
+                )
                 if data and data.get("면적(㎡)", 0) > 0:
                     detected_type = data.get("거래유형", "")
                     if detected_type == ttype:
@@ -220,12 +227,12 @@ class CrawlerDomScrollParseMixin:
             except Exception as e:
                 self.log(f"   ⚠️ 항목 파싱 중 오류: {e}", 30)
                 parse_error_count += 1
-        
+
         if skipped_type > 0:
             self.log(f"   ℹ️ 다른 거래유형 {skipped_type}건 제외 (요청: {ttype})")
 
         self._record_observed_items(raw_items)
-        
+
         parse_success = parse_error_count == 0
         empty_confirmed = (
             len(raw_items) == 0
@@ -243,11 +250,12 @@ class CrawlerDomScrollParseMixin:
             "blocked_detected": False,
         }
 
-        
     def _check_filters(self, data, ttype):
         if self.area_filter.get("enabled"):
             sqm = data.get("면적(㎡)", 0)
-            if sqm < self.area_filter.get("min", 0) or sqm > self.area_filter.get("max", 999):
+            if sqm < self.area_filter.get("min", 0) or sqm > self.area_filter.get(
+                "max", 999
+            ):
                 return False
         if self.price_filter.get("enabled"):
             price_range = self.price_filter.get(ttype, {}) or {}
@@ -259,7 +267,9 @@ class CrawlerDomScrollParseMixin:
                     return False
             elif ttype == "월세":
                 deposit_min = price_range.get("deposit_min", price_range.get("min", 0))
-                deposit_max = price_range.get("deposit_max", price_range.get("max", 999999))
+                deposit_max = price_range.get(
+                    "deposit_max", price_range.get("max", 999999)
+                )
                 rent_min = price_range.get("rent_min", price_range.get("min", 0))
                 rent_max = price_range.get("rent_max", price_range.get("max", 999999))
                 deposit = PriceConverter.to_int(data.get("보증금", "0"))

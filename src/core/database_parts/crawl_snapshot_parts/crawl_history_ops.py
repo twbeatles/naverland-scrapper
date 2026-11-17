@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseCrawlHistoryOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def add_crawl_history(
@@ -59,7 +60,11 @@ class ComplexDatabaseCrawlHistoryOpsMixin:
                                 int(source_zoom or 0),
                                 asset_type,
                                 str(run_status or "success"),
-                                json.dumps(diagnostics or {}, ensure_ascii=False, allow_nan=False),
+                                json.dumps(
+                                    diagnostics or {},
+                                    ensure_ascii=False,
+                                    allow_nan=False,
+                                ),
                             ),
                         )
                         conn.commit()

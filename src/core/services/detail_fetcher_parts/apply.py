@@ -27,12 +27,17 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
             }:
                 existing_num = item.get(key)
                 try:
-                    if existing_num not in (None, "", 0, 0.0) and float(existing_num) != 0:
+                    if (
+                        existing_num not in (None, "", 0, 0.0)
+                        and float(existing_num) != 0
+                    ):
                         continue
                 except (TypeError, ValueError):
                     pass
             item[key] = value
-        if applied.get("면적소스") == "detail_structured" and applied.get("공급면적(㎡)"):
+        if applied.get("면적소스") == "detail_structured" and applied.get(
+            "공급면적(㎡)"
+        ):
             from src.utils.helpers import (
                 AreaConverter,
                 PriceConverter,
@@ -42,7 +47,11 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
             sqm = float(applied["공급면적(㎡)"])
             item["면적(㎡)"] = sqm
             item["면적(평)"] = AreaConverter.sqm_to_pyeong(sqm)
-            price = PriceConverter.to_int(item.get("매매가") if item.get("거래유형") == "매매" else item.get("보증금"))
+            price = PriceConverter.to_int(
+                item.get("매매가")
+                if item.get("거래유형") == "매매"
+                else item.get("보증금")
+            )
             item["평당가"] = PricePerPyeongCalculator.calculate(price, item["면적(평)"])
             item["평당가_표시"] = PricePerPyeongCalculator.format(item["평당가"])
         if meta:
@@ -56,7 +65,9 @@ def apply_mobile_detail(item: dict, detail: dict | None) -> dict:
             item["detail_source"] = source
             item["detail_parse_state"] = parse_state
             item["missing_field_count"] = missing_count
-            item["detail_network_response_count"] = int(meta.get("network_response_count", 0) or 0)
+            item["detail_network_response_count"] = int(
+                meta.get("network_response_count", 0) or 0
+            )
             item["detail_hydration_hit"] = int(meta.get("hydration_hit", 0) or 0)
             if meta.get("detail_host_unreachable"):
                 item["detail_host_unreachable"] = True

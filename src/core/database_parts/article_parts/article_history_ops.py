@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseArticleHistoryOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     @staticmethod
@@ -33,7 +34,9 @@ class ComplexDatabaseArticleHistoryOpsMixin:
             return f"({column_name} = ? OR COALESCE({column_name}, '') = '')", [token]
         return f"{column_name} = ?", [token]
 
-    def get_article_history_state_bulk(self, complex_id, trade_type=None, asset_type=None):
+    def get_article_history_state_bulk(
+        self, complex_id, trade_type=None, asset_type=None
+    ):
         conn = self._pool.get_connection()
         try:
             sql = """
@@ -70,7 +73,9 @@ class ComplexDatabaseArticleHistoryOpsMixin:
         finally:
             self._pool.return_connection(conn)
 
-    def check_article_history(self, article_id, complex_id, current_price, asset_type=None):
+    def check_article_history(
+        self, article_id, complex_id, current_price, asset_type=None
+    ):
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
@@ -113,7 +118,9 @@ class ComplexDatabaseArticleHistoryOpsMixin:
             with self._write_lock:
                 c = conn.cursor()
                 extra = dict(extra or {})
-                asset_type = self._normalize_listing_asset_type(extra.get("asset_type", "APT"))
+                asset_type = self._normalize_listing_asset_type(
+                    extra.get("asset_type", "APT")
+                )
                 asset_where, asset_params = self._asset_scope_where(asset_type)
 
                 c.execute(

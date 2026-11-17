@@ -12,6 +12,7 @@ try:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     Workbook = None
@@ -36,9 +37,7 @@ def _atomic_target(path):
     """ISSUE-014: tmp 파일에 쓰고 os.replace로 원자 교체. 크래시 시 기존본 보존."""
     target = os.fspath(path)
     directory = os.path.dirname(os.path.abspath(target)) or "."
-    fd, tmp_path = tempfile.mkstemp(
-        dir=directory, prefix=".export-", suffix=".tmp"
-    )
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".export-", suffix=".tmp")
     os.close(fd)
     try:
         yield tmp_path
@@ -60,8 +59,10 @@ class ExportResult:
     def __bool__(self):
         return bool(self.ok)
 
+
 class ExcelTemplate:
     """엑셀 내보내기 템플릿 (v7.3)"""
+
     DEFAULT_COLUMNS = [
         ("단지명", True),
         ("자산유형", True),
@@ -108,39 +109,108 @@ class ExcelTemplate:
         ("신규여부", False),
         ("가격변동", False),
     ]
-    
+
     @staticmethod
     def get_column_order():
         return [
-            "단지명", "자산유형", "거래유형", "매매가", "보증금", "월세", 
-            "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징",
-            "공급면적(㎡)", "전용면적(㎡)", "면적정밀도",
-            "확인일", "동", "타입명", "동일주소건수",
-            "동일주소최고가", "동일주소최저가", "확인유형", "상세주소", "직거래", "정보제공",
-            "기전세금(원)", "갭금액(원)", "갭비율", "부동산상호", "중개사이름",
-            "전화1", "전화2", "상세수집상태", "상세누락필드수", "상세소스",
-            "수집모드", "위도", "경도", "줌", "마커ID",
-            "매물ID", "단지ID", "수집시각", "신규여부", "가격변동"
+            "단지명",
+            "자산유형",
+            "거래유형",
+            "매매가",
+            "보증금",
+            "월세",
+            "면적(㎡)",
+            "면적(평)",
+            "평당가_표시",
+            "층/방향",
+            "타입/특징",
+            "공급면적(㎡)",
+            "전용면적(㎡)",
+            "면적정밀도",
+            "확인일",
+            "동",
+            "타입명",
+            "동일주소건수",
+            "동일주소최고가",
+            "동일주소최저가",
+            "확인유형",
+            "상세주소",
+            "직거래",
+            "정보제공",
+            "기전세금(원)",
+            "갭금액(원)",
+            "갭비율",
+            "부동산상호",
+            "중개사이름",
+            "전화1",
+            "전화2",
+            "상세수집상태",
+            "상세누락필드수",
+            "상세소스",
+            "수집모드",
+            "위도",
+            "경도",
+            "줌",
+            "마커ID",
+            "매물ID",
+            "단지ID",
+            "수집시각",
+            "신규여부",
+            "가격변동",
         ]
-    
+
     @staticmethod
     def get_default_template():
         return {col: bool(enabled) for col, enabled in ExcelTemplate.DEFAULT_COLUMNS}
 
+
 class DataExporter:
     # v12.0: 확장된 컬럼 (평당가, 신규, 가격변동 포함)
     COLUMNS = [
-        "단지명", "자산유형", "거래유형", "매매가", "보증금", "월세", 
-        "면적(㎡)", "면적(평)", "평당가_표시", "층/방향", "타입/특징",
-        "확인일", "동", "타입명", "동일주소건수",
-        "동일주소최고가", "동일주소최저가", "확인유형", "상세주소", "직거래", "정보제공",
-        "기전세금(원)", "갭금액(원)", "갭비율", "부동산상호", "중개사이름",
-        "전화1", "전화2", "상세수집상태", "상세누락필드수", "상세소스",
-        "수집모드", "위도", "경도", "줌", "마커ID",
-        "매물ID", "단지ID", "수집시각", "신규여부", "가격변동"
+        "단지명",
+        "자산유형",
+        "거래유형",
+        "매매가",
+        "보증금",
+        "월세",
+        "면적(㎡)",
+        "면적(평)",
+        "평당가_표시",
+        "층/방향",
+        "타입/특징",
+        "확인일",
+        "동",
+        "타입명",
+        "동일주소건수",
+        "동일주소최고가",
+        "동일주소최저가",
+        "확인유형",
+        "상세주소",
+        "직거래",
+        "정보제공",
+        "기전세금(원)",
+        "갭금액(원)",
+        "갭비율",
+        "부동산상호",
+        "중개사이름",
+        "전화1",
+        "전화2",
+        "상세수집상태",
+        "상세누락필드수",
+        "상세소스",
+        "수집모드",
+        "위도",
+        "경도",
+        "줌",
+        "마커ID",
+        "매물ID",
+        "단지ID",
+        "수집시각",
+        "신규여부",
+        "가격변동",
     ]
-    
-    def __init__(self, data): 
+
+    def __init__(self, data):
         self.data = data
         self.last_error = ""
 
@@ -190,7 +260,9 @@ class DataExporter:
         if isinstance(template, dict):
             if isinstance(template.get("columns"), dict):
                 raw_columns = dict(default_columns)
-                raw_columns.update({str(k): bool(v) for k, v in template.get("columns", {}).items()})
+                raw_columns.update(
+                    {str(k): bool(v) for k, v in template.get("columns", {}).items()}
+                )
                 if isinstance(template.get("order"), list):
                     raw_order = [str(c) for c in template.get("order", []) if str(c)]
             else:
@@ -206,7 +278,7 @@ class DataExporter:
             seen.add(token)
             order.append(token)
         return [col for col in order if bool(raw_columns.get(col, False))]
-    
+
     def export_excel(self, path, template=None):
         """엑셀로 내보내기 - 템플릿 지원 (v7.3)"""
         if (
@@ -217,77 +289,89 @@ class DataExporter:
             or Alignment is None
             or get_column_letter is None
         ):
-            return self._failure("openpyxl 라이브러리를 사용할 수 없어 Excel 저장을 수행할 수 없습니다.")
+            return self._failure(
+                "openpyxl 라이브러리를 사용할 수 없어 Excel 저장을 수행할 수 없습니다."
+            )
         try:
             wb = Workbook()
             ws = wb.active
             if ws is None:
                 return self._failure("Excel 워크시트를 생성할 수 없습니다.")
             ws.title = "매물 데이터"
-            
+
             columns = self._columns_from_template(template)
-            
+
             # 헤더 스타일
             header_font = Font(bold=True, color="FFFFFF")
-            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-            
+            header_fill = PatternFill(
+                start_color="4472C4", end_color="4472C4", fill_type="solid"
+            )
+
             # 헤더 작성
             for col, h in enumerate(columns, 1):
                 cell = ws.cell(row=1, column=col, value=h)
                 cell.font = header_font
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center")
-            
+
             # 거래유형별 색상
             trade_colors = {
-                "매매": PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid"),
-                "전세": PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid"),
-                "월세": PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+                "매매": PatternFill(
+                    start_color="FFCCCC", end_color="FFCCCC", fill_type="solid"
+                ),
+                "전세": PatternFill(
+                    start_color="CCFFCC", end_color="CCFFCC", fill_type="solid"
+                ),
+                "월세": PatternFill(
+                    start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"
+                ),
             }
-            
+
             # v7.3: 신규/가격변동 색상
-            new_fill = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+            new_fill = PatternFill(
+                start_color="FFF3CD", end_color="FFF3CD", fill_type="solid"
+            )
             price_up_font = Font(color="FF0000")
             price_down_font = Font(color="008000")
-            
+
             # 데이터 작성
             for ri, item in enumerate(self.data, 2):
                 tt = item.get("거래유형", "")
                 fill = trade_colors.get(tt)
-                
+
                 for ci, cn in enumerate(columns, 1):
                     # 특수 컬럼 처리
                     if cn == "신규여부":
-                        value = "🆕 신규" if item.get('is_new', False) else ""
+                        value = "🆕 신규" if item.get("is_new", False) else ""
                     elif cn == "가격변동":
-                        value = self._format_price_change(item.get('price_change', 0))
+                        value = self._format_price_change(item.get("price_change", 0))
                     elif cn == "갭비율":
                         value = self._format_gap_ratio(item.get("갭비율", 0))
                     else:
                         value = _sanitize_spreadsheet_value(item.get(cn, ""))
-                    
+
                     cell = ws.cell(row=ri, column=ci, value=value)
-                    
+
                     # 스타일 적용
                     if fill:
                         cell.fill = fill
-                    
+
                     # 신규 매물 강조
-                    if item.get('is_new', False) and cn == "단지명":
+                    if item.get("is_new", False) and cn == "단지명":
                         cell.fill = new_fill
-                    
+
                     # 가격 변동 색상
                     if cn == "가격변동":
-                        pc = self._change_to_int(item.get('price_change', 0))
+                        pc = self._change_to_int(item.get("price_change", 0))
                         if pc > 0:
                             cell.font = price_up_font
                         elif pc < 0:
                             cell.font = price_down_font
-            
+
             # 컬럼 너비 설정
             for col in range(1, len(columns) + 1):
                 ws.column_dimensions[get_column_letter(col)].width = 15
-            
+
             ws.freeze_panes = "A2"
             with _atomic_target(path) as tmp_path:
                 wb.save(tmp_path)
@@ -299,31 +383,36 @@ class DataExporter:
     def to_excel(self, path, template=None):
         result = self.export_excel(path, template)
         return result.path if result.ok else None
-    
+
     def export_csv(self, path, template=None):
         """CSV로 내보내기 - 템플릿 지원"""
         try:
             columns = self._columns_from_template(template)
-            
-            with _atomic_target(path) as tmp_path, open(tmp_path, 'w', newline='', encoding='utf-8-sig') as f:
-                    writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
-                    writer.writeheader()
-                
-                    for item in self.data:
-                        # 특수 컬럼 추가
-                        row = dict(item)
-                        row['신규여부'] = "신규" if item.get('is_new', False) else ""
-                        row['가격변동'] = self._format_price_change(item.get('price_change', 0))
-                        row['갭비율'] = self._format_gap_ratio(item.get('갭비율', 0))
-                        row = {
-                            column: (
-                                row.get(column, "")
-                                if column in {"신규여부", "가격변동", "갭비율"}
-                                else _sanitize_spreadsheet_value(row.get(column, ""))
-                            )
-                            for column in columns
-                        }
-                        writer.writerow(row)
+
+            with (
+                _atomic_target(path) as tmp_path,
+                open(tmp_path, "w", newline="", encoding="utf-8-sig") as f,
+            ):
+                writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
+                writer.writeheader()
+
+                for item in self.data:
+                    # 특수 컬럼 추가
+                    row = dict(item)
+                    row["신규여부"] = "신규" if item.get("is_new", False) else ""
+                    row["가격변동"] = self._format_price_change(
+                        item.get("price_change", 0)
+                    )
+                    row["갭비율"] = self._format_gap_ratio(item.get("갭비율", 0))
+                    row = {
+                        column: (
+                            row.get(column, "")
+                            if column in {"신규여부", "가격변동", "갭비율"}
+                            else _sanitize_spreadsheet_value(row.get(column, ""))
+                        )
+                        for column in columns
+                    }
+                    writer.writerow(row)
             return self._success(path)
         except Exception as e:
             logger.error(f"CSV 저장 실패: {e}")
@@ -332,18 +421,30 @@ class DataExporter:
     def to_csv(self, path, template=None):
         result = self.export_csv(path, template)
         return result.path if result.ok else None
-    
+
     def export_json(self, path):
         """JSON으로 내보내기"""
         try:
-            with _atomic_target(path) as tmp_path, open(tmp_path, 'w', encoding='utf-8') as f:
-                    json.dump({
-                        "exported_at": DateTimeHelper.now_string(), 
+            with (
+                _atomic_target(path) as tmp_path,
+                open(tmp_path, "w", encoding="utf-8") as f,
+            ):
+                json.dump(
+                    {
+                        "exported_at": DateTimeHelper.now_string(),
                         "total_count": len(self.data),
-                        "new_count": sum(1 for d in self.data if d.get('is_new', False)),
-                        "price_change_count": sum(1 for d in self.data if d.get('price_change', 0) != 0),
-                        "data": self.data
-                    }, f, ensure_ascii=False, indent=2)
+                        "new_count": sum(
+                            1 for d in self.data if d.get("is_new", False)
+                        ),
+                        "price_change_count": sum(
+                            1 for d in self.data if d.get("price_change", 0) != 0
+                        ),
+                        "data": self.data,
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             return self._success(path)
         except Exception as e:
             logger.error(f"JSON 저장 실패: {e}")

@@ -8,12 +8,15 @@ if TYPE_CHECKING:
 
 class CrawlerTabFilterRenderMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _update_advanced_filter_badge(self: Any):
         active = bool(self._advanced_filters)
         if hasattr(self, "lbl_advanced_filter"):
-            self.lbl_advanced_filter.setText("상세 필터로 일부 매물만 보고 있습니다." if active else "")
+            self.lbl_advanced_filter.setText(
+                "상세 필터로 일부 매물만 보고 있습니다." if active else ""
+            )
         notice = getattr(self, "filter_notice", None)
         if notice is not None:
             notice.setVisible(active)
@@ -32,7 +35,9 @@ class CrawlerTabFilterRenderMixin:
         next_filters = filters or None
         if next_filters and self._is_default_advanced_filter(next_filters):
             next_filters = None
-        self._advanced_filters = dict(next_filters) if isinstance(next_filters, dict) else None
+        self._advanced_filters = (
+            dict(next_filters) if isinstance(next_filters, dict) else None
+        )
         enabled = self._advanced_filters is not None
         if hasattr(self, "btn_clear_advanced_filter"):
             self.btn_clear_advanced_filter.setEnabled(enabled)
@@ -48,7 +53,9 @@ class CrawlerTabFilterRenderMixin:
 
     def _apply_current_filter_to_row(self: Any, row):
         text_lower = (self._pending_search_text or "").lower()
-        searchable = self._row_search_cache[row] if row < len(self._row_search_cache) else ""
+        searchable = (
+            self._row_search_cache[row] if row < len(self._row_search_cache) else ""
+        )
         text_norm = self._normalize_search_text(self._pending_search_text or "")
         searchable_norm = self._normalize_search_text(searchable)
         hidden_by_text = (
@@ -57,7 +64,9 @@ class CrawlerTabFilterRenderMixin:
             and (not text_norm or text_norm not in searchable_norm)
         )
         hidden_by_advanced = False
-        payload = self._row_payload_cache[row] if row < len(self._row_payload_cache) else None
+        payload = (
+            self._row_payload_cache[row] if row < len(self._row_payload_cache) else None
+        )
         if self._advanced_filters and payload is not None:
             hidden_by_advanced = not self._check_advanced_filter(payload)
         hidden = hidden_by_text or hidden_by_advanced

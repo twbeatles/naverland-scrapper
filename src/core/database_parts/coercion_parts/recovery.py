@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseRecoveryMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else DB_PATH
         logger.info(f"ComplexDatabase initialized: {self.db_path}")
@@ -66,7 +68,9 @@ class ComplexDatabaseRecoveryMixin:
             source = Path(f"{db_path}{suffix}")
             if not source.exists():
                 continue
-            destination = quarantined_db if not suffix else Path(f"{quarantined_db}{suffix}")
+            destination = (
+                quarantined_db if not suffix else Path(f"{quarantined_db}{suffix}")
+            )
             try:
                 shutil.move(str(source), str(destination))
                 moved_any = True
@@ -76,7 +80,9 @@ class ComplexDatabaseRecoveryMixin:
                 )
 
         if not moved_any:
-            runtime_logger.error("Startup recovery failed: could not quarantine corrupted DB files.")
+            runtime_logger.error(
+                "Startup recovery failed: could not quarantine corrupted DB files."
+            )
             return None
 
         recovered_pool = ConnectionPool(db_path)

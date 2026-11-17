@@ -83,7 +83,9 @@ class TestCacheAndManagers(unittest.TestCase):
     def test_crawl_cache_write_back_flush(self):
         cache_path = self.tmp_path / "crawl_cache.json"
         with patch("src.core.cache.CACHE_PATH", cache_path):
-            cache = CrawlCache(ttl_minutes=30, write_back_interval_sec=999, max_entries=2000)
+            cache = CrawlCache(
+                ttl_minutes=30, write_back_interval_sec=999, max_entries=2000
+            )
             with patch.object(cache, "_save", wraps=cache._save) as mock_save:
                 for i in range(10):
                     cache.set(f"1{i}", "매매", [{"id": i}])
@@ -100,7 +102,9 @@ class TestCacheAndManagers(unittest.TestCase):
                 "items": [{"id": 7}],
             }
         }
-        cache_path.write_text(json.dumps(legacy_payload, ensure_ascii=False), encoding="utf-8")
+        cache_path.write_text(
+            json.dumps(legacy_payload, ensure_ascii=False), encoding="utf-8"
+        )
 
         with patch("src.core.cache.CACHE_PATH", cache_path):
             cache = CrawlCache(ttl_minutes=30)
@@ -167,8 +171,18 @@ class TestCacheAndManagers(unittest.TestCase):
             history = SearchHistoryManager(max_items=5)
             history.add({"complexes": ["11111"]})
             self.assertEqual(len(history.get_recent()), 1)
-            history.add({"complexes": [{"name": "단지A", "cid": "11111"}], "trade_types": ["전세"]})
-            history.add({"complexes": [{"name": "단지A", "cid": "11111"}], "trade_types": ["매매"]})
+            history.add(
+                {
+                    "complexes": [{"name": "단지A", "cid": "11111"}],
+                    "trade_types": ["전세"],
+                }
+            )
+            history.add(
+                {
+                    "complexes": [{"name": "단지A", "cid": "11111"}],
+                    "trade_types": ["매매"],
+                }
+            )
             self.assertEqual(len(history.get_recent()), 3)
             self.assertAlmostEqual(settings.get("geo_last_lat"), 37.5608, places=4)
             self.assertAlmostEqual(settings.get("geo_last_lon"), 126.9888, places=4)
@@ -187,7 +201,9 @@ class TestCacheAndManagers(unittest.TestCase):
         self.assertEqual(sanitized["geo_asset_types"], [])
         self.assertEqual(sanitized["schedule_config"]["geo"]["asset_types"], [])
 
-        missing = _sanitize_settings_payload({"schedule_config": {"mode": "geo_sweep", "geo": {}}})
+        missing = _sanitize_settings_payload(
+            {"schedule_config": {"mode": "geo_sweep", "geo": {}}}
+        )
         self.assertEqual(
             missing["schedule_config"]["geo"]["asset_types"],
             DEFAULT_SETTINGS["schedule_config"]["geo"]["asset_types"],
@@ -201,7 +217,12 @@ class TestCacheAndManagers(unittest.TestCase):
                 "detail_enrichment_max_per_complex": 999,
                 "article_api_page_delay_ms": 5000,
                 "playwright_detail_workers": 99,
-                "result_extra_columns": ["confirm_date", "bogus", "building", "confirm_date"],
+                "result_extra_columns": [
+                    "confirm_date",
+                    "bogus",
+                    "building",
+                    "confirm_date",
+                ],
             }
         )
         self.assertTrue(sanitized["include_pre_sale_rights"])
@@ -209,9 +230,13 @@ class TestCacheAndManagers(unittest.TestCase):
         self.assertEqual(sanitized["detail_enrichment_max_per_complex"], 500)
         self.assertEqual(sanitized["article_api_page_delay_ms"], 2000)
         self.assertEqual(sanitized["playwright_detail_workers"], 16)
-        self.assertEqual(sanitized["result_extra_columns"], ["confirm_date", "building"])
+        self.assertEqual(
+            sanitized["result_extra_columns"], ["confirm_date", "building"]
+        )
         self.assertIn("detail_front_api_enabled", sanitized)
-        self.assertEqual(sanitized["card_show_extra_meta"], DEFAULT_SETTINGS["card_show_extra_meta"])
+        self.assertEqual(
+            sanitized["card_show_extra_meta"], DEFAULT_SETTINGS["card_show_extra_meta"]
+        )
 
     def test_detail_workers_default_is_lightweight(self):
         self.assertEqual(DEFAULT_SETTINGS["playwright_detail_workers"], 4)
@@ -307,16 +332,43 @@ class TestCacheAndManagers(unittest.TestCase):
 
             cache.set("99999", "매매", [{"id": "legacy"}])  # 무컨텍스트(레거시)
             self.assertEqual(cache.get("99999", "매매"), [{"id": "legacy"}])
-            self.assertIsNone(cache.get("99999", "매매", mode="complex", asset_type="APT"))
+            self.assertIsNone(
+                cache.get("99999", "매매", mode="complex", asset_type="APT")
+            )
 
     def test_recently_viewed_manager(self):
         storage_path = self.tmp_path / "recently_viewed.json"
-        with patch.object(RecentlyViewedManager, "_storage_path", return_value=storage_path):
+        with patch.object(
+            RecentlyViewedManager, "_storage_path", return_value=storage_path
+        ):
             mgr = RecentlyViewedManager(max_items=2)
-            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A"})
-            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "VL", "단지명": "단지A"})
-            mgr.add({"매물ID": "A1", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A-최신"})
-            mgr.add({"매물ID": "A2", "단지ID": "10001", "자산유형": "APT", "단지명": "단지A"})
+            mgr.add(
+                {
+                    "매물ID": "A1",
+                    "단지ID": "10001",
+                    "자산유형": "APT",
+                    "단지명": "단지A",
+                }
+            )
+            mgr.add(
+                {"매물ID": "A1", "단지ID": "10001", "자산유형": "VL", "단지명": "단지A"}
+            )
+            mgr.add(
+                {
+                    "매물ID": "A1",
+                    "단지ID": "10001",
+                    "자산유형": "APT",
+                    "단지명": "단지A-최신",
+                }
+            )
+            mgr.add(
+                {
+                    "매물ID": "A2",
+                    "단지ID": "10001",
+                    "자산유형": "APT",
+                    "단지명": "단지A",
+                }
+            )
 
             rows = mgr.get_recent()
             self.assertEqual(len(rows), 2)

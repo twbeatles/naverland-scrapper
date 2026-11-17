@@ -26,7 +26,9 @@ class NaverURLParser(
     ]
     _PARSE_PATTERNS = (
         {
-            "pattern": re.compile(r"new\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"new\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE
+            ),
             "family": "new",
             "entity_type": "complex",
             "asset_type": "APT",
@@ -51,7 +53,9 @@ class NaverURLParser(
             "complex_group": 1,
         },
         {
-            "pattern": re.compile(r"complexNo=(\d+)(?:.*?articleId=(\d+))?", re.IGNORECASE),
+            "pattern": re.compile(
+                r"complexNo=(\d+)(?:.*?articleId=(\d+))?", re.IGNORECASE
+            ),
             "family": "legacy",
             "entity_type": "complex",
             "asset_type": "APT",
@@ -73,27 +77,35 @@ class NaverURLParser(
             "complex_group": 1,
         },
         {
-            "pattern": re.compile(r"m\.land\.naver\.com/article/(?:info|view)/(\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"m\.land\.naver\.com/article/(?:info|view)/(\d+)", re.IGNORECASE
+            ),
             "family": "m",
             "entity_type": "article",
             "article_group": 1,
         },
         {
-            "pattern": re.compile(r"m\.land\.naver\.com.*complex[=/](\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"m\.land\.naver\.com.*complex[=/](\d+)", re.IGNORECASE
+            ),
             "family": "m",
             "entity_type": "complex",
             "asset_type": "APT",
             "complex_group": 1,
         },
         {
-            "pattern": re.compile(r"m\.land\.naver\.com.*houses?[=/](\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"m\.land\.naver\.com.*houses?[=/](\d+)", re.IGNORECASE
+            ),
             "family": "m",
             "entity_type": "complex",
             "asset_type": "VL",
             "complex_group": 1,
         },
         {
-            "pattern": re.compile(r"fin\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"fin\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE
+            ),
             "family": "fin",
             "entity_type": "complex",
             "asset_type": "APT",
@@ -123,7 +135,9 @@ class NaverURLParser(
             "article_group": 1,
         },
         {
-            "pattern": re.compile(r"fin\.land\.naver\.com/articles/(\d+)", re.IGNORECASE),
+            "pattern": re.compile(
+                r"fin\.land\.naver\.com/articles/(\d+)", re.IGNORECASE
+            ),
             "family": "fin",
             "entity_type": "article",
             "article_group": 1,
@@ -137,10 +151,34 @@ class NaverURLParser(
     )
     _COMPLEX_QUERY_RE = re.compile(r"complexNo=(\d+)", re.IGNORECASE)
     _ARTICLE_COMPLEX_PATTERNS = (
-        ("VL", re.compile(r'\\?"(?:bildNo|buildingNo|houseNo|houseId)\\?"\s*:\s*\\?"?(\d+)\\?"?', re.IGNORECASE)),
-        ("APT", re.compile(r'\\?"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\\?"\s*:\s*\\?"?(\d+)\\?"?', re.IGNORECASE)),
-        ("VL", re.compile(r"(?:bildNo|buildingNo|houseNo|houseId)\s*[=:]\s*['\"]?(\d+)", re.IGNORECASE)),
-        ("APT", re.compile(r"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\s*[=:]\s*['\"]?(\d+)", re.IGNORECASE)),
+        (
+            "VL",
+            re.compile(
+                r'\\?"(?:bildNo|buildingNo|houseNo|houseId)\\?"\s*:\s*\\?"?(\d+)\\?"?',
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "APT",
+            re.compile(
+                r'\\?"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\\?"\s*:\s*\\?"?(\d+)\\?"?',
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "VL",
+            re.compile(
+                r"(?:bildNo|buildingNo|houseNo|houseId)\s*[=:]\s*['\"]?(\d+)",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "APT",
+            re.compile(
+                r"(?:complexNo|complexId|complexNumber|hscpNo|hscpId)\s*[=:]\s*['\"]?(\d+)",
+                re.IGNORECASE,
+            ),
+        ),
         ("VL", re.compile(r"new\.land\.naver\.com/houses/(\d+)", re.IGNORECASE)),
         ("APT", re.compile(r"new\.land\.naver\.com/complexes/(\d+)", re.IGNORECASE)),
     )

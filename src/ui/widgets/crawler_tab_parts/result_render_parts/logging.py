@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabResultLoggingMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def append_log(self: Any, msg, level=20):

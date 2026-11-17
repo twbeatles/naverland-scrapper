@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseDisappearedOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def mark_disappeared_articles(self, asset_type=None):
@@ -57,7 +58,9 @@ class ComplexDatabaseDisappearedOpsMixin:
                 pass
             self._pool.return_connection(conn)
 
-    def mark_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
+    def mark_disappeared_articles_for_targets(
+        self, targets: list[tuple[str, ...]]
+    ) -> int:
         if self.is_write_disabled():
             return 0
 
@@ -102,7 +105,9 @@ class ComplexDatabaseDisappearedOpsMixin:
                     params = []
                     for asset_type, complex_id, trade_type in triple_chunk:
                         asset_where, asset_params = self._asset_scope_where(asset_type)
-                        clauses.append(f"(({asset_where}) AND complex_id = ? AND trade_type = ?)")
+                        clauses.append(
+                            f"(({asset_where}) AND complex_id = ? AND trade_type = ?)"
+                        )
                         params.extend(asset_params)
                         params.extend([complex_id, trade_type])
                     where_triples = " OR ".join(clauses)
@@ -138,7 +143,9 @@ class ComplexDatabaseDisappearedOpsMixin:
                 pass
             self._pool.return_connection(conn)
 
-    def count_disappeared_articles_for_targets(self, targets: list[tuple[str, ...]]) -> int:
+    def count_disappeared_articles_for_targets(
+        self, targets: list[tuple[str, ...]]
+    ) -> int:
         normalized_triples: list[tuple[str, str, str]] = []
         for pair in targets or []:
             if not isinstance(pair, (list, tuple)):
@@ -174,7 +181,9 @@ class ComplexDatabaseDisappearedOpsMixin:
                 params = []
                 for asset_type, complex_id, trade_type in triple_chunk:
                     asset_where, asset_params = self._asset_scope_where(asset_type)
-                    clauses.append(f"(({asset_where}) AND complex_id = ? AND trade_type = ?)")
+                    clauses.append(
+                        f"(({asset_where}) AND complex_id = ? AND trade_type = ?)"
+                    )
                     params.extend(asset_params)
                     params.extend([complex_id, trade_type])
                 row = c.execute(
@@ -182,7 +191,7 @@ class ComplexDatabaseDisappearedOpsMixin:
                     SELECT COUNT(*)
                     FROM article_history
                     WHERE status='disappeared'
-                      AND ({' OR '.join(clauses)})
+                      AND ({" OR ".join(clauses)})
                     """,
                     params,
                 ).fetchone()
@@ -197,14 +206,18 @@ class ComplexDatabaseDisappearedOpsMixin:
     def get_disappeared_articles(self, limit=50):
         conn = self._pool.get_connection()
         try:
-            rows = conn.cursor().execute(
-                """
+            rows = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT * FROM article_history
                 WHERE status='disappeared'
                 ORDER BY last_seen DESC LIMIT ?
                 """,
-                (limit,),
-            ).fetchall()
+                    (limit,),
+                )
+                .fetchall()
+            )
             return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"get disappeared articles failed: {e}")
@@ -215,9 +228,13 @@ class ComplexDatabaseDisappearedOpsMixin:
     def count_disappeared_articles(self):
         conn = self._pool.get_connection()
         try:
-            row = conn.cursor().execute(
-                "SELECT COUNT(*) FROM article_history WHERE status='disappeared'"
-            ).fetchone()
+            row = (
+                conn.cursor()
+                .execute(
+                    "SELECT COUNT(*) FROM article_history WHERE status='disappeared'"
+                )
+                .fetchone()
+            )
             return row[0] if row else 0
         except Exception as e:
             logger.error(f"count disappeared articles failed: {e}")

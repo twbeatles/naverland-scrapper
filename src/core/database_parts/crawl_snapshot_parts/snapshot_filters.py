@@ -8,9 +8,12 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseSnapshotFilterMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
-    def _append_snapshot_asset_filter(self, sql_parts: list[str], params: list[Any], asset_type) -> None:
+    def _append_snapshot_asset_filter(
+        self, sql_parts: list[str], params: list[Any], asset_type
+    ) -> None:
         if self._is_all_filter_value(asset_type):
             return
         asset_token = self._normalize_asset_type(asset_type)
@@ -59,6 +62,8 @@ class ComplexDatabaseSnapshotFilterMixin:
                 sql_parts.append("AND price_metric = ?")
                 params.append("rent")
             return
-        metric_token = self._normalize_price_metric(price_metric, trade_type=trade_type_token)
+        metric_token = self._normalize_price_metric(
+            price_metric, trade_type=trade_type_token
+        )
         sql_parts.append("AND price_metric = ?")
         params.append(metric_token)

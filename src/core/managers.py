@@ -14,6 +14,7 @@ Single-responsibility owners live in :mod:`src.core.managers_parts`:
 This module re-exports the full previous public surface so existing
 ``from src.core.managers import ...`` imports keep working.
 """
+
 from __future__ import annotations
 
 from src.core.managers_parts.filter_preset import FilterPresetManager

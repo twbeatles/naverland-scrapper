@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabTableRowRenderMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     @staticmethod
@@ -68,7 +69,9 @@ class CrawlerTabTableRowRenderMixin:
             "show_new_badge": bool(settings.get("show_new_badge", True)),
             "show_price_change": bool(settings.get("show_price_change", True)),
             "price_change_threshold": threshold,
-            "extra_columns": normalize_result_extra_columns(settings.get("result_extra_columns", [])),
+            "extra_columns": normalize_result_extra_columns(
+                settings.get("result_extra_columns", [])
+            ),
         }
         if hasattr(self, "_apply_extra_column_visibility"):
             self._apply_extra_column_visibility()
@@ -99,7 +102,9 @@ class CrawlerTabTableRowRenderMixin:
         )
 
         menu = QMenu(self)
-        baseline = normalize_result_extra_columns(settings.get("result_extra_columns", []))
+        baseline = normalize_result_extra_columns(
+            settings.get("result_extra_columns", [])
+        )
         baseline_box = {"ids": list(baseline)}
         current_set = set(baseline)
         actions = []
@@ -151,12 +156,17 @@ class CrawlerTabTableRowRenderMixin:
         if not items:
             return
         self.collected_data.extend(items)
-        visible_items = self._decorate_favorite_state(self._apply_advanced_filter_items(items))
+        visible_items = self._decorate_favorite_state(
+            self._apply_advanced_filter_items(items)
+        )
         if not visible_items:
             return
         if self._compact_duplicates:
             self._append_rows_compact_batch(visible_items)
-            if self.view_mode == "card" and self.view_stack.currentWidget() is self.card_view:
+            if (
+                self.view_mode == "card"
+                and self.view_stack.currentWidget() is self.card_view
+            ):
                 self._schedule_card_view_refresh()
         else:
             self._append_rows_batch(visible_items)
@@ -209,19 +219,29 @@ class CrawlerTabTableRowRenderMixin:
             ratio = 0.0
         return f"{ratio:.4f}" if ratio else ""
 
-    def _build_row_payload_from_data(self: Any, data, trade_type, price_int, area_val, price_change, is_new):
+    def _build_row_payload_from_data(
+        self: Any, data, trade_type, price_int, area_val, price_change, is_new
+    ):
         payload = dict(data or {})
         payload["단지명"] = str(payload.get("단지명", "") or "")
         payload["단지ID"] = str(payload.get("단지ID", "") or "")
         payload["매물ID"] = str(payload.get("매물ID", "") or "")
-        payload["자산유형"] = str(payload.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        payload["자산유형"] = (
+            str(payload.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        )
         payload["거래유형"] = trade_type
         payload["price_int"] = int(price_int or 0)
         payload["면적(평)"] = float(area_val or 0)
-        payload["층/방향"] = str(data.get("층/방향", "") if isinstance(data, dict) else "")
-        payload["타입/특징"] = str(data.get("타입/특징", "") if isinstance(data, dict) else "")
+        payload["층/방향"] = str(
+            data.get("층/방향", "") if isinstance(data, dict) else ""
+        )
+        payload["타입/특징"] = str(
+            data.get("타입/특징", "") if isinstance(data, dict) else ""
+        )
         payload["is_new"] = bool(is_new)
-        payload["is_favorite"] = bool(data.get("is_favorite")) if isinstance(data, dict) else False
+        payload["is_favorite"] = (
+            bool(data.get("is_favorite")) if isinstance(data, dict) else False
+        )
         payload["price_change"] = int(price_change or 0)
         return payload
 
@@ -293,7 +313,9 @@ class CrawlerTabTableRowRenderMixin:
             render_options = self._refresh_result_render_options()
         show_new_badge = bool(render_options.get("show_new_badge", True))
         show_price_change = bool(render_options.get("show_price_change", True))
-        price_change_threshold = int(render_options.get("price_change_threshold", 0) or 0)
+        price_change_threshold = int(
+            render_options.get("price_change_threshold", 0) or 0
+        )
         if price_change_threshold > 0 and abs(price_change) < price_change_threshold:
             price_change = 0
 
@@ -310,7 +332,9 @@ class CrawlerTabTableRowRenderMixin:
         pyeong_price_text = str(data.get("평당가_표시", "-"))
         pyeong_item = NumericSortTableWidgetItem(pyeong_price_text)
         try:
-            pyeong_item.setData(Qt.ItemDataRole.UserRole, float(data.get("평당가", 0) or 0))
+            pyeong_item.setData(
+                Qt.ItemDataRole.UserRole, float(data.get("평당가", 0) or 0)
+            )
         except (TypeError, ValueError):
             pyeong_item.setData(Qt.ItemDataRole.UserRole, 0.0)
         self.result_table.setItem(row, self.COL_PYEONG_PRICE, pyeong_item)
@@ -321,7 +345,9 @@ class CrawlerTabTableRowRenderMixin:
 
         dup_count = int(data.get("duplicate_count", 1) or 1)
         dup_count_text = f"{dup_count}건"
-        self.result_table.setItem(row, self.COL_DUP_COUNT, QTableWidgetItem(dup_count_text))
+        self.result_table.setItem(
+            row, self.COL_DUP_COUNT, QTableWidgetItem(dup_count_text)
+        )
 
         is_new = bool(data.get("is_new") or data.get("신규여부"))
         new_badge_text = "N" if show_new_badge and is_new else ""
@@ -331,18 +357,30 @@ class CrawlerTabTableRowRenderMixin:
             change_text = PriceConverter.to_signed_string(price_change, zero_text="")
         else:
             change_text = ""
-        self.result_table.setItem(row, self.COL_PRICE_CHANGE, QTableWidgetItem(change_text))
+        self.result_table.setItem(
+            row, self.COL_PRICE_CHANGE, QTableWidgetItem(change_text)
+        )
         asset_type_text = str(data.get("자산유형", ""))
-        self.result_table.setItem(row, self.COL_ASSET_TYPE, QTableWidgetItem(asset_type_text))
+        self.result_table.setItem(
+            row, self.COL_ASSET_TYPE, QTableWidgetItem(asset_type_text)
+        )
         prev_jeonse_text = self._format_won_value(data.get("기전세금(원)", 0))
-        self.result_table.setItem(row, self.COL_PREV_JEONSE, QTableWidgetItem(prev_jeonse_text))
+        self.result_table.setItem(
+            row, self.COL_PREV_JEONSE, QTableWidgetItem(prev_jeonse_text)
+        )
         gap_amount_text = self._format_won_value(data.get("갭금액(원)", 0), signed=True)
-        self.result_table.setItem(row, self.COL_GAP_AMOUNT, QTableWidgetItem(gap_amount_text))
+        self.result_table.setItem(
+            row, self.COL_GAP_AMOUNT, QTableWidgetItem(gap_amount_text)
+        )
         gap_ratio_text = self._format_gap_ratio(data.get("갭비율", 0))
-        self.result_table.setItem(row, self.COL_GAP_RATIO, QTableWidgetItem(gap_ratio_text))
+        self.result_table.setItem(
+            row, self.COL_GAP_RATIO, QTableWidgetItem(gap_ratio_text)
+        )
 
         collect_time = str(data.get("수집시각", ""))
-        self.result_table.setItem(row, self.COL_COLLECTED_AT, QTableWidgetItem(collect_time))
+        self.result_table.setItem(
+            row, self.COL_COLLECTED_AT, QTableWidgetItem(collect_time)
+        )
         self.result_table.setItem(row, self.COL_LINK, QTableWidgetItem("🔗"))
 
         article_url = get_article_url(
@@ -368,13 +406,25 @@ class CrawlerTabTableRowRenderMixin:
         broker_office_text = str(data.get("부동산상호", "") or "")
         broker_phone_text = str(data.get("전화1", "") or "")
         if hasattr(self, "COL_CONFIRM_DATE"):
-            self.result_table.setItem(row, self.COL_CONFIRM_DATE, QTableWidgetItem(confirm_text))
-            self.result_table.setItem(row, self.COL_BUILDING, QTableWidgetItem(building_text))
-            self.result_table.setItem(row, self.COL_AREA_NAME, QTableWidgetItem(area_name_text))
-            self.result_table.setItem(row, self.COL_SAME_ADDR, QTableWidgetItem(same_addr_text))
+            self.result_table.setItem(
+                row, self.COL_CONFIRM_DATE, QTableWidgetItem(confirm_text)
+            )
+            self.result_table.setItem(
+                row, self.COL_BUILDING, QTableWidgetItem(building_text)
+            )
+            self.result_table.setItem(
+                row, self.COL_AREA_NAME, QTableWidgetItem(area_name_text)
+            )
+            self.result_table.setItem(
+                row, self.COL_SAME_ADDR, QTableWidgetItem(same_addr_text)
+            )
             self.result_table.setItem(row, self.COL_CP, QTableWidgetItem(cp_text))
-            self.result_table.setItem(row, self.COL_BROKER_OFFICE, QTableWidgetItem(broker_office_text))
-            self.result_table.setItem(row, self.COL_BROKER_PHONE, QTableWidgetItem(broker_phone_text))
+            self.result_table.setItem(
+                row, self.COL_BROKER_OFFICE, QTableWidgetItem(broker_office_text)
+            )
+            self.result_table.setItem(
+                row, self.COL_BROKER_PHONE, QTableWidgetItem(broker_phone_text)
+            )
 
         payload = self._build_row_payload_from_data(
             data=data,
@@ -437,7 +487,9 @@ class CrawlerTabTableRowRenderMixin:
         if len(self._row_search_cache) < needed:
             self._row_search_cache.extend([""] * (needed - len(self._row_search_cache)))
         if len(self._row_payload_cache) < needed:
-            self._row_payload_cache.extend({} for _ in range(needed - len(self._row_payload_cache)))
+            self._row_payload_cache.extend(
+                {} for _ in range(needed - len(self._row_payload_cache))
+            )
 
         chunk_size = max(50, int(self._append_chunk_size))
         try:

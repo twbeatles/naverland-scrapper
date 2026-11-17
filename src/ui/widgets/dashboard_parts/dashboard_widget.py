@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.figure import Figure
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     FigureCanvas = None
@@ -32,8 +33,9 @@ logger = get_logger("Dashboard")
 
 class DashboardWidget(QWidget):
     """통합 대시보드 (v13.0)"""
+
     warning_signal = Signal(str)
-    
+
     def __init__(self, db, theme="dark", parent=None):
         super().__init__(parent)
         self.db = db
@@ -52,7 +54,9 @@ class DashboardWidget(QWidget):
         self._disappeared_cache_ttl = 10.0
         self._warning_cache = {}
         self._warning_throttle_seconds = 3.0
-        self._korean_font_ok = bool(setup_korean_font()) if MATPLOTLIB_AVAILABLE else True
+        self._korean_font_ok = (
+            bool(setup_korean_font()) if MATPLOTLIB_AVAILABLE else True
+        )
         self._trade_chart_layout = None
         self._price_chart_layout = None
         self._trade_placeholder = None
@@ -77,61 +81,68 @@ class DashboardWidget(QWidget):
             for key, _ in oldest:
                 self._warning_cache.pop(key, None)
         self.warning_signal.emit(text)
-    
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
+
         layout.setSpacing(_SM)
-        
+
         title = QLabel("대시보드")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
-        subtitle = QLabel("방금 수집한 결과를 한눈에 요약합니다. 단지별 날짜별 시세 변화는 「시세 흐름」에서 볼 수 있습니다.")
+        subtitle = QLabel(
+            "방금 수집한 결과를 한눈에 요약합니다. 단지별 날짜별 시세 변화는 「시세 흐름」에서 볼 수 있습니다."
+        )
         subtitle.setObjectName("hintLabel")
         subtitle.setWordWrap(True)
         self._subtitle = subtitle
         self._apply_subtitle_style()
         layout.addWidget(subtitle)
-        
+
         # 통계 카드 영역 (반응형 그리드)
         self.cards_container = QWidget()
         self.cards_layout = QGridLayout(self.cards_container)
         self.cards_layout.setSpacing(12)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.total_card = self._create_stat_card("전체 매물", "0", "#3b82f6")
         self.new_card = self._create_stat_card("신규", "0", "#22c55e")
         self.up_card = self._create_stat_card("가격 상승", "0", "#ef4444")
         self.down_card = self._create_stat_card("가격 하락", "0", "#10b981")
         self.disappeared_card = self._create_stat_card("사라진 매물", "0", "#6b7280")
-        
+
         self._stat_cards = [
-            self.total_card, self.new_card, self.up_card, self.down_card, self.disappeared_card
+            self.total_card,
+            self.new_card,
+            self.up_card,
+            self.down_card,
+            self.disappeared_card,
         ]
         self._relayout_stats()
         layout.addWidget(self.cards_container)
-        
+
         # 차트 영역
         charts_layout = QHBoxLayout()
         charts_layout.setSpacing(12)
-        
+
         self.trade_chart_frame = QGroupBox("거래 종류별 매물 수")
         self._trade_chart_layout = QVBoxLayout(self.trade_chart_frame)
         self._trade_placeholder = QLabel("수집하면 그래프가 나타납니다.")
         self._trade_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._trade_chart_layout.addWidget(self._trade_placeholder)
         charts_layout.addWidget(self.trade_chart_frame)
-        
+
         self.price_chart_frame = QGroupBox("가격대별 매물 수")
         self._price_chart_layout = QVBoxLayout(self.price_chart_frame)
         self._price_placeholder = QLabel("수집하면 그래프가 나타납니다.")
         self._price_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._price_chart_layout.addWidget(self._price_placeholder)
         charts_layout.addWidget(self.price_chart_frame)
-        
+
         layout.addLayout(charts_layout)
-        
+
         self.trend_frame = QGroupBox("한눈에 보기")
         trend_layout = QVBoxLayout(self.trend_frame)
         self.trend_label = QLabel("수집하면 요약이 나타납니다.")
@@ -147,18 +158,22 @@ class DashboardWidget(QWidget):
         )
         layout.addWidget(self.empty_label, 1)
         self.empty_label.hide()
-        
+
         layout.addStretch()
-    
+
     def _create_stat_card(self, title: str, value: str, color: str) -> StatCard:
         return StatCard(title=title, value=value, color=color, theme=self._theme)
 
     def _ensure_chart_canvases(self):
         if not MATPLOTLIB_AVAILABLE or Figure is None or FigureCanvas is None:
             if self._trade_placeholder is not None:
-                self._trade_placeholder.setText("그래프 구성요소가 없어 표시할 수 없습니다.")
+                self._trade_placeholder.setText(
+                    "그래프 구성요소가 없어 표시할 수 없습니다."
+                )
             if self._price_placeholder is not None:
-                self._price_placeholder.setText("그래프 구성요소가 없어 표시할 수 없습니다.")
+                self._price_placeholder.setText(
+                    "그래프 구성요소가 없어 표시할 수 없습니다."
+                )
             return False
         if self.trade_canvas is not None and self.price_canvas is not None:
             return True
@@ -185,7 +200,10 @@ class DashboardWidget(QWidget):
         return self.trade_canvas is not None and self.price_canvas is not None
 
     def _build_stats_snapshot(self):
-        if self._stats_cache_revision == self._data_revision and self._stats_cache is not None:
+        if (
+            self._stats_cache_revision == self._data_revision
+            and self._stats_cache is not None
+        ):
             return self._stats_cache
 
         trade_counts = {"매매": 0, "전세": 0, "월세": 0}
@@ -241,11 +259,20 @@ class DashboardWidget(QWidget):
         for item in self._data or []:
             if not isinstance(item, dict):
                 continue
-            asset_type = str(item.get("자산유형", item.get("asset_type", "APT")) or "APT").strip().upper() or "APT"
+            asset_type = (
+                str(item.get("자산유형", item.get("asset_type", "APT")) or "APT")
+                .strip()
+                .upper()
+                or "APT"
+            )
             if asset_type not in {"APT", "VL"}:
                 asset_type = "APT"
-            complex_id = str(item.get("단지ID", item.get("complex_id", "")) or "").strip()
-            trade_type = str(item.get("거래유형", item.get("trade_type", "")) or "").strip()
+            complex_id = str(
+                item.get("단지ID", item.get("complex_id", "")) or ""
+            ).strip()
+            trade_type = str(
+                item.get("거래유형", item.get("trade_type", "")) or ""
+            ).strip()
             key = (asset_type, complex_id, trade_type)
             if not complex_id or not trade_type or key in seen_targets:
                 continue
@@ -253,8 +280,12 @@ class DashboardWidget(QWidget):
             scoped_targets.append(key)
 
         try:
-            if scoped_targets and hasattr(self.db, "count_disappeared_articles_for_targets"):
-                disappeared = int(self.db.count_disappeared_articles_for_targets(scoped_targets) or 0)
+            if scoped_targets and hasattr(
+                self.db, "count_disappeared_articles_for_targets"
+            ):
+                disappeared = int(
+                    self.db.count_disappeared_articles_for_targets(scoped_targets) or 0
+                )
             else:
                 disappeared = 0
         except Exception as e:
@@ -266,7 +297,7 @@ class DashboardWidget(QWidget):
         self._disappeared_cache_revision = self._data_revision
         self._disappeared_cache_loaded_at = now
         return disappeared
-    
+
     def set_data(self, data: list):
         """대시보드 데이터 설정"""
         self._data = list(data) if data else []
@@ -275,7 +306,7 @@ class DashboardWidget(QWidget):
         self._stats_cache = None
         self._disappeared_cache_revision = -1
         self.refresh()
-    
+
     def _apply_subtitle_style(self):
         subtitle = getattr(self, "_subtitle", None)
         if subtitle is None:
@@ -335,9 +366,21 @@ class DashboardWidget(QWidget):
         self._set_card_value(self.disappeared_card, "0")
         self._last_trade_chart_sig = None
         self._last_price_chart_sig = None
-        self._clear_chart(self.trade_figure, self.trade_canvas, self._trade_placeholder, "데이터가 없습니다.")
-        self._clear_chart(self.price_figure, self.price_canvas, self._price_placeholder, "데이터가 없습니다.")
-        self.trend_label.setText("총 매물 0건\n신규 0건 · 상승 0건 · 하락 0건 · 사라짐 0건\n가장 많은 거래 종류: 없음")
+        self._clear_chart(
+            self.trade_figure,
+            self.trade_canvas,
+            self._trade_placeholder,
+            "데이터가 없습니다.",
+        )
+        self._clear_chart(
+            self.price_figure,
+            self.price_canvas,
+            self._price_placeholder,
+            "데이터가 없습니다.",
+        )
+        self.trend_label.setText(
+            "총 매물 0건\n신규 0건 · 상승 0건 · 하락 0건 · 사라짐 0건\n가장 많은 거래 종류: 없음"
+        )
 
     @staticmethod
     def _dominant_trade_type(trade_counts: dict) -> str:
@@ -361,13 +404,17 @@ class DashboardWidget(QWidget):
             f"사라짐 {int(disappeared_count or 0)}건\n"
             f"가장 많은 거래 종류: {self._dominant_trade_type(stats.get('trade_counts', {}))}"
         )
-    
+
     def refresh(self):
         """대시보드 새로고침"""
         show_trend = bool(settings.get("show_trend_analysis", True))
         has_data = bool(self._data)
         # 비어 있을 때는 0으로 가득한 카드 대신 안내만 보여 준다.
-        for body in (self.cards_container, self.trade_chart_frame, self.price_chart_frame):
+        for body in (
+            self.cards_container,
+            self.trade_chart_frame,
+            self.price_chart_frame,
+        ):
             body.setVisible(has_data)
         self.trend_frame.setVisible(show_trend and has_data)
         if not has_data:
@@ -417,7 +464,7 @@ class DashboardWidget(QWidget):
     def resizeEvent(self, a0):
         super().resizeEvent(a0)
         self._relayout_stats()
-    
+
     def _update_trade_chart(self, trade_counts: dict):
         """거래유형별 파이 차트 업데이트"""
         if self.trade_figure is None or self.trade_canvas is None:
@@ -429,50 +476,53 @@ class DashboardWidget(QWidget):
         )
         if signature == self._last_trade_chart_sig:
             return
-        
+
         try:
             self.trade_figure.clear()
             ax = self.trade_figure.add_subplot(111)
-            
+
             labels = []
             sizes = []
-            colors = ['#ef4444', '#22c55e', '#3b82f6']
+            colors = ["#ef4444", "#22c55e", "#3b82f6"]
             label_map = {"매매": "Sale", "전세": "Jeonse", "월세": "Monthly"}
-            
+
             for label, count in trade_counts.items():
                 if count > 0:
                     if self._korean_font_ok:
                         display = str(label)
                     else:
-                        display = label_map.get(str(label), sanitize_text_for_matplotlib(str(label), fallback="Type"))
+                        display = label_map.get(
+                            str(label),
+                            sanitize_text_for_matplotlib(str(label), fallback="Type"),
+                        )
                     labels.append(f"{display}\n({count})")
                     sizes.append(count)
-            
+
             if sizes:
                 # Set text color based on theme - simplified logic
-                text_color = 'white' if self._theme == 'dark' else 'black'
-                
+                text_color = "white" if self._theme == "dark" else "black"
+
                 pie_result = ax.pie(
                     sizes,
                     labels=labels,
-                    colors=colors[:len(sizes)],
-                    autopct='%1.1f%%',
+                    colors=colors[: len(sizes)],
+                    autopct="%1.1f%%",
                     startangle=90,
                 )
                 texts = pie_result[1]
                 autotexts = pie_result[2] if len(pie_result) > 2 else []
-                ax.axis('equal')
-                
+                ax.axis("equal")
+
                 for text in texts + autotexts:
                     text.set_color(text_color)
-            
+
             self.trade_figure.tight_layout()
             self.trade_canvas.draw()
             self._last_trade_chart_sig = signature
         except Exception as e:
             logger.debug(f"거래유형 차트 그리기 실패 (무시): {e}")
             self._emit_warning("거래유형 차트 렌더링에 실패했습니다.")
-    
+
     def _update_price_chart(self, prices: list[float]):
         """가격대별 히스토그램 업데이트"""
         if self.price_figure is None or self.price_canvas is None:
@@ -480,28 +530,28 @@ class DashboardWidget(QWidget):
         signature = (self._data_revision, self._theme)
         if signature == self._last_price_chart_sig:
             return
-        
+
         try:
             self.price_figure.clear()
             ax = self.price_figure.add_subplot(111)
 
             if prices:
-                ax.hist(prices, bins=10, color='#3b82f6', alpha=0.7, edgecolor='white')
+                ax.hist(prices, bins=10, color="#3b82f6", alpha=0.7, edgecolor="white")
                 if self._korean_font_ok:
-                    ax.set_xlabel('가격 (억원)')
-                    ax.set_ylabel('매물 수')
+                    ax.set_xlabel("가격 (억원)")
+                    ax.set_ylabel("매물 수")
                 else:
                     ax.set_xlabel("Price (100M KRW)")
                     ax.set_ylabel("Listings")
-                
+
                 # Style update
-                text_color = 'white' if self._theme == 'dark' else 'black'
+                text_color = "white" if self._theme == "dark" else "black"
                 ax.tick_params(colors=text_color)
                 ax.xaxis.label.set_color(text_color)
                 ax.yaxis.label.set_color(text_color)
                 for spine in ax.spines.values():
-                    spine.set_color('#555555')
-            
+                    spine.set_color("#555555")
+
             self.price_figure.tight_layout()
             self.price_canvas.draw()
             self._last_price_chart_sig = signature

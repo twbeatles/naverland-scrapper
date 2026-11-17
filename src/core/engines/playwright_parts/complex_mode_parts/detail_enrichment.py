@@ -16,6 +16,7 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightDetailEnrichmentMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _process_raw_items_with_filtered_details(
@@ -37,25 +38,41 @@ class PlaywrightDetailEnrichmentMixin:
             area_filter = getattr(self.thread, "area_filter", {}) or {}
             # Integer list areas can hide a matching fractional detail area.
             # Fetch borderline rows, then apply the exact final filter below.
-            if (area_filter.get("enabled") and item.get("면적소스") == "list_api"
-                    and bool(getattr(self.thread, "detail_enrichment_enabled", True))):
+            if (
+                area_filter.get("enabled")
+                and item.get("면적소스") == "list_api"
+                and bool(getattr(self.thread, "detail_enrichment_enabled", True))
+            ):
                 sqm = float(item.get("면적(㎡)", 0) or 0)
-                low, high = float(area_filter.get("min", 0)), float(area_filter.get("max", 999))
+                low, high = (
+                    float(area_filter.get("min", 0)),
+                    float(area_filter.get("max", 999)),
+                )
                 if sqm > 0 and sqm.is_integer() and low <= sqm + 1 and high >= sqm - 1:
                     candidate = dict(item)
                     candidate["면적(㎡)"] = min(high, max(low, sqm))
             if self.thread._check_filters(candidate, trade_type):
                 detail_candidates.append(item)
                 continue
-            self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1
+            self.thread.stats["filtered_out"] = (
+                int(self.thread.stats.get("filtered_out", 0)) + 1
+            )
             self.thread.stats["detail_fetch_skipped_count"] = (
                 int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + 1
             )
 
         if detail_candidates:
-            enrich_enabled = bool(getattr(self.thread, "detail_enrichment_enabled", True))
+            enrich_enabled = bool(
+                getattr(self.thread, "detail_enrichment_enabled", True)
+            )
             try:
-                max_detail = max(0, int(getattr(self.thread, "detail_enrichment_max_per_complex", 0) or 0))
+                max_detail = max(
+                    0,
+                    int(
+                        getattr(self.thread, "detail_enrichment_max_per_complex", 0)
+                        or 0
+                    ),
+                )
             except (TypeError, ValueError):
                 max_detail = 0
 
@@ -63,9 +80,9 @@ class PlaywrightDetailEnrichmentMixin:
                 to_enrich: list[dict] = []
                 passthrough = list(detail_candidates)
                 self.thread.stats["detail_enrichment_disabled"] = 1
-                self.thread.stats["detail_fetch_skipped_count"] = (
-                    int(self.thread.stats.get("detail_fetch_skipped_count", 0)) + len(passthrough)
-                )
+                self.thread.stats["detail_fetch_skipped_count"] = int(
+                    self.thread.stats.get("detail_fetch_skipped_count", 0)
+                ) + len(passthrough)
             elif max_detail > 0 and len(detail_candidates) > max_detail:
                 to_enrich = list(detail_candidates[:max_detail])
                 passthrough = list(detail_candidates[max_detail:])
@@ -81,15 +98,21 @@ class PlaywrightDetailEnrichmentMixin:
                 passthrough = []
 
             detailed_items = (
-                await self._enrich_items_with_mobile_details(to_enrich) if to_enrich else []
+                await self._enrich_items_with_mobile_details(to_enrich)
+                if to_enrich
+                else []
             )
             for detailed_item in list(detailed_items) + list(passthrough):
-                processed_item = self.thread._enrich_item_with_history_and_alerts(dict(detailed_item))
+                processed_item = self.thread._enrich_item_with_history_and_alerts(
+                    dict(detailed_item)
+                )
                 if self.thread._check_filters(processed_item, trade_type):
                     if self.thread._push_item(processed_item):
                         matched_count += 1
                 else:
-                    self.thread.stats["filtered_out"] = int(self.thread.stats.get("filtered_out", 0)) + 1
+                    self.thread.stats["filtered_out"] = (
+                        int(self.thread.stats.get("filtered_out", 0)) + 1
+                    )
 
         self.thread._flush_history_updates(force=True)
         self.thread._flush_pending_items_if_needed(force=True)
@@ -98,7 +121,9 @@ class PlaywrightDetailEnrichmentMixin:
 
     def _detail_worker_count(self, item_count: int) -> int:
         try:
-            configured = max(1, int(getattr(self.thread, "playwright_detail_workers", 1) or 1))
+            configured = max(
+                1, int(getattr(self.thread, "playwright_detail_workers", 1) or 1)
+            )
         except (TypeError, ValueError):
             configured = 1
         # Cap under rate-limit pressure or front-api-only mode.
@@ -112,7 +137,9 @@ class PlaywrightDetailEnrichmentMixin:
 
     def _record_detail_outcome(self, item: dict, detail: dict | None) -> dict:
         """Apply detail and classify success after list-meta merge (audit H-4)."""
-        merged = apply_mobile_detail(dict(item), detail if isinstance(detail, dict) else {})
+        merged = apply_mobile_detail(
+            dict(item), detail if isinstance(detail, dict) else {}
+        )
         parse_state = str(merged.get("detail_parse_state", "") or "")
         source = str(merged.get("detail_source", "") or "")
         if merged.get("detail_host_unreachable"):
@@ -140,8 +167,12 @@ class PlaywrightDetailEnrichmentMixin:
         )
 
         if parse_state == "success" or (parse_state == "partial" and detail_core):
-            self.thread.stats["detail_success_count"] = int(self.thread.stats.get("detail_success_count", 0)) + 1
-            self.thread.stats["detail_fetch_success"] = int(self.thread.stats.get("detail_fetch_success", 0)) + 1
+            self.thread.stats["detail_success_count"] = (
+                int(self.thread.stats.get("detail_success_count", 0)) + 1
+            )
+            self.thread.stats["detail_fetch_success"] = (
+                int(self.thread.stats.get("detail_fetch_success", 0)) + 1
+            )
             if parse_state == "partial":
                 self.thread.stats["detail_partial_count"] = (
                     int(self.thread.stats.get("detail_partial_count", 0)) + 1
@@ -154,12 +185,16 @@ class PlaywrightDetailEnrichmentMixin:
             self.thread.stats["detail_partial_count"] = (
                 int(self.thread.stats.get("detail_partial_count", 0)) + 1
             )
-            merged["detail_source"] = "list_meta" if not detail_core else (source or "list_meta")
+            merged["detail_source"] = (
+                "list_meta" if not detail_core else (source or "list_meta")
+            )
             merged["detail_parse_state"] = "partial"
             merged["상세소스"] = merged["detail_source"]
             merged["상세수집상태"] = "partial"
         else:
-            self.thread.stats["detail_fail_count"] = int(self.thread.stats.get("detail_fail_count", 0)) + 1
+            self.thread.stats["detail_fail_count"] = (
+                int(self.thread.stats.get("detail_fail_count", 0)) + 1
+            )
         return merged
 
     async def _enrich_items_with_mobile_details(self, items: list[dict]) -> list[dict]:
@@ -168,9 +203,9 @@ class PlaywrightDetailEnrichmentMixin:
 
         # Per-complex flags (reset each batch).
         self._detail_rate_limited = bool(getattr(self, "_detail_rate_limited", False))
-        prefer_api_only = bool(getattr(self.thread, "detail_front_api_only", False)) or bool(
-            getattr(self, "_detail_prefer_front_api_only", False)
-        )
+        prefer_api_only = bool(
+            getattr(self.thread, "detail_front_api_only", False)
+        ) or bool(getattr(self, "_detail_prefer_front_api_only", False))
         if int(self.thread.stats.get("detail_host_unreachable_count", 0) or 0) >= 3:
             prefer_api_only = True
         self._detail_prefer_front_api_only = prefer_api_only
@@ -198,15 +233,23 @@ class PlaywrightDetailEnrichmentMixin:
             page = await self._acquire_detail_page()
             detail: dict = {}
             try:
-                article_no = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, ""))
-                self.thread.stats["detail_fetch_total"] = int(self.thread.stats.get("detail_fetch_total", 0)) + 1
-                front_api_enabled = bool(getattr(self.thread, "detail_front_api_enabled", True))
+                article_no = str(
+                    item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "")
+                )
+                self.thread.stats["detail_fetch_total"] = (
+                    int(self.thread.stats.get("detail_fetch_total", 0)) + 1
+                )
+                front_api_enabled = bool(
+                    getattr(self.thread, "detail_front_api_enabled", True)
+                )
                 if bool(getattr(self, "_detail_rate_limited", False)):
                     # After 429, skip network detail; keep list meta only.
                     front_api_enabled = False
                     prefer_local = True
                 else:
-                    prefer_local = bool(getattr(self, "_detail_prefer_front_api_only", False))
+                    prefer_local = bool(
+                        getattr(self, "_detail_prefer_front_api_only", False)
+                    )
 
                 if front_api_enabled or not prefer_local:
                     detail = await self._async_retry(
@@ -219,21 +262,32 @@ class PlaywrightDetailEnrichmentMixin:
                             prefer_front_api_only=prefer_local and front_api_enabled,
                         ),
                     )
-                detail_meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
-                missing_field_count = int(detail_meta.get("missing_field_count", 0) or 0)
+                detail_meta = (
+                    dict(detail.get("_detail_meta", {}) or {})
+                    if isinstance(detail, dict)
+                    else {}
+                )
+                missing_field_count = int(
+                    detail_meta.get("missing_field_count", 0) or 0
+                )
                 if missing_field_count > 0:
                     self.thread.stats["detail_missing_field_total"] = (
-                        int(self.thread.stats.get("detail_missing_field_total", 0)) + missing_field_count
+                        int(self.thread.stats.get("detail_missing_field_total", 0))
+                        + missing_field_count
                     )
-                network_response_count = int(detail_meta.get("network_response_count", 0) or 0)
+                network_response_count = int(
+                    detail_meta.get("network_response_count", 0) or 0
+                )
                 if network_response_count > 0:
                     self.thread.stats["detail_network_response_total"] = (
-                        int(self.thread.stats.get("detail_network_response_total", 0)) + network_response_count
+                        int(self.thread.stats.get("detail_network_response_total", 0))
+                        + network_response_count
                     )
                 hydration_hit = int(detail_meta.get("hydration_hit", 0) or 0)
                 if hydration_hit > 0:
                     self.thread.stats["detail_hydration_hit_count"] = (
-                        int(self.thread.stats.get("detail_hydration_hit_count", 0)) + hydration_hit
+                        int(self.thread.stats.get("detail_hydration_hit_count", 0))
+                        + hydration_hit
                     )
                 if detail_meta.get("front_api_rate_limited"):
                     self._detail_rate_limited = True

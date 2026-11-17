@@ -75,17 +75,24 @@ class TestKeywordMatching(unittest.TestCase):
         self.assertFalse(C._match_keyword("반지하", "84m 급매 역세권"))
 
     def test_blob_covers_broker_and_address_keys(self):
-        blob = C._keyword_text_blob(_Stub(), _base_payload({
-            "부동산상호": "한빛공인중개사",
-            "주소": "서울시 서초구 반포동",
-        }))
+        blob = C._keyword_text_blob(
+            _Stub(),
+            _base_payload(
+                {
+                    "부동산상호": "한빛공인중개사",
+                    "주소": "서울시 서초구 반포동",
+                }
+            ),
+        )
         self.assertIn("한빛공인중개사", blob)
         self.assertIn("서초구", blob)
 
     def test_include_matches_address_now(self):
         self.assertTrue(
-            _check(_base_payload({"주소": "서울시 서초구 반포동"}),
-                   _default_filters(include_keywords=["서초구"]))
+            _check(
+                _base_payload({"주소": "서울시 서초구 반포동"}),
+                _default_filters(include_keywords=["서초구"]),
+            )
         )
 
     def test_include_spacing_tolerant(self):
@@ -95,17 +102,27 @@ class TestKeywordMatching(unittest.TestCase):
 
     def test_include_or_default(self):
         self.assertTrue(
-            _check(_base_payload(), _default_filters(include_keywords=["급매", "반지하"]))
+            _check(
+                _base_payload(), _default_filters(include_keywords=["급매", "반지하"])
+            )
         )
 
     def test_include_all_mode(self):
         self.assertFalse(
-            _check(_base_payload(),
-                   _default_filters(include_keywords=["급매", "반지하"], include_mode="all"))
+            _check(
+                _base_payload(),
+                _default_filters(
+                    include_keywords=["급매", "반지하"], include_mode="all"
+                ),
+            )
         )
         self.assertTrue(
-            _check(_base_payload(),
-                   _default_filters(include_keywords=["급매", "역세권"], include_mode="all"))
+            _check(
+                _base_payload(),
+                _default_filters(
+                    include_keywords=["급매", "역세권"], include_mode="all"
+                ),
+            )
         )
 
     def test_exclude_spacing_tolerant(self):
@@ -117,11 +134,17 @@ class TestKeywordMatching(unittest.TestCase):
         self.assertTrue(C._is_default_advanced_filter(None))
         self.assertTrue(C._is_default_advanced_filter({}))
         self.assertTrue(C._is_default_advanced_filter(_default_filters()))
-        self.assertFalse(C._is_default_advanced_filter(_default_filters(include_mode="all")))
-        self.assertFalse(C._is_default_advanced_filter(_default_filters(include_keywords=["a"])))
+        self.assertFalse(
+            C._is_default_advanced_filter(_default_filters(include_mode="all"))
+        )
+        self.assertFalse(
+            C._is_default_advanced_filter(_default_filters(include_keywords=["a"]))
+        )
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestAdvancedFilterDialogMode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -164,7 +187,9 @@ class TestAdvancedFilterDialogMode(unittest.TestCase):
             dlg.deleteLater()
 
 
-@unittest.skipIf(__import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing")
+@unittest.skipIf(
+    __import__("importlib").util.find_spec("PySide6") is None, "PySide6 missing"
+)
 class TestCardSearchNormalization(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

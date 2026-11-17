@@ -13,6 +13,7 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightComplexPathsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     @staticmethod

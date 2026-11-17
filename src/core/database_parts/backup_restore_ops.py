@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseBackupRestoreOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     @staticmethod
@@ -35,7 +36,9 @@ class ComplexDatabaseBackupRestoreOpsMixin:
             c = conn.cursor()
             row = c.execute("PRAGMA integrity_check").fetchone()
             if not row or str(row[0]).strip().lower() != "ok":
-                raise RuntimeError(f"복원 DB integrity_check 실패: {row[0] if row else 'empty'}")
+                raise RuntimeError(
+                    f"복원 DB integrity_check 실패: {row[0] if row else 'empty'}"
+                )
 
             names = {
                 r[0]
@@ -85,7 +88,11 @@ class ComplexDatabaseBackupRestoreOpsMixin:
         verify_conn = None
         try:
             verify_conn = sqlite3.connect(str(backup_path), timeout=30)
-            row = verify_conn.cursor().execute("SELECT COUNT(*) FROM complexes").fetchone()
+            row = (
+                verify_conn.cursor()
+                .execute("SELECT COUNT(*) FROM complexes")
+                .fetchone()
+            )
             if not row:
                 logger.error("백업 검증 실패: complexes 집계 결과가 비어 있습니다.")
                 return False
@@ -103,7 +110,7 @@ class ComplexDatabaseBackupRestoreOpsMixin:
                     verify_conn.close()
                 except Exception:
                     pass
-    
+
     def restore_database(self, path):
         """DB 복원 - 유지보수와 롤백을 포함한 안전한 복원 로직."""
         restore_path = Path(path)
@@ -135,7 +142,9 @@ class ComplexDatabaseBackupRestoreOpsMixin:
                     return False
 
             if self._pool:
-                close_result = self._pool.close_all(timeout_ms=8000, force_after_timeout=False)
+                close_result = self._pool.close_all(
+                    timeout_ms=8000, force_after_timeout=False
+                )
                 if not getattr(close_result, "ok", False):
                     self._last_restore_error = (
                         "복원 중단: 활성 DB 연결 종료 실패 "
@@ -194,4 +203,3 @@ class ComplexDatabaseBackupRestoreOpsMixin:
                 self._pool.close_all()
         except Exception as e:
             logger.debug(f"DB 종료 실패 (무시): {e}")
-

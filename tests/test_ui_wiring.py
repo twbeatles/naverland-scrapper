@@ -21,7 +21,9 @@ def _force_complex_schedule_mode(app) -> None:
     app.schedule_mode_combo.setCurrentIndex(mode_index if mode_index >= 0 else 0)
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestUIWiring(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -39,7 +41,9 @@ class TestUIWiring(unittest.TestCase):
 
         reset_crawl_lock_for_tests()
 
-    def test_crawler_tab_saves_search_history_and_complex_finished_slot_is_ui_only(self):
+    def test_crawler_tab_saves_search_history_and_complex_finished_slot_is_ui_only(
+        self,
+    ):
         from src.core.crawler import CrawlerThread
         from src.core.database import ComplexDatabase
         from src.ui.widgets.crawler_tab import CrawlerTab
@@ -85,7 +89,9 @@ class TestUIWiring(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = ComplexDatabase(os.path.join(tmp, "thread_wiring.db"))
             self.assertTrue(
-                db.add_alert_setting("12345", "테스트단지", "매매", 10.0, 50.0, 5000, 20000)
+                db.add_alert_setting(
+                    "12345", "테스트단지", "매매", 10.0, 50.0, 5000, 20000
+                )
             )
 
             thread = CrawlerThread(
@@ -157,7 +163,9 @@ class TestUIWiring(unittest.TestCase):
                 }
                 return overrides.get(key, default)
 
-            with patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting):
+            with patch(
+                "src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting
+            ):
                 tab._append_rows_batch([sample])
 
             self.assertEqual(_table_text(tab.result_table, 0, 7), "1건")
@@ -263,7 +271,9 @@ class TestUIWiring(unittest.TestCase):
             self.assertEqual(hidden_beta, 300)
             # 반복 필터링에도 상태 일관성 유지
             tab._filter_results("beta")
-            hidden_beta_again = sum(1 for r in range(450) if tab.result_table.isRowHidden(r))
+            hidden_beta_again = sum(
+                1 for r in range(450) if tab.result_table.isRowHidden(r)
+            )
             self.assertEqual(hidden_beta_again, 300)
 
             db.close()
@@ -432,12 +442,18 @@ class TestUIWiring(unittest.TestCase):
             tab._advanced_filters = {"only_price_down": True}
             tab._filter_results("")
 
-            hidden = sum(1 for r in range(tab.result_table.rowCount()) if tab.result_table.isRowHidden(r))
+            hidden = sum(
+                1
+                for r in range(tab.result_table.rowCount())
+                if tab.result_table.isRowHidden(r)
+            )
             self.assertEqual(hidden, 2)
 
             tab.clear_advanced_filters()
             hidden_after_clear = sum(
-                1 for r in range(tab.result_table.rowCount()) if tab.result_table.isRowHidden(r)
+                1
+                for r in range(tab.result_table.rowCount())
+                if tab.result_table.isRowHidden(r)
             )
             self.assertEqual(hidden_after_clear, 0)
 
@@ -454,7 +470,9 @@ class TestUIWiring(unittest.TestCase):
             tab = CrawlerTab(db, maintenance_guard=lambda: True)
             tab.add_task("유지보수단지", "50001")
 
-            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 tab.start_crawling()
 
             self.assertIsNone(tab.crawler_thread)
@@ -484,7 +502,9 @@ class TestUIWiring(unittest.TestCase):
             db = ComplexDatabase(os.path.join(tmp, "ui_runtime_settings.db"))
             tab = CrawlerTab(db)
 
-            with patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get):
+            with patch(
+                "src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get
+            ):
                 tab.update_runtime_settings()
 
             self.assertEqual(tab._search_timer.interval(), 350)
@@ -493,7 +513,9 @@ class TestUIWiring(unittest.TestCase):
 
             tab.crawler_thread = object()
             with (
-                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get),
+                patch(
+                    "src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get
+                ),
                 patch("src.ui.widgets.crawler_tab.QApplication.beep") as mock_beep,
                 patch.object(tab, "_save_price_snapshots", return_value=None),
             ):
@@ -510,7 +532,9 @@ class TestUIWiring(unittest.TestCase):
         from src.ui.app import RealEstateApp
         from src.utils.constants import SHORTCUTS
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         self.assertIn(SHORTCUTS["settings"], app._shortcuts)
@@ -519,7 +543,9 @@ class TestUIWiring(unittest.TestCase):
         app._minimize_to_tray()
 
         app.schedule_group_combo.clear()
-        with patch.object(app.db, "get_all_groups", return_value=[(1, "테스트그룹", "")]):
+        with patch.object(
+            app.db, "get_all_groups", return_value=[(1, "테스트그룹", "")]
+        ):
             app.group_tab.groups_updated.emit()
         self.assertEqual(app.schedule_group_combo.count(), 1)
 
@@ -535,7 +561,9 @@ class TestUIWiring(unittest.TestCase):
         from src.ui.app import settings as app_settings
 
         original_settings = copy.deepcopy(app_settings._settings)
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
         try:
             with patch.object(app_settings, "_save", return_value=None):
@@ -550,7 +578,9 @@ class TestUIWiring(unittest.TestCase):
                     "geo": app._schedule_geo_defaults(),
                 }
                 app.schedule_group_combo.clear()
-                with patch.object(app.db, "get_all_groups", return_value=[(1, "다른그룹", "")]):
+                with patch.object(
+                    app.db, "get_all_groups", return_value=[(1, "다른그룹", "")]
+                ):
                     app._load_schedule_groups()
 
                 saved = app_settings.get("schedule_config", {})
@@ -571,7 +601,9 @@ class TestUIWiring(unittest.TestCase):
         from src.ui.app import settings as app_settings
 
         original_settings = copy.deepcopy(app_settings._settings)
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
         try:
             with patch.object(app_settings, "_save", return_value=None):
@@ -617,7 +649,9 @@ class TestUIWiring(unittest.TestCase):
             def isRunning(self):
                 return True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         app.schedule_group_combo.clear()
@@ -627,8 +661,14 @@ class TestUIWiring(unittest.TestCase):
         app.crawler_tab.crawler_thread = _RunningThread()
 
         with (
-            patch.object(app.crawler_tab, "clear_tasks", wraps=app.crawler_tab.clear_tasks) as mock_clear,
-            patch.object(app.db, "get_complexes_in_group", return_value=[(1, "새단지", "12345", "")]),
+            patch.object(
+                app.crawler_tab, "clear_tasks", wraps=app.crawler_tab.clear_tasks
+            ) as mock_clear,
+            patch.object(
+                app.db,
+                "get_complexes_in_group",
+                return_value=[(1, "새단지", "12345", "")],
+            ),
             patch.object(app.crawler_tab, "start_crawling") as mock_start,
         ):
             app._run_scheduled()
@@ -648,7 +688,9 @@ class TestUIWiring(unittest.TestCase):
     def test_scheduled_run_includes_vl_targets_in_playwright_complex_mode(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         app.schedule_group_combo.clear()
@@ -692,7 +734,9 @@ class TestUIWiring(unittest.TestCase):
     def test_scheduled_run_skips_when_selenium_group_has_only_vl_targets(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         app.schedule_group_combo.clear()
@@ -716,7 +760,10 @@ class TestUIWiring(unittest.TestCase):
             app._run_scheduled()
 
         self.assertEqual(app.crawler_tab.table_list.rowCount(), 0)
-        self.assertIn("보조 엔진(Selenium)은 아파트만 수집", app.crawler_tab.log_browser.toPlainText())
+        self.assertIn(
+            "보조 엔진(Selenium)은 아파트만 수집",
+            app.crawler_tab.log_browser.toPlainText(),
+        )
         mock_start.assert_not_called()
 
         if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -732,7 +779,9 @@ class TestUIWiring(unittest.TestCase):
 
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         sample = {
@@ -807,7 +856,9 @@ class TestUIWiring(unittest.TestCase):
             def now(cls, tz=None):
                 return cls(2026, 3, 19, 9, 5, 0)
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -822,7 +873,9 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
                 app.time_edit.setTime(QTime(9, 0))
-                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_mode_combo.setCurrentIndex(
+                    app.schedule_mode_combo.findData("complex")
+                )
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 10)
 
@@ -868,7 +921,9 @@ class TestUIWiring(unittest.TestCase):
             def isRunning(self):
                 return True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -883,7 +938,9 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
                 app.time_edit.setTime(QTime(9, 0))
-                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_mode_combo.setCurrentIndex(
+                    app.schedule_mode_combo.findData("complex")
+                )
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 10)
                 app.crawler_tab.crawler_thread = _RunningThread()
@@ -891,7 +948,9 @@ class TestUIWiring(unittest.TestCase):
                 with patch("src.ui.app.datetime", _FixedDateTime):
                     app._check_schedule()
 
-                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"), ""
+                )
 
                 app.crawler_tab.crawler_thread = None
                 with (
@@ -930,7 +989,9 @@ class TestUIWiring(unittest.TestCase):
             def now(cls, tz=None):
                 return cls(2026, 3, 19, 9, 5, 0)
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -945,7 +1006,9 @@ class TestUIWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
                 app.time_edit.setTime(QTime(9, 0))
-                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("complex"))
+                app.schedule_mode_combo.setCurrentIndex(
+                    app.schedule_mode_combo.findData("complex")
+                )
                 app.schedule_group_combo.clear()
                 app.schedule_group_combo.addItem("테스트그룹", 10)
 
@@ -962,7 +1025,9 @@ class TestUIWiring(unittest.TestCase):
                     patch.object(app.crawler_tab, "start_crawling") as mock_start,
                 ):
                     app._check_schedule()
-                    self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                    self.assertEqual(
+                        app_settings.get("schedule_config", {}).get("last_run_slot"), ""
+                    )
                     app._check_schedule()
 
                 mock_start.assert_called_once()
@@ -983,7 +1048,9 @@ class TestUIWiring(unittest.TestCase):
         from src.ui.app import RealEstateApp
         from src.ui.app import settings as app_settings
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -1009,20 +1076,28 @@ class TestUIWiring(unittest.TestCase):
                         "get_complexes_in_group",
                         return_value=[(1, "예약단지", "APT", "11111", "")],
                     ),
-                    patch.object(app.crawler_tab, "start_crawling", return_value=False) as mock_start,
+                    patch.object(
+                        app.crawler_tab, "start_crawling", return_value=False
+                    ) as mock_start,
                 ):
                     self.assertFalse(app._run_scheduled())
 
                 mock_start.assert_called_once()
                 self.assertEqual(app.crawler_tab.table_list.rowCount(), 2)
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존APT")
+                self.assertEqual(
+                    _table_text(app.crawler_tab.table_list, 0, 0), "기존APT"
+                )
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 2), "APT")
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 0), "기존VL")
+                self.assertEqual(
+                    _table_text(app.crawler_tab.table_list, 1, 0), "기존VL"
+                )
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 1), "99999")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 2), "VL")
                 self.assertEqual(app.crawler_tab.table_list.currentRow(), 1)
-                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"), ""
+                )
         finally:
             app_settings._settings = original_settings
             if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -1032,11 +1107,15 @@ class TestUIWiring(unittest.TestCase):
             app.deleteLater()
             self._qt_app.processEvents()
 
-    def test_schedule_no_target_restore_preserves_manual_tasks_and_keeps_slot_empty(self):
+    def test_schedule_no_target_restore_preserves_manual_tasks_and_keeps_slot_empty(
+        self,
+    ):
         from src.ui.app import RealEstateApp
         from src.ui.app import settings as app_settings
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -1069,14 +1148,20 @@ class TestUIWiring(unittest.TestCase):
 
                 mock_start.assert_not_called()
                 self.assertEqual(app.crawler_tab.table_list.rowCount(), 2)
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 0), "기존APT")
+                self.assertEqual(
+                    _table_text(app.crawler_tab.table_list, 0, 0), "기존APT"
+                )
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 1), "99999")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 0, 2), "APT")
-                self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 0), "기존VL")
+                self.assertEqual(
+                    _table_text(app.crawler_tab.table_list, 1, 0), "기존VL"
+                )
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 1), "99999")
                 self.assertEqual(_table_text(app.crawler_tab.table_list, 1, 2), "VL")
                 self.assertEqual(app.crawler_tab.table_list.currentRow(), 1)
-                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"), ""
+                )
         finally:
             app_settings._settings = original_settings
             if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -1089,7 +1174,9 @@ class TestUIWiring(unittest.TestCase):
     def test_app_advanced_filter_wiring_to_crawler_tab(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         with patch.object(app.crawler_tab, "open_advanced_filter_dialog") as mock_open:
@@ -1131,16 +1218,28 @@ class TestUIWiring(unittest.TestCase):
                 self.start_calls.append(ms)
                 self.active = True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
         app.schedule_timer = _TimerStub(active=True)
 
         restore_path = "C:/tmp/mock_restore.db"
         with (
-            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=(restore_path, "Database (*.db)")),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
-            patch.object(app.crawler_tab, "shutdown_crawl", return_value=True) as mock_shutdown_crawl,
-            patch.object(app.geo_tab, "shutdown_crawl", return_value=True) as mock_geo_shutdown,
+            patch(
+                "src.ui.app.QFileDialog.getOpenFileName",
+                return_value=(restore_path, "Database (*.db)"),
+            ),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
+            patch.object(
+                app.crawler_tab, "shutdown_crawl", return_value=True
+            ) as mock_shutdown_crawl,
+            patch.object(
+                app.geo_tab, "shutdown_crawl", return_value=True
+            ) as mock_geo_shutdown,
             patch.object(app.db, "restore_database", return_value=True) as mock_restore,
             patch.object(app, "_load_initial_data") as mock_reload,
             patch("src.ui.app.QMessageBox.information"),
@@ -1168,13 +1267,23 @@ class TestUIWiring(unittest.TestCase):
 
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
-        app.db._last_restore_error = "복원 중단: 활성 DB 연결 종료 실패 (leased=1, close_errors=0)"
+        app.db._last_restore_error = (
+            "복원 중단: 활성 DB 연결 종료 실패 (leased=1, close_errors=0)"
+        )
         with (
-            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch(
+                "src.ui.app.QFileDialog.getOpenFileName",
+                return_value=("C:/tmp/mock_restore.db", "Database (*.db)"),
+            ),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
             patch.object(app.crawler_tab, "shutdown_crawl", return_value=True),
             patch.object(app.geo_tab, "shutdown_crawl", return_value=True),
             patch.object(app.db, "restore_database", return_value=False),
@@ -1216,15 +1325,25 @@ class TestUIWiring(unittest.TestCase):
                 self.start_calls.append(ms)
                 self.active = True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
         app.schedule_timer = _TimerStub(active=True)
 
         with (
-            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch(
+                "src.ui.app.QFileDialog.getOpenFileName",
+                return_value=("C:/tmp/mock_restore.db", "Database (*.db)"),
+            ),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
             patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
-            patch.object(app.geo_tab, "shutdown_crawl", return_value=True) as mock_geo_shutdown,
+            patch.object(
+                app.geo_tab, "shutdown_crawl", return_value=True
+            ) as mock_geo_shutdown,
             patch.object(app.db, "restore_database") as mock_restore,
             patch("src.ui.app.QMessageBox.warning") as mock_warning,
             patch("src.ui.app.QApplication.processEvents", return_value=None),
@@ -1266,14 +1385,24 @@ class TestUIWiring(unittest.TestCase):
                 self.start_calls.append(ms)
                 self.active = True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
         app.schedule_timer = _TimerStub(active=True)
 
         with (
-            patch("src.ui.app.QFileDialog.getOpenFileName", return_value=("C:/tmp/mock_restore.db", "Database (*.db)")),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
-            patch.object(app.crawler_tab, "shutdown_crawl", return_value=True) as mock_shutdown_crawl,
+            patch(
+                "src.ui.app.QFileDialog.getOpenFileName",
+                return_value=("C:/tmp/mock_restore.db", "Database (*.db)"),
+            ),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
+            patch.object(
+                app.crawler_tab, "shutdown_crawl", return_value=True
+            ) as mock_shutdown_crawl,
             patch.object(app.geo_tab, "shutdown_crawl", return_value=False),
             patch.object(app.db, "restore_database") as mock_restore,
             patch("src.ui.app.QMessageBox.warning") as mock_warning,
@@ -1306,7 +1435,10 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
 
@@ -1324,7 +1456,16 @@ class TestUIWiring(unittest.TestCase):
                     """,
                     [
                         ("90001", "매매", 34.0, 10000, 12000, 11000, 2, "2026-02-24"),
-                        ("90001", "매매", "34평", "1억", "1억 2,000만", "1억 1,000만", "3건", "2026-02-25"),
+                        (
+                            "90001",
+                            "매매",
+                            "34평",
+                            "1억",
+                            "1억 2,000만",
+                            "1억 1,000만",
+                            "3건",
+                            "2026-02-25",
+                        ),
                     ],
                 )
                 conn.commit()
@@ -1335,14 +1476,22 @@ class TestUIWiring(unittest.TestCase):
             idx = -1
             for i in range(app.stats_complex_combo.count()):
                 data = app.stats_complex_combo.itemData(i)
-                if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "90001":
+                if (
+                    isinstance(data, tuple)
+                    and len(data) >= 2
+                    and str(data[1]) == "90001"
+                ):
                     idx = i
                     break
                 if isinstance(data, str):
                     if data == "90001" or data.endswith(":90001"):
                         idx = i
                         break
-                if isinstance(data, (tuple, list)) and len(data) >= 1 and str(data[0]).endswith(":90001"):
+                if (
+                    isinstance(data, (tuple, list))
+                    and len(data) >= 1
+                    and str(data[0]).endswith(":90001")
+                ):
                     idx = i
                     break
             self.assertGreaterEqual(idx, 0)
@@ -1350,7 +1499,10 @@ class TestUIWiring(unittest.TestCase):
             app.stats_complex_combo.setCurrentIndex(idx)
             app._on_stats_complex_changed(idx)
 
-            labels = [app.stats_pyeong_combo.itemText(i) for i in range(app.stats_pyeong_combo.count())]
+            labels = [
+                app.stats_pyeong_combo.itemText(i)
+                for i in range(app.stats_pyeong_combo.count())
+            ]
             self.assertIn("34평", labels)
 
             app._load_stats()
@@ -1363,7 +1515,9 @@ class TestUIWiring(unittest.TestCase):
             app.deleteLater()
             self._qt_app.processEvents()
 
-    def test_stats_tab_monthly_metric_selector_defaults_to_rent_and_can_switch_to_deposit(self):
+    def test_stats_tab_monthly_metric_selector_defaults_to_rent_and_can_switch_to_deposit(
+        self,
+    ):
         from src.core.database import ComplexDatabase
         from src.ui.app import RealEstateApp
 
@@ -1375,17 +1529,44 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
             try:
-                self.assertTrue(app.db.add_complex("월세단지", "91001", asset_type="APT"))
+                self.assertTrue(
+                    app.db.add_complex("월세단지", "91001", asset_type="APT")
+                )
                 self.assertEqual(
                     app.db.add_price_snapshots_bulk(
                         [
-                            ("91001", "월세", 24.0, 50000, 55000, 52500, 2, "APT", "deposit", 0),
+                            (
+                                "91001",
+                                "월세",
+                                24.0,
+                                50000,
+                                55000,
+                                52500,
+                                2,
+                                "APT",
+                                "deposit",
+                                0,
+                            ),
                             ("91001", "월세", 24.0, 90, 110, 100, 2, "APT", "rent", 0),
-                            ("91001", "월세", 24.0, 40000, 42000, 41000, 1, "APT", "deposit", 1),
+                            (
+                                "91001",
+                                "월세",
+                                24.0,
+                                40000,
+                                42000,
+                                41000,
+                                1,
+                                "APT",
+                                "deposit",
+                                1,
+                            ),
                         ]
                     ),
                     3,
@@ -1394,7 +1575,11 @@ class TestUIWiring(unittest.TestCase):
                 app._load_stats_complexes()
                 for i in range(app.stats_complex_combo.count()):
                     data = app.stats_complex_combo.itemData(i)
-                    if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "91001":
+                    if (
+                        isinstance(data, tuple)
+                        and len(data) >= 2
+                        and str(data[1]) == "91001"
+                    ):
                         app.stats_complex_combo.setCurrentIndex(i)
                         break
                 app.stats_type_combo.setCurrentText("월세")
@@ -1409,7 +1594,9 @@ class TestUIWiring(unittest.TestCase):
                 self.assertIn("월세", rent_header.text())
                 self.assertEqual(_table_text(app.stats_table, 0, 5), "100만")
 
-                app.stats_metric_combo.setCurrentIndex(app.stats_metric_combo.findData("deposit"))
+                app.stats_metric_combo.setCurrentIndex(
+                    app.stats_metric_combo.findData("deposit")
+                )
                 app._load_stats()
 
                 self.assertEqual(app.stats_metric_combo.currentData(), "deposit")
@@ -1476,11 +1663,16 @@ class TestUIWiring(unittest.TestCase):
 
             dialog = AlertSettingDialog(db=db)
 
-            combo_texts = [dialog.combo_complex.itemText(i) for i in range(dialog.combo_complex.count())]
+            combo_texts = [
+                dialog.combo_complex.itemText(i)
+                for i in range(dialog.combo_complex.count())
+            ]
             self.assertIn("APT단지  ·  아파트", combo_texts)
             self.assertIn("VL단지  ·  빌라", combo_texts)
 
-            dialog.combo_complex.setCurrentIndex(combo_texts.index("APT단지  ·  아파트"))
+            dialog.combo_complex.setCurrentIndex(
+                combo_texts.index("APT단지  ·  아파트")
+            )
             dialog.check_common_scope.setChecked(True)
             dialog._add()
 
@@ -1521,7 +1713,9 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls,
-                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting),
+                patch(
+                    "src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting
+                ),
             ):
                 tab.start_crawling()
 
@@ -1550,8 +1744,12 @@ class TestUIWiring(unittest.TestCase):
                 return default
 
             with (
-                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting),
-                patch("src.ui.widgets.crawler_tab.QMessageBox.warning", return_value=None),
+                patch(
+                    "src.ui.widgets.crawler_tab.settings.get", side_effect=_get_setting
+                ),
+                patch(
+                    "src.ui.widgets.crawler_tab.QMessageBox.warning", return_value=None
+                ),
             ):
                 self.assertFalse(tab.start_crawling())
 
@@ -1573,7 +1771,10 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
 
@@ -1615,7 +1816,10 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
 
@@ -1632,8 +1836,28 @@ class TestUIWiring(unittest.TestCase):
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
-                        ("92001", "매매", 34.0, 10000, 12000, 11000, 2, "APT", "2026-03-10"),
-                        ("92001", "전세", 34.0, 5000, 7000, 6000, 2, "APT", "2026-03-11"),
+                        (
+                            "92001",
+                            "매매",
+                            34.0,
+                            10000,
+                            12000,
+                            11000,
+                            2,
+                            "APT",
+                            "2026-03-10",
+                        ),
+                        (
+                            "92001",
+                            "전세",
+                            34.0,
+                            5000,
+                            7000,
+                            6000,
+                            2,
+                            "APT",
+                            "2026-03-11",
+                        ),
                     ],
                 )
                 conn.commit()
@@ -1643,7 +1867,11 @@ class TestUIWiring(unittest.TestCase):
             app._load_stats_complexes()
             for i in range(app.stats_complex_combo.count()):
                 data = app.stats_complex_combo.itemData(i)
-                if isinstance(data, tuple) and len(data) >= 2 and str(data[1]) == "92001":
+                if (
+                    isinstance(data, tuple)
+                    and len(data) >= 2
+                    and str(data[1]) == "92001"
+                ):
                     app.stats_complex_combo.setCurrentIndex(i)
                     break
             # 기본 거래 종류(매매)는 한 시리즈라 바로 그래프와 요약이 나온다.
@@ -1679,12 +1907,19 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
             try:
-                self.assertTrue(app.db.add_complex("매매단지", "93001", asset_type="APT"))
-                self.assertTrue(app.db.add_complex("전세만단지", "93002", asset_type="APT"))
+                self.assertTrue(
+                    app.db.add_complex("매매단지", "93001", asset_type="APT")
+                )
+                self.assertTrue(
+                    app.db.add_complex("전세만단지", "93002", asset_type="APT")
+                )
                 conn = app.db._pool.get_connection()
                 try:
                     conn.cursor().executemany(
@@ -1695,10 +1930,50 @@ class TestUIWiring(unittest.TestCase):
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         [
-                            ("93001", "매매", 34.0, 95000, 105000, 100000, 4, "APT", "2026-01-05"),
-                            ("93001", "매매", 34.0, 98000, 110000, 104000, 5, "APT", "2026-02-05"),
-                            ("93001", "매매", 34.0, 100000, 112000, 110000, 3, "APT", "2026-03-05"),
-                            ("93002", "전세", 25.0, 40000, 46000, 43000, 2, "APT", "2026-03-05"),
+                            (
+                                "93001",
+                                "매매",
+                                34.0,
+                                95000,
+                                105000,
+                                100000,
+                                4,
+                                "APT",
+                                "2026-01-05",
+                            ),
+                            (
+                                "93001",
+                                "매매",
+                                34.0,
+                                98000,
+                                110000,
+                                104000,
+                                5,
+                                "APT",
+                                "2026-02-05",
+                            ),
+                            (
+                                "93001",
+                                "매매",
+                                34.0,
+                                100000,
+                                112000,
+                                110000,
+                                3,
+                                "APT",
+                                "2026-03-05",
+                            ),
+                            (
+                                "93002",
+                                "전세",
+                                25.0,
+                                40000,
+                                46000,
+                                43000,
+                                2,
+                                "APT",
+                                "2026-03-05",
+                            ),
                         ],
                     )
                     conn.commit()
@@ -1708,7 +1983,10 @@ class TestUIWiring(unittest.TestCase):
                 app.db_tab.load_data()
                 target_row = -1
                 for row in range(app.db_tab.table.rowCount()):
-                    if _table_text(app.db_tab.table, row, app.db_tab.COL_COMPLEX_ID) == "93001":
+                    if (
+                        _table_text(app.db_tab.table, row, app.db_tab.COL_COMPLEX_ID)
+                        == "93001"
+                    ):
                         target_row = row
                 self.assertGreaterEqual(target_row, 0)
                 app.db_tab.table.selectRow(target_row)
@@ -1716,7 +1994,9 @@ class TestUIWiring(unittest.TestCase):
                 app.db_tab.btn_trend.click()
 
                 self.assertIs(app.tabs.currentWidget(), app.stats_tab)
-                self.assertEqual(app.stats_complex_combo.currentData(), ("APT", "93001"))
+                self.assertEqual(
+                    app.stats_complex_combo.currentData(), ("APT", "93001")
+                )
                 # 면적이 하나뿐이면 자동으로 골라 요약이 바로 보인다.
                 self.assertEqual(app.stats_pyeong_combo.currentText(), "34평")
                 self.assertEqual(app.stats_summary.value_text("latest"), "11억")
@@ -1737,7 +2017,9 @@ class TestUIWiring(unittest.TestCase):
                 # 사용자가 직접 고른 거래 종류는 바꾸지 않고 빈 상태를 안내한다.
                 app.stats_type_combo.setCurrentText("매매")
                 self.assertEqual(app.stats_type_combo.currentText(), "매매")
-                self.assertIn("매매 가격 기록이 없습니다", app.chart_widget.message_label.text())
+                self.assertIn(
+                    "매매 가격 기록이 없습니다", app.chart_widget.message_label.text()
+                )
 
                 # 테마 전환이 차트/요약에 예외 없이 전달된다.
                 app._apply_domain_stylesheet("light")
@@ -1762,12 +2044,19 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
             try:
-                self.assertTrue(app.db.add_complex("기준단지", "94001", asset_type="APT"))
-                self.assertTrue(app.db.add_complex("비교단지", "94002", asset_type="APT"))
+                self.assertTrue(
+                    app.db.add_complex("기준단지", "94001", asset_type="APT")
+                )
+                self.assertTrue(
+                    app.db.add_complex("비교단지", "94002", asset_type="APT")
+                )
                 self.assertTrue(app.db.add_complex("전세만", "94003", asset_type="APT"))
                 conn = app.db._pool.get_connection()
                 try:
@@ -1779,11 +2068,61 @@ class TestUIWiring(unittest.TestCase):
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         [
-                            ("94001", "매매", 34.0, 100000, 104000, 102000, 2, "APT", "2026-02-01"),
-                            ("94001", "매매", 34.0, 104000, 108000, 106000, 2, "APT", "2026-03-01"),
-                            ("94002", "매매", 25.0, 60000, 64000, 62500, 3, "APT", "2026-02-01"),
-                            ("94002", "매매", 25.0, 62000, 66000, 65000, 3, "APT", "2026-03-01"),
-                            ("94003", "전세", 25.0, 40000, 42000, 41000, 1, "APT", "2026-03-01"),
+                            (
+                                "94001",
+                                "매매",
+                                34.0,
+                                100000,
+                                104000,
+                                102000,
+                                2,
+                                "APT",
+                                "2026-02-01",
+                            ),
+                            (
+                                "94001",
+                                "매매",
+                                34.0,
+                                104000,
+                                108000,
+                                106000,
+                                2,
+                                "APT",
+                                "2026-03-01",
+                            ),
+                            (
+                                "94002",
+                                "매매",
+                                25.0,
+                                60000,
+                                64000,
+                                62500,
+                                3,
+                                "APT",
+                                "2026-02-01",
+                            ),
+                            (
+                                "94002",
+                                "매매",
+                                25.0,
+                                62000,
+                                66000,
+                                65000,
+                                3,
+                                "APT",
+                                "2026-03-01",
+                            ),
+                            (
+                                "94003",
+                                "전세",
+                                25.0,
+                                40000,
+                                42000,
+                                41000,
+                                1,
+                                "APT",
+                                "2026-03-01",
+                            ),
                         ],
                     )
                     conn.commit()
@@ -1793,10 +2132,14 @@ class TestUIWiring(unittest.TestCase):
                 # 수집 화면의 우클릭 「시세 흐름 보기」와 같은 신호로 이동한다.
                 app.crawler_tab.trend_requested.emit("APT", "94001")
                 self.assertIs(app.tabs.currentWidget(), app.stats_tab)
-                self.assertEqual(app.stats_complex_combo.currentData(), ("APT", "94001"))
+                self.assertEqual(
+                    app.stats_complex_combo.currentData(), ("APT", "94001")
+                )
 
                 app._set_stats_compare(["APT:94002", "APT:94003", "APT:99999"])
-                self.assertEqual(app._active_stats_compare_keys(), ["APT:94002", "APT:94003"])
+                self.assertEqual(
+                    app._active_stats_compare_keys(), ["APT:94002", "APT:94003"]
+                )
                 self.assertFalse(app.stats_compare_label.isHidden())
                 self.assertIn("비교단지", app.stats_compare_label.text())
                 assert app.chart_widget is not None and app.chart_widget.ax is not None
@@ -1833,7 +2176,10 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
 
@@ -1883,7 +2229,10 @@ class TestUIWiring(unittest.TestCase):
 
             with (
                 patch("src.ui.app.ComplexDatabase", side_effect=_db_factory),
-                patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False),
+                patch(
+                    "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable",
+                    return_value=False,
+                ),
             ):
                 app = RealEstateApp()
 
@@ -1923,7 +2272,9 @@ class TestUIWiring(unittest.TestCase):
     def test_app_shutdown_waits_crawler_before_db_close(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         call_order = []
@@ -1931,9 +2282,13 @@ class TestUIWiring(unittest.TestCase):
             patch.object(
                 app.crawler_tab,
                 "shutdown_crawl",
-                side_effect=lambda timeout_ms=8000: call_order.append("crawler_shutdown") or True,
+                side_effect=lambda timeout_ms=8000: (
+                    call_order.append("crawler_shutdown") or True
+                ),
             ),
-            patch.object(app.db, "close", side_effect=lambda: call_order.append("db_close")),
+            patch.object(
+                app.db, "close", side_effect=lambda: call_order.append("db_close")
+            ),
         ):
             result = app._shutdown()
 
@@ -1948,7 +2303,9 @@ class TestUIWiring(unittest.TestCase):
     def test_app_shutdown_blocks_db_close_on_crawler_timeout(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         with (
@@ -1984,7 +2341,9 @@ class TestUIWiring(unittest.TestCase):
             def ignore(self):
                 self.ignored = True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         def _settings_get(key, default=None):
@@ -1997,7 +2356,10 @@ class TestUIWiring(unittest.TestCase):
         evt = _EventStub()
         with (
             patch("src.ui.app.settings.get", side_effect=_settings_get),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes) as mock_question,
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ) as mock_question,
             patch.object(app, "_shutdown", return_value=True) as mock_shutdown,
         ):
             app.closeEvent(evt)
@@ -2008,7 +2370,10 @@ class TestUIWiring(unittest.TestCase):
         mock_shutdown.assert_called_once()
 
         with (
-            patch("src.ui.app.QMessageBox.question", side_effect=AssertionError("should not be called")),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                side_effect=AssertionError("should not be called"),
+            ),
             patch.object(app, "_shutdown", return_value=True) as mock_shutdown2,
             patch("src.ui.app.QApplication.quit") as mock_quit,
         ):
@@ -2020,7 +2385,10 @@ class TestUIWiring(unittest.TestCase):
         evt2 = _EventStub()
         with (
             patch("src.ui.app.settings.get", side_effect=_settings_get),
-            patch("src.ui.app.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes),
+            patch(
+                "src.ui.app.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
             patch.object(app, "_shutdown", return_value=False),
         ):
             app.closeEvent(evt2)
@@ -2037,13 +2405,17 @@ class TestUIWiring(unittest.TestCase):
     def test_app_shutdown_aborts_when_crawler_shutdown_fails(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         call_order = []
         with (
             patch.object(app.crawler_tab, "shutdown_crawl", return_value=False),
-            patch.object(app.db, "close", side_effect=lambda: call_order.append("db_close")),
+            patch.object(
+                app.db, "close", side_effect=lambda: call_order.append("db_close")
+            ),
         ):
             ok = app._shutdown()
 
@@ -2072,7 +2444,9 @@ class TestUIWiring(unittest.TestCase):
             def ignore(self):
                 self.ignored = True
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         def _settings_get(key, default=None):
@@ -2119,7 +2493,9 @@ class TestUIWiring(unittest.TestCase):
                 return overrides.get(key, default)
 
             with (
-                patch("src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get),
+                patch(
+                    "src.ui.widgets.crawler_tab.settings.get", side_effect=_settings_get
+                ),
                 patch("src.ui.widgets.crawler_tab.CrawlerThread") as mock_thread_cls,
             ):
                 tab.start_crawling()
@@ -2142,7 +2518,9 @@ class TestUIWiring(unittest.TestCase):
             tab.input_name.setText("테스트단지")
             tab.input_id.setText("12")
 
-            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 tab._add_complex()
 
             self.assertEqual(tab.table_list.rowCount(), 1)
@@ -2164,7 +2542,9 @@ class TestUIWiring(unittest.TestCase):
             tab.input_name.setText("")
             tab.input_id.setText("7")
 
-            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 tab._add_complex()
 
             self.assertEqual(tab.table_list.rowCount(), 1)
@@ -2185,9 +2565,13 @@ class TestUIWiring(unittest.TestCase):
             tab = CrawlerTab(db)
             tab.input_name.setText("빌라단지")
             tab.input_id.setText("34567")
-            tab.combo_manual_asset.setCurrentIndex(tab.combo_manual_asset.findData("VL"))
+            tab.combo_manual_asset.setCurrentIndex(
+                tab.combo_manual_asset.findData("VL")
+            )
 
-            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 tab._add_complex()
 
             self.assertEqual(tab.table_list.rowCount(), 1)
@@ -2210,7 +2594,9 @@ class TestUIWiring(unittest.TestCase):
             tab.input_name.setText("테스트단지")
             tab.input_id.setText("12A")
 
-            with patch("src.ui.widgets.crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 tab._add_complex()
 
             self.assertEqual(tab.table_list.rowCount(), 0)
@@ -2344,8 +2730,12 @@ class TestUIWiring(unittest.TestCase):
 
                 tab.combo_sort.setCurrentText("가격 ↑")
                 tab._sort_results("가격 ↑")
-                self.assertEqual(_table_text(tab.result_table, 0, tab.COL_COMPLEX), "보증금높은단지")
-                self.assertEqual(_table_text(tab.result_table, 1, tab.COL_COMPLEX), "월세높은단지")
+                self.assertEqual(
+                    _table_text(tab.result_table, 0, tab.COL_COMPLEX), "보증금높은단지"
+                )
+                self.assertEqual(
+                    _table_text(tab.result_table, 1, tab.COL_COMPLEX), "월세높은단지"
+                )
 
                 filters = {
                     "price_min": 100,
@@ -2363,7 +2753,9 @@ class TestUIWiring(unittest.TestCase):
                 }
                 tab.set_advanced_filters(filters)
                 self.assertEqual(tab.result_table.rowCount(), 1)
-                self.assertEqual(_table_text(tab.result_table, 0, tab.COL_COMPLEX), "월세높은단지")
+                self.assertEqual(
+                    _table_text(tab.result_table, 0, tab.COL_COMPLEX), "월세높은단지"
+                )
 
                 tab.btn_view_mode.setChecked(True)
                 tab._toggle_view_mode()
@@ -2440,7 +2832,9 @@ class TestUIWiring(unittest.TestCase):
             tab.check_asset_apt.setChecked(False)
             tab.check_asset_vl.setChecked(False)
 
-            with patch("src.ui.widgets.geo_crawler_tab.QMessageBox.warning") as mock_warning:
+            with patch(
+                "src.ui.widgets.geo_crawler_tab.QMessageBox.warning"
+            ) as mock_warning:
                 started = tab.start_crawling()
 
             self.assertFalse(started)
@@ -2475,8 +2869,12 @@ class TestUIWiring(unittest.TestCase):
                     "src.ui.widgets.crawler_tab.QFileDialog.getSaveFileName",
                     return_value=(os.path.join(tmp, "export.csv"), "CSV (*.csv)"),
                 ),
-                patch("src.ui.widgets.crawler_tab.QMessageBox.critical") as mock_critical,
-                patch("src.ui.widgets.crawler_tab.QMessageBox.information") as mock_information,
+                patch(
+                    "src.ui.widgets.crawler_tab.QMessageBox.critical"
+                ) as mock_critical,
+                patch(
+                    "src.ui.widgets.crawler_tab.QMessageBox.information"
+                ) as mock_information,
             ):
                 tab.save_csv("raw")
 
@@ -2505,13 +2903,19 @@ class TestUIWiring(unittest.TestCase):
             tab.collected_data = [{"단지명": "A", "매물ID": "A1"}]
 
             with (
-                patch("src.ui.widgets.crawler_tab.DataExporter", _LegacyFailingExporter),
+                patch(
+                    "src.ui.widgets.crawler_tab.DataExporter", _LegacyFailingExporter
+                ),
                 patch(
                     "src.ui.widgets.crawler_tab.QFileDialog.getSaveFileName",
                     return_value=(os.path.join(tmp, "export.json"), "JSON (*.json)"),
                 ),
-                patch("src.ui.widgets.crawler_tab.QMessageBox.critical") as mock_critical,
-                patch("src.ui.widgets.crawler_tab.QMessageBox.information") as mock_information,
+                patch(
+                    "src.ui.widgets.crawler_tab.QMessageBox.critical"
+                ) as mock_critical,
+                patch(
+                    "src.ui.widgets.crawler_tab.QMessageBox.information"
+                ) as mock_information,
             ):
                 tab.save_json("raw")
 
@@ -2577,10 +2981,14 @@ class TestUIWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_scheduled_geo_run_uses_schedule_geo_profile_without_overwriting_last_manual_coords(self):
+    def test_scheduled_geo_run_uses_schedule_geo_profile_without_overwriting_last_manual_coords(
+        self,
+    ):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         with (
@@ -2589,7 +2997,9 @@ class TestUIWiring(unittest.TestCase):
             patch.object(app.geo_tab, "start_crawling") as mock_geo_start,
             patch.object(app.crawler_tab, "start_crawling") as mock_complex_start,
         ):
-            app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+            app.schedule_mode_combo.setCurrentIndex(
+                app.schedule_mode_combo.findData("geo_sweep")
+            )
             app.schedule_geo_lat.setValue(37.4321)
             app.schedule_geo_lon.setValue(127.1234)
             app.schedule_geo_zoom.setValue(14)
@@ -2619,14 +3029,20 @@ class TestUIWiring(unittest.TestCase):
         app.deleteLater()
         self._qt_app.processEvents()
 
-    def test_schedule_geo_config_blocks_save_and_run_when_no_asset_type_is_selected(self):
+    def test_schedule_geo_config_blocks_save_and_run_when_no_asset_type_is_selected(
+        self,
+    ):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         app.schedule_mode_combo.blockSignals(True)
-        app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+        app.schedule_mode_combo.setCurrentIndex(
+            app.schedule_mode_combo.findData("geo_sweep")
+        )
         app.schedule_mode_combo.blockSignals(False)
         app.schedule_geo_asset_apt.blockSignals(True)
         app.schedule_geo_asset_vl.blockSignals(True)
@@ -2675,7 +3091,9 @@ class TestUIWiring(unittest.TestCase):
             "자산유형": "APT",
         }
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         for tab in (app.crawler_tab, app.geo_tab):
@@ -2686,8 +3104,12 @@ class TestUIWiring(unittest.TestCase):
             tab._rebuild_result_views_from_collected_data()
 
         with (
-            patch.object(app.crawler_tab, "_rebuild_result_views_from_collected_data") as crawler_rebuild,
-            patch.object(app.geo_tab, "_rebuild_result_views_from_collected_data") as geo_rebuild,
+            patch.object(
+                app.crawler_tab, "_rebuild_result_views_from_collected_data"
+            ) as crawler_rebuild,
+            patch.object(
+                app.geo_tab, "_rebuild_result_views_from_collected_data"
+            ) as geo_rebuild,
         ):
             app._on_favorite_toggled("A1", "71001", "APT", True)
 
@@ -2709,17 +3131,23 @@ class TestUIWiring(unittest.TestCase):
     def test_favorite_toggle_failure_reverts_optimistic_visual(self):
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         try:
             with (
                 patch.object(app.db, "toggle_favorite", return_value=False),
                 patch.object(
-                    app.crawler_tab, "_update_favorite_state_for_key", wraps=app.crawler_tab._update_favorite_state_for_key
+                    app.crawler_tab,
+                    "_update_favorite_state_for_key",
+                    wraps=app.crawler_tab._update_favorite_state_for_key,
                 ) as crawler_visual,
                 patch.object(
-                    app.geo_tab, "_update_favorite_state_for_key", wraps=app.geo_tab._update_favorite_state_for_key
+                    app.geo_tab,
+                    "_update_favorite_state_for_key",
+                    wraps=app.geo_tab._update_favorite_state_for_key,
                 ) as geo_visual,
             ):
                 app._on_favorite_toggled("AUDIT-FAV-1", "990011", "APT", True)
@@ -2751,14 +3179,17 @@ class TestUIWiring(unittest.TestCase):
                 _time.sleep(0.3)
 
         idle = _types.SimpleNamespace(_price_snapshot_worker=None)
-        self.assertTrue(CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(idle, 500))
+        self.assertTrue(
+            CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(idle, 500)
+        )
 
         worker = _SlowThread()
         worker.start()
         try:
             running = _types.SimpleNamespace(_price_snapshot_worker=worker)
             self.assertTrue(
-                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(running, 2000))
+                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(running, 2000)
+            )
             self.assertFalse(worker.isRunning())
         finally:
             worker.wait(2000)
@@ -2787,9 +3218,12 @@ class TestUIWiring(unittest.TestCase):
             )
             start = _time.monotonic()
             self.assertFalse(
-                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(stub, 100))
+                CrawlerTabSnapshotWorkerMixin._wait_for_snapshot_worker(stub, 100)
+            )
             self.assertLess(_time.monotonic() - start, 1.5)
-            self.assertTrue(any("제때 끝나지 않았습니다" in str(args) for args in logged))
+            self.assertTrue(
+                any("제때 끝나지 않았습니다" in str(args) for args in logged)
+            )
         finally:
             worker.wait(5000)
 
@@ -2798,7 +3232,9 @@ class TestUIWiring(unittest.TestCase):
 
         from src.ui.app import RealEstateApp
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         try:
@@ -2836,17 +3272,25 @@ class TestUIWiring(unittest.TestCase):
             }
         ]
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         app.tabs.setCurrentWidget(app.crawler_tab)
 
         with (
             patch.object(app, "_load_history", wraps=app._load_history) as load_history,
-            patch.object(app, "_load_stats_complexes", wraps=app._load_stats_complexes) as load_stats_complexes,
+            patch.object(
+                app, "_load_stats_complexes", wraps=app._load_stats_complexes
+            ) as load_stats_complexes,
             patch.object(app, "_load_stats", wraps=app._load_stats) as load_stats,
-            patch.object(app.favorites_tab, "refresh", wraps=app.favorites_tab.refresh) as favorites_refresh,
-            patch.object(app, "_ensure_dashboard_widget", wraps=app._ensure_dashboard_widget) as ensure_dashboard,
+            patch.object(
+                app.favorites_tab, "refresh", wraps=app.favorites_tab.refresh
+            ) as favorites_refresh,
+            patch.object(
+                app, "_ensure_dashboard_widget", wraps=app._ensure_dashboard_widget
+            ) as ensure_dashboard,
         ):
             app._on_crawl_data_collected(sample_data)
 

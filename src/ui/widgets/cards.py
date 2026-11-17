@@ -95,7 +95,9 @@ class ArticleCard(QFrame):
     def paintEvent(self, a0):
         theme_key = _theme_key(self.is_dark)
         palette = COLORS[theme_key]
-        surface = QColor(palette.get("card_bg", "#ffffff" if not self.is_dark else "#1e1e2e"))
+        surface = QColor(
+            palette.get("card_bg", "#ffffff" if not self.is_dark else "#1e1e2e")
+        )
         border = QColor(palette.get("card_border", "#e2e8f0"))
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -134,11 +136,15 @@ class ArticleCard(QFrame):
         duplicate_count = int(self.data.get("duplicate_count", 1) or 1)
         if duplicate_count > 1:
             dup_badge = QLabel(f"{duplicate_count}건")
-            dup_badge.setStyleSheet("color: #06b6d4; font-weight: 700; font-size: 11px;")
+            dup_badge.setStyleSheet(
+                "color: #06b6d4; font-weight: 700; font-size: 11px;"
+            )
             top_layout.addWidget(dup_badge)
         if self.data.get("is_new") or self.data.get("신규여부"):
             new_badge = QLabel("NEW")
-            new_badge.setStyleSheet("color: #f59e0b; font-weight: 800; font-size: 11px;")
+            new_badge.setStyleSheet(
+                "color: #f59e0b; font-weight: 800; font-size: 11px;"
+            )
             top_layout.addWidget(new_badge)
         price_change = self.data.get("price_change", 0)
         if isinstance(price_change, str):
@@ -161,9 +167,7 @@ class ArticleCard(QFrame):
         self.fav_btn.setToolTip("즐겨찾기")
         fav_style = self._FAVORITE_STYLE_CACHE.get(accent)
         if fav_style is None:
-            fav_style = (
-                f"border: none; font-size: 16px; background: transparent; color: {accent};"
-            )
+            fav_style = f"border: none; font-size: 16px; background: transparent; color: {accent};"
             self._FAVORITE_STYLE_CACHE[accent] = fav_style
         self.fav_btn.setStyleSheet(fav_style)
         self.set_favorite_state(bool(self.data.get("is_favorite")))
@@ -207,9 +211,7 @@ class ArticleCard(QFrame):
         price_label = QLabel(price_text)
         price_style = self._PRICE_STYLE_CACHE.get(fg_color)
         if price_style is None:
-            price_style = (
-                f"color: {fg_color}; font-size: 17px; font-weight: 800; background: transparent;"
-            )
+            price_style = f"color: {fg_color}; font-size: 17px; font-weight: 800; background: transparent;"
             self._PRICE_STYLE_CACHE[fg_color] = price_style
         price_label.setStyleSheet(price_style)
         layout.addWidget(price_label)
@@ -261,7 +263,9 @@ class ArticleCard(QFrame):
     def _toggle_favorite(self):
         article_id = self.data.get("매물ID", "")
         complex_id = self.data.get("단지ID", "")
-        asset_type = str(self.data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        asset_type = (
+            str(self.data.get("자산유형", "APT") or "APT").strip().upper() or "APT"
+        )
         is_fav = self.fav_btn.text() == "☆"
         self.set_favorite_state(is_fav)
         self.favorite_toggled.emit(article_id, complex_id, asset_type, is_fav)
@@ -305,7 +309,9 @@ class CardViewWidget(QScrollArea):
         self.container = QWidget()
         self.grid_layout = QGridLayout(self.container)
         self.grid_layout.setSpacing(15)
-        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.grid_layout.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
 
         self.setWidget(self.container)
 
@@ -369,7 +375,9 @@ class CardViewWidget(QScrollArea):
     def set_data(self, articles: list):
         self._all_data = list(articles) if articles else []
         self._search_text_cache = [self._build_search_text(a) for a in self._all_data]
-        self._search_text_norm_cache = [self._normalize_search_text(t) for t in self._search_text_cache]
+        self._search_text_norm_cache = [
+            self._normalize_search_text(t) for t in self._search_text_cache
+        ]
         self._apply_filter(reset_view=True)
 
     def append_data(self, articles: list):
@@ -378,7 +386,10 @@ class CardViewWidget(QScrollArea):
         new_items = list(articles)
         self._all_data.extend(new_items)
         self._search_text_cache.extend(self._build_search_text(a) for a in new_items)
-        self._search_text_norm_cache.extend(self._normalize_search_text(t) for t in self._search_text_cache[-len(new_items):])
+        self._search_text_norm_cache.extend(
+            self._normalize_search_text(t)
+            for t in self._search_text_cache[-len(new_items) :]
+        )
 
         if self._filter_text:
             self._apply_filter(reset_view=True)
@@ -437,13 +448,18 @@ class CardViewWidget(QScrollArea):
         text_norm = self._normalize_search_text(self._filter_text or "")
         norm_cache = list(getattr(self, "_search_text_norm_cache", None) or [])
         if len(norm_cache) != len(self._search_text_cache):
-            norm_cache = [self._normalize_search_text(t) for t in self._search_text_cache]
+            norm_cache = [
+                self._normalize_search_text(t) for t in self._search_text_cache
+            ]
             self._search_text_norm_cache = norm_cache
         if text:
             self._filtered_data = [
                 d
-                for d, searchable, searchable_norm in zip(self._all_data, self._search_text_cache, norm_cache, strict=True)
-                if text in searchable or (bool(text_norm) and text_norm in searchable_norm)
+                for d, searchable, searchable_norm in zip(
+                    self._all_data, self._search_text_cache, norm_cache, strict=True
+                )
+                if text in searchable
+                or (bool(text_norm) and text_norm in searchable_norm)
             ]
         else:
             self._filtered_data = list(self._all_data)

@@ -8,12 +8,15 @@ if TYPE_CHECKING:
 
 class AppLifecycleBootstrapMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def __init__(self: Any):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         try:
             from src.ui.fluent.theme import configure_fluent_window as _configure_fluent
+
             _configure_fluent(self)
         except Exception:
             pass
@@ -21,6 +24,7 @@ class AppLifecycleBootstrapMixin:
             from PySide6.QtGui import QGuiApplication as _QGuiApp
 
             from src.ui.fluent.design_tokens import preferred_window_size as _pref_size
+
             _screen = _QGuiApp.primaryScreen()
             _avail = _screen.availableGeometry() if _screen is not None else None
             if _avail is not None:
@@ -30,16 +34,21 @@ class AppLifecycleBootstrapMixin:
             pass
         from src.ui.fluent.design_tokens import MIN_WINDOW_HEIGHT as _MIN_H
         from src.ui.fluent.design_tokens import MIN_WINDOW_WIDTH as _MIN_W
+
         self.setMinimumSize(_MIN_W, _MIN_H)
         # ISSUE-001: geometry is applied only through the validated
         # _restore_window_geometry() single path (no unvalidated setGeometry).
         self._restore_window_geometry()
-        
+
         self.settings_manager = get_settings()
         self.preset_manager = FilterPresetManager()
-        self.history_manager = SearchHistoryManager(max_items=settings.get("max_search_history", 20))
+        self.history_manager = SearchHistoryManager(
+            max_items=settings.get("max_search_history", 20)
+        )
         self.recently_viewed = RecentlyViewedManager(
-            max_items=settings.get("recently_viewed_count", RecentlyViewedManager.MAX_ITEMS)
+            max_items=settings.get(
+                "recently_viewed_count", RecentlyViewedManager.MAX_ITEMS
+            )
         )
         self.advanced_filters: dict[str, Any] | None = None
         self.collected_data: list[dict[str, Any]] = []
@@ -61,10 +70,10 @@ class AppLifecycleBootstrapMixin:
             "favorites": False,
             "dashboard": False,
         }
-        
+
         # v11.0: Toast 알림 시스템
         self.toast_widgets: List[ToastWidget] = []
-        
+
         self.current_theme = settings.get("theme", "dark")
         try:
             from src.ui.fluent.theme import apply_app_theme
@@ -74,7 +83,7 @@ class AppLifecycleBootstrapMixin:
             pass
         # Domain widgets still use the legacy QSS palette; applied after shell init.
         self._input_wheel_guard = install_global_wheel_guard(QApplication.instance())
-        
+
         # UI 초기화
         self._init_ui()
         self._apply_domain_stylesheet(self.current_theme)
@@ -85,10 +94,10 @@ class AppLifecycleBootstrapMixin:
         self._init_tray()
         self._init_timers()
         self._load_initial_data()
-        
+
         # 윈도우 설정
         self._restore_window_geometry()
-        
+
         self.show_toast(f"환영합니다! {APP_TITLE} {APP_VERSION}입니다.")
         startup_notice = ""
         try:
@@ -107,6 +116,7 @@ class AppLifecycleBootstrapMixin:
         """
         from src.ui.fluent.design_tokens import DEFAULT_WINDOW_HEIGHT as _DH
         from src.ui.fluent.design_tokens import DEFAULT_WINDOW_WIDTH as _DW
+
         try:
             geo = settings.get("window_geometry")
         except Exception:
@@ -151,6 +161,7 @@ class AppLifecycleBootstrapMixin:
             return
         try:
             from PySide6.QtGui import QGuiApplication as _QGuiApp
+
             _screen = _QGuiApp.primaryScreen()
             _avail = _screen.availableGeometry() if _screen is not None else None
         except Exception:
@@ -193,6 +204,7 @@ class AppLifecycleBootstrapMixin:
         if _key not in COLORS:
             try:
                 import darkdetect
+
                 _key = "light" if darkdetect.theme() == "Light" else "dark"
             except Exception:
                 _key = "dark"
@@ -257,7 +269,9 @@ class AppLifecycleBootstrapMixin:
             app = QApplication.instance()
             if app is None:
                 return
-            self._dialog_themer = DialogThemer(lambda: getattr(self, "_domain_sheet", ""), self)
+            self._dialog_themer = DialogThemer(
+                lambda: getattr(self, "_domain_sheet", ""), self
+            )
             app.installEventFilter(self._dialog_themer)
         except Exception:
             self._dialog_themer = None
@@ -286,10 +300,14 @@ class AppLifecycleBootstrapMixin:
             db_tab.load_data()
         self._load_schedule_groups()
         self._load_schedule_config()
-        
+
         # Connect signals after loading
         try:
-            self.stats_complex_combo.currentIndexChanged.disconnect(self._on_stats_complex_changed)
+            self.stats_complex_combo.currentIndexChanged.disconnect(
+                self._on_stats_complex_changed
+            )
         except Exception:
             pass
-        self.stats_complex_combo.currentIndexChanged.connect(self._on_stats_complex_changed)
+        self.stats_complex_combo.currentIndexChanged.connect(
+            self._on_stats_complex_changed
+        )

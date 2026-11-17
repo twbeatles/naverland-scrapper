@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class AppStatsScheduleConfigMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     def _collect_schedule_config(self: Any):
         mode = str(self.schedule_mode_combo.currentData() or "complex")
         current = settings.get("schedule_config", {}) or {}
@@ -34,12 +36,19 @@ class AppStatsScheduleConfigMixin:
         if bool(getattr(self, "_schedule_hydrating", False)):
             return settings.get("schedule_config", {}) or {}
         config = self._collect_schedule_config()
-        if (
-            str(config.get("mode", "complex") or "complex") == "geo_sweep"
-            and not self._normalize_geo_asset_types(config["geo"].get("asset_types", []), default_to_all=False)
+        if str(
+            config.get("mode", "complex") or "complex"
+        ) == "geo_sweep" and not self._normalize_geo_asset_types(
+            config["geo"].get("asset_types", []), default_to_all=False
         ):
-            QMessageBox.warning(self, "주택 종류를 선택해 주세요", "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.")
-            self.status_bar.showMessage("예약 설정을 저장하지 않았습니다. 주택 종류를 하나 이상 선택해 주세요.")
+            QMessageBox.warning(
+                self,
+                "주택 종류를 선택해 주세요",
+                "아파트 또는 빌라·연립 중 하나 이상 선택해 주세요.",
+            )
+            self.status_bar.showMessage(
+                "예약 설정을 저장하지 않았습니다. 주택 종류를 하나 이상 선택해 주세요."
+            )
             return settings.get("schedule_config", {}) or {}
         settings.update(
             {
@@ -77,7 +86,9 @@ class AppStatsScheduleConfigMixin:
         target = self._schedule_target_descriptor(config)
         return f"{current_dt.strftime('%Y-%m-%d')}|{time_text}|{mode}|{target}"
 
-    def _remember_schedule_skip(self: Any, slot: str, reason: str, message: str) -> None:
+    def _remember_schedule_skip(
+        self: Any, slot: str, reason: str, message: str
+    ) -> None:
         notice_key = (slot, reason)
         if getattr(self, "_schedule_skip_notice_key", None) == notice_key:
             return
@@ -89,7 +100,9 @@ class AppStatsScheduleConfigMixin:
         config = settings.get("schedule_config", {}) or {}
         mode = str(config.get("mode", "complex") or "complex")
         time_text = str(config.get("time", "09:00") or "09:00")
-        geo_config = config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
+        geo_config = (
+            config.get("geo", {}) if isinstance(config.get("geo"), dict) else {}
+        )
 
         previous_hydrating = bool(getattr(self, "_schedule_hydrating", False))
         self._schedule_hydrating = True
@@ -108,10 +121,14 @@ class AppStatsScheduleConfigMixin:
         try:
             self.check_schedule.setChecked(bool(config.get("enabled", False)))
             parsed_time = QTime.fromString(time_text, "HH:mm")
-            self.time_edit.setTime(parsed_time if parsed_time.isValid() else QTime(9, 0))
+            self.time_edit.setTime(
+                parsed_time if parsed_time.isValid() else QTime(9, 0)
+            )
 
             mode_index = self.schedule_mode_combo.findData(mode)
-            self.schedule_mode_combo.setCurrentIndex(mode_index if mode_index >= 0 else 0)
+            self.schedule_mode_combo.setCurrentIndex(
+                mode_index if mode_index >= 0 else 0
+            )
 
             gid = config.get("group_id")
             if gid is not None:
@@ -124,7 +141,9 @@ class AppStatsScheduleConfigMixin:
             zoom = geo_config.get("zoom", settings.get("geo_default_zoom", 15))
             rings = geo_config.get("rings", settings.get("geo_grid_rings", 1))
             step_px = geo_config.get("step_px", settings.get("geo_grid_step_px", 480))
-            dwell_ms = geo_config.get("dwell_ms", settings.get("geo_sweep_dwell_ms", 600))
+            dwell_ms = geo_config.get(
+                "dwell_ms", settings.get("geo_sweep_dwell_ms", 600)
+            )
             default_asset_types = settings.get("geo_asset_types", ["APT", "VL"])
             asset_types = geo_config.get("asset_types", default_asset_types)
             try:

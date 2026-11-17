@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabasePriceSnapshotQueryOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def get_complex_price_history(
@@ -112,7 +113,9 @@ class ComplexDatabasePriceSnapshotQueryOpsMixin:
     ):
         conn = self._pool.get_connection()
         try:
-            sql_parts = ["SELECT DISTINCT pyeong FROM price_snapshots WHERE complex_id = ?"]
+            sql_parts = [
+                "SELECT DISTINCT pyeong FROM price_snapshots WHERE complex_id = ?"
+            ]
             params = [complex_id]
             self._append_snapshot_metric_filter(
                 sql_parts,
@@ -182,9 +185,9 @@ class ComplexDatabasePriceSnapshotQueryOpsMixin:
                     sql_parts.append("AND pyeong = ?")
                     params.append(parsed_pyeong)
             self._append_latest_snapshot_filter(sql_parts)
-            
-            sql_parts.append('ORDER BY snapshot_date DESC, trade_type, pyeong')
-            
+
+            sql_parts.append("ORDER BY snapshot_date DESC, trade_type, pyeong")
+
             raw_rows = self._fetchall_safe(
                 conn,
                 " ".join(sql_parts),

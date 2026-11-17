@@ -9,7 +9,9 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
     search_space = str(body_text or "")
     combined_text = search_space
     if fallback_text:
-        combined_text = f"{combined_text}\n{fallback_text}" if combined_text else str(fallback_text)
+        combined_text = (
+            f"{combined_text}\n{fallback_text}" if combined_text else str(fallback_text)
+        )
 
     def grab(regex: str, flags: int = 0) -> str:
         for source in (search_space, combined_text):
@@ -20,7 +22,9 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
                 return match.group(1).strip()
         return ""
 
-    prev_jeonse_text = grab(r"기전세금\s*([\d,억\s만]+)") or grab(r"prevJeonse\s*([\d,억\s만]+)")
+    prev_jeonse_text = grab(r"기전세금\s*([\d,억\s만]+)") or grab(
+        r"prevJeonse\s*([\d,억\s만]+)"
+    )
     prev_jeonse = parse_kr_money_to_won(prev_jeonse_text) if prev_jeonse_text else 0
 
     lines = [line.strip() for line in combined_text.splitlines() if line.strip()]
@@ -29,8 +33,13 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
     candidate_idx = -1
 
     for idx, line in enumerate(lines):
-        if re.fullmatch(r"[가-힣]{2,4}", line) and line not in ("이미지", "상세보기", "중개사", "중개소"):
-            context = "\n".join(lines[max(0, idx - 3): idx + 2])
+        if re.fullmatch(r"[가-힣]{2,4}", line) and line not in (
+            "이미지",
+            "상세보기",
+            "중개사",
+            "중개소",
+        ):
+            context = "\n".join(lines[max(0, idx - 3) : idx + 2])
             if ("중개사" in context) or ("프로필" in context) or ("중개소" in context):
                 agent_name = line
                 candidate_idx = idx
@@ -38,8 +47,12 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
 
     office_pattern = re.compile(r"(공인중개사|부동산)")
     if candidate_idx >= 0:
-        for line in lines[candidate_idx + 1: candidate_idx + 6]:
-            if office_pattern.search(line) and ("상세보기" not in line) and ("전화" not in line):
+        for line in lines[candidate_idx + 1 : candidate_idx + 6]:
+            if (
+                office_pattern.search(line)
+                and ("상세보기" not in line)
+                and ("전화" not in line)
+            ):
                 office = line
                 break
     if not office:
@@ -61,7 +74,11 @@ def _parse_detail_fields(body_text: str, *, fallback_text: str = "") -> dict:
 
     max_match = re.search(r"(\d+)\s*년\s*내\s*최고\s*([\d,억\s만]+)", combined_text)
     min_match = re.search(r"(\d+)\s*년\s*내\s*최저\s*([\d,억\s만]+)", combined_text)
-    period_years = int(max_match.group(1)) if max_match else (int(min_match.group(1)) if min_match else 0)
+    period_years = (
+        int(max_match.group(1))
+        if max_match
+        else (int(min_match.group(1)) if min_match else 0)
+    )
     jeonse_max = parse_kr_money_to_won(max_match.group(2)) if max_match else 0
     jeonse_min = parse_kr_money_to_won(min_match.group(2)) if min_match else 0
     phones = re.findall(r"(0\d{1,2}-\d{3,4}-\d{4})", combined_text)
@@ -87,7 +104,10 @@ def _detail_core_field_score(fields: dict) -> int:
         for flag in (
             bool(str(fields.get("부동산상호", "") or "").strip()),
             bool(str(fields.get("중개사이름", "") or "").strip()),
-            bool(str(fields.get("전화1", "") or "").strip() or str(fields.get("전화2", "") or "").strip()),
+            bool(
+                str(fields.get("전화1", "") or "").strip()
+                or str(fields.get("전화2", "") or "").strip()
+            ),
             int(fields.get("기전세금(원)", 0) or 0) > 0,
         )
         if flag
@@ -113,13 +133,19 @@ def _merge_detail_artifacts(primary: dict | None, secondary: dict | None) -> dic
     return {
         "body_text": str(extra.get("body_text", "") or base.get("body_text", "") or ""),
         "html_text": str(extra.get("html_text", "") or base.get("html_text", "") or ""),
-        "hydration_state": extra.get("hydration_state", {}) or base.get("hydration_state", {}) or {},
+        "hydration_state": extra.get("hydration_state", {})
+        or base.get("hydration_state", {})
+        or {},
         "responses": responses,
-        "corpus_text": str(extra.get("corpus_text", "") or base.get("corpus_text", "") or ""),
+        "corpus_text": str(
+            extra.get("corpus_text", "") or base.get("corpus_text", "") or ""
+        ),
     }
 
 
-def _build_detail_meta(source: str, body_text: str, fields: dict, artifacts: dict | None = None) -> dict:
+def _build_detail_meta(
+    source: str, body_text: str, fields: dict, artifacts: dict | None = None
+) -> dict:
     artifacts = dict(artifacts or {})
     responses = list(artifacts.get("responses", []) or [])
     hydration_state = dict(artifacts.get("hydration_state", {}) or {})

@@ -236,7 +236,9 @@ def get_effective_crawl_engine(settings_path: Optional[Path] = None) -> str:
         return "playwright"
     if not isinstance(payload, dict):
         return "playwright"
-    engine = str(payload.get("crawl_engine", "playwright") or "playwright").strip().lower()
+    engine = (
+        str(payload.get("crawl_engine", "playwright") or "playwright").strip().lower()
+    )
     if engine not in {"playwright", "selenium"}:
         return "playwright"
     return engine
@@ -276,7 +278,10 @@ def run_preflight_checks(
     elif not should_skip_playwright_browser_check():
         missing_browser = find_missing_playwright_browser()
         if missing_browser:
-            message = "Playwright 브라우저(로컬 Chrome 또는 Chromium)가 준비되지 않았습니다: " + missing_browser
+            message = (
+                "Playwright 브라우저(로컬 Chrome 또는 Chromium)가 준비되지 않았습니다: "
+                + missing_browser
+            )
             if should_require_playwright_browser():
                 errors.append(message)
                 app_logger.error("Playwright browser 누락: %s", missing_browser)
@@ -302,7 +307,8 @@ def run_preflight_checks(
         internal_failures = find_internal_import_failures(REQUIRED_INTERNAL_IMPORTS)
         if internal_failures:
             errors.append(
-                "내부 모듈 import 스모크 테스트에 실패했습니다: " + "; ".join(internal_failures)
+                "내부 모듈 import 스모크 테스트에 실패했습니다: "
+                + "; ".join(internal_failures)
             )
             app_logger.error("내부 모듈 import 실패: %s", "; ".join(internal_failures))
 

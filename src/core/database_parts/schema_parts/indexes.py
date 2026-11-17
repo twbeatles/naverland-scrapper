@@ -13,15 +13,22 @@ logger = get_logger("DB")
 
 class ComplexDatabaseSchemaIndexMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _ensure_schema_indexes(self, c):
         # Alert log table
-        c.execute('DROP INDEX IF EXISTS idx_article_complex')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(asset_type, complex_id)')
-        c.execute('DROP INDEX IF EXISTS idx_article_id')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(asset_type, article_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)')
+        c.execute("DROP INDEX IF EXISTS idx_article_complex")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_article_complex ON article_history(asset_type, complex_id)"
+        )
+        c.execute("DROP INDEX IF EXISTS idx_article_id")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_article_id ON article_history(asset_type, article_id)"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_crawl_history_crawled_at ON crawl_history(crawled_at DESC)"
+        )
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_crawl_history_stats_lookup "
             "ON crawl_history(asset_type, complex_id, crawled_at DESC)"
@@ -71,7 +78,9 @@ class ComplexDatabaseSchemaIndexMixin:
                 try:
                     self._ensure_column(c, table_name, column_name, ddl)
                 except Exception as me:
-                    logger.warning(f"{table_name}.{column_name} column migration failed (ignored): {me}")
+                    logger.warning(
+                        f"{table_name}.{column_name} column migration failed (ignored): {me}"
+                    )
         try:
             c.execute("DROP INDEX IF EXISTS idx_price_snapshots_lookup")
             c.execute(
@@ -89,29 +98,39 @@ class ComplexDatabaseSchemaIndexMixin:
                 "ON price_snapshots(asset_type, complex_id, trade_type, price_metric, pyeong, snapshot_date DESC)"
             )
         except Exception as me:
-            logger.warning(f"price_snapshots asset lookup index migration failed (ignored): {me}")
-        
+            logger.warning(
+                f"price_snapshots asset lookup index migration failed (ignored): {me}"
+            )
+
         # status column backfill (best effort; do not block startup)
         try:
-            c.execute('CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)')
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_article_status ON article_history(status)"
+            )
         except Exception:
             logger.debug("status column backfill failed (ignored)")
-        c.execute('CREATE INDEX IF NOT EXISTS idx_article_status_last_seen ON article_history(status, last_seen)')
         c.execute(
-            'CREATE INDEX IF NOT EXISTS idx_article_disappeared_scope '
-            'ON article_history(status, asset_type, complex_id, trade_type, last_seen)'
+            "CREATE INDEX IF NOT EXISTS idx_article_status_last_seen ON article_history(status, last_seen)"
         )
-        
-        c.execute('DROP INDEX IF EXISTS idx_favorites')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(asset_type, article_id, complex_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)')
-        c.execute('DROP INDEX IF EXISTS idx_alert_lookup')
         c.execute(
-            'CREATE INDEX IF NOT EXISTS idx_alert_lookup '
-            'ON alert_settings(complex_id, trade_type, asset_type, enabled)'
+            "CREATE INDEX IF NOT EXISTS idx_article_disappeared_scope "
+            "ON article_history(status, asset_type, complex_id, trade_type, last_seen)"
         )
-        c.execute('DROP INDEX IF EXISTS idx_alert_log_lookup')
+
+        c.execute("DROP INDEX IF EXISTS idx_favorites")
         c.execute(
-            'CREATE INDEX IF NOT EXISTS idx_alert_log_lookup '
-            'ON article_alert_log(alert_id, article_id, complex_id, asset_type, notified_on)'
+            "CREATE INDEX IF NOT EXISTS idx_favorites ON article_favorites(asset_type, article_id, complex_id)"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON article_favorites(updated_at DESC)"
+        )
+        c.execute("DROP INDEX IF EXISTS idx_alert_lookup")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_alert_lookup "
+            "ON alert_settings(complex_id, trade_type, asset_type, enabled)"
+        )
+        c.execute("DROP INDEX IF EXISTS idx_alert_log_lookup")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_alert_log_lookup "
+            "ON article_alert_log(alert_id, article_id, complex_id, asset_type, notified_on)"
         )

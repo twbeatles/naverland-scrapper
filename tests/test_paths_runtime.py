@@ -26,7 +26,9 @@ class TestRuntimePaths(unittest.TestCase):
             with (
                 patch.object(sys, "frozen", True, create=True),
                 patch.object(sys, "executable", str(exe_path)),
-                patch.dict(os.environ, {"LOCALAPPDATA": str(appdata_root)}, clear=False),
+                patch.dict(
+                    os.environ, {"LOCALAPPDATA": str(appdata_root)}, clear=False
+                ),
             ):
                 paths = self._reload_paths()
                 self.assertEqual(
@@ -60,7 +62,9 @@ class TestRuntimePaths(unittest.TestCase):
             with (
                 patch.object(sys, "frozen", True, create=True),
                 patch.object(sys, "executable", str(exe_path)),
-                patch.dict(os.environ, {"LOCALAPPDATA": str(appdata_root)}, clear=False),
+                patch.dict(
+                    os.environ, {"LOCALAPPDATA": str(appdata_root)}, clear=False
+                ),
             ):
                 paths = self._reload_paths()
                 paths.ensure_directories()
@@ -109,7 +113,9 @@ class TestRuntimePaths(unittest.TestCase):
                 self.assertEqual(configured, sandbox)
                 self.assertEqual(paths.BASE_DIR, sandbox)
                 self.assertEqual(paths.DATA_DIR, sandbox / "data")
-                self.assertEqual(paths.SETTINGS_PATH, sandbox / "data" / "settings.json")
+                self.assertEqual(
+                    paths.SETTINGS_PATH, sandbox / "data" / "settings.json"
+                )
             finally:
                 paths.reset_configured_paths()
             self._reload_paths()
@@ -119,7 +125,9 @@ class TestRuntimePaths(unittest.TestCase):
             sandbox = Path(tmp) / "env-root"
             paths = self._reload_paths()
             try:
-                with patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False):
+                with patch.dict(
+                    os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False
+                ):
                     configured = paths.apply_runtime_path_overrides_from_env()
                     self.assertEqual(configured, sandbox)
                     self.assertEqual(paths.BASE_DIR, sandbox)
@@ -134,7 +142,9 @@ class TestRuntimePaths(unittest.TestCase):
             sandbox = Path(tmp) / "bootstrap-env"
             paths = self._reload_paths()
             try:
-                with patch.dict(os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False):
+                with patch.dict(
+                    os.environ, {"NAVERLAND_DATA_DIR": str(sandbox)}, clear=False
+                ):
                     base = paths.bootstrap_runtime_paths()
                     self.assertEqual(base, sandbox)
                     self.assertTrue(paths.get_settings_path().parent.exists())

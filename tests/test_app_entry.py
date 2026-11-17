@@ -29,7 +29,9 @@ class TestAppEntry(unittest.TestCase):
         )
 
         self.assertTrue(args.live_smoke)
-        self.assertEqual(args.smoke_url, ["https://example.com/a", "https://example.com/b"])
+        self.assertEqual(
+            args.smoke_url, ["https://example.com/a", "https://example.com/b"]
+        )
         self.assertEqual(args.smoke_timeout_ms, 5000)
         self.assertTrue(args.smoke_headless)
         self.assertEqual(args.smoke_complex_id, "77777")
@@ -40,7 +42,9 @@ class TestAppEntry(unittest.TestCase):
         self.assertTrue(args.live_smoke_detail_fields)
 
     def test_main_dispatches_live_smoke_runner(self):
-        with patch("src.utils.live_smoke.run_live_smoke", return_value=(True, ["[ok] smoke"])) as mock_runner:
+        with patch(
+            "src.utils.live_smoke.run_live_smoke", return_value=(True, ["[ok] smoke"])
+        ) as mock_runner:
             exit_code = app_entry.main(
                 [
                     "--live-smoke",

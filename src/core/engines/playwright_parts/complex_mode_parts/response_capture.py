@@ -13,6 +13,7 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightResponseCaptureMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _collect_target_raw_items(
@@ -67,8 +68,12 @@ class PlaywrightResponseCaptureMixin:
                 )
             except Exception as exc:
                 fin_result = None
-                self._record_fin_api_failure(type(exc).__name__, status=type(exc).__name__)
-                self.thread.log(f"   fin front-api 실패({cid}), new.land 경로로 전환: {exc}", 20)
+                self._record_fin_api_failure(
+                    type(exc).__name__, status=type(exc).__name__
+                )
+                self.thread.log(
+                    f"   fin front-api 실패({cid}), new.land 경로로 전환: {exc}", 20
+                )
             if fin_result is not None:
                 return fin_result
             seen_ids.clear()
@@ -108,7 +113,11 @@ class PlaywrightResponseCaptureMixin:
             page = self._desktop_page
             if page is None:
                 break
-            plan_key = (str(mode or "complex"), str(asset_type or "APT").upper(), str(base_kind or ""))
+            plan_key = (
+                str(mode or "complex"),
+                str(asset_type or "APT").upper(),
+                str(base_kind or ""),
+            )
             for plan in self._ordered_entry_plans(target_url, plan_key):
                 pending_tasks: set[asyncio.Task] = set()
                 response_event = asyncio.Event()
@@ -119,8 +128,17 @@ class PlaywrightResponseCaptureMixin:
                 plan_block_reason = ""
                 plan_final_url = ""
 
-                async def _consume(response, _base_kind=base_kind, _path_asset=path_asset, _response_event=response_event):
-                    nonlocal response_seen, parse_success, parse_failed, response_match_count
+                async def _consume(
+                    response,
+                    _base_kind=base_kind,
+                    _path_asset=path_asset,
+                    _response_event=response_event,
+                ):
+                    nonlocal \
+                        response_seen, \
+                        parse_success, \
+                        parse_failed, \
+                        response_match_count
                     nonlocal plan_response_seen, plan_parse_success, plan_parse_failed
                     nonlocal capture_last_payload, capture_invalid_rows
                     url = response.url
@@ -144,10 +162,17 @@ class PlaywrightResponseCaptureMixin:
                         _response_event.set()
                         return
                     items, valid = self._normalize_article_api_payload(
-                        payload, name=name, cid=cid, trade_type=trade_type,
-                        path_asset=_path_asset, mode=mode, source_lat=source_lat,
-                        source_lon=source_lon, source_zoom=source_zoom,
-                        marker_id=marker_id, seen_ids=seen_ids,
+                        payload,
+                        name=name,
+                        cid=cid,
+                        trade_type=trade_type,
+                        path_asset=_path_asset,
+                        mode=mode,
+                        source_lat=source_lat,
+                        source_lon=source_lon,
+                        source_zoom=source_zoom,
+                        marker_id=marker_id,
+                        seen_ids=seen_ids,
                     )
                     raw_items.extend(items)
                     if not valid:
@@ -177,33 +202,48 @@ class PlaywrightResponseCaptureMixin:
                     try:
                         await asyncio.wait_for(
                             response_event.wait(),
-                            timeout=max(0.1, float(self._article_response_wait_ms()) / 1000.0),
+                            timeout=max(
+                                0.1, float(self._article_response_wait_ms()) / 1000.0
+                            ),
                         )
                     except Exception:
                         pass
                     if response_event.is_set() and (
-                        raw_items or (plan_response_seen and plan_parse_success and not plan_parse_failed)
+                        raw_items
+                        or (
+                            plan_response_seen
+                            and plan_parse_success
+                            and not plan_parse_failed
+                        )
                     ):
                         plan_final_url = str(getattr(page, "url", "") or "")
                     else:
                         try:
                             await self._async_retry(
                                 f"article load {base_kind}/{cid}",
-                                lambda _page=page: _page.wait_for_load_state("networkidle", timeout=6000),
+                                lambda _page=page: _page.wait_for_load_state(
+                                    "networkidle", timeout=6000
+                                ),
                             )
                         except Exception:
                             pass
                         for text in ["매매", trade_type]:
                             try:
-                                await page.locator(f"text={text}").first.click(timeout=1000)
+                                await page.locator(f"text={text}").first.click(
+                                    timeout=1000
+                                )
                                 await page.wait_for_timeout(400)
                             except Exception:
                                 continue
                         await page.wait_for_timeout(1800)
                         page_state = await self._classify_page_state(page)
                         plan_final_url = str(page_state.get("final_url", "") or "")
-                        plan_block_like_redirect = bool(page_state.get("block_like_redirect", False))
-                        plan_block_reason = str(page_state.get("block_reason", "") or "")
+                        plan_block_like_redirect = bool(
+                            page_state.get("block_like_redirect", False)
+                        )
+                        plan_block_reason = str(
+                            page_state.get("block_reason", "") or ""
+                        )
                 except Exception as exc:
                     self.thread.log(
                         f"   entry plan 실패({base_kind}/{cid}, {plan.get('name', 'direct')}): {exc}",
@@ -228,10 +268,17 @@ class PlaywrightResponseCaptureMixin:
                 if plan_response_seen and plan_parse_success:
                     confirmed_capture = True
                     confirmed_parse_success = True
-                    self._remember_entry_plan_success(plan_key, str(plan.get("name", "direct") or "direct"))
+                    self._remember_entry_plan_success(
+                        plan_key, str(plan.get("name", "direct") or "direct")
+                    )
                 if raw_items:
                     break
-                if plan_response_seen and plan_parse_success and not plan_parse_failed and not plan_block_like_redirect:
+                if (
+                    plan_response_seen
+                    and plan_parse_success
+                    and not plan_parse_failed
+                    and not plan_block_like_redirect
+                ):
                     break
             if raw_items:
                 break
@@ -254,10 +301,16 @@ class PlaywrightResponseCaptureMixin:
                 last_payload=capture_last_payload,
             )
 
-        capture_failed = bool(not raw_items and not confirmed_capture and (block_like_redirect or not response_seen or parse_failed))
+        capture_failed = bool(
+            not raw_items
+            and not confirmed_capture
+            and (block_like_redirect or not response_seen or parse_failed)
+        )
         failure_reason = ""
         if block_like_redirect:
-            failure_reason = f"block-like redirect: {block_reason or final_url or 'unknown'}"
+            failure_reason = (
+                f"block-like redirect: {block_reason or final_url or 'unknown'}"
+            )
         elif not response_seen:
             failure_reason = f"response capture missing: {final_url or 'no_final_url'}"
         elif parse_failed and not confirmed_capture:
@@ -265,16 +318,22 @@ class PlaywrightResponseCaptureMixin:
 
         supplement = dict(getattr(self, "_article_supplement_result", {}) or {})
         complete = bool(
-            confirmed_capture and not drain_timed_out and not capture_invalid_rows
+            confirmed_capture
+            and not drain_timed_out
+            and not capture_invalid_rows
             and supplement.get("collection_status") == "complete"
         )
         if not complete:
-            failure_reason = failure_reason or str(supplement.get("failure_reason") or "capture_incomplete")
+            failure_reason = failure_reason or str(
+                supplement.get("failure_reason") or "capture_incomplete"
+            )
 
         return {
             "raw_items": raw_items,
             "response_seen": response_seen,
-            "parse_success": bool(confirmed_parse_success or (parse_success and not parse_failed)),
+            "parse_success": bool(
+                confirmed_parse_success or (parse_success and not parse_failed)
+            ),
             "drain_timed_out": drain_timed_out,
             "response_match_count": response_match_count,
             "final_url": final_url,
@@ -282,7 +341,9 @@ class PlaywrightResponseCaptureMixin:
             "block_reason": block_reason,
             "capture_failed": capture_failed,
             "failure_reason": failure_reason,
-            "collection_status": "complete" if complete else ("partial" if raw_items else "failed"),
+            "collection_status": "complete"
+            if complete
+            else ("partial" if raw_items else "failed"),
             "last_successful_page": int(supplement.get("last_successful_page", 0)),
             "failed_page": int(supplement.get("failed_page", 0)),
         }

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class PlaywrightNavigationRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _build_entry_plans(self, target_url: str) -> list[dict]:
@@ -20,7 +21,11 @@ class PlaywrightNavigationRuntimeMixin:
 
         plans = [
             {"name": "direct", "warmups": [], "target": target},
-            {"name": "new_home_then_target", "warmups": [f"{HOST_NEW}/"], "target": target},
+            {
+                "name": "new_home_then_target",
+                "warmups": [f"{HOST_NEW}/"],
+                "target": target,
+            },
         ]
         return plans
 
@@ -57,7 +62,9 @@ class PlaywrightNavigationRuntimeMixin:
             return False
         if not bool(self._launched_headless):
             return False
-        self.thread.log(f"Playwright headed fallback 전환: {reason or 'capture recovery'}", 30)
+        self.thread.log(
+            f"Playwright headed fallback 전환: {reason or 'capture recovery'}", 30
+        )
         self._headed_fallback_used = True
         self.thread.stats["playwright_headed_fallback_used"] = 1
         self._launch_headless_override = False

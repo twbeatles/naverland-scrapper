@@ -8,7 +8,9 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseSchemaNormalizeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     @staticmethod
     def _column_names(cursor, table_name: str) -> set[str]:
         try:
@@ -38,7 +40,9 @@ class ComplexDatabaseSchemaNormalizeMixin:
         return token or "APT"
 
     @staticmethod
-    def _normalize_price_metric(price_metric, trade_type=None, default: str = "price") -> str:
+    def _normalize_price_metric(
+        price_metric, trade_type=None, default: str = "price"
+    ) -> str:
         token = str(price_metric or "").strip().lower()
         if token in {"price", "deposit", "rent"}:
             return token
@@ -112,7 +116,9 @@ class ComplexDatabaseSchemaNormalizeMixin:
         if not cls._complexes_table_requires_migration(cursor):
             return
 
-        logger.info("complexes schema migration start: add asset_type + composite unique")
+        logger.info(
+            "complexes schema migration start: add asset_type + composite unique"
+        )
         cursor.execute("PRAGMA foreign_keys=OFF")
         try:
             table_names = {
@@ -227,7 +233,9 @@ class ComplexDatabaseSchemaNormalizeMixin:
         if "group_complexes" not in table_names:
             return
         try:
-            fk_rows = cursor.execute("PRAGMA foreign_key_list(group_complexes)").fetchall()
+            fk_rows = cursor.execute(
+                "PRAGMA foreign_key_list(group_complexes)"
+            ).fetchall()
         except Exception:
             fk_rows = []
         fk_targets = set()

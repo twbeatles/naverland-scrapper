@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class PlaywrightBlockingRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _setup_blocking(self, context):

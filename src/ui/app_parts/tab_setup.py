@@ -40,11 +40,13 @@ if TYPE_CHECKING:
 
 def _secondary_label_qss(theme_name) -> str:
     from src.ui.fluent.design_tokens import secondary_label_qss
+
     return secondary_label_qss(theme_name)
 
 
 def _empty_state_qss(theme_name, padding: int = 20) -> str:
     from src.ui.fluent.design_tokens import empty_state_qss
+
     return empty_state_qss(theme_name, padding=padding)
 
 
@@ -62,6 +64,7 @@ class AppTabSetupMixin:
     TAB_GUIDE = 9
 
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _init_ui(self: Any):
@@ -76,6 +79,7 @@ class AppTabSetupMixin:
         )
         try:
             from src.ui.fluent.design_tokens import NAV_EXPAND_WIDTH as _NAV_W
+
             self.navigationInterface.setExpandWidth(_NAV_W)
         except Exception:
             pass
@@ -84,8 +88,10 @@ class AppTabSetupMixin:
         content_layout = QVBoxLayout(content)
         from src.ui.fluent.design_tokens import GROUP_GAP as _GG
         from src.ui.fluent.design_tokens import PAGE_MARGIN as _PM
+
         content_layout.setContentsMargins(_PM, _GG, _PM, _GG)
         from src.ui.fluent.design_tokens import GROUP_GAP as _GG2
+
         content_layout.setSpacing(_GG2)
 
         self.stackedWidget = QStackedWidget(content)
@@ -142,9 +148,7 @@ class AppTabSetupMixin:
         try:
             from PySide6.QtCore import QTimer
 
-            QTimer.singleShot(
-                0, lambda: self.navigationInterface.expand(useAni=False)
-            )
+            QTimer.singleShot(0, lambda: self.navigationInterface.expand(useAni=False))
         except Exception:
             pass
         root.addWidget(self.navigationInterface)
@@ -236,7 +240,6 @@ class AppTabSetupMixin:
             self.favorites_tab = tab
         return tab
 
-    
     def _setup_schedule_tab(self: Any):
         from src.ui.fluent.design_tokens import SPACE_SM as _SM
         from src.ui.fluent.design_tokens import SPACE_XS as _XS
@@ -266,7 +269,9 @@ class AppTabSetupMixin:
         form.setColumnStretch(2, 1)
 
         self.check_schedule = QCheckBox("매일 자동으로 수집하기")
-        self.check_schedule.setToolTip("켜 두면 아래에 정한 시간마다 자동으로 수집을 시작합니다.")
+        self.check_schedule.setToolTip(
+            "켜 두면 아래에 정한 시간마다 자동으로 수집을 시작합니다."
+        )
         form.addWidget(self.check_schedule, 0, 0, 1, 3)
 
         form.addWidget(_label("시작 시간"), 1, 0)
@@ -307,7 +312,9 @@ class AppTabSetupMixin:
         geo_layout.setVerticalSpacing(_XS)
         geo_layout.setColumnStretch(4, 1)
 
-        self.btn_schedule_geo_copy = QPushButton("「지도로 찾기」에서 정한 위치 가져오기")
+        self.btn_schedule_geo_copy = QPushButton(
+            "「지도로 찾기」에서 정한 위치 가져오기"
+        )
         self.btn_schedule_geo_copy.setObjectName("secondaryBtn")
         self.btn_schedule_geo_copy.setToolTip(
             "「지도로 찾기」 화면에서 지역을 고른 뒤 누르면 그 위치와 범위를 그대로 가져옵니다."
@@ -333,7 +340,9 @@ class AppTabSetupMixin:
         self.schedule_geo_rings.setRange(0, 6)
         self.schedule_geo_rings.setValue(1)
         self.schedule_geo_rings.setSuffix(" 단계")
-        self.schedule_geo_rings.setToolTip("0단계는 정한 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다.")
+        self.schedule_geo_rings.setToolTip(
+            "0단계는 정한 위치만, 숫자가 클수록 주변을 더 넓게 훑습니다."
+        )
         geo_layout.addWidget(self.schedule_geo_rings, 2, 1)
         geo_layout.addWidget(_label("지도 확대 단계"), 2, 2)
         self.schedule_geo_zoom = QSpinBox()
@@ -347,7 +356,9 @@ class AppTabSetupMixin:
         self.schedule_geo_step.setSingleStep(40)
         self.schedule_geo_step.setValue(480)
         self.schedule_geo_step.setSuffix(" px")
-        self.schedule_geo_step.setToolTip("주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다.")
+        self.schedule_geo_step.setToolTip(
+            "주변 구역을 나눌 때 구역 사이 거리(지도 화면 픽셀 기준)입니다. 기본값을 권장합니다."
+        )
         geo_layout.addWidget(self.schedule_geo_step, 3, 1)
         geo_layout.addWidget(_label("구역마다 쉬는 시간"), 3, 2)
         self.schedule_geo_dwell = QSpinBox()
@@ -355,7 +366,9 @@ class AppTabSetupMixin:
         self.schedule_geo_dwell.setSingleStep(100)
         self.schedule_geo_dwell.setValue(600)
         self.schedule_geo_dwell.setSuffix(" ms")
-        self.schedule_geo_dwell.setToolTip("한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)")
+        self.schedule_geo_dwell.setToolTip(
+            "한 구역의 단지 목록을 받은 뒤 다음 구역으로 넘어가기 전에 쉬는 시간입니다.\n너무 짧으면 네이버가 잠시 접속을 막을 수 있습니다. (1000ms = 1초)"
+        )
         geo_layout.addWidget(self.schedule_geo_dwell, 3, 3)
 
         geo_layout.addWidget(_label("주택 종류"), 4, 0)
@@ -386,8 +399,12 @@ class AppTabSetupMixin:
 
         self.check_schedule.toggled.connect(self._save_schedule_config)
         self.time_edit.timeChanged.connect(self._save_schedule_config)
-        self.schedule_mode_combo.currentIndexChanged.connect(self._on_schedule_mode_changed)
-        self.schedule_group_combo.currentIndexChanged.connect(self._save_schedule_config)
+        self.schedule_mode_combo.currentIndexChanged.connect(
+            self._on_schedule_mode_changed
+        )
+        self.schedule_group_combo.currentIndexChanged.connect(
+            self._save_schedule_config
+        )
         self.schedule_geo_lat.valueChanged.connect(self._save_schedule_config)
         self.schedule_geo_lon.valueChanged.connect(self._save_schedule_config)
         self.schedule_geo_zoom.valueChanged.connect(self._save_schedule_config)
@@ -421,7 +438,9 @@ class AppTabSetupMixin:
         self._save_schedule_config()
         place = str(getattr(geo_tab, "_geo_place_name", "") or "").strip()
         self.show_toast(
-            f"'{place}' 위치를 예약 설정으로 가져왔습니다." if place else "지도 위치를 예약 설정으로 가져왔습니다.",
+            f"'{place}' 위치를 예약 설정으로 가져왔습니다."
+            if place
+            else "지도 위치를 예약 설정으로 가져왔습니다.",
             toast_type="success",
         )
 
@@ -444,7 +463,13 @@ class AppTabSetupMixin:
         layout.setSpacing(_SM)
 
         bl = QHBoxLayout()
-        bl.addWidget(build_page_header("수집 기록", "언제 어떤 단지를 수집했고 매물이 몇 건이었는지 보여 줍니다."), 1)
+        bl.addWidget(
+            build_page_header(
+                "수집 기록",
+                "언제 어떤 단지를 수집했고 매물이 몇 건이었는지 보여 줍니다.",
+            ),
+            1,
+        )
         btn_rf = QPushButton("새로고침")
         btn_rf.setObjectName("secondaryBtn")
         btn_rf.setToolTip("수집 기록을 다시 불러옵니다. (F5)")
@@ -455,14 +480,26 @@ class AppTabSetupMixin:
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(9)
         self.history_table.setHorizontalHeaderLabels(
-            ["단지 이름", "단지 번호", "종류", "엔진", "수집 방식", "결과", "거래 종류", "매물 수", "수집 시각"]
+            [
+                "단지 이름",
+                "단지 번호",
+                "종류",
+                "엔진",
+                "수집 방식",
+                "결과",
+                "거래 종류",
+                "매물 수",
+                "수집 시각",
+            ]
         )
         history_header = self.history_table.horizontalHeader()
         if history_header is not None:
             history_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.history_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         # 내부 값(APT, complex, success …)은 그대로 두고 화면에만 쉬운 말로 보여 준다.
         install_token_labels(self.history_table, 2, asset_label)
         install_token_labels(self.history_table, 4, crawl_mode_label)
@@ -481,9 +518,15 @@ class AppTabSetupMixin:
         self.history_empty_label.hide()
         history_model = self.history_table.model()
         if history_model is not None:
-            history_model.rowsInserted.connect(lambda *_: self._update_history_empty_state())
-            history_model.rowsRemoved.connect(lambda *_: self._update_history_empty_state())
-            history_model.modelReset.connect(lambda *_: self._update_history_empty_state())
+            history_model.rowsInserted.connect(
+                lambda *_: self._update_history_empty_state()
+            )
+            history_model.rowsRemoved.connect(
+                lambda *_: self._update_history_empty_state()
+            )
+            history_model.modelReset.connect(
+                lambda *_: self._update_history_empty_state()
+            )
         self._update_history_empty_state()
 
         prepare_page(self.history_tab, ROUTE_HISTORY)
@@ -520,7 +563,9 @@ class AppTabSetupMixin:
         )
         btn_load = QPushButton("새로고침")
         btn_load.setObjectName("secondaryBtn")
-        btn_load.setToolTip("단지 목록과 가격 기록을 다시 불러옵니다. 조건을 바꾸면 자동으로 다시 그립니다.")
+        btn_load.setToolTip(
+            "단지 목록과 가격 기록을 다시 불러옵니다. 조건을 바꾸면 자동으로 다시 그립니다."
+        )
         btn_load.clicked.connect(lambda *_: self._reload_stats_page())
         header_row.addWidget(btn_load, 0, Qt.AlignmentFlag.AlignBottom)
         self.btn_stats_reload = btn_load
@@ -546,20 +591,26 @@ class AppTabSetupMixin:
         self.stats_type_combo.addItems(["전체", "매매", "전세", "월세"])
         # 매매·전세·월세는 가격 기준이 달라 한 그래프에 겹치지 않으므로 하나를 기본으로 고른다.
         self.stats_type_combo.setCurrentText("매매")
-        self.stats_type_combo.setToolTip("단지를 바꿨을 때 고른 거래 종류의 기록이 없으면 기록이 있는 종류로 바꿔 보여 줍니다.")
+        self.stats_type_combo.setToolTip(
+            "단지를 바꿨을 때 고른 거래 종류의 기록이 없으면 기록이 있는 종류로 바꿔 보여 줍니다."
+        )
         fl.addWidget(self.stats_type_combo)
         self.stats_metric_label = _label("기준")
         fl.addWidget(self.stats_metric_label)
         self.stats_metric_combo = QComboBox()
         self.stats_metric_combo.addItem("월세 금액", "rent")
         self.stats_metric_combo.addItem("보증금", "deposit")
-        self.stats_metric_combo.setToolTip("월세는 매달 내는 금액과 보증금 중 무엇을 기준으로 볼지 고릅니다.")
+        self.stats_metric_combo.setToolTip(
+            "월세는 매달 내는 금액과 보증금 중 무엇을 기준으로 볼지 고릅니다."
+        )
         fl.addWidget(self.stats_metric_combo)
         fl.addSpacing(_XS)
         fl.addWidget(_label("면적"))
         self.stats_pyeong_combo = QComboBox()
         self.stats_pyeong_combo.addItem("전체")
-        self.stats_pyeong_combo.setToolTip("면적을 하나 고르면 변화 요약과 최저~최고 범위가 함께 나타납니다.")
+        self.stats_pyeong_combo.setToolTip(
+            "면적을 하나 고르면 변화 요약과 최저~최고 범위가 함께 나타납니다."
+        )
         fl.addWidget(self.stats_pyeong_combo)
         fl.addSpacing(_XS)
         fl.addWidget(_label("기간"))
@@ -588,8 +639,12 @@ class AppTabSetupMixin:
         cmp_row.addWidget(self.stats_compare_label, 1)
         self.btn_stats_compare_clear = QPushButton("비교 끄기")
         self.btn_stats_compare_clear.setObjectName("secondaryBtn")
-        self.btn_stats_compare_clear.setToolTip("비교를 끄고 고른 단지 하나의 흐름만 봅니다.")
-        self.btn_stats_compare_clear.clicked.connect(lambda *_: self._clear_stats_compare())
+        self.btn_stats_compare_clear.setToolTip(
+            "비교를 끄고 고른 단지 하나의 흐름만 봅니다."
+        )
+        self.btn_stats_compare_clear.clicked.connect(
+            lambda *_: self._clear_stats_compare()
+        )
         self.btn_stats_compare_clear.hide()
         cmp_row.addWidget(self.btn_stats_compare_clear)
         cmp_row.addStretch(0)
@@ -600,24 +655,41 @@ class AppTabSetupMixin:
 
         self.stats_type_combo.currentIndexChanged.connect(self._on_stats_type_changed)
         self.stats_metric_combo.currentIndexChanged.connect(self._on_stats_type_changed)
-        self.stats_pyeong_combo.currentIndexChanged.connect(lambda *_: self._load_stats())
-        self.stats_period_combo.currentIndexChanged.connect(lambda *_: self._load_stats())
+        self.stats_pyeong_combo.currentIndexChanged.connect(
+            lambda *_: self._load_stats()
+        )
+        self.stats_period_combo.currentIndexChanged.connect(
+            lambda *_: self._load_stats()
+        )
 
-        self.stats_summary = TrendSummaryStrip(theme=str(getattr(self, "current_theme", "dark") or "dark"))
+        self.stats_summary = TrendSummaryStrip(
+            theme=str(getattr(self, "current_theme", "dark") or "dark")
+        )
         self.stats_summary.clear("단지를 고르면 최근 평균과 변화가 여기에 나타납니다.")
         layout.addWidget(self.stats_summary)
 
         self.stats_table = QTableWidget()
         self.stats_table.setColumnCount(8)
         self.stats_table.setHorizontalHeaderLabels(
-            ["날짜", "거래 종류", "평형", "최저가", "최고가", "평균가", "매물 수", "직전 대비"]
+            [
+                "날짜",
+                "거래 종류",
+                "평형",
+                "최저가",
+                "최고가",
+                "평균가",
+                "매물 수",
+                "직전 대비",
+            ]
         )
         stats_header = self.stats_table.horizontalHeader()
         if stats_header is not None:
             stats_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.stats_table.setAlternatingRowColors(True)
         self.stats_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.stats_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.stats_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.stats_table.setSortingEnabled(True)
 
         # 그래프가 핵심이므로 위에, 날짜별 상세 표는 아래에 둔다.
@@ -658,11 +730,11 @@ class AppTabSetupMixin:
         self.dashboard_layout.addWidget(self.dashboard_placeholder)
         prepare_page(self.dashboard_tab, ROUTE_DASHBOARD)
         self.tabs.addTab(self.dashboard_tab, TAB_DASHBOARD)
-    
+
     def _setup_favorites_tab(self: Any):
         self.favorites_tab = prepare_page(self._ensure_favorites_tab(), ROUTE_FAVORITES)
         self.tabs.addTab(self.favorites_tab, TAB_FAVORITES)
-    
+
     def _setup_guide_tab(self: Any):
         from src.ui.guide_content import build_guide_html
 
@@ -674,7 +746,11 @@ class AppTabSetupMixin:
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_SM)
-        layout.addWidget(build_page_header("가이드", "처음 쓰는 분을 위한 사용 방법과 화면 안내입니다."))
+        layout.addWidget(
+            build_page_header(
+                "가이드", "처음 쓰는 분을 위한 사용 방법과 화면 안내입니다."
+            )
+        )
         browser = QTextBrowser()
         browser.setObjectName("guideBrowser")
         browser.setFrameShape(QFrame.Shape.NoFrame)
@@ -701,13 +777,15 @@ class AppTabSetupMixin:
             browser.setHtml(build_guide_html(theme_name))
         except Exception:
             pass
-    
+
     def _ensure_chart_widget(self: Any):
         if self.chart_widget is not None:
             return
         from src.ui.widgets.chart import ChartWidget
 
-        self.chart_widget = ChartWidget(theme=str(getattr(self, "current_theme", "dark") or "dark"))
+        self.chart_widget = ChartWidget(
+            theme=str(getattr(self, "current_theme", "dark") or "dark")
+        )
         idx = self.stats_splitter.indexOf(self.chart_placeholder)
         if idx >= 0:
             self.stats_splitter.insertWidget(idx, self.chart_widget)
@@ -787,5 +865,3 @@ class AppTabSetupMixin:
                 return
             self.favorites_tab.refresh()
             self._mark_noncritical_loaded("favorites")
-
-

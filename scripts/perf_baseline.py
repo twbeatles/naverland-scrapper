@@ -42,7 +42,11 @@ def _benchmark_parser():
         ItemParser.parse_element(item, "Bench", "12345", "매매")
     elapsed = time.perf_counter() - start
     throughput = n / elapsed if elapsed > 0 else 0
-    return {"iterations": n, "elapsed_sec": elapsed, "throughput_items_per_sec": throughput}
+    return {
+        "iterations": n,
+        "elapsed_sec": elapsed,
+        "throughput_items_per_sec": throughput,
+    }
 
 
 def _benchmark_cache():
@@ -50,7 +54,9 @@ def _benchmark_cache():
     with tempfile.TemporaryDirectory() as tmp:
         cache_path = Path(tmp) / "crawl_cache.json"
         with patch("src.core.cache.CACHE_PATH", cache_path):
-            cache = CrawlCache(ttl_minutes=30, write_back_interval_sec=999, max_entries=2000)
+            cache = CrawlCache(
+                ttl_minutes=30, write_back_interval_sec=999, max_entries=2000
+            )
             start_set = time.perf_counter()
             for i in range(100):
                 cache.set(str(10000 + i), "매매", payload)
@@ -235,17 +241,29 @@ def main():
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     out_path = LOG_DIR / f"perf_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     print("Performance baseline")
-    print(f"- parser throughput: {results['parser']['throughput_items_per_sec']:.2f} items/s")
+    print(
+        f"- parser throughput: {results['parser']['throughput_items_per_sec']:.2f} items/s"
+    )
     print(f"- cache set(100): {results['cache']['set_100_elapsed_sec']:.4f}s")
     print(f"- cache flush: {results['cache']['flush_elapsed_sec']:.4f}s")
-    print(f"- card set_data(1000): {results['card_render']['set_data_elapsed_sec']:.4f}s")
-    print(f"- compact live batches(3000/30): {results['compact_live_batches']['elapsed_sec']:.4f}s")
+    print(
+        f"- card set_data(1000): {results['card_render']['set_data_elapsed_sec']:.4f}s"
+    )
+    print(
+        f"- compact live batches(3000/30): {results['compact_live_batches']['elapsed_sec']:.4f}s"
+    )
     print(f"- preflight startup: {results['preflight_startup']['elapsed_sec']:.4f}s")
-    print(f"- app startup(no dashboard): {results['app_startup_without_dashboard']['init_elapsed_sec']:.4f}s")
-    print(f"- dashboard first open: {results['dashboard_first_open']['open_elapsed_sec']:.4f}s")
+    print(
+        f"- app startup(no dashboard): {results['app_startup_without_dashboard']['init_elapsed_sec']:.4f}s"
+    )
+    print(
+        f"- dashboard first open: {results['dashboard_first_open']['open_elapsed_sec']:.4f}s"
+    )
     print(f"- app init: {results['app_init']['init_elapsed_sec']:.4f}s")
     print(f"- json: {out_path}")
 

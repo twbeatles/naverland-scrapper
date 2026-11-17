@@ -1,4 +1,5 @@
 """Regression tests for Phase-1 (P0) audit fixes: ISSUE-001/002/003 (T-001~T-003)."""
+
 import inspect
 import os
 import types
@@ -76,7 +77,9 @@ class TestIssue001WindowGeometry(unittest.TestCase):
         )
 
         w, _ = self._restore(None)
-        self.assertEqual((w.width(), w.height()), (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
+        self.assertEqual(
+            (w.width(), w.height()), (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        )
         w.deleteLater()
 
     def test_valid_geometry_applied(self):
@@ -249,10 +252,14 @@ class TestIssue003FavoriteToggle(unittest.TestCase):
     def test_db_true_updates_memory_and_tabs(self):
         host = FavoriteHost(FakeFavoriteDB(result=True))
         host.crawler_tab = types.SimpleNamespace(
-            _update_favorite_state_for_key=lambda k, v: host.tab_updates.append(("crawler", k, v))
+            _update_favorite_state_for_key=lambda k, v: host.tab_updates.append(
+                ("crawler", k, v)
+            )
         )
         host.geo_tab = types.SimpleNamespace(
-            _update_favorite_state_for_key=lambda k, v: host.tab_updates.append(("geo", k, v))
+            _update_favorite_state_for_key=lambda k, v: host.tab_updates.append(
+                ("geo", k, v)
+            )
         )
         self._call(host, "A1", "C1", "APT", True)
         self.assertIn(("APT", "A1", "C1"), host.favorite_keys)
@@ -339,7 +346,9 @@ class TestIssue010SnapshotRollback(unittest.TestCase):
             patch.object(self.db._pool, "return_connection", return_value=None),
         ):
             self.assertEqual(
-                self.db.add_price_snapshots_bulk([("C1", "매매", 25.0, 100, 200, 150, 3)]),
+                self.db.add_price_snapshots_bulk(
+                    [("C1", "매매", 25.0, 100, 200, 150, 3)]
+                ),
                 0,
             )
         self.assertEqual(conn.rollbacks, 1)
@@ -388,7 +397,9 @@ class TestIssue007SnapshotLockOrder(unittest.TestCase):
             host = types.SimpleNamespace(
                 collected_data=[{"매물ID": "1"}],
                 db=types.SimpleNamespace(
-                    add_price_snapshots_bulk=lambda rows: (calls.append(list(rows)), 7)[1]
+                    add_price_snapshots_bulk=lambda rows: (calls.append(list(rows)), 7)[
+                        1
+                    ]
                 ),
                 append_log=lambda *a: None,
             )
@@ -700,7 +711,9 @@ class TestBulkDedupCountAndAtomicExport(unittest.TestCase):
                 "order": ["단지명", "가격변동"],
                 "columns": {"단지명": True, "가격변동": True},
             }
-            self.assertTrue(DataExporter(data).export_csv(csv_path, template=template).ok)
+            self.assertTrue(
+                DataExporter(data).export_csv(csv_path, template=template).ok
+            )
             self.assertTrue(DataExporter(data).export_json(json_path).ok)
             self.assertTrue(os.path.getsize(csv_path) > 0)
             self.assertTrue(os.path.getsize(json_path) > 0)

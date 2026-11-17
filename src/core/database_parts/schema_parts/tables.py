@@ -13,6 +13,7 @@ logger = get_logger("DB")
 
 class ComplexDatabaseSchemaTableMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
         @staticmethod
         def _column_names(cursor: Any, table_name: str) -> set[str]: ...
@@ -21,7 +22,7 @@ class ComplexDatabaseSchemaTableMixin:
         conn = self._pool.get_connection()
         try:
             c = conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS complexes (
+            c.execute("""CREATE TABLE IF NOT EXISTS complexes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 asset_type TEXT NOT NULL DEFAULT 'APT',
@@ -29,25 +30,25 @@ class ComplexDatabaseSchemaTableMixin:
                 memo TEXT DEFAULT "",
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(asset_type, complex_id)
-            )''')
+            )""")
             if self._complexes_table_requires_migration(c):
                 self._backup_before_schema_migration(conn, "complexes")
             self._migrate_complexes_asset_type_schema(c)
-            c.execute('''CREATE TABLE IF NOT EXISTS groups (
+            c.execute("""CREATE TABLE IF NOT EXISTS groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT DEFAULT "",
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''')
-            c.execute('''CREATE TABLE IF NOT EXISTS group_complexes (
+            )""")
+            c.execute("""CREATE TABLE IF NOT EXISTS group_complexes (
                 group_id INTEGER,
                 complex_id INTEGER,
                 PRIMARY KEY (group_id, complex_id),
                 FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
                 FOREIGN KEY (complex_id) REFERENCES complexes(id) ON DELETE CASCADE
-            )''')
+            )""")
             self._ensure_group_complexes_fk_integrity(c)
-            c.execute('''CREATE TABLE IF NOT EXISTS crawl_history (
+            c.execute("""CREATE TABLE IF NOT EXISTS crawl_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complex_name TEXT,
                 complex_id TEXT,
@@ -61,8 +62,8 @@ class ComplexDatabaseSchemaTableMixin:
                 asset_type TEXT DEFAULT '',
                 run_status TEXT DEFAULT 'success',
                 crawled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''')
-            c.execute('''CREATE TABLE IF NOT EXISTS price_snapshots (
+            )""")
+            c.execute("""CREATE TABLE IF NOT EXISTS price_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complex_id TEXT,
                 trade_type TEXT,
@@ -75,8 +76,8 @@ class ComplexDatabaseSchemaTableMixin:
                 price_metric TEXT DEFAULT 'price',
                 legacy_monthly INTEGER DEFAULT 0,
                 snapshot_date DATE DEFAULT CURRENT_DATE
-            )''')
-            c.execute('''CREATE TABLE IF NOT EXISTS alert_settings (
+            )""")
+            c.execute("""CREATE TABLE IF NOT EXISTS alert_settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complex_id TEXT,
                 complex_name TEXT,
@@ -88,9 +89,9 @@ class ComplexDatabaseSchemaTableMixin:
                 price_max INTEGER DEFAULT 999999999,
                 enabled INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''')
+            )""")
             # v7.3: listing history table (initial listing + previous-price baseline)
-            c.execute('''CREATE TABLE IF NOT EXISTS article_history (
+            c.execute("""CREATE TABLE IF NOT EXISTS article_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 article_id TEXT NOT NULL,
                 complex_id TEXT NOT NULL,
@@ -123,12 +124,12 @@ class ComplexDatabaseSchemaTableMixin:
                 gap_amount_won INTEGER DEFAULT 0,
                 gap_ratio REAL DEFAULT 0,
                 UNIQUE(asset_type, article_id, complex_id)
-            )''')
+            )""")
             if self._article_history_requires_migration(c):
                 self._backup_before_schema_migration(conn, "article_history")
                 self._migrate_article_history_asset_scope_schema(c)
             # v12.0: cache table for query-level response reuse
-            c.execute('''CREATE TABLE IF NOT EXISTS article_favorites (
+            c.execute("""CREATE TABLE IF NOT EXISTS article_favorites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 asset_type TEXT NOT NULL DEFAULT 'APT',
                 article_id TEXT NOT NULL,
@@ -138,11 +139,11 @@ class ComplexDatabaseSchemaTableMixin:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(asset_type, article_id, complex_id)
-            )''')
+            )""")
             if self._article_favorites_requires_migration(c):
                 self._backup_before_schema_migration(conn, "article_favorites")
                 self._migrate_article_favorites_asset_scope_schema(c)
-            c.execute('''CREATE TABLE IF NOT EXISTS article_alert_log (
+            c.execute("""CREATE TABLE IF NOT EXISTS article_alert_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 alert_id INTEGER NOT NULL,
                 article_id TEXT NOT NULL,
@@ -151,7 +152,7 @@ class ComplexDatabaseSchemaTableMixin:
                 notified_on DATE DEFAULT CURRENT_DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(alert_id, article_id, complex_id, asset_type, notified_on)
-            )''')
+            )""")
             if self._article_alert_log_requires_migration(c):
                 self._backup_before_schema_migration(conn, "article_alert_log")
             self._migrate_article_alert_log_asset_type_schema(c)

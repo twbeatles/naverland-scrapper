@@ -27,17 +27,36 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightArticleApiMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _article_api_timeout_ms(self) -> int:
         try:
-            return min(20000, max(300, int(getattr(self.thread, "playwright_article_api_timeout_ms", 2500))))
+            return min(
+                20000,
+                max(
+                    300,
+                    int(
+                        getattr(self.thread, "playwright_article_api_timeout_ms", 2500)
+                    ),
+                ),
+            )
         except (TypeError, ValueError):
             return 2500
 
     def _article_response_wait_ms(self) -> int:
         try:
-            return min(20000, max(100, int(getattr(self.thread, "playwright_article_response_wait_ms", 1200))))
+            return min(
+                20000,
+                max(
+                    100,
+                    int(
+                        getattr(
+                            self.thread, "playwright_article_response_wait_ms", 1200
+                        )
+                    ),
+                ),
+            )
         except (TypeError, ValueError):
             return 1200
 
@@ -49,7 +68,9 @@ class PlaywrightArticleApiMixin:
         return bool(getattr(self.thread, "include_pre_sale_rights", False))
 
     def _article_api_real_estate_type(self, path_asset: str) -> str:
-        return article_api_real_estate_type(path_asset, include_pre=self._article_api_include_pre())
+        return article_api_real_estate_type(
+            path_asset, include_pre=self._article_api_include_pre()
+        )
 
     def _build_article_api_url(
         self,
@@ -90,24 +111,40 @@ class PlaywrightArticleApiMixin:
     def _remember_article_api_request_headers(self, response) -> None:
         try:
             request = getattr(response, "request", None)
-            headers = dict(getattr(request, "headers", {}) or {}) if request is not None else {}
+            headers = (
+                dict(getattr(request, "headers", {}) or {})
+                if request is not None
+                else {}
+            )
         except Exception:
             headers = {}
-        auth_header = str(headers.get("authorization", "") or headers.get("Authorization", "") or "").strip()
+        auth_header = str(
+            headers.get("authorization", "") or headers.get("Authorization", "") or ""
+        ).strip()
         if auth_header:
             self._article_api_auth_header = auth_header
 
-    def _ordered_entry_plans(self, target_url: str, plan_key: tuple[str, str, str]) -> list[dict]:
+    def _ordered_entry_plans(
+        self, target_url: str, plan_key: tuple[str, str, str]
+    ) -> list[dict]:
         plans = self._build_entry_plans(target_url)
-        preferred = str(getattr(self, "_entry_plan_success_by_key", {}).get(plan_key, "") or "")
+        preferred = str(
+            getattr(self, "_entry_plan_success_by_key", {}).get(plan_key, "") or ""
+        )
         if not preferred:
             return plans
-        preferred_plans = [plan for plan in plans if str(plan.get("name", "")) == preferred]
+        preferred_plans = [
+            plan for plan in plans if str(plan.get("name", "")) == preferred
+        ]
         if not preferred_plans:
             return plans
-        return preferred_plans + [plan for plan in plans if str(plan.get("name", "")) != preferred]
+        return preferred_plans + [
+            plan for plan in plans if str(plan.get("name", "")) != preferred
+        ]
 
-    def _remember_entry_plan_success(self, plan_key: tuple[str, str, str], plan_name: str) -> None:
+    def _remember_entry_plan_success(
+        self, plan_key: tuple[str, str, str], plan_name: str
+    ) -> None:
         if not plan_name:
             return
         try:
@@ -140,9 +177,14 @@ class PlaywrightArticleApiMixin:
         for article in article_list:
             if not isinstance(article, dict):
                 valid = False
-                self.thread.stats["invalid_row_count"] = int(self.thread.stats.get("invalid_row_count", 0)) + 1
+                self.thread.stats["invalid_row_count"] = (
+                    int(self.thread.stats.get("invalid_row_count", 0)) + 1
+                )
                 continue
-            if detect_trade_type(article, requested_trade_type=trade_type) != trade_type:
+            if (
+                detect_trade_type(article, requested_trade_type=trade_type)
+                != trade_type
+            ):
                 continue
             payload_marker_id = "" if mode == "complex" else str(marker_id or cid or "")
             item = normalize_article_payload(
@@ -157,10 +199,14 @@ class PlaywrightArticleApiMixin:
                 zoom=source_zoom,
                 marker_id=payload_marker_id,
             )
-            aid = str(item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
+            aid = str(
+                item.get("매물ID", "") or item.get(_LEGACY_ARTICLE_ID_KEY, "") or ""
+            )
             if item.get("데이터품질오류") or not aid:
                 valid = False
-                self.thread.stats["invalid_row_count"] = int(self.thread.stats.get("invalid_row_count", 0)) + 1
+                self.thread.stats["invalid_row_count"] = (
+                    int(self.thread.stats.get("invalid_row_count", 0)) + 1
+                )
             if not aid:
                 continue
             if aid in seen_ids:
@@ -275,7 +321,10 @@ class PlaywrightArticleApiMixin:
                         timeout=self._article_api_timeout_ms(),
                     )
                     response_match_count += 1
-                    if int(getattr(response, "status", 200) or 200) < 500 or attempt == 1:
+                    if (
+                        int(getattr(response, "status", 200) or 200) < 500
+                        or attempt == 1
+                    ):
                         break
                 except Exception as exc:
                     response = None
@@ -302,16 +351,22 @@ class PlaywrightArticleApiMixin:
                 payload = await response.json()
             except Exception:
                 failure_reason = "invalid_json"
-                self._record_article_api_failure(failure_reason, status=status_label or failure_reason)
+                self._record_article_api_failure(
+                    failure_reason, status=status_label or failure_reason
+                )
                 if page == first_page and not all_raw_items:
                     return None
                 break
             if isinstance(payload, dict) and (
-                str(payload.get("code", "") or "").upper() in {"TOO_MANY_REQUESTS", "429"}
-                or str(payload.get("detailCode", "") or "").upper() == "TOO_MANY_REQUESTS"
+                str(payload.get("code", "") or "").upper()
+                in {"TOO_MANY_REQUESTS", "429"}
+                or str(payload.get("detailCode", "") or "").upper()
+                == "TOO_MANY_REQUESTS"
             ):
                 failure_reason = "rate_limited"
-                self._record_article_api_failure("rate_limited", status=status_label or "429")
+                self._record_article_api_failure(
+                    "rate_limited", status=status_label or "429"
+                )
                 if page == first_page and not all_raw_items:
                     return None
                 break
@@ -331,7 +386,9 @@ class PlaywrightArticleApiMixin:
             all_raw_items.extend(raw_items)
             if not valid_payload:
                 failure_reason = "invalid_payload"
-                self._record_article_api_failure(failure_reason, status=status_label or failure_reason)
+                self._record_article_api_failure(
+                    failure_reason, status=status_label or failure_reason
+                )
                 if page == first_page and not all_raw_items:
                     return None
                 break
@@ -347,14 +404,16 @@ class PlaywrightArticleApiMixin:
 
         if not all_raw_items and response_match_count == 0:
             return None
-        return dict(self._article_api_fast_path_success(
-            raw_items=all_raw_items,
-            response_match_count=response_match_count,
-            final_api_url=final_api_url,
-            failure_reason=failure_reason,
-            last_successful_page=last_successful_page,
-            failed_page=last_page if failure_reason else 0,
-        ))
+        return dict(
+            self._article_api_fast_path_success(
+                raw_items=all_raw_items,
+                response_match_count=response_match_count,
+                final_api_url=final_api_url,
+                failure_reason=failure_reason,
+                last_successful_page=last_successful_page,
+                failed_page=last_page if failure_reason else 0,
+            )
+        )
 
     async def _fetch_article_api_fast_path(
         self,
@@ -375,7 +434,9 @@ class PlaywrightArticleApiMixin:
         if not bool(getattr(self.thread, "playwright_article_api_fast_path", True)):
             return None
         context = self._desktop_context
-        request_context = getattr(context, "request", None) if context is not None else None
+        request_context = (
+            getattr(context, "request", None) if context is not None else None
+        )
         if request_context is None or not hasattr(request_context, "get"):
             return None
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
@@ -399,8 +460,12 @@ class PlaywrightArticleApiMixin:
                 start_page=1,
             )
         except Exception as exc:
-            self._record_article_api_failure(type(exc).__name__, status=type(exc).__name__)
-            self.thread.log(f"   Article API fast path fallback({base_kind}/{cid}): {exc}", 10)
+            self._record_article_api_failure(
+                type(exc).__name__, status=type(exc).__name__
+            )
+            self.thread.log(
+                f"   Article API fast path fallback({base_kind}/{cid}): {exc}", 10
+            )
             return None
 
     async def _supplement_article_api_pages(
@@ -422,20 +487,29 @@ class PlaywrightArticleApiMixin:
         last_payload: dict | None,
     ) -> list[dict]:
         self._article_supplement_result = {
-            "collection_status": "partial", "failure_reason": "pagination_unavailable",
-            "last_successful_page": 1, "failed_page": 2,
+            "collection_status": "partial",
+            "failure_reason": "pagination_unavailable",
+            "last_successful_page": 1,
+            "failed_page": 2,
         }
         if isinstance(last_payload, dict):
             list_count = article_api_list_count(last_payload)
             if not article_api_has_more_pages(last_payload, list_count):
-                self._article_supplement_result = {"collection_status": "complete", "failure_reason": "", "last_successful_page": 1, "failed_page": 0}
+                self._article_supplement_result = {
+                    "collection_status": "complete",
+                    "failure_reason": "",
+                    "last_successful_page": 1,
+                    "failed_page": 0,
+                }
                 return list(existing_items or [])
         elif not existing_items:
             return list(existing_items or [])
         if not str(getattr(self, "_article_api_auth_header", "") or "").strip():
             return list(existing_items or [])
         context = self._desktop_context
-        request_context = getattr(context, "request", None) if context is not None else None
+        request_context = (
+            getattr(context, "request", None) if context is not None else None
+        )
         if request_context is None or not hasattr(request_context, "get"):
             return list(existing_items or [])
         try:
@@ -457,7 +531,9 @@ class PlaywrightArticleApiMixin:
                 existing_items=list(existing_items or []),
             )
         except Exception as exc:
-            self._record_article_api_failure(type(exc).__name__, status=type(exc).__name__)
+            self._record_article_api_failure(
+                type(exc).__name__, status=type(exc).__name__
+            )
             return list(existing_items or [])
         if result is None:
             return list(existing_items or [])

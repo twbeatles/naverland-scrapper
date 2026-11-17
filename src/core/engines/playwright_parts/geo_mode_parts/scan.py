@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class PlaywrightGeoScanMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _run_geo(self):
@@ -31,7 +32,9 @@ class PlaywrightGeoScanMixin:
             f"지도 탐색 시작: lat={lat:.5f}, lon={lon:.5f}, zoom={zoom}, 자산={','.join(geo.asset_types)}"
         )
 
-        marker_handler, marker_pending_tasks, marker_stats = self._build_marker_handler(discovered)
+        marker_handler, marker_pending_tasks, marker_stats = self._build_marker_handler(
+            discovered
+        )
         marker_wait_count = 0
         marker_drain_timed_out = False
         self._desktop_page.on("response", marker_handler)
@@ -43,7 +46,9 @@ class PlaywrightGeoScanMixin:
                     if self.thread._should_stop():
                         break
                     try:
-                        await self._scan_geo_asset_type(asset_type, trade_type, lat, lon, zoom, geo)
+                        await self._scan_geo_asset_type(
+                            asset_type, trade_type, lat, lon, zoom, geo
+                        )
                     except Exception as exc:
                         self.thread._mark_geo_incomplete(
                             "geo_scan_failure",
@@ -58,7 +63,10 @@ class PlaywrightGeoScanMixin:
                 self._desktop_page.remove_listener("response", marker_handler)
             except Exception:
                 pass
-            marker_wait_count, marker_drain_timed_out = await self._drain_pending_response_tasks(
+            (
+                marker_wait_count,
+                marker_drain_timed_out,
+            ) = await self._drain_pending_response_tasks(
                 marker_pending_tasks,
                 label="geo_marker",
             )
@@ -80,12 +88,19 @@ class PlaywrightGeoScanMixin:
             reason_summary = self.thread._geo_incomplete_reason_summary() or "unknown"
             persistence_note = ""
             if not persistence_allowed:
-                persistence_note = " (safety mode: auto-register/history/disappeared skipped)"
+                persistence_note = (
+                    " (safety mode: auto-register/history/disappeared skipped)"
+                )
             self.thread.log(f"Geo incomplete: {reason_summary}{persistence_note}", 30)
         elif flushed_count:
-            self.thread.log(f"   geo discovered complexes registered: {flushed_count}", 10)
+            self.thread.log(
+                f"   geo discovered complexes registered: {flushed_count}", 10
+            )
 
-        ordered = sorted(discovered.values(), key=lambda row: (-int(row.get("count", 0)), row.get("complex_name", "")))
+        ordered = sorted(
+            discovered.values(),
+            key=lambda row: (-int(row.get("count", 0)), row.get("complex_name", "")),
+        )
         if not ordered:
             self.thread.log("지도 탐색 결과 단지를 찾지 못했습니다.", 30)
             return
@@ -93,7 +108,9 @@ class PlaywrightGeoScanMixin:
         processed_pairs = set()
         total = len(ordered) * max(1, len(self.thread.trade_types))
         current = 0
-        force_incomplete_history = bool(self.thread.geo_incomplete and not self.thread.geo_incomplete_safety_mode)
+        force_incomplete_history = bool(
+            self.thread.geo_incomplete and not self.thread.geo_incomplete_safety_mode
+        )
         for row in ordered:
             if self.thread._should_stop():
                 break
@@ -128,14 +145,26 @@ class PlaywrightGeoScanMixin:
                         marker_id=str(row.get("marker_id", "")),
                     )
                     if bool(result.get("block_like_redirect", False)):
-                        raise RuntimeError(str(result.get("block_reason", "") or "block-like redirect"))
+                        raise RuntimeError(
+                            str(result.get("block_reason", "") or "block-like redirect")
+                        )
                     if bool(result.get("capture_failed", False)):
-                        raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
+                        raise RuntimeError(
+                            str(
+                                result.get("failure_reason", "")
+                                or "capture failed after navigation"
+                            )
+                        )
                     count = int(result.get("count", 0))
                     complex_count += count
                     if not result_is_complete(result):
-                        self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
-                        self.thread._mark_geo_incomplete("article_partial", f"{asset_type}/{cid}/{trade_type}")
+                        self.thread.stats["collection_incomplete_count"] = (
+                            int(self.thread.stats.get("collection_incomplete_count", 0))
+                            + 1
+                        )
+                        self.thread._mark_geo_incomplete(
+                            "article_partial", f"{asset_type}/{cid}/{trade_type}"
+                        )
                         continue
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
@@ -144,26 +173,42 @@ class PlaywrightGeoScanMixin:
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
-                    reset_streak = getattr(self.thread, "_reset_block_detection_streak", None)
+                    reset_streak = getattr(
+                        self.thread, "_reset_block_detection_streak", None
+                    )
                     if callable(reset_streak):
                         reset_streak()
                 except Exception as exc:
-                    self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                    self.thread.stats["collection_incomplete_count"] = (
+                        int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                    )
                     self.thread.log(f"   {name}({trade_type}) 수집 실패: {exc}", 40)
                     is_block_like = getattr(self.thread, "_is_block_like_error", None)
-                    block_like = bool(is_block_like(exc)) if callable(is_block_like) else False
+                    block_like = (
+                        bool(is_block_like(exc)) if callable(is_block_like) else False
+                    )
                     if block_like:
-                        register_block = getattr(self.thread, "_register_block_detection", None)
-                        should_cooldown = bool(register_block(str(exc))) if callable(register_block) else False
+                        register_block = getattr(
+                            self.thread, "_register_block_detection", None
+                        )
+                        should_cooldown = (
+                            bool(register_block(str(exc)))
+                            if callable(register_block)
+                            else False
+                        )
                         if should_cooldown:
                             self.thread.log(
                                 f"   ⏸️ 차단 신호 3회 연속 감지, {int(self.thread._block_cooldown_seconds)}초 쿨다운",
                                 30,
                             )
-                            if not await self._sleep_async_interruptible(self.thread._block_cooldown_seconds):
+                            if not await self._sleep_async_interruptible(
+                                self.thread._block_cooldown_seconds
+                            ):
                                 break
                     else:
-                        reset_streak = getattr(self.thread, "_reset_block_detection_streak", None)
+                        reset_streak = getattr(
+                            self.thread, "_reset_block_detection_streak", None
+                        )
                         if callable(reset_streak):
                             reset_streak()
             if not attempted_trade_types:
@@ -178,7 +223,10 @@ class PlaywrightGeoScanMixin:
             if not persistence_allowed:
                 continue
             if not complex_trade_types and not force_incomplete_history:
-                self.thread.log(f"   {name}({asset_type}) 거래 성공 없음: 이력 기록을 생략합니다.", 30)
+                self.thread.log(
+                    f"   {name}({asset_type}) 거래 성공 없음: 이력 기록을 생략합니다.",
+                    30,
+                )
                 continue
             self.thread.record_crawl_history(
                 name,
@@ -194,7 +242,9 @@ class PlaywrightGeoScanMixin:
                 run_status=run_status,
             )
             if complex_trade_types:
-                self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
+                self.thread.complex_finished_signal.emit(
+                    name, cid, ",".join(complex_trade_types), int(complex_count)
+                )
         self.thread._finalize_disappeared_articles(processed_pairs)
 
     async def _scan_geo_asset_type(
@@ -210,10 +260,15 @@ class PlaywrightGeoScanMixin:
             return False
         # fin boundedComplexes first (no map dragging); new.land map below is fallback.
         if self._fin_front_api_enabled(asset_type):
-            fin_ok = await self._scan_geo_asset_type_fin(asset_type, trade_type, lat, lon, zoom, geo)
+            fin_ok = await self._scan_geo_asset_type_fin(
+                asset_type, trade_type, lat, lon, zoom, geo
+            )
             if fin_ok is not None:
                 return fin_ok
-            self.thread.log(f"   fin 지도 목록을 쓸 수 없어 new.land 지도로 전환({asset_type}/{trade_type})", 20)
+            self.thread.log(
+                f"   fin 지도 목록을 쓸 수 없어 new.land 지도로 전환({asset_type}/{trade_type})",
+                20,
+            )
         base_kind = "houses" if asset_type == "VL" else "complexes"
         # Live UI keeps trade filter as ``b=A1``; ``tradeTypes`` is dropped (2026-08-12).
         include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
@@ -237,13 +292,17 @@ class PlaywrightGeoScanMixin:
                 page_state = await self._classify_page_state(self._desktop_page)
                 if bool(page_state.get("block_like_redirect", False)):
                     last_failure = str(
-                        page_state.get("block_reason", "") or page_state.get("final_url", "") or "block-like redirect"
+                        page_state.get("block_reason", "")
+                        or page_state.get("final_url", "")
+                        or "block-like redirect"
                     )
                     continue
                 try:
                     await self._async_retry(
                         "geo canvas wait",
-                        lambda: self._desktop_page.wait_for_selector("canvas", timeout=15000),
+                        lambda: self._desktop_page.wait_for_selector(
+                            "canvas", timeout=15000
+                        ),
                     )
                 except Exception:
                     self.thread.log("geo canvas wait timeout", 10)
@@ -276,13 +335,17 @@ class PlaywrightGeoScanMixin:
                         f"   geo DOM 마커 전환 실패 → API로 {api_hits}건 확보, 스윕 계속",
                         20,
                     )
-                coords = build_grid_sweep_coords(lat, lon, zoom, rings=geo.rings, step_px=geo.step_px)
+                coords = build_grid_sweep_coords(
+                    lat, lon, zoom, rings=geo.rings, step_px=geo.step_px
+                )
                 dwell_ms = max(100, int(geo.dwell_ms))
                 total = len(coords)
                 for idx, (target_lat, target_lon) in enumerate(coords, 1):
                     if self.thread._should_stop():
                         break
-                    self.thread.log(f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10)
+                    self.thread.log(
+                        f"   {asset_type}/{trade_type} 탐색 {idx}/{total}", 10
+                    )
                     await self._drag_to_latlon(target_lat, target_lon)
                     try:
                         await self._desktop_page.mouse.wheel(0, -40)
@@ -310,6 +373,10 @@ class PlaywrightGeoScanMixin:
                     20,
                 )
                 continue
-        if await self._maybe_enable_headed_fallback(last_failure or f"geo {asset_type}/{trade_type}"):
-            return await self._scan_geo_asset_type(asset_type, trade_type, lat, lon, zoom, geo)
+        if await self._maybe_enable_headed_fallback(
+            last_failure or f"geo {asset_type}/{trade_type}"
+        ):
+            return await self._scan_geo_asset_type(
+                asset_type, trade_type, lat, lon, zoom, geo
+            )
         raise RuntimeError(f"block-like redirect: {last_failure or url}")

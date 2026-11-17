@@ -7,6 +7,7 @@ original path kept as a facade. These tests pin the contract:
 - each composed mixin actually inherits all of its part mixins, so no method
   is dropped by the split.
 """
+
 import os
 import sys
 import unittest
@@ -21,21 +22,33 @@ class TestDetailFetcherFacade(unittest.TestCase):
         import src.core.services.detail_fetcher as facade
 
         part_names = (
-            "apply", "artifacts", "detail_parse", "field_keys",
-            "field_merge", "front_api", "hydration", "money",
-            "orchestrator", "page_primitives", "text_extract",
+            "apply",
+            "artifacts",
+            "detail_parse",
+            "field_keys",
+            "field_merge",
+            "front_api",
+            "hydration",
+            "money",
+            "orchestrator",
+            "page_primitives",
+            "text_extract",
         )
         expected = set()
         base = os.path.join("src", "core", "services", "detail_fetcher_parts")
         for part in part_names:
-            tree = ast.parse(open(os.path.join(base, part + ".py"),
-                                  encoding="utf-8").read())
+            tree = ast.parse(
+                open(os.path.join(base, part + ".py"), encoding="utf-8").read()
+            )
             for node in tree.body:
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
-                                     ast.ClassDef)):
+                if isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
                     expected.add(node.name)
                 elif isinstance(node, (ast.Assign, ast.AnnAssign)):
-                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    targets = (
+                        node.targets if isinstance(node, ast.Assign) else [node.target]
+                    )
                     for target in targets:
                         if isinstance(target, ast.Name):
                             expected.add(target.id)
@@ -49,8 +62,9 @@ class TestDetailFetcherFacade(unittest.TestCase):
         from src.core.services.detail_fetcher_parts import apply as apply_part
         from src.core.services.detail_fetcher_parts import orchestrator
 
-        self.assertIs(facade.fetch_mobile_article_detail,
-                      orchestrator.fetch_mobile_article_detail)
+        self.assertIs(
+            facade.fetch_mobile_article_detail, orchestrator.fetch_mobile_article_detail
+        )
         self.assertIs(facade.apply_mobile_detail, apply_part.apply_mobile_detail)
 
 
@@ -63,8 +77,7 @@ class TestManagersFacade(unittest.TestCase):
             self.assertTrue(hasattr(facade, name), name)
         # singleton identity must be preserved for `patch("src.core.managers.settings")`
         self.assertIs(facade.settings, settings_manager.settings)
-        self.assertIs(facade.DEFAULT_SETTINGS,
-                      schedule_defaults.DEFAULT_SETTINGS)
+        self.assertIs(facade.DEFAULT_SETTINGS, schedule_defaults.DEFAULT_SETTINGS)
 
     def test_manager_classes_live_in_dedicated_parts(self):
         import src.core.managers as facade
@@ -92,11 +105,14 @@ class TestMixinComposition(unittest.TestCase):
             ComplexDatabaseValueCoerceMixin,
         )
 
-        for part in (ComplexDatabaseRecoveryMixin,
-                     ComplexDatabaseSchemaNormalizeMixin,
-                     ComplexDatabaseValueCoerceMixin):
-            self.assertTrue(issubclass(ComplexDatabaseCoercionMixin, part),
-                            part.__name__)
+        for part in (
+            ComplexDatabaseRecoveryMixin,
+            ComplexDatabaseSchemaNormalizeMixin,
+            ComplexDatabaseValueCoerceMixin,
+        ):
+            self.assertTrue(
+                issubclass(ComplexDatabaseCoercionMixin, part), part.__name__
+            )
 
     def test_stats_schedule_composes_all_parts(self):
         from src.ui.app_parts.stats_schedule import AppStatsScheduleMixin
@@ -108,11 +124,13 @@ class TestMixinComposition(unittest.TestCase):
             stats_history,
         )
 
-        for part in (geo_assets.AppStatsScheduleGeoAssetsMixin,
-                     stats_history.AppStatsScheduleStatsHistoryMixin,
-                     schedule_config.AppStatsScheduleConfigMixin,
-                     schedule_run.AppStatsScheduleRunMixin,
-                     group_state.AppStatsScheduleGroupStateMixin):
+        for part in (
+            geo_assets.AppStatsScheduleGeoAssetsMixin,
+            stats_history.AppStatsScheduleStatsHistoryMixin,
+            schedule_config.AppStatsScheduleConfigMixin,
+            schedule_run.AppStatsScheduleRunMixin,
+            group_state.AppStatsScheduleGroupStateMixin,
+        ):
             self.assertTrue(issubclass(AppStatsScheduleMixin, part), part.__name__)
         self.assertEqual(AppStatsScheduleMixin.SCHEDULE_CATCHUP_WINDOW_MINUTES, 10)
 
@@ -129,14 +147,16 @@ class TestMixinComposition(unittest.TestCase):
             updates,
         )
 
-        for part in (bootstrap.AppLifecycleBootstrapMixin,
-                     menu.AppLifecycleMenuMixin,
-                     updates.AppLifecycleUpdatesMixin,
-                     shortcuts_actions.AppLifecycleShortcutsActionsMixin,
-                     tray.AppLifecycleTrayMixin,
-                     timers_events.AppLifecycleTimersEventsMixin,
-                     notify.AppLifecycleNotifyMixin,
-                     shutdown.AppLifecycleShutdownMixin):
+        for part in (
+            bootstrap.AppLifecycleBootstrapMixin,
+            menu.AppLifecycleMenuMixin,
+            updates.AppLifecycleUpdatesMixin,
+            shortcuts_actions.AppLifecycleShortcutsActionsMixin,
+            tray.AppLifecycleTrayMixin,
+            timers_events.AppLifecycleTimersEventsMixin,
+            notify.AppLifecycleNotifyMixin,
+            shutdown.AppLifecycleShutdownMixin,
+        ):
             self.assertTrue(issubclass(AppLifecycleMixin, part), part.__name__)
 
 

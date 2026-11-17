@@ -5,7 +5,9 @@ import unittest
 from src.utils.mixin_rebind import iter_mixin_callable_names
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestMixinMethodRebinding(unittest.TestCase):
     @staticmethod
     def _mixin_callable_names(mixin_cls):
@@ -120,7 +122,11 @@ class TestMixinMethodRebinding(unittest.TestCase):
     def test_crawler_thread_target_helpers_are_rebound_and_stale_entry_removed(self):
         from src.core.crawler import CrawlerThread
 
-        for name in ("_normalize_target_asset_type", "_normalize_target_entry", "_iter_targets"):
+        for name in (
+            "_normalize_target_asset_type",
+            "_normalize_target_entry",
+            "_iter_targets",
+        ):
             self.assertIn(name, CrawlerThread.__dict__)
             self.assertIsNotNone(inspect.getattr_static(CrawlerThread, name, None))
         self.assertNotIn("_is_confirmed_empty_state", CrawlerThread.__dict__)
@@ -128,9 +134,15 @@ class TestMixinMethodRebinding(unittest.TestCase):
     def test_playwright_filtered_detail_helper_is_rebound(self):
         from src.core.engines.playwright_engine import PlaywrightCrawlerEngine
 
-        self.assertIn("_process_raw_items_with_filtered_details", PlaywrightCrawlerEngine.__dict__)
+        self.assertIn(
+            "_process_raw_items_with_filtered_details", PlaywrightCrawlerEngine.__dict__
+        )
         self.assertIsNotNone(
-            inspect.getattr_static(PlaywrightCrawlerEngine, "_process_raw_items_with_filtered_details", None)
+            inspect.getattr_static(
+                PlaywrightCrawlerEngine,
+                "_process_raw_items_with_filtered_details",
+                None,
+            )
         )
 
     def test_playwright_engine_exports_article_api_helpers(self):
@@ -156,9 +168,13 @@ class TestMixinMethodRebinding(unittest.TestCase):
             build_article_api_url,
         ]
         self.assertTrue(all(obj is not None for obj in public_objects))
-        self.assertIn("_supplement_article_api_pages", PlaywrightArticleApiMixin.__dict__)
+        self.assertIn(
+            "_supplement_article_api_pages", PlaywrightArticleApiMixin.__dict__
+        )
         self.assertIn("_record_article_api_failure", PlaywrightArticleApiMixin.__dict__)
-        self.assertIn("_mark_article_api_page_cap_truncation", PlaywrightArticleApiMixin.__dict__)
+        self.assertIn(
+            "_mark_article_api_page_cap_truncation", PlaywrightArticleApiMixin.__dict__
+        )
 
     def test_facade_modules_keep_public_imports(self):
         from src.core.database_parts.article_ops import ComplexDatabaseArticleOpsMixin

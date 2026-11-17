@@ -8,9 +8,13 @@ if TYPE_CHECKING:
 
 class AppStatsScheduleGeoAssetsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
+
     @staticmethod
-    def _normalize_geo_asset_types(asset_types, *, default_to_all: bool = True) -> list[str]:
+    def _normalize_geo_asset_types(
+        asset_types, *, default_to_all: bool = True
+    ) -> list[str]:
         normalized_assets = []
         for asset in asset_types or []:
             token = str(asset or "").strip().upper()
@@ -22,9 +26,15 @@ class AppStatsScheduleGeoAssetsMixin:
 
     def _selected_schedule_geo_assets(self: Any) -> list[str]:
         selected = []
-        if getattr(self, "schedule_geo_asset_apt", None) and self.schedule_geo_asset_apt.isChecked():
+        if (
+            getattr(self, "schedule_geo_asset_apt", None)
+            and self.schedule_geo_asset_apt.isChecked()
+        ):
             selected.append("APT")
-        if getattr(self, "schedule_geo_asset_vl", None) and self.schedule_geo_asset_vl.isChecked():
+        if (
+            getattr(self, "schedule_geo_asset_vl", None)
+            and self.schedule_geo_asset_vl.isChecked()
+        ):
             selected.append("VL")
         return selected
 

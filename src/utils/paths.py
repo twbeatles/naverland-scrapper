@@ -84,7 +84,15 @@ def get_history_path() -> Path:
 
 
 def _refresh_path_constants() -> None:
-    global BASE_DIR, DATA_DIR, LOG_DIR, DB_PATH, SETTINGS_PATH, PRESETS_PATH, CACHE_PATH, HISTORY_PATH
+    global \
+        BASE_DIR, \
+        DATA_DIR, \
+        LOG_DIR, \
+        DB_PATH, \
+        SETTINGS_PATH, \
+        PRESETS_PATH, \
+        CACHE_PATH, \
+        HISTORY_PATH
     base = get_base_dir()
     BASE_DIR = base
     DATA_DIR = get_data_dir()
@@ -214,7 +222,9 @@ def _migrate_legacy_frozen_runtime_data():
                 _migrate_sqlite_file(source, target)
             else:
                 shutil.copy2(source, target)
-            logger.info(f"레거시 실행 폴더 데이터 마이그레이션 완료: {source} -> {target}")
+            logger.info(
+                f"레거시 실행 폴더 데이터 마이그레이션 완료: {source} -> {target}"
+            )
         except Exception as e:
             logger.warning(f"레거시 실행 폴더 데이터 마이그레이션 실패 ({source}): {e}")
 

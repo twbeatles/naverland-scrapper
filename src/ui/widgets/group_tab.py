@@ -64,7 +64,9 @@ class GroupTab(QWidget):
         self.group_list.currentItemChanged.connect(self._on_group_changed)
         gl_layout.addWidget(self.group_list, 1)
 
-        self.group_empty_label = QLabel("아직 묶음이 없습니다.\n아래 「새 묶음」으로 만들어 보세요.")
+        self.group_empty_label = QLabel(
+            "아직 묶음이 없습니다.\n아래 「새 묶음」으로 만들어 보세요."
+        )
         self.group_empty_label.setObjectName("listPlaceholder")
         self.group_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.group_empty_label.setWordWrap(True)
@@ -78,7 +80,9 @@ class GroupTab(QWidget):
         self.btn_create_group.clicked.connect(self._create_group)
         self.btn_delete_group = QPushButton("묶음 삭제")
         self.btn_delete_group.setObjectName("dangerBtn")
-        self.btn_delete_group.setToolTip("고른 묶음을 지웁니다. 안에 든 단지 자체는 「내 단지」에 그대로 남습니다.")
+        self.btn_delete_group.setToolTip(
+            "고른 묶음을 지웁니다. 안에 든 단지 자체는 「내 단지」에 그대로 남습니다."
+        )
         self.btn_delete_group.clicked.connect(self._delete_group)
         group_btns.addWidget(self.btn_create_group, 1)
         group_btns.addWidget(self.btn_delete_group)
@@ -94,11 +98,15 @@ class GroupTab(QWidget):
         right_btn.setSpacing(_XS)
         self.btn_add_complex = QPushButton("단지 넣기")
         self.btn_add_complex.setObjectName("secondaryBtn")
-        self.btn_add_complex.setToolTip("「내 단지」에 저장된 단지 중에서 골라 이 묶음에 넣습니다.")
+        self.btn_add_complex.setToolTip(
+            "「내 단지」에 저장된 단지 중에서 골라 이 묶음에 넣습니다."
+        )
         self.btn_add_complex.clicked.connect(self._add_to_group)
         self.btn_remove_complex = QPushButton("선택 빼기")
         self.btn_remove_complex.setObjectName("secondaryBtn")
-        self.btn_remove_complex.setToolTip("고른 단지를 이 묶음에서만 뺍니다. 단지 자체는 지워지지 않습니다.")
+        self.btn_remove_complex.setToolTip(
+            "고른 단지를 이 묶음에서만 뺍니다. 단지 자체는 지워지지 않습니다."
+        )
         self.btn_remove_complex.clicked.connect(self._remove_from_group)
         right_btn.addWidget(self.btn_add_complex)
         right_btn.addWidget(self.btn_remove_complex)
@@ -107,14 +115,18 @@ class GroupTab(QWidget):
 
         self.complex_table = QTableWidget()
         self.complex_table.setColumnCount(5)
-        self.complex_table.setHorizontalHeaderLabels(["ID", "종류", "단지 이름", "단지 번호", "메모"])
+        self.complex_table.setHorizontalHeaderLabels(
+            ["ID", "종류", "단지 이름", "단지 번호", "메모"]
+        )
         self.complex_table.setColumnHidden(0, True)
         complex_header = self.complex_table.horizontalHeader()
         if complex_header is not None:
             complex_header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.complex_table.setAlternatingRowColors(True)
         self.complex_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.complex_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.complex_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         install_token_labels(self.complex_table, 1, asset_label)
         self.complex_table.itemSelectionChanged.connect(self._update_action_state)
         right_l.addWidget(self.complex_table, 1)
@@ -139,10 +151,14 @@ class GroupTab(QWidget):
         self.group_empty_label.setVisible(not has_groups)
         self.btn_delete_group.setEnabled(has_group)
         self.btn_add_complex.setEnabled(has_group)
-        self.btn_remove_complex.setEnabled(has_group and self.complex_table.currentRow() >= 0)
+        self.btn_remove_complex.setEnabled(
+            has_group and self.complex_table.currentRow() >= 0
+        )
         if not has_group:
             self.complex_empty.set_text(
-                "묶음을 먼저 골라 주세요" if has_groups else "묶음을 먼저 만들어 주세요",
+                "묶음을 먼저 골라 주세요"
+                if has_groups
+                else "묶음을 먼저 만들어 주세요",
                 "왼쪽에서 묶음을 고르면 들어 있는 단지가 여기에 보입니다."
                 if has_groups
                 else "왼쪽 아래 「새 묶음」을 눌러 시작합니다.",
@@ -206,7 +222,9 @@ class GroupTab(QWidget):
         self._on_group_changed(self.group_list.currentItem())
 
     def _create_group(self):
-        name, ok = QInputDialog.getText(self, "새 묶음", "묶음 이름 (예: 관심 단지, 강남권)")
+        name, ok = QInputDialog.getText(
+            self, "새 묶음", "묶음 이름 (예: 관심 단지, 강남권)"
+        )
         name = str(name or "").strip()
         if not ok or not name:
             return
@@ -219,7 +237,11 @@ class GroupTab(QWidget):
                     break
             self.groups_updated.emit()
         else:
-            QMessageBox.warning(self, "만들지 못했습니다", "같은 이름의 묶음이 이미 있는지 확인해 주세요.")
+            QMessageBox.warning(
+                self,
+                "만들지 못했습니다",
+                "같은 이름의 묶음이 이미 있는지 확인해 주세요.",
+            )
 
     def _delete_group(self):
         item = self.group_list.currentItem()
@@ -249,18 +271,26 @@ class GroupTab(QWidget):
         for row_idx, row_data in enumerate(rows):
             db_id, name, asset_type, cid, memo = self._normalize_complex_row(row_data)
             self.complex_table.setItem(row_idx, 0, QTableWidgetItem(str(db_id)))
-            self.complex_table.setItem(row_idx, 1, QTableWidgetItem(str(asset_type or "")))
+            self.complex_table.setItem(
+                row_idx, 1, QTableWidgetItem(str(asset_type or ""))
+            )
             self.complex_table.setItem(row_idx, 2, QTableWidgetItem(str(name or "")))
             self.complex_table.setItem(row_idx, 3, QTableWidgetItem(str(cid or "")))
             self.complex_table.setItem(row_idx, 4, QTableWidgetItem(str(memo or "")))
         self.complex_table.setUpdatesEnabled(True)
-        self.complex_box.setTitle(f"묶음에 든 단지 · {len(rows)}곳" if rows else "묶음에 든 단지")
+        self.complex_box.setTitle(
+            f"묶음에 든 단지 · {len(rows)}곳" if rows else "묶음에 든 단지"
+        )
         self._update_action_state()
 
     def _add_to_group(self):
         group_item = self.group_list.currentItem()
         if not group_item:
-            QMessageBox.information(self, "묶음을 골라 주세요", "왼쪽에서 단지를 넣을 묶음을 먼저 골라 주세요.")
+            QMessageBox.information(
+                self,
+                "묶음을 골라 주세요",
+                "왼쪽에서 단지를 넣을 묶음을 먼저 골라 주세요.",
+            )
             return
 
         gid = group_item.data(Qt.ItemDataRole.UserRole)

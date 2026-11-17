@@ -29,8 +29,6 @@ from src.utils.paths import DB_PATH  # noqa: F401  # star-carried (do not remove
 logger = get_logger("DB")
 
 
-
-
 class ComplexDatabase(
     ComplexDatabaseCoercionMixin,
     ComplexDatabaseSchemaMixin,
@@ -52,7 +50,6 @@ class ComplexDatabase(
         "article_favorites",
         "article_alert_log",
     )
-
 
 
 rebind_inherited_methods(

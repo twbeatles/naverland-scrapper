@@ -19,7 +19,11 @@ def parse_kr_money_to_won(text: str) -> int | None:
         except (TypeError, ValueError):
             pass
         tail = src.split("억", 1)[1]
-        man_match = re.search(r"(\d+)만", tail) or re.search(r"^(\d+)$", tail) or re.search(r"(\d+)천", tail)
+        man_match = (
+            re.search(r"(\d+)만", tail)
+            or re.search(r"^(\d+)$", tail)
+            or re.search(r"(\d+)천", tail)
+        )
         if man_match:
             try:
                 man = int(man_match.group(1))

@@ -20,7 +20,9 @@ class TestMapGeometry(unittest.TestCase):
     def test_grid_sweep_coords_are_deduped_and_clamped(self):
         coords = build_grid_sweep_coords(37.5608, 126.9888, 15, rings=1, step_px=480)
         self.assertGreaterEqual(len(coords), 5)
-        self.assertEqual(len(coords), len(set((round(a, 6), round(b, 6)) for a, b in coords)))
+        self.assertEqual(
+            len(coords), len(set((round(a, 6), round(b, 6)) for a, b in coords))
+        )
         for lat, lon in coords:
             self.assertEqual((lat, lon), clamp_korea(lat, lon))
 

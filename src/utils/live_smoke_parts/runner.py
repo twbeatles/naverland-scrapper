@@ -47,7 +47,11 @@ async def _run_live_smoke_async(
     include_detail_fields: bool = False,
 ) -> tuple[bool, list[str], str]:
     if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
-        return False, ["Playwright is not installed."], str(article_id or DEFAULT_SMOKE_ARTICLE_ID)
+        return (
+            False,
+            ["Playwright is not installed."],
+            str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
+        )
 
     controller = await async_playwright().start()
     browser = None
@@ -66,7 +70,9 @@ async def _run_live_smoke_async(
                 )
                 browser_source = f"local_chrome:{chrome_path}"
             except Exception as exc:
-                messages.append(f"[warn] local Chrome launch failed, fallback to Chromium: {exc}")
+                messages.append(
+                    f"[warn] local Chrome launch failed, fallback to Chromium: {exc}"
+                )
         if browser is None:
             browser = await controller.chromium.launch(headless=bool(headless))
             browser_source = f"playwright_chromium:{getattr(controller.chromium, 'executable_path', '') or ''}"
@@ -78,7 +84,9 @@ async def _run_live_smoke_async(
             locale="ko-KR",
             user_agent=DESKTOP_USER_AGENT,
         )
-        messages.append(f"[info] browser={browser_source} mode={'headless' if headless else 'headed'}")
+        messages.append(
+            f"[info] browser={browser_source} mode={'headless' if headless else 'headed'}"
+        )
         home_page = await _new_smoke_page(context)
         try:
             home_ok, home_messages = await _run_home_probes(
@@ -93,7 +101,12 @@ async def _run_live_smoke_async(
 
         fin_page = await _new_smoke_page(context)
         try:
-            fin_ok, fin_line, fin_sample_article_id, _fin_count = await _run_fin_contract_probe(
+            (
+                fin_ok,
+                fin_line,
+                fin_sample_article_id,
+                _fin_count,
+            ) = await _run_fin_contract_probe(
                 fin_page,
                 complex_id,
                 timeout_ms,
@@ -102,22 +115,36 @@ async def _run_live_smoke_async(
             overall_ok = overall_ok and fin_ok
         finally:
             await fin_page.close()
-        if fin_sample_article_id and (not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID):
+        if fin_sample_article_id and (
+            not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID
+        ):
             effective_article_id = fin_sample_article_id
 
-        article_api_ok, article_api_line, api_sample_article_id, _api_article_count = await _run_article_api_probe(
+        (
+            article_api_ok,
+            article_api_line,
+            api_sample_article_id,
+            _api_article_count,
+        ) = await _run_article_api_probe(
             context,
             complex_id,
             timeout_ms,
         )
         messages.append(article_api_line)
         overall_ok = overall_ok and article_api_ok
-        if api_sample_article_id and (not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID):
+        if api_sample_article_id and (
+            not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID
+        ):
             effective_article_id = api_sample_article_id
 
         complex_page = await _new_smoke_page(context)
         try:
-            complex_ok, complex_line, sample_article_id, _article_count = await _run_complex_probe_detail(
+            (
+                complex_ok,
+                complex_line,
+                sample_article_id,
+                _article_count,
+            ) = await _run_complex_probe_detail(
                 complex_page,
                 complex_id,
                 timeout_ms,
@@ -127,12 +154,16 @@ async def _run_live_smoke_async(
         finally:
             await complex_page.close()
 
-        if sample_article_id and (not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID):
+        if sample_article_id and (
+            not effective_article_id or effective_article_id == DEFAULT_SMOKE_ARTICLE_ID
+        ):
             effective_article_id = sample_article_id
 
         detail_page = await _new_smoke_page(context)
         try:
-            detail_ok, detail_line = await _run_detail_probe(detail_page, effective_article_id, timeout_ms)
+            detail_ok, detail_line = await _run_detail_probe(
+                detail_page, effective_article_id, timeout_ms
+            )
             messages.append(detail_line)
             overall_ok = overall_ok and detail_ok
         finally:
@@ -163,7 +194,9 @@ async def _run_live_smoke_async(
                 await geo_contract_page.close()
             geo_page = await _new_smoke_page(context)
             try:
-                geo_ok, geo_line = await _run_geo_marker_probe(geo_page, complex_id, timeout_ms)
+                geo_ok, geo_line = await _run_geo_marker_probe(
+                    geo_page, complex_id, timeout_ms
+                )
                 messages.append(geo_line)
                 overall_ok = overall_ok and geo_ok
             finally:
@@ -223,7 +256,9 @@ def run_live_smoke(
             messages = [f"[fail] [live-smoke] invalid_async_result={async_result!r}"]
     except Exception as exc:
         ok = False
-        messages = [f"[fail] [live-smoke] unexpected_exception={type(exc).__name__}: {exc}"]
+        messages = [
+            f"[fail] [live-smoke] unexpected_exception={type(exc).__name__}: {exc}"
+        ]
     messages.insert(0, _runtime_info_line(runtime_meta))
     messages.append(
         f"[info] requested_article_id={requested_article_id or '-'} "
@@ -241,8 +276,12 @@ def run_live_smoke(
                 {
                     "ok": bool(ok),
                     "complex_id": str(complex_id or DEFAULT_SMOKE_COMPLEX_ID),
-                    "article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
-                    "effective_article_id": str(effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID),
+                    "article_id": str(
+                        effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID
+                    ),
+                    "effective_article_id": str(
+                        effective_article_id or article_id or DEFAULT_SMOKE_ARTICLE_ID
+                    ),
                     "requested_article_id": str(article_id or DEFAULT_SMOKE_ARTICLE_ID),
                     "runtime_source": runtime_meta["runtime_source"],
                     "executable": runtime_meta["executable"],

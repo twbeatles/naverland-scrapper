@@ -15,12 +15,15 @@ ResultRow = dict[str, Any]
 
 class CrawlerTabControlSetupMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _configure_filter_spinbox(self: Any, spinbox):
         """Compact spinbox policy for narrow control panel / HiDPI scaling."""
         spinbox.setMinimumWidth(96)
-        spinbox.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        spinbox.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         spinbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def _field_label(self: Any, text: str) -> QLabel:
@@ -28,7 +31,9 @@ class CrawlerTabControlSetupMixin:
         lbl.setObjectName("fieldLabel")
         return lbl
 
-    def _make_disclosure(self: Any, title: str, content: QWidget, *, expanded: bool = False):
+    def _make_disclosure(
+        self: Any, title: str, content: QWidget, *, expanded: bool = False
+    ):
         """접었다 펼치는 보조 영역. 닫혀 있을 때는 제목 한 줄만 차지한다."""
         button = QPushButton()
         button.setObjectName("disclosureBtn")
@@ -140,16 +145,27 @@ class CrawlerTabControlSetupMixin:
             price_grid.addWidget(spin_max, row, 3)
 
         self.spin_trade_min = _price_spin(0, 1000, "매매 최소 가격")
-        self.spin_trade_max = _price_spin(100000, 1000, "매매 최대 가격 (100,000만원 = 10억)")
+        self.spin_trade_max = _price_spin(
+            100000, 1000, "매매 최대 가격 (100,000만원 = 10억)"
+        )
         _price_row(0, "매매", self.spin_trade_min, self.spin_trade_max)
 
         self.spin_jeonse_min = _price_spin(0, 1000, "전세 최소 가격")
-        self.spin_jeonse_max = _price_spin(50000, 1000, "전세 최대 가격 (50,000만원 = 5억)")
+        self.spin_jeonse_max = _price_spin(
+            50000, 1000, "전세 최대 가격 (50,000만원 = 5억)"
+        )
         _price_row(1, "전세", self.spin_jeonse_min, self.spin_jeonse_max)
 
         self.spin_monthly_deposit_min = _price_spin(0, 1000, "월세 보증금 최소 금액")
-        self.spin_monthly_deposit_max = _price_spin(50000, 1000, "월세 보증금 최대 금액")
-        _price_row(2, "월세 보증금", self.spin_monthly_deposit_min, self.spin_monthly_deposit_max)
+        self.spin_monthly_deposit_max = _price_spin(
+            50000, 1000, "월세 보증금 최대 금액"
+        )
+        _price_row(
+            2,
+            "월세 보증금",
+            self.spin_monthly_deposit_min,
+            self.spin_monthly_deposit_max,
+        )
 
         self.spin_monthly_rent_min = _price_spin(0, 100, "매달 내는 월세 최소 금액")
         self.spin_monthly_rent_max = _price_spin(5000, 100, "매달 내는 월세 최대 금액")
@@ -215,14 +231,18 @@ class CrawlerTabControlSetupMixin:
         self.btn_find_complex = QPushButton("단지 찾기")
         self.btn_find_complex.setIcon(FIF.SEARCH.icon())
         self.btn_find_complex.setObjectName("secondaryBtn")
-        self.btn_find_complex.setToolTip("단지 이름이나 지역으로 검색해 목록에 추가합니다. (예: 래미안, 반포자이)")
+        self.btn_find_complex.setToolTip(
+            "단지 이름이나 지역으로 검색해 목록에 추가합니다. (예: 래미안, 반포자이)"
+        )
         self.btn_find_complex.clicked.connect(self._show_keyword_search_dialog)
         add_row.addWidget(self.btn_find_complex, 1)
 
         self.btn_load_complex = QPushButton("불러오기")
         self.btn_load_complex.setIcon(FIF.FOLDER.icon())
         self.btn_load_complex.setObjectName("secondaryBtn")
-        self.btn_load_complex.setToolTip("저장해 둔 단지나 이전에 수집한 목록을 불러옵니다.")
+        self.btn_load_complex.setToolTip(
+            "저장해 둔 단지나 이전에 수집한 목록을 불러옵니다."
+        )
         load_menu = QMenu(self.btn_load_complex)
         load_menu.addAction("내 단지에서 고르기", self._show_db_load_dialog)
         load_menu.addAction("단지 묶음 불러오기", self._show_group_load_dialog)
@@ -240,7 +260,9 @@ class CrawlerTabControlSetupMixin:
         input_layout.setSpacing(4)
         self.input_name = QLineEdit()
         self.input_name.setPlaceholderText("단지 이름 (선택)")
-        self.input_name.setToolTip("목록에 표시할 이름입니다. 비워 두면 번호로 표시합니다.")
+        self.input_name.setToolTip(
+            "목록에 표시할 이름입니다. 비워 두면 번호로 표시합니다."
+        )
         self.input_id = QLineEdit()
         self.input_id.setPlaceholderText("단지 번호 또는 주소")
         self.input_id.setToolTip(
@@ -269,7 +291,9 @@ class CrawlerTabControlSetupMixin:
         input_layout.addWidget(self.combo_manual_asset)
         input_layout.addWidget(btn_add)
 
-        self.btn_manual_toggle = self._make_disclosure("단지 번호로 직접 추가", manual, expanded=False)
+        self.btn_manual_toggle = self._make_disclosure(
+            "단지 번호로 직접 추가", manual, expanded=False
+        )
         cl.addWidget(self.btn_manual_toggle)
         cl.addWidget(manual)
 
@@ -292,7 +316,9 @@ class CrawlerTabControlSetupMixin:
         self.table_list.setColumnWidth(2, 72)
         self.table_list.setMinimumHeight(140)
         self.table_list.setAlternatingRowColors(True)
-        self.table_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_list.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.table_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         list_vheader = self.table_list.verticalHeader()
         if list_vheader is not None:
@@ -302,7 +328,9 @@ class CrawlerTabControlSetupMixin:
         )
         self.table_list.doubleClicked.connect(self._open_complex_url)
         self.table_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table_list.customContextMenuRequested.connect(self._show_task_list_context_menu)
+        self.table_list.customContextMenuRequested.connect(
+            self._show_task_list_context_menu
+        )
         from src.ui.widgets.components import install_token_labels
         from src.utils.ui_labels import asset_label
 
@@ -318,15 +346,21 @@ class CrawlerTabControlSetupMixin:
         manage_btn.addStretch()
         self.btn_list_save = QPushButton("내 단지에 저장")
         self.btn_list_save.setObjectName("secondaryBtn")
-        self.btn_list_save.setToolTip("이 목록을 「내 단지」에 저장해 두고 다음에 다시 불러올 수 있습니다.")
+        self.btn_list_save.setToolTip(
+            "이 목록을 「내 단지」에 저장해 두고 다음에 다시 불러올 수 있습니다."
+        )
         self.btn_list_save.clicked.connect(self._save_to_db)
         self.btn_list_delete = QPushButton("선택 빼기")
         self.btn_list_delete.setObjectName("secondaryBtn")
-        self.btn_list_delete.setToolTip("선택한 단지를 목록에서 뺍니다. 저장된 데이터는 지워지지 않습니다.")
+        self.btn_list_delete.setToolTip(
+            "선택한 단지를 목록에서 뺍니다. 저장된 데이터는 지워지지 않습니다."
+        )
         self.btn_list_delete.clicked.connect(self._delete_complex)
         self.btn_list_clear = QPushButton("모두 비우기")
         self.btn_list_clear.setObjectName("secondaryBtn")
-        self.btn_list_clear.setToolTip("목록을 비웁니다. 저장된 데이터는 지워지지 않습니다.")
+        self.btn_list_clear.setToolTip(
+            "목록을 비웁니다. 저장된 데이터는 지워지지 않습니다."
+        )
         self.btn_list_clear.clicked.connect(self._clear_list)
         manage_btn.addWidget(self.btn_list_save)
         manage_btn.addWidget(self.btn_list_delete)
@@ -390,7 +424,9 @@ class CrawlerTabControlSetupMixin:
         self.speed_slider.speed_changed.connect(self._on_speed_changed)
         layout.addWidget(self.speed_slider)
 
-        hint = QLabel("너무 빠르면 네이버에서 잠시 접속을 막을 수 있습니다. 보통 이하를 권장합니다.")
+        hint = QLabel(
+            "너무 빠르면 네이버에서 잠시 접속을 막을 수 있습니다. 보통 이하를 권장합니다."
+        )
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -414,7 +450,9 @@ class CrawlerTabControlSetupMixin:
         self.btn_stop.setObjectName("dangerBtn")
         self.btn_stop.setEnabled(False)
         self.btn_stop.setMinimumHeight(40)
-        self.btn_stop.setToolTip("진행 중인 수집을 멈춥니다. 그때까지 모은 결과는 남습니다. (Ctrl+Shift+R)")
+        self.btn_stop.setToolTip(
+            "진행 중인 수집을 멈춥니다. 그때까지 모은 결과는 남습니다. (Ctrl+Shift+R)"
+        )
         self.btn_stop.clicked.connect(self.stop_crawling)
 
         self.btn_save = QPushButton("결과 저장")

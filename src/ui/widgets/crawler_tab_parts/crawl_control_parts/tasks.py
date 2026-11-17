@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabTaskOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     @staticmethod
@@ -42,7 +43,9 @@ class CrawlerTabTaskOpsMixin:
             if index >= 0:
                 self.combo_manual_asset.setCurrentIndex(index)
         self.input_id.setText(cid)
-        self.status_message.emit(f"주소에서 단지 번호 {cid}을(를) 읽었습니다. 추가 버튼을 눌러 주세요.")
+        self.status_message.emit(
+            f"주소에서 단지 번호 {cid}을(를) 읽었습니다. 추가 버튼을 눌러 주세요."
+        )
 
     def _add_complex(self: Any):
         name = self.input_name.text().strip()
@@ -80,7 +83,9 @@ class CrawlerTabTaskOpsMixin:
         for row in range(self.table_list.rowCount()):
             item = self.table_list.item(row, 1)
             asset_item = self.table_list.item(row, 2)
-            row_asset = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
+            row_asset = self._normalize_task_asset_type(
+                asset_item.text() if asset_item else "APT"
+            )
             if item and item.text().strip() == cid_text and row_asset == asset_token:
                 return row
         return -1
@@ -90,7 +95,9 @@ class CrawlerTabTaskOpsMixin:
         self.table_list.insertRow(row)
         self.table_list.setItem(row, 0, QTableWidgetItem(str(name)))
         self.table_list.setItem(row, 1, QTableWidgetItem(str(cid)))
-        self.table_list.setItem(row, 2, QTableWidgetItem(self._normalize_task_asset_type(asset_type)))
+        self.table_list.setItem(
+            row, 2, QTableWidgetItem(self._normalize_task_asset_type(asset_type))
+        )
 
     def _emit_task_duplicate_skip(self: Any, name, cid, asset_type="APT"):
         asset_token = self._normalize_task_asset_type(asset_type)
@@ -144,7 +151,9 @@ class CrawlerTabTaskOpsMixin:
                 removed += 1
                 continue
             seen.add(dedupe_key)
-            deduped.append((self._normalize_task_name(name, cid_text), cid_text, asset_token))
+            deduped.append(
+                (self._normalize_task_name(name, cid_text), cid_text, asset_token)
+            )
         return deduped, removed
 
     def _normalize_task_table(self: Any):
@@ -157,7 +166,9 @@ class CrawlerTabTaskOpsMixin:
                 (
                     name_item.text().strip() if name_item else "",
                     cid_item.text().strip() if cid_item else "",
-                    self._normalize_task_asset_type(asset_item.text() if asset_item else "APT"),
+                    self._normalize_task_asset_type(
+                        asset_item.text() if asset_item else "APT"
+                    ),
                 )
             )
         deduped, removed = self._dedupe_target_entries(rows)
@@ -175,7 +186,9 @@ class CrawlerTabTaskOpsMixin:
         self.table_list.setRowCount(0)
 
     def _delete_complex(self: Any):
-        rows = sorted({idx.row() for idx in self.table_list.selectedIndexes()}, reverse=True)
+        rows = sorted(
+            {idx.row() for idx in self.table_list.selectedIndexes()}, reverse=True
+        )
         if not rows:
             row = self.table_list.currentRow()
             rows = [row] if row >= 0 else []
@@ -204,14 +217,20 @@ class CrawlerTabTaskOpsMixin:
         failed_count = 0
         total = self.table_list.rowCount()
         if total <= 0:
-            self.status_message.emit("저장할 단지가 없습니다. 먼저 목록에 단지를 추가해 주세요.")
+            self.status_message.emit(
+                "저장할 단지가 없습니다. 먼저 목록에 단지를 추가해 주세요."
+            )
             return
         for r in range(total):
             name = self.table_list.item(r, 0).text()
             cid = self.table_list.item(r, 1).text()
             asset_item = self.table_list.item(r, 2)
-            asset_type = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
-            status = self.db.add_complex(name, cid, asset_type=asset_type, return_status=True)
+            asset_type = self._normalize_task_asset_type(
+                asset_item.text() if asset_item else "APT"
+            )
+            status = self.db.add_complex(
+                name, cid, asset_type=asset_type, return_status=True
+            )
             if status == "inserted":
                 inserted_count += 1
             elif status == "existing":
@@ -240,7 +259,9 @@ class CrawlerTabTaskOpsMixin:
         for url in urls:
             parsed = NaverURLParser.parse_url_info(str(url or ""))
             cid = str(parsed.get("complex_id", "") or "").strip()
-            asset_type = self._normalize_task_asset_type(parsed.get("asset_type", "APT"))
+            asset_type = self._normalize_task_asset_type(
+                parsed.get("asset_type", "APT")
+            )
             if not cid:
                 unreadable += 1
             elif self._add_row(f"단지_{cid}", cid, asset_type):

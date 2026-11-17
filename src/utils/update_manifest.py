@@ -1,4 +1,5 @@
 """Verification for signed, GitHub-hosted application updates."""
+
 from __future__ import annotations
 
 import base64
@@ -47,20 +48,48 @@ def is_newer_version(candidate: str, current: str) -> bool:
 
 
 def canonical_manifest_payload(payload: Mapping[str, Any]) -> bytes:
-    return json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return json.dumps(
+        dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
 
 
-def verify_release_manifest(document: bytes | str | Mapping[str, Any], *, public_key_b64: str, current_version: str, now: datetime | None = None) -> ReleaseManifest:
-    raw = document if isinstance(document, bytes) else (document.encode("utf-8") if isinstance(document, str) else canonical_manifest_payload(document))
+def verify_release_manifest(
+    document: bytes | str | Mapping[str, Any],
+    *,
+    public_key_b64: str,
+    current_version: str,
+    now: datetime | None = None,
+) -> ReleaseManifest:
+    raw = (
+        document
+        if isinstance(document, bytes)
+        else (
+            document.encode("utf-8")
+            if isinstance(document, str)
+            else canonical_manifest_payload(document)
+        )
+    )
     if len(raw) > MAX_MANIFEST_BYTES:
         raise ValueError("Manifest size exceeds the allowed limit")
     try:
-        parsed = json.loads(raw.decode("utf-8")) if not isinstance(document, Mapping) else dict(document)
+        parsed = (
+            json.loads(raw.decode("utf-8"))
+            if not isinstance(document, Mapping)
+            else dict(document)
+        )
         payload = dict(parsed["payload"])
         signature = base64.b64decode(str(parsed["signature"]), validate=True)
-        key = Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64, validate=True))
+        key = Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(public_key_b64, validate=True)
+        )
         key.verify(signature, canonical_manifest_payload(payload))
-    except (KeyError, TypeError, ValueError, InvalidSignature, json.JSONDecodeError) as exc:
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        InvalidSignature,
+        json.JSONDecodeError,
+    ) as exc:
         raise ValueError("Manifest signature verification failed") from exc
     version = str(payload.get("version", "")).strip()
     if not is_newer_version(version, current_version):
@@ -73,7 +102,9 @@ def verify_release_manifest(document: bytes | str | Mapping[str, Any], *, public
         raise ValueError("Manifest sha256 is invalid")
     try:
         size = int(payload.get("size", 0))
-        expiry = datetime.fromisoformat(str(payload.get("expires_at", "")).replace("Z", "+00:00"))
+        expiry = datetime.fromisoformat(
+            str(payload.get("expires_at", "")).replace("Z", "+00:00")
+        )
     except (TypeError, ValueError) as exc:
         raise ValueError("Manifest metadata is invalid") from exc
     if size <= 0 or size > MAX_ARTIFACT_BYTES:
@@ -89,7 +120,10 @@ def download_release_manifest(url: str) -> bytes:
     parsed = urlsplit(str(url).strip())
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("Update manifest URL must be HTTPS")
-    with urlopen(Request(url, headers={"User-Agent": "NaverlandScrapper-Updater"}), timeout=REQUEST_TIMEOUT_SECONDS) as response:
+    with urlopen(
+        Request(url, headers={"User-Agent": "NaverlandScrapper-Updater"}),
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    ) as response:
         final = urlsplit(response.geturl())
         if final.scheme != "https" or not final.hostname:
             raise ValueError("Manifest redirect must remain HTTPS")

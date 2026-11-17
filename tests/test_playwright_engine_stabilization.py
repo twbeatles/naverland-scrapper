@@ -33,9 +33,15 @@ class _CacheStub:
             "query_fingerprint": str(ctx.get("query_fingerprint", "") or ""),
             "mode": str(ctx.get("mode", "") or ""),
             "asset_type": str(ctx.get("asset_type", "") or ""),
-            "source_lat": "" if ctx.get("source_lat", None) is None else str(ctx.get("source_lat")),
-            "source_lon": "" if ctx.get("source_lon", None) is None else str(ctx.get("source_lon")),
-            "source_zoom": "" if ctx.get("source_zoom", None) is None else str(ctx.get("source_zoom")),
+            "source_lat": ""
+            if ctx.get("source_lat", None) is None
+            else str(ctx.get("source_lat")),
+            "source_lon": ""
+            if ctx.get("source_lon", None) is None
+            else str(ctx.get("source_lon")),
+            "source_zoom": ""
+            if ctx.get("source_zoom", None) is None
+            else str(ctx.get("source_zoom")),
             "marker_id": str(ctx.get("marker_id", "") or ""),
         }
 
@@ -49,13 +55,17 @@ class _CacheStub:
         self.get_calls.append((str(complex_id), str(trade_type), dict(ctx)))
         return self._store.get(self._key(complex_id, trade_type, ctx))
 
-    def set(self, complex_id, trade_type, raw_items, ttl_seconds=None, reason="", **ctx):
+    def set(
+        self, complex_id, trade_type, raw_items, ttl_seconds=None, reason="", **ctx
+    ):
         payload_ctx = dict(ctx)
         if reason:
             payload_ctx["reason"] = str(reason)
         if ttl_seconds is not None:
             payload_ctx["ttl_seconds"] = ttl_seconds
-        self.set_calls.append((str(complex_id), str(trade_type), list(raw_items), payload_ctx))
+        self.set_calls.append(
+            (str(complex_id), str(trade_type), list(raw_items), payload_ctx)
+        )
         self._store[self._key(complex_id, trade_type, ctx)] = list(raw_items)
 
 
@@ -78,7 +88,10 @@ class _ThreadStub:
         self.geo_incomplete_count = 0
         self.cache: Any | None = None
         self.negative_cache_ttl_minutes = 5
-        self.trade_types = [TRADE_CODE_MAP.get("A1", "매매"), TRADE_CODE_MAP.get("B1", "전세")]
+        self.trade_types = [
+            TRADE_CODE_MAP.get("A1", "매매"),
+            TRADE_CODE_MAP.get("B1", "전세"),
+        ]
         self.targets = [("테스트단지", "12345")]
         self.geo_config = SimpleNamespace(
             lat=37.55,
@@ -90,7 +103,11 @@ class _ThreadStub:
             asset_types=["APT", "VL"],
         )
         self.stats = {
-            "by_trade_type": {self.trade_types[0]: 0, self.trade_types[1]: 0, TRADE_CODE_MAP.get("B2", "월세"): 0},
+            "by_trade_type": {
+                self.trade_types[0]: 0,
+                self.trade_types[1]: 0,
+                TRADE_CODE_MAP.get("B2", "월세"): 0,
+            },
             "response_drain_wait_count": 0,
             "response_drain_timeout_count": 0,
             "response_seen_count": 0,
@@ -146,7 +163,9 @@ class _ThreadStub:
         if isinstance(entry, (list, tuple)):
             name = str(entry[0] if len(entry) >= 1 else "" or "")
             cid = str(entry[1] if len(entry) >= 2 else "" or "")
-            asset_type = self._normalize_target_asset_type(entry[2] if len(entry) >= 3 else "APT")
+            asset_type = self._normalize_target_asset_type(
+                entry[2] if len(entry) >= 3 else "APT"
+            )
             return name, cid, asset_type
         return "", "", "APT"
 
@@ -165,7 +184,9 @@ class _ThreadStub:
         )
 
     def _mark_pair_processed(self, name, cid, trade_type, asset_type="APT"):
-        self._processed_pairs.add(self._pair_key(name, cid, trade_type, asset_type=asset_type))
+        self._processed_pairs.add(
+            self._pair_key(name, cid, trade_type, asset_type=asset_type)
+        )
 
     def _sleep_interruptible(self, seconds, chunk_seconds=0.2):
         return True
@@ -241,7 +262,9 @@ class _ThreadStub:
         return None
 
     def _check_filters(self, data, trade_type):
-        article_id = str(data.get("매물ID", "") or data.get(_LEGACY_ARTICLE_ID_KEY, "") or "")
+        article_id = str(
+            data.get("매물ID", "") or data.get(_LEGACY_ARTICLE_ID_KEY, "") or ""
+        )
         return article_id not in self.filtered_ids
 
     def _enrich_item_with_history_and_alerts(self, data):
@@ -309,7 +332,9 @@ class _FakePage:
     async def goto(self, url, wait_until="domcontentloaded", timeout=None):
         self.url = url
         self.visited.append(url)
-        self.goto_calls.append({"url": url, "wait_until": wait_until, "timeout": timeout})
+        self.goto_calls.append(
+            {"url": url, "wait_until": wait_until, "timeout": timeout}
+        )
         for response in list(self._responses):
             for handler in list(self._handlers.get("response", [])):
                 handler(response)
@@ -406,11 +431,15 @@ class _FakeResponse:
         # These fixtures model valid minimal listing rows. Invalid-schema/quality
         # cases use dedicated unmodified responses in test_collection_integrity.
         if isinstance(payload, dict) and isinstance(payload.get("articleList"), list):
-            payload = dict(payload, articleList=[
-                dict({"dealOrWarrantPrc": "1억", "area1": 99}, **a)
-                if isinstance(a, dict) and a.get("articleNo") else a
-                for a in payload["articleList"]
-            ])
+            payload = dict(
+                payload,
+                articleList=[
+                    dict({"dealOrWarrantPrc": "1억", "area1": 99}, **a)
+                    if isinstance(a, dict) and a.get("articleNo")
+                    else a
+                    for a in payload["articleList"]
+                ],
+            )
         self._payload = payload
         self._delay_sec = float(delay_sec)
         self.status = status
@@ -444,21 +473,31 @@ class _FakeContextWithRequest:
 
 class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
     async def test_browser_error_responses_never_become_negative_cache(self):
-        for payload, status in (({"code": "TOO_MANY_REQUESTS"}, 429),
-                                ({"success": False}, 200), ({}, 200)):
+        for payload, status in (
+            ({"code": "TOO_MANY_REQUESTS"}, 429),
+            ({"success": False}, 200),
+            ({}, 200),
+        ):
             thread = _ThreadStub()
             thread.playwright_article_response_wait_ms = 100
             cache = _CacheStub()
             thread.cache = cache
             engine = PlaywrightCrawlerEngine(thread)
-            engine._desktop_page = _FakePage(responses=[_FakeResponse(
-                url="https://new.land.naver.com/api/articles/complex/12345?page=1",
-                payload=payload, status=status,
-            )])
+            engine._desktop_page = _FakePage(
+                responses=[
+                    _FakeResponse(
+                        url="https://new.land.naver.com/api/articles/complex/12345?page=1",
+                        payload=payload,
+                        status=status,
+                    )
+                ]
+            )
             engine._ensure_started = AsyncMock()
             engine._maybe_enable_headed_fallback = AsyncMock(return_value=False)
             try:
-                result = await engine._crawl_target_with_cache("sample", "12345", thread.trade_types[0], asset_type="APT")
+                result = await engine._crawl_target_with_cache(
+                    "sample", "12345", thread.trade_types[0], asset_type="APT"
+                )
                 self.assertEqual(result["collection_status"], "failed")
                 self.assertTrue(result["capture_failed"])
                 self.assertEqual(cache.set_calls, [])
@@ -500,7 +539,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     return_value={"매물ID": "A1", _LEGACY_ARTICLE_ID_KEY: "A1"},
@@ -520,9 +562,13 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(collect_result.get("response_seen"))
         self.assertFalse(collect_result.get("drain_timed_out"))
         self.assertEqual(len(raw_items), 1)
-        article_id = raw_items[0].get("매물ID") or raw_items[0].get(_LEGACY_ARTICLE_ID_KEY)
+        article_id = raw_items[0].get("매물ID") or raw_items[0].get(
+            _LEGACY_ARTICLE_ID_KEY
+        )
         self.assertEqual(article_id, "A1")
-        self.assertTrue(any("article_capture:complexes/12345" in msg for msg, _ in thread.logged))
+        self.assertTrue(
+            any("article_capture:complexes/12345" in msg for msg, _ in thread.logged)
+        )
 
     async def test_article_api_fast_path_success_skips_page_navigation(self):
         thread = _ThreadStub()
@@ -532,7 +578,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             [
                 _FakeResponse(
                     url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
-                    payload={"articleList": [{"articleNo": "API-1", "tradeTypeCode": "A1"}]},
+                    payload={
+                        "articleList": [{"articleNo": "API-1", "tradeTypeCode": "A1"}]
+                    },
                 )
             ]
         )
@@ -548,7 +596,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     return_value={"매물ID": "API-1", _LEGACY_ARTICLE_ID_KEY: "API-1"},
@@ -605,7 +656,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     side_effect=lambda article, **kwargs: {
@@ -629,7 +683,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(request.calls), 2)
         self.assertIn("page=2", request.calls[1]["url"])
 
-    async def test_article_api_fast_path_paginates_on_full_page_despite_trade_filter(self):
+    async def test_article_api_fast_path_paginates_on_full_page_despite_trade_filter(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
@@ -645,7 +701,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                 ),
                 _FakeResponse(
                     url="https://new.land.naver.com/api/articles/complex/12345?page=2",
-                    payload={"articleList": [{"articleNo": "MIX-20", "tradeTypeCode": "A1"}]},
+                    payload={
+                        "articleList": [{"articleNo": "MIX-20", "tradeTypeCode": "A1"}]
+                    },
                 ),
             ]
         )
@@ -660,7 +718,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._ensure_started = _noop_started
 
         try:
-            with patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type):
+            with patch(
+                "src.core.engines.playwright_engine.detect_trade_type",
+                return_value=trade_type,
+            ):
                 collect_result = await engine._collect_target_raw_items(
                     "테스트단지",
                     "12345",
@@ -707,7 +768,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     return_value={"매물ID": "KEEP-1", _LEGACY_ARTICLE_ID_KEY: "KEEP-1"},
@@ -751,7 +815,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     side_effect=lambda article, **kwargs: {
@@ -773,10 +840,15 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     source_zoom=None,
                     marker_id="",
                     seen_ids=set(),
-                    existing_items=[{"매물ID": "SUP-1", _LEGACY_ARTICLE_ID_KEY: "SUP-1"}],
+                    existing_items=[
+                        {"매물ID": "SUP-1", _LEGACY_ARTICLE_ID_KEY: "SUP-1"}
+                    ],
                     last_payload={
                         "isMoreData": True,
-                        "articleList": [{"articleNo": f"SUP-{i}", "tradeTypeCode": "A1"} for i in range(20)],
+                        "articleList": [
+                            {"articleNo": f"SUP-{i}", "tradeTypeCode": "A1"}
+                            for i in range(20)
+                        ],
                     },
                 )
         finally:
@@ -786,7 +858,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(request.calls), 1)
         self.assertIn("page=2", request.calls[0]["url"])
 
-    async def test_supplement_fetches_page_two_without_last_payload_when_items_exist(self):
+    async def test_supplement_fetches_page_two_without_last_payload_when_items_exist(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
@@ -811,7 +885,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     side_effect=lambda article, **kwargs: {
@@ -833,7 +910,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     source_zoom=None,
                     marker_id="",
                     seen_ids=set(),
-                    existing_items=[{"매물ID": "SKIP-1", _LEGACY_ARTICLE_ID_KEY: "SKIP-1"}],
+                    existing_items=[
+                        {"매물ID": "SKIP-1", _LEGACY_ARTICLE_ID_KEY: "SKIP-1"}
+                    ],
                     last_payload=None,
                 )
         finally:
@@ -853,7 +932,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     url=f"https://new.land.naver.com/api/articles/complex/12345?page={page}",
                     payload={
                         "isMoreData": True,
-                        "articleList": [{"articleNo": f"CAP-{page}", "tradeTypeCode": "A1"}],
+                        "articleList": [
+                            {"articleNo": f"CAP-{page}", "tradeTypeCode": "A1"}
+                        ],
                     },
                 )
             )
@@ -872,7 +953,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     "src.core.engines.playwright_engine.MAX_ARTICLE_API_PAGES",
                     2,
                 ),
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     side_effect=lambda article, **kwargs: {
@@ -901,9 +985,13 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(len(result.get("raw_items", [])), 2)
-        self.assertEqual(int(thread.stats.get("article_api_page_cap_truncated_count", 0)), 1)
+        self.assertEqual(
+            int(thread.stats.get("article_api_page_cap_truncated_count", 0)), 1
+        )
 
-    async def test_response_capture_supplements_after_browser_capture_with_is_more_data(self):
+    async def test_response_capture_supplements_after_browser_capture_with_is_more_data(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
@@ -940,7 +1028,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     side_effect=lambda article, **kwargs: {
@@ -962,9 +1053,13 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(collect_result.get("api_fast_path", False))
         self.assertEqual(len(collect_result.get("raw_items", [])), 2)
         self.assertEqual(len(request.calls), 1)
-        self.assertEqual(getattr(engine, "_article_api_auth_header", ""), "Bearer browser-token")
+        self.assertEqual(
+            getattr(engine, "_article_api_auth_header", ""), "Bearer browser-token"
+        )
 
-    async def test_article_api_fast_path_empty_result_is_confirmed_without_navigation(self):
+    async def test_article_api_fast_path_empty_result_is_confirmed_without_navigation(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
@@ -1021,7 +1116,11 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             responses=[
                 _FakeResponse(
                     url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
-                    payload={"articleList": [{"articleNo": "FALLBACK-1", "tradeTypeCode": "A1"}]},
+                    payload={
+                        "articleList": [
+                            {"articleNo": "FALLBACK-1", "tradeTypeCode": "A1"}
+                        ]
+                    },
                     request_headers={"authorization": "Bearer unit-token"},
                 )
             ]
@@ -1037,10 +1136,16 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
-                    return_value={"매물ID": "FALLBACK-1", _LEGACY_ARTICLE_ID_KEY: "FALLBACK-1"},
+                    return_value={
+                        "매물ID": "FALLBACK-1",
+                        _LEGACY_ARTICLE_ID_KEY: "FALLBACK-1",
+                    },
                 ),
             ):
                 collect_result = await engine._collect_target_raw_items(
@@ -1056,9 +1161,15 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(collect_result.get("api_fast_path", False))
         self.assertEqual(len(collect_result.get("raw_items", [])), 1)
         self.assertGreaterEqual(len(page.goto_calls), 1)
-        self.assertEqual(int(thread.stats.get("article_api_fast_path_fail_count", 0)), 1)
-        self.assertEqual(int(thread.stats.get("article_api_fast_path_fallback_count", 0)), 1)
-        self.assertEqual(getattr(engine, "_article_api_auth_header", ""), "Bearer unit-token")
+        self.assertEqual(
+            int(thread.stats.get("article_api_fast_path_fail_count", 0)), 1
+        )
+        self.assertEqual(
+            int(thread.stats.get("article_api_fast_path_fallback_count", 0)), 1
+        )
+        self.assertEqual(
+            getattr(engine, "_article_api_auth_header", ""), "Bearer unit-token"
+        )
 
     async def test_marker_handler_drains_and_applies_dedupe_rules(self):
         thread = _ThreadStub()
@@ -1070,11 +1181,15 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             handler(
                 _FakeResponse(
                     url="https://new.land.naver.com/api/complexes/single-markers",
-                    payload=[{"complexNo": "1001", "complexName": "단지A", "articleCount": 3}],
+                    payload=[
+                        {"complexNo": "1001", "complexName": "단지A", "articleCount": 3}
+                    ],
                     delay_sec=0.05,
                 )
             )
-            wait_count, timed_out = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_1")
+            wait_count, timed_out = await engine._drain_pending_response_tasks(
+                pending_tasks, label="test_marker_1"
+            )
             self.assertEqual(wait_count, 1)
             self.assertFalse(timed_out)
             self.assertIn("APT:1001", discovered)
@@ -1083,22 +1198,30 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             handler(
                 _FakeResponse(
                     url="https://new.land.naver.com/api/complexes/single-markers",
-                    payload=[{"complexNo": "1001", "complexName": "단지A", "articleCount": 3}],
+                    payload=[
+                        {"complexNo": "1001", "complexName": "단지A", "articleCount": 3}
+                    ],
                     delay_sec=0.01,
                 )
             )
-            _wait_count2, _timed_out2 = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_2")
+            _wait_count2, _timed_out2 = await engine._drain_pending_response_tasks(
+                pending_tasks, label="test_marker_2"
+            )
             self.assertEqual(int(stats.get("dedup_skipped", 0)), 1)
             self.assertEqual(len(thread.registered), 1)
 
             handler(
                 _FakeResponse(
                     url="https://new.land.naver.com/api/complexes/single-markers",
-                    payload=[{"complexNo": "1001", "complexName": "단지A", "articleCount": 5}],
+                    payload=[
+                        {"complexNo": "1001", "complexName": "단지A", "articleCount": 5}
+                    ],
                     delay_sec=0.01,
                 )
             )
-            _wait_count3, _timed_out3 = await engine._drain_pending_response_tasks(pending_tasks, label="test_marker_3")
+            _wait_count3, _timed_out3 = await engine._drain_pending_response_tasks(
+                pending_tasks, label="test_marker_3"
+            )
             self.assertEqual(int(discovered["APT:1001"]["count"]), 5)
             self.assertEqual(len(thread.registered), 2)
         finally:
@@ -1127,7 +1250,12 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             called,
-            [("APT", thread.trade_types[0]), ("APT", thread.trade_types[1]), ("VL", thread.trade_types[0]), ("VL", thread.trade_types[1])],
+            [
+                ("APT", thread.trade_types[0]),
+                ("APT", thread.trade_types[1]),
+                ("VL", thread.trade_types[0]),
+                ("VL", thread.trade_types[1]),
+            ],
         )
 
     async def test_detail_enrich_cancels_pending_tasks_on_stop(self):
@@ -1155,7 +1283,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             return {}
 
         start = time.monotonic()
-        with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
+        with patch(
+            "src.core.engines.playwright_engine.fetch_mobile_article_detail",
+            side_effect=_fake_fetch,
+        ):
             result = await engine._enrich_items_with_mobile_details(
                 [
                     {"매물ID": "1", _LEGACY_ARTICLE_ID_KEY: "1"},
@@ -1192,7 +1323,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             finally:
                 active["value"] -= 1
 
-        with patch("src.core.engines.playwright_engine.fetch_mobile_article_detail", side_effect=_fake_fetch):
+        with patch(
+            "src.core.engines.playwright_engine.fetch_mobile_article_detail",
+            side_effect=_fake_fetch,
+        ):
             result = await engine._enrich_items_with_mobile_details(
                 [{"매물ID": str(i), _LEGACY_ARTICLE_ID_KEY: str(i)} for i in range(5)]
             )
@@ -1305,13 +1439,28 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         cache = _CacheStub()
         thread.cache = cache
         engine = PlaywrightCrawlerEngine(thread)
-        cache.set("12345", thread.trade_types[0], [{"id": "legacy"}], mode="complex", asset_type="", marker_id="12345")
+        cache.set(
+            "12345",
+            thread.trade_types[0],
+            [{"id": "legacy"}],
+            mode="complex",
+            asset_type="",
+            marker_id="12345",
+        )
+
         async def collect(*args, **kwargs):
-            return {"raw_items": [], "response_seen": True, "parse_success": True,
-                    "collection_status": "complete"}
+            return {
+                "raw_items": [],
+                "response_seen": True,
+                "parse_success": True,
+                "collection_status": "complete",
+            }
+
         engine._collect_target_raw_items = collect
         try:
-            result = await engine._crawl_target_with_cache("테스트", "12345", thread.trade_types[0], mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "12345", thread.trade_types[0], mode="complex"
+            )
         finally:
             engine._loop.close()
         self.assertFalse(result["cache_hit"])
@@ -1325,14 +1474,25 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         shared_items = [{"id": "shared"}]
-        cache.set("99999", trade_type, shared_items, mode="complex", asset_type="APT", query_fingerprint="articles-v3:pre=0")
+        cache.set(
+            "99999",
+            trade_type,
+            shared_items,
+            mode="complex",
+            asset_type="APT",
+            query_fingerprint="articles-v3:pre=0",
+        )
 
         async def _must_not_collect(*args, **kwargs):
-            raise AssertionError("network collection should not run on normalized cache hit")
+            raise AssertionError(
+                "network collection should not run on normalized cache hit"
+            )
 
         engine._collect_target_raw_items = _must_not_collect
         try:
-            result = await engine._crawl_target_with_cache("테스트", "99999", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "99999", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1348,19 +1508,30 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         async def _collect_confirmed_empty(*_args, **_kwargs):
-            return {"raw_items": [], "response_seen": True, "drain_timed_out": False, "collection_status": "complete"}
+            return {
+                "raw_items": [],
+                "response_seen": True,
+                "drain_timed_out": False,
+                "collection_status": "complete",
+            }
 
         engine._collect_target_raw_items = _collect_confirmed_empty
         try:
-            result = await engine._crawl_target_with_cache("테스트", "55555", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "55555", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
         self.assertEqual(result["count"], 0)
         self.assertFalse(result["cache_hit"])
-        self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
+        self.assertTrue(
+            any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls)
+        )
 
-    async def test_negative_cache_written_when_later_plan_confirms_empty_after_parse_failure(self):
+    async def test_negative_cache_written_when_later_plan_confirms_empty_after_parse_failure(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         cache = _CacheStub()
@@ -1376,7 +1547,11 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         async def _run_entry_plan(_page, plan, *, label):
             attempted_plans.append(str(plan.get("name", "")))
-            payload = {"articleList": "not-a-list"} if len(attempted_plans) == 1 else {"articleList": []}
+            payload = (
+                {"articleList": "not-a-list"}
+                if len(attempted_plans) == 1
+                else {"articleList": []}
+            )
             for handler in list(_page._handlers.get("response", [])):
                 handler(
                     _FakeResponse(
@@ -1389,12 +1564,22 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         typed_engine = cast(Any, engine)
         typed_engine._run_entry_plan = _run_entry_plan
         typed_engine._build_entry_plans = lambda _url: [
-            {"name": "direct", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
-            {"name": "fin_then_new_target", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+            {
+                "name": "direct",
+                "warmups": [],
+                "target": "https://new.land.naver.com/complexes/12345",
+            },
+            {
+                "name": "fin_then_new_target",
+                "warmups": [],
+                "target": "https://new.land.naver.com/complexes/12345",
+            },
         ]
 
         try:
-            result = await engine._crawl_target_with_cache("테스트", "12345", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "12345", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1403,7 +1588,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["capture_failed"])
         self.assertTrue(result["parse_success"])
         self.assertEqual(result["failure_reason"], "")
-        self.assertTrue(any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls))
+        self.assertTrue(
+            any(call[3].get("reason") == "confirmed_empty" for call in cache.set_calls)
+        )
 
     async def test_negative_cache_skipped_on_drain_timeout(self):
         thread = _ThreadStub()
@@ -1418,7 +1605,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         engine._collect_target_raw_items = _collect_timeout_empty
         try:
-            result = await engine._crawl_target_with_cache("테스트", "66666", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "66666", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1432,11 +1621,18 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         async def _collect_failed_parse(*_args, **_kwargs):
-            return {"raw_items": [], "response_seen": True, "parse_success": False, "drain_timed_out": False}
+            return {
+                "raw_items": [],
+                "response_seen": True,
+                "parse_success": False,
+                "drain_timed_out": False,
+            }
 
         engine._collect_target_raw_items = _collect_failed_parse
         try:
-            result = await engine._crawl_target_with_cache("테스트", "77777", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "77777", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1445,7 +1641,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(thread.stats.get("parse_success_count", 0)), 0)
         self.assertEqual(int(thread.stats.get("parse_fail_count", 0)), 1)
 
-    async def test_capture_failure_flags_block_like_redirect_and_skips_negative_cache(self):
+    async def test_capture_failure_flags_block_like_redirect_and_skips_negative_cache(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         cache = _CacheStub()
@@ -1468,7 +1666,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         engine._collect_target_raw_items = _collect_capture_failed
         try:
-            result = await engine._crawl_target_with_cache("테스트", "81818", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "81818", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1476,7 +1676,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["block_like_redirect"])
         self.assertEqual(int(thread.stats.get("capture_failed_count", 0)), 1)
         self.assertEqual(int(thread.stats.get("block_like_redirect_count", 0)), 1)
-        self.assertEqual(thread.stats.get("playwright_last_final_url"), "https://new.land.naver.com/404")
+        self.assertEqual(
+            thread.stats.get("playwright_last_final_url"),
+            "https://new.land.naver.com/404",
+        )
         self.assertFalse(cache.set_calls)
 
     async def test_runtime_prefers_local_chrome_when_available(self):
@@ -1486,32 +1689,53 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine = PlaywrightCrawlerEngine(thread)
 
         with (
-            patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
-            patch("src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
+            patch(
+                "src.core.engines.playwright_engine.async_playwright",
+                return_value=_FakeAsyncPlaywright(controller),
+            ),
+            patch(
+                "src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path",
+                return_value="C:\\Chrome\\chrome.exe",
+            ),
         ):
             await engine._ensure_started()
 
         try:
-            self.assertEqual(thread.stats.get("playwright_browser_source"), "local_chrome")
-            self.assertEqual(browser_type.launch_calls[0].get("executable_path"), "C:\\Chrome\\chrome.exe")
+            self.assertEqual(
+                thread.stats.get("playwright_browser_source"), "local_chrome"
+            )
+            self.assertEqual(
+                browser_type.launch_calls[0].get("executable_path"),
+                "C:\\Chrome\\chrome.exe",
+            )
         finally:
             await engine._shutdown_async()
             engine._loop.close()
 
-    async def test_runtime_falls_back_to_playwright_chromium_when_local_chrome_launch_fails(self):
+    async def test_runtime_falls_back_to_playwright_chromium_when_local_chrome_launch_fails(
+        self,
+    ):
         thread = _ThreadStub()
         browser_type = _FakeBrowserType(fail_on_executable_path=True)
         controller = _FakePlaywrightController(browser_type)
         engine = PlaywrightCrawlerEngine(thread)
 
         with (
-            patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
-            patch("src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path", return_value="C:\\Chrome\\chrome.exe"),
+            patch(
+                "src.core.engines.playwright_engine.async_playwright",
+                return_value=_FakeAsyncPlaywright(controller),
+            ),
+            patch(
+                "src.core.engines.playwright_engine.ChromeParamHelper.get_chrome_executable_path",
+                return_value="C:\\Chrome\\chrome.exe",
+            ),
         ):
             await engine._ensure_started()
 
         try:
-            self.assertEqual(thread.stats.get("playwright_browser_source"), "playwright_chromium")
+            self.assertEqual(
+                thread.stats.get("playwright_browser_source"), "playwright_chromium"
+            )
             self.assertEqual(len(browser_type.launch_calls), 2)
             self.assertIn("executable_path", browser_type.launch_calls[0])
             self.assertNotIn("executable_path", browser_type.launch_calls[1])
@@ -1532,22 +1756,31 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             mobile_state.write_text("{}", encoding="utf-8")
 
             with (
-                patch("src.core.engines.playwright_engine.async_playwright", return_value=_FakeAsyncPlaywright(controller)),
+                patch(
+                    "src.core.engines.playwright_engine.async_playwright",
+                    return_value=_FakeAsyncPlaywright(controller),
+                ),
                 patch.object(engine, "_profile_root", return_value=tmp),
             ):
                 await engine._ensure_started()
 
             try:
-                self.assertEqual(int(thread.stats.get("playwright_session_reused", 0)), 2)
+                self.assertEqual(
+                    int(thread.stats.get("playwright_session_reused", 0)), 2
+                )
                 # 2026-08-12: desktop warmup is new.land only (fin/m home skipped).
-                self.assertGreaterEqual(int(thread.stats.get("playwright_warmup_count", 0)), 1)
+                self.assertGreaterEqual(
+                    int(thread.stats.get("playwright_warmup_count", 0)), 1
+                )
                 self.assertEqual(int(thread.stats.get("warmup_new_land_ok", 0)), 1)
                 self.assertEqual(thread.stats.get("playwright_profile_dir"), tmp)
             finally:
                 await engine._shutdown_async()
                 engine._loop.close()
 
-    async def test_collect_target_raw_items_tries_next_entry_plan_when_direct_capture_missing(self):
+    async def test_collect_target_raw_items_tries_next_entry_plan_when_direct_capture_missing(
+        self,
+    ):
         thread = _ThreadStub()
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
@@ -1566,7 +1799,11 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     handler(
                         _FakeResponse(
                             url="https://new.land.naver.com/api/articles/complex/12345?tradeTypes=A1",
-                            payload={"articleList": [{"articleNo": "A2", "tradeTypeCode": "A1"}]},
+                            payload={
+                                "articleList": [
+                                    {"articleNo": "A2", "tradeTypeCode": "A1"}
+                                ]
+                            },
                         )
                     )
 
@@ -1574,13 +1811,24 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         typed_engine = cast(Any, engine)
         typed_engine._run_entry_plan = _run_entry_plan
         typed_engine._build_entry_plans = lambda _url: [
-            {"name": "direct", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
-            {"name": "fin_then_new_target", "warmups": [], "target": "https://new.land.naver.com/complexes/12345"},
+            {
+                "name": "direct",
+                "warmups": [],
+                "target": "https://new.land.naver.com/complexes/12345",
+            },
+            {
+                "name": "fin_then_new_target",
+                "warmups": [],
+                "target": "https://new.land.naver.com/complexes/12345",
+            },
         ]
 
         try:
             with (
-                patch("src.core.engines.playwright_engine.detect_trade_type", return_value=trade_type),
+                patch(
+                    "src.core.engines.playwright_engine.detect_trade_type",
+                    return_value=trade_type,
+                ),
                 patch(
                     "src.core.engines.playwright_engine.normalize_article_payload",
                     return_value={"매물ID": "A2", _LEGACY_ARTICLE_ID_KEY: "A2"},
@@ -1622,7 +1870,14 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
                     "final_url": "https://new.land.naver.com/404",
                 }
             return {
-                "raw_items": [{"매물ID": "RECOVER-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}],
+                "raw_items": [
+                    {
+                        "매물ID": "RECOVER-1",
+                        "거래유형": trade_type,
+                        "매매가": "10000",
+                        "면적(㎡)": 84.0,
+                    }
+                ],
                 "response_seen": True,
                 "parse_success": True,
                 "drain_timed_out": False,
@@ -1636,12 +1891,21 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         engine._collect_target_raw_items = _collect
         engine._enrich_items_with_mobile_details = AsyncMock(
-            return_value=[{"매물ID": "RECOVER-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}]
+            return_value=[
+                {
+                    "매물ID": "RECOVER-1",
+                    "거래유형": trade_type,
+                    "매매가": "10000",
+                    "면적(㎡)": 84.0,
+                }
+            ]
         )
         engine._maybe_enable_headed_fallback = AsyncMock(return_value=True)
 
         try:
-            result = await engine._crawl_target_with_cache("테스트", "12345", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "12345", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1693,7 +1957,14 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         async def _collect(*_args, **_kwargs):
             return {
-                "raw_items": [{"매물ID": "MISS-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}],
+                "raw_items": [
+                    {
+                        "매물ID": "MISS-1",
+                        "거래유형": trade_type,
+                        "매매가": "10000",
+                        "면적(㎡)": 84.0,
+                    }
+                ],
                 "response_seen": True,
                 "parse_success": True,
                 "drain_timed_out": False,
@@ -1702,7 +1973,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._collect_target_raw_items = _collect
         engine._enrich_items_with_mobile_details = AsyncMock(return_value=[])
         try:
-            result = await engine._crawl_target_with_cache("테스트", "80808", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "80808", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1718,7 +1991,12 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         trade_type = thread.trade_types[0]
         engine = PlaywrightCrawlerEngine(thread)
 
-        raw_item = {"매물ID": "HIT-1", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0}
+        raw_item = {
+            "매물ID": "HIT-1",
+            "거래유형": trade_type,
+            "매매가": "10000",
+            "면적(㎡)": 84.0,
+        }
 
         async def _collect(*_args, **_kwargs):
             return {
@@ -1738,7 +2016,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._collect_target_raw_items = _collect
         engine._enrich_items_with_mobile_details = AsyncMock(side_effect=_detail)
         try:
-            result = await engine._crawl_target_with_cache("테스트", "90909", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "90909", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1746,8 +2026,12 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._enrich_items_with_mobile_details.assert_awaited_once()
         self.assertEqual(int(thread.stats.get("detail_fetch_skipped_count", 0)), 0)
         self.assertEqual(len(thread.pushed_items), 1)
-        self.assertEqual(int(thread.pushed_items[0].get("기전세금(원)", 0)), 350_000_000)
-        self.assertEqual(str(thread.pushed_items[0].get("부동산상호", "")), "테스트부동산")
+        self.assertEqual(
+            int(thread.pushed_items[0].get("기전세금(원)", 0)), 350_000_000
+        )
+        self.assertEqual(
+            str(thread.pushed_items[0].get("부동산상호", "")), "테스트부동산"
+        )
 
     async def test_cache_hit_fetches_details_only_for_filter_hits(self):
         thread = _ThreadStub()
@@ -1761,8 +2045,18 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             "91919",
             trade_type,
             [
-                {"매물ID": "MISS-2", "거래유형": trade_type, "매매가": "10000", "면적(㎡)": 84.0},
-                {"매물ID": "HIT-2", "거래유형": trade_type, "매매가": "12000", "면적(㎡)": 84.0},
+                {
+                    "매물ID": "MISS-2",
+                    "거래유형": trade_type,
+                    "매매가": "10000",
+                    "면적(㎡)": 84.0,
+                },
+                {
+                    "매물ID": "HIT-2",
+                    "거래유형": trade_type,
+                    "매매가": "12000",
+                    "면적(㎡)": 84.0,
+                },
             ],
             mode="complex",
             asset_type="APT",
@@ -1777,7 +2071,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         engine._enrich_items_with_mobile_details = AsyncMock(side_effect=_detail)
         try:
-            result = await engine._crawl_target_with_cache("테스트", "91919", trade_type, mode="complex")
+            result = await engine._crawl_target_with_cache(
+                "테스트", "91919", trade_type, mode="complex"
+            )
         finally:
             engine._loop.close()
 
@@ -1848,7 +2144,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["complex_id"], "complex-202")
         self.assertEqual(payload["marker_id"], "marker-101")
 
-    async def test_complex_mode_records_partial_run_status_when_some_trade_types_fail(self):
+    async def test_complex_mode_records_partial_run_status_when_some_trade_types_fail(
+        self,
+    ):
         thread = _ThreadStub()
         engine = PlaywrightCrawlerEngine(thread)
 
@@ -1877,7 +2175,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["run_status"], "partial")
         self.assertEqual(args[2], thread.trade_types[0])
 
-    async def test_complex_mode_records_failed_run_status_when_all_trade_types_fail(self):
+    async def test_complex_mode_records_failed_run_status_when_all_trade_types_fail(
+        self,
+    ):
         thread = _ThreadStub()
         engine = PlaywrightCrawlerEngine(thread)
 
@@ -1974,7 +2274,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         engine._switch_to_listing_markers = _switch_fail
 
         try:
-            result = await engine._scan_geo_asset_type("APT", thread.trade_types[0], 37.55, 126.99, 15, thread.geo_config)
+            result = await engine._scan_geo_asset_type(
+                "APT", thread.trade_types[0], 37.55, 126.99, 15, thread.geo_config
+            )
         finally:
             engine._loop.close()
 
@@ -1996,7 +2298,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(thread.stats["geo_marker_switch_attempt_count"], 1)
         self.assertEqual(thread.stats["geo_marker_switch_success_count"], 1)
         self.assertEqual(thread.stats["geo_marker_switch_fail_count"], 0)
-        self.assertEqual(thread.stats["geo_marker_switch_last_method"], "text:상세매물검색")
+        self.assertEqual(
+            thread.stats["geo_marker_switch_last_method"], "text:상세매물검색"
+        )
         self.assertEqual(thread.stats_emitted, 1)
 
     async def test_geo_marker_switch_failure_records_stats(self):
@@ -2027,7 +2331,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(thread.stats["geo_marker_switch_fail_count"], 1)
         self.assertEqual(thread.stats_emitted, 1)
 
-    async def test_geo_incomplete_safety_mode_skips_history_and_disappeared_finalize(self):
+    async def test_geo_incomplete_safety_mode_skips_history_and_disappeared_finalize(
+        self,
+    ):
         thread = _ThreadStub()
         thread.crawl_mode = "geo_sweep"
         thread.geo_incomplete_safety_mode = True
@@ -2144,7 +2450,10 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("src.core.engines.playwright_engine.PSUTIL_AVAILABLE", True),
-            patch("src.core.engines.playwright_engine.psutil.Process", return_value=_Proc()),
+            patch(
+                "src.core.engines.playwright_engine.psutil.Process",
+                return_value=_Proc(),
+            ),
         ):
             await engine._check_memory_and_recycle_if_needed("unit_test")
 
@@ -2152,7 +2461,9 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
             engine._shutdown_async.assert_awaited_once()
             engine._ensure_started.assert_awaited_once()
             self.assertEqual(int(thread.stats.get("playwright_recycle_count", 0)), 1)
-            self.assertIn("unit_test", str(thread.stats.get("playwright_last_recycle_reason", "")))
+            self.assertIn(
+                "unit_test", str(thread.stats.get("playwright_last_recycle_reason", ""))
+            )
             self.assertGreaterEqual(thread.stats_emitted, 1)
         finally:
             engine._loop.close()

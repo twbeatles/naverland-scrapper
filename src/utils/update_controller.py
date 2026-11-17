@@ -1,4 +1,5 @@
 """Qt bridge that keeps network update work off the GUI thread."""
+
 from __future__ import annotations
 
 import sys
@@ -33,7 +34,9 @@ class UpdateController(QObject):
         """Join update worker threads (ISSUE-005: no orphan check/download on exit)."""
         import time as _time
 
-        deadline = None if timeout is None else _time.monotonic() + max(0.0, float(timeout))
+        deadline = (
+            None if timeout is None else _time.monotonic() + max(0.0, float(timeout))
+        )
         while True:
             with self._lock:
                 alive = [t for t in self._threads if t.is_alive()]
@@ -43,7 +46,9 @@ class UpdateController(QObject):
                     self._threads = []
                 return True
             for thread in alive:
-                remaining = None if deadline is None else max(0.0, deadline - _time.monotonic())
+                remaining = (
+                    None if deadline is None else max(0.0, deadline - _time.monotonic())
+                )
                 thread.join(timeout=remaining)
             with self._lock:
                 self._threads = [t for t in self._threads if t.is_alive()]
@@ -65,9 +70,14 @@ class UpdateController(QObject):
             if self._busy:
                 return False
             self._busy = True
+
         def worker():
             try:
-                manifest = verify_release_manifest(download_release_manifest(UPDATE_MANIFEST_URL), public_key_b64=UPDATE_PUBLIC_KEY_B64, current_version=APP_VERSION)
+                manifest = verify_release_manifest(
+                    download_release_manifest(UPDATE_MANIFEST_URL),
+                    public_key_b64=UPDATE_PUBLIC_KEY_B64,
+                    current_version=APP_VERSION,
+                )
             except NoUpdateAvailableError:
                 self.no_update.emit()
             except Exception as exc:
@@ -77,6 +87,7 @@ class UpdateController(QObject):
             finally:
                 with self._lock:
                     self._busy = False
+
         check_thread = threading.Thread(target=worker, name="UpdateCheck", daemon=True)
         with self._lock:
             self._threads.append(check_thread)
@@ -91,6 +102,7 @@ class UpdateController(QObject):
             if self._busy:
                 return False
             self._busy = True
+
         def worker():
             try:
                 self.downloaded.emit(manifest, download_verified_artifact(manifest))
@@ -99,7 +111,10 @@ class UpdateController(QObject):
             finally:
                 with self._lock:
                     self._busy = False
-        download_thread = threading.Thread(target=worker, name="UpdateDownload", daemon=True)
+
+        download_thread = threading.Thread(
+            target=worker, name="UpdateDownload", daemon=True
+        )
         with self._lock:
             self._threads.append(download_thread)
         download_thread.start()
@@ -107,7 +122,12 @@ class UpdateController(QObject):
 
     @staticmethod
     def apply(staged: Path, manifest: ReleaseManifest) -> None:
-        launch_update_helper(target=Path(sys.executable).resolve(), staged=staged, manifest=manifest, parent_pid=os.getpid())
+        launch_update_helper(
+            target=Path(sys.executable).resolve(),
+            staged=staged,
+            manifest=manifest,
+            parent_pid=os.getpid(),
+        )
 
 
 import os  # noqa: E402  # kept below Qt imports to avoid altering packaged Qt startup

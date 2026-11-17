@@ -14,7 +14,7 @@ class PresetDialog(QDialog):
         self.preset_manager = preset_manager
         self.selected_preset = None
         self._setup_ui()
-    
+
     def _setup_ui(self):
         self.setWindowTitle("저장한 조건 불러오기")
         self.setMinimumSize(400, 350)
@@ -36,18 +36,18 @@ class PresetDialog(QDialog):
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
         self._refresh()
-    
+
     def _refresh(self):
         self.list.clear()
         if self.preset_manager:
             for name in self.preset_manager.get_all_names():
                 self.list.addItem(name)
-    
+
     def _load(self):
         if item := self.list.currentItem():
             self.selected_preset = item.text()
             self.accept()
-    
+
     def _delete(self):
         if (item := self.list.currentItem()) and self.preset_manager:
             self.preset_manager.delete(item.text())

@@ -20,15 +20,29 @@ from src.utils.constants import CRAWL_SPEED_PRESETS, TRADE_COLORS
 
 class EmptyStateWidget(QWidget):
     """재사용 가능한 빈 상태 위젯 (Fluent IconWidget 기반)"""
+
     action_clicked = Signal()
 
-    _LEGACY_ICONS = {"📭": "DOCUMENT", "🔍": "SEARCH", "⭐": "HEART", "📁": "FOLDER", "ℹ": "INFO"}
+    _LEGACY_ICONS = {
+        "📭": "DOCUMENT",
+        "🔍": "SEARCH",
+        "⭐": "HEART",
+        "📁": "FOLDER",
+        "ℹ": "INFO",
+    }
 
-    def __init__(self, icon=None, title: str = "데이터가 없습니다",
-                 description: str = "", action_text: str = "", parent=None):
+    def __init__(
+        self,
+        icon=None,
+        title: str = "데이터가 없습니다",
+        description: str = "",
+        action_text: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("emptyStateWidget")
         from src.ui.fluent.design_tokens import SPACE_LG, SPACE_SM, SPACE_XL
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SPACE_LG, SPACE_XL, SPACE_LG, SPACE_XL)
         layout.setSpacing(SPACE_SM)
@@ -174,7 +188,9 @@ class SpeedSlider(QWidget):
         self.slider.setValue(1)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.slider.valueChanged.connect(self._on_change)
-        self.slider.setToolTip("천천히 수집할수록 네이버에서 접속이 막힐 위험이 줄어듭니다.")
+        self.slider.setToolTip(
+            "천천히 수집할수록 네이버에서 접속이 막힐 위험이 줄어듭니다."
+        )
         layout.addWidget(self.slider)
         self._refresh_text(self.SPEEDS[1])
 
@@ -188,13 +204,17 @@ class SpeedSlider(QWidget):
         self._refresh_text(speed)
         self.speed_changed.emit(speed)
 
-    def current_speed(self): return self.SPEEDS[self.slider.value()]
+    def current_speed(self):
+        return self.SPEEDS[self.slider.value()]
+
     def set_speed(self, speed):
         if speed in self.SPEEDS:
             self.slider.setValue(self.SPEEDS.index(speed))
 
+
 class ProgressWidget(QWidget):
     """진행 상태 위젯 - 예상 시간 표시"""
+
     IDLE_TEXT = "수집을 시작하면 진행 상황이 여기에 표시됩니다."
 
     def __init__(self, parent=None):
@@ -202,31 +222,31 @@ class ProgressWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        
+
         # 상태 표시줄
         status_layout = QHBoxLayout()
         self.status_label = QLabel(self.IDLE_TEXT)
         self.status_label.setObjectName("progressStatus")
         self.status_label.setStyleSheet("font-weight: 600;")
         status_layout.addWidget(self.status_label)
-        
+
         self.time_label = QLabel("")
         self.time_label.setObjectName("progressTime")
         self.time_label.setObjectName("fieldLabel")
         status_layout.addStretch()
         status_layout.addWidget(self.time_label)
         layout.addLayout(status_layout)
-        
+
         # 프로그레스바
         self.progress_bar = QProgressBar()
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFixedHeight(18)
         layout.addWidget(self.progress_bar)
-    
+
     def update_progress(self, percent, current_name, remaining_seconds):
         self.progress_bar.setValue(percent)
         self.status_label.setText(str(current_name or "진행 중..."))
-        
+
         if remaining_seconds > 0:
             mins, secs = divmod(remaining_seconds, 60)
             if mins > 0:
@@ -235,16 +255,17 @@ class ProgressWidget(QWidget):
                 self.time_label.setText(f"약 {secs}초 남음")
         else:
             self.time_label.setText("")
-    
+
     def reset(self):
         self.progress_bar.setValue(0)
         self.status_label.setText(self.IDLE_TEXT)
         self.time_label.setText("")
-    
+
     def complete(self):
         self.progress_bar.setValue(100)
         self.status_label.setText("수집을 마쳤습니다.")
         self.time_label.setText("")
+
 
 class ColoredTableWidgetItem(QTableWidgetItem):
     def __init__(self, text, trade_type=None, is_dark=True):
@@ -256,8 +277,10 @@ class ColoredTableWidgetItem(QTableWidgetItem):
             self.setBackground(QColor(bg))
             self.setForeground(QColor(fg))
 
+
 class SummaryCard(QFrame):
     """결과 요약 카드 위젯 (v15.0 — QSS 토큰 연동)"""
+
     def __init__(self, parent=None, theme="dark"):
         super().__init__(parent)
         self.setObjectName("summaryCard")
@@ -295,15 +318,21 @@ class SummaryCard(QFrame):
         self.price_up_widget = self._create_stat_widget("가격 상승", "0건", c["error"])
         layout.addWidget(self.price_up_widget)
 
-        self.price_down_widget = self._create_stat_widget("가격 하락", "0건", c["success"])
+        self.price_down_widget = self._create_stat_widget(
+            "가격 하락", "0건", c["success"]
+        )
         layout.addWidget(self.price_down_widget)
 
-        self.filtered_widget = self._create_stat_widget("조건 제외", "0건", c["text_secondary"])
+        self.filtered_widget = self._create_stat_widget(
+            "조건 제외", "0건", c["text_secondary"]
+        )
         layout.addWidget(self.filtered_widget)
 
         # 숫자가 무엇을 센 것인지 헷갈리지 않게 설명을 단다.
         self.total_widget.setToolTip("이번 수집에서 조건에 맞아 담은 매물 수입니다.")
-        self.new_widget.setToolTip("지난 수집에는 없다가 이번에 새로 나온 매물 수입니다.")
+        self.new_widget.setToolTip(
+            "지난 수집에는 없다가 이번에 새로 나온 매물 수입니다."
+        )
         self.price_up_widget.setToolTip("지난 수집보다 가격이 오른 매물 수입니다.")
         self.price_down_widget.setToolTip("지난 수집보다 가격이 내린 매물 수입니다.")
         self.filtered_widget.setToolTip(
@@ -324,9 +353,16 @@ class SummaryCard(QFrame):
         """타이틀 레이블 색상 업데이트"""
         c = COLORS[self._theme]
         title_color = c["text_secondary"]
-        for widget in [self.total_widget, self.trade_widget, self.jeonse_widget,
-                       self.monthly_widget, self.new_widget, self.price_up_widget,
-                       self.price_down_widget, self.filtered_widget]:
+        for widget in [
+            self.total_widget,
+            self.trade_widget,
+            self.jeonse_widget,
+            self.monthly_widget,
+            self.new_widget,
+            self.price_up_widget,
+            self.price_down_widget,
+            self.filtered_widget,
+        ]:
             labels = widget.findChildren(QLabel)
             for label in labels:
                 if label.objectName() != "value":
@@ -340,24 +376,38 @@ class SummaryCard(QFrame):
 
         title_label = QLabel(title)
         title_color = COLORS[self._theme]["text_secondary"]
-        title_label.setStyleSheet(f"color: {title_color}; font-size: 11px; font-weight: 500;")
+        title_label.setStyleSheet(
+            f"color: {title_color}; font-size: 11px; font-weight: 500;"
+        )
         layout.addWidget(title_label)
 
         value_label = QLabel(value)
         value_label.setObjectName("value")
-        value_label.setStyleSheet(f"color: {color}; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;")
+        value_label.setStyleSheet(
+            f"color: {color}; font-size: 18px; font-weight: 700; letter-spacing: -0.3px;"
+        )
         layout.addWidget(value_label)
 
         return widget
-    
-    def update_stats(self, total=0, trade=0, jeonse=0, monthly=0, filtered=0, 
-                     new_count=0, price_up=0, price_down=0):
+
+    def update_stats(
+        self,
+        total=0,
+        trade=0,
+        jeonse=0,
+        monthly=0,
+        filtered=0,
+        new_count=0,
+        price_up=0,
+        price_down=0,
+    ):
         """통계 업데이트 (안전하게)"""
+
         def safe_set(widget, text):
             child = widget.findChild(QLabel, "value")
             if child is not None:
                 child.setText(text)
-        
+
         safe_set(self.total_widget, f"{total}건")
         safe_set(self.trade_widget, f"{trade}건")
         safe_set(self.jeonse_widget, f"{jeonse}건")
@@ -366,19 +416,34 @@ class SummaryCard(QFrame):
         safe_set(self.new_widget, f"{new_count}건")
         safe_set(self.price_up_widget, f"{price_up}건")
         safe_set(self.price_down_widget, f"{price_down}건")
-    
+
     def reset(self):
         self.update_stats(0, 0, 0, 0, 0, 0, 0, 0)
+
 
 class SortableTableWidgetItem(QTableWidgetItem):
     def __init__(self, text):
         super().__init__(text)
-    
+
     def __lt__(self, other):
         try:
             # 숫자 비교 시도 (가격, 면적 등)
-            val1 = float(self.text().replace(",", "").replace("만", "").replace("억", "").replace("평", "").split()[0])
-            val2 = float(other.text().replace(",", "").replace("만", "").replace("억", "").replace("평", "").split()[0])
+            val1 = float(
+                self.text()
+                .replace(",", "")
+                .replace("만", "")
+                .replace("억", "")
+                .replace("평", "")
+                .split()[0]
+            )
+            val2 = float(
+                other.text()
+                .replace(",", "")
+                .replace("만", "")
+                .replace("억", "")
+                .replace("평", "")
+                .split()[0]
+            )
             return val1 < val2
         except (ValueError, IndexError):
             return super().__lt__(other)

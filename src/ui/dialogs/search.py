@@ -47,8 +47,9 @@ class _KeywordWorker(QObject):
     region_located = Signal(dict, int)
     failed = Signal(str, int, str)
 
-    def __init__(self, session_factory=None, rate_limit_cooldown_sec=30.0,
-                 retry_delay_sec=1.0):
+    def __init__(
+        self, session_factory=None, rate_limit_cooldown_sec=30.0, retry_delay_sec=1.0
+    ):
         super().__init__()
         self._session_factory = session_factory or KeywordBrowserSession
         self._session = None
@@ -111,7 +112,9 @@ class _KeywordWorker(QObject):
     def _run_fetch_once(self, kind, keyword, page=1):
         if kind == "suggest":
             return fetch_complex_suggestions(keyword, self._ensure_session().fetch)
-        return fetch_complex_search_page(keyword, self._ensure_session().fetch, page=int(page or 1))
+        return fetch_complex_search_page(
+            keyword, self._ensure_session().fetch, page=int(page or 1)
+        )
 
     def _fetch_with_retry(self, kind, keyword, page=1):
         """Single retry on transport errors; rate limits arm the cooldown."""
@@ -160,8 +163,11 @@ class _KeywordWorker(QObject):
         """Fresh (page-1) search: address variants first, one retry."""
         try:
             return fetch_search_page_with_fallback(
-                keyword, self._ensure_session().fetch, page=1,
-                fetch_page=fetch_complex_search_page)
+                keyword,
+                self._ensure_session().fetch,
+                page=1,
+                fetch_page=fetch_complex_search_page,
+            )
         except KeywordSearchError as exc:
             if self._cancelled:
                 raise
@@ -170,8 +176,11 @@ class _KeywordWorker(QObject):
             if not self._sleep_retry_delay():
                 raise
             return fetch_search_page_with_fallback(
-                keyword, self._ensure_session().fetch, page=1,
-                fetch_page=fetch_complex_search_page)
+                keyword,
+                self._ensure_session().fetch,
+                page=1,
+                fetch_page=fetch_complex_search_page,
+            )
 
     def resolve(self, entries, generation):
         """Resolve pasted complex IDs to rows (runs on the pump thread)."""
@@ -196,7 +205,9 @@ class _KeywordWorker(QObject):
             # out-of-browser name lookups are rate limited since 2026-10.
             info = {}
             try:
-                info = fetch_fin_complex_info(cid, self._ensure_session().fetch, asset_type=asset)
+                info = fetch_fin_complex_info(
+                    cid, self._ensure_session().fetch, asset_type=asset
+                )
             except Exception:
                 info = {}
             name = str(info.get("name", "") or "").strip()
@@ -206,27 +217,37 @@ class _KeywordWorker(QObject):
                 except Exception:
                     name = ""
             name = str(name or "").strip() or f"단지_{cid}"
-            rows.append({
-                "complex_id": cid,
-                "name": name,
-                "address": str(info.get("address", "") or ""),
-                "asset_type": asset,
-                "latitude": info.get("latitude"),
-                "longitude": info.get("longitude"),
-                "deep_link": "",
-            })
+            rows.append(
+                {
+                    "complex_id": cid,
+                    "name": name,
+                    "address": str(info.get("address", "") or ""),
+                    "asset_type": asset,
+                    "latitude": info.get("latitude"),
+                    "longitude": info.get("longitude"),
+                    "deep_link": "",
+                }
+            )
         if not self._cancelled:
             self.search_ready.emit(
-                {"complexes": rows, "regions": [],
-                 "is_more_data": False, "effective_query": ""},
-                int(generation), False)
+                {
+                    "complexes": rows,
+                    "regions": [],
+                    "is_more_data": False,
+                    "effective_query": "",
+                },
+                int(generation),
+                False,
+            )
 
     def locate(self, lat, lon, generation):
         """Name a pasted map point by its legal division (best effort)."""
         if self._cooldown_message():
             return
         try:
-            region = fetch_fin_region_by_coordinate(lat, lon, self._ensure_session().fetch)
+            region = fetch_fin_region_by_coordinate(
+                lat, lon, self._ensure_session().fetch
+            )
         except Exception:
             region = {}
         if region and not self._cancelled:
@@ -343,7 +364,9 @@ class KeywordSearchDialog(QDialog):
         region_btns = QHBoxLayout()
         self.btn_region_map = QPushButton("이 지역 주변을 「지도로 찾기」로 탐색")
         self.btn_region_map.setObjectName("secondaryBtn")
-        self.btn_region_map.setToolTip("고른 지역을 「지도로 찾기」 화면의 탐색 위치로 정합니다.")
+        self.btn_region_map.setToolTip(
+            "고른 지역을 「지도로 찾기」 화면의 탐색 위치로 정합니다."
+        )
         self.btn_region_map.clicked.connect(self._emit_region)
         region_btns.addWidget(self.btn_region_map)
         region_btns.addStretch()
@@ -385,7 +408,9 @@ class KeywordSearchDialog(QDialog):
             if region_style is not None:
                 region_style.unpolish(self.btn_region_map)
                 region_style.polish(self.btn_region_map)
-            self.btn_region_map.setToolTip("고른 지역을 탐색 위치로 정합니다. (두 번 눌러도 됩니다)")
+            self.btn_region_map.setToolTip(
+                "고른 지역을 탐색 위치로 정합니다. (두 번 눌러도 됩니다)"
+            )
 
         self._suggest_timer = QTimer(self)
         self._suggest_timer.setSingleShot(True)
@@ -520,7 +545,9 @@ class KeywordSearchDialog(QDialog):
     def _run_search(self):
         keyword = self.input_keyword.text().strip()
         if not keyword:
-            QMessageBox.warning(self, "검색어를 입력해 주세요", "찾을 이름을 입력해 주세요.")
+            QMessageBox.warning(
+                self, "검색어를 입력해 주세요", "찾을 이름을 입력해 주세요."
+            )
             return
         if self._busy:
             return
@@ -554,7 +581,8 @@ class KeywordSearchDialog(QDialog):
         if not isinstance(found, list):
             found = []
         entries = [
-            e for e in found
+            e
+            for e in found
             if isinstance(e, dict) and str(e.get("complex_id", "") or "").strip()
         ]
         if entries:
@@ -581,8 +609,13 @@ class KeywordSearchDialog(QDialog):
             row = QListWidgetItem(name)
             row.setData(
                 Qt.ItemDataRole.UserRole,
-                {"cortar_no": "", "name": name,
-                 "latitude": lat, "longitude": lon, "deep_link": ""},
+                {
+                    "cortar_no": "",
+                    "name": name,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "deep_link": "",
+                },
             )
             row.setToolTip("이 위치를 탐색 위치로 쓸 수 있습니다.")
             self.region_list.addItem(row)
@@ -596,7 +629,8 @@ class KeywordSearchDialog(QDialog):
             self._enqueue(("locate", lat, lon, self._search_generation))
             return True
         articles = [
-            e for e in found
+            e
+            for e in found
             if isinstance(e, dict) and str(e.get("article_id", "") or "").strip()
         ]
         if articles:
@@ -614,7 +648,9 @@ class KeywordSearchDialog(QDialog):
     def _load_more(self):
         if self._busy or not self._has_more or not self._keyword:
             return
-        self._set_busy(True, f"'{self._keyword}' {self._next_page}페이지 불러오는 중...")
+        self._set_busy(
+            True, f"'{self._keyword}' {self._next_page}페이지 불러오는 중..."
+        )
         query = str(self._search_query or self._keyword or "")
         self._enqueue(("search", query, self._next_page, self._search_generation, True))
 
@@ -633,18 +669,24 @@ class KeywordSearchDialog(QDialog):
             self.complex_list.clear()
             self.region_list.clear()
         if not append:
-            self._search_query = str(result.get("effective_query", "") or self._keyword or "")
+            self._search_query = str(
+                result.get("effective_query", "") or self._keyword or ""
+            )
         for item in result.get("complexes", []) or []:
             cid = str(item.get("complex_id", "") or "")
             name = str(item.get("name", "") or f"단지_{cid}")
             address = str(item.get("address", "") or "")
             asset = str(item.get("asset_type", "APT") or "APT")
-            text = f"{name}  ·  {asset_label(asset)}" + (f"\n{address}" if address else "")
+            text = f"{name}  ·  {asset_label(asset)}" + (
+                f"\n{address}" if address else ""
+            )
             row = QListWidgetItem(text)
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             row.setCheckState(Qt.CheckState.Unchecked)
             row.setToolTip(f"단지번호 {cid}" + (f" · {address}" if address else ""))
-            row.setData(Qt.ItemDataRole.UserRole, {"name": name, "cid": cid, "asset": asset})
+            row.setData(
+                Qt.ItemDataRole.UserRole, {"name": name, "cid": cid, "asset": asset}
+            )
             self.complex_list.addItem(row)
         for item in result.get("regions", []) or []:
             name = str(item.get("name", "") or "")
@@ -670,7 +712,9 @@ class KeywordSearchDialog(QDialog):
             self.tabs.setCurrentIndex(1)
         self._set_busy(False)
         if n_complex == 0 and n_region == 0:
-            self.status_label.setText(f"'{self._keyword}' 결과가 없습니다. 다른 이름으로 검색해 보세요.")
+            self.status_label.setText(
+                f"'{self._keyword}' 결과가 없습니다. 다른 이름으로 검색해 보세요."
+            )
         else:
             self.status_label.setText(
                 (
@@ -691,7 +735,9 @@ class KeywordSearchDialog(QDialog):
         data = dict(item.data(Qt.ItemDataRole.UserRole) or {})
         if data.get("cortar_no"):
             return
-        data.update({"cortar_no": region.get("cortar_no", ""), "name": region.get("name", "")})
+        data.update(
+            {"cortar_no": region.get("cortar_no", ""), "name": region.get("name", "")}
+        )
         label = f"{data['name']} 일대 (지도 링크 위치)"
         item.setText(label)
         item.setData(Qt.ItemDataRole.UserRole, data)
@@ -704,13 +750,17 @@ class KeywordSearchDialog(QDialog):
                 return
             self._set_busy(False)
             self._completed_search_generation = generation
-            self.status_label.setText(f"검색하지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
+            self.status_label.setText(
+                f"검색하지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}"
+            )
             return
         if generation != self._generation or self._busy:
             return
         if self._completed_search_generation == self._search_generation:
             return
-        self.status_label.setText(f"추천 검색어를 불러오지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}")
+        self.status_label.setText(
+            f"추천 검색어를 불러오지 못했습니다: {message or '잠시 후 다시 시도해 주세요.'}"
+        )
 
     def _set_all_checked(self, checked: bool):
         state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
@@ -726,14 +776,20 @@ class KeywordSearchDialog(QDialog):
             if item is not None and item.checkState() == Qt.CheckState.Checked:
                 data = item.data(Qt.ItemDataRole.UserRole) or {}
                 selected.append(
-                    (str(data.get("name", "")), str(data.get("cid", "")), str(data.get("asset", "APT")))
+                    (
+                        str(data.get("name", "")),
+                        str(data.get("cid", "")),
+                        str(data.get("asset", "APT")),
+                    )
                 )
         return [row for row in selected if row[1]]
 
     def _emit_complexes(self):
         selected = self.checked_complexes()
         if not selected:
-            QMessageBox.information(self, "단지를 체크해 주세요", "목록에서 추가할 단지를 체크해 주세요.")
+            QMessageBox.information(
+                self, "단지를 체크해 주세요", "목록에서 추가할 단지를 체크해 주세요."
+            )
             return
         self.complexes_added.emit(selected)
         self.accept()
@@ -741,7 +797,9 @@ class KeywordSearchDialog(QDialog):
     def _emit_region(self):
         item = self.region_list.currentItem()
         if item is None:
-            QMessageBox.information(self, "지역을 골라 주세요", "「지역」 목록에서 지역을 하나 골라 주세요.")
+            QMessageBox.information(
+                self, "지역을 골라 주세요", "「지역」 목록에서 지역을 하나 골라 주세요."
+            )
             return
         self.region_chosen.emit(dict(item.data(Qt.ItemDataRole.UserRole) or {}))
         self.accept()
@@ -749,6 +807,7 @@ class KeywordSearchDialog(QDialog):
 
 class RecentSearchDialog(QDialog):
     """최근 검색 기록 다이얼로그"""
+
     def __init__(self, parent=None, history_manager=None):
         super().__init__(parent)
         self.history_manager = history_manager
@@ -783,9 +842,9 @@ class RecentSearchDialog(QDialog):
         self.list.clear()
         if self.history_manager:
             for h in self.history_manager.get_recent():
-                complexes = h.get('complexes', [])
-                types = h.get('trade_types', [])
-                timestamp = h.get('timestamp', '')
+                complexes = h.get("complexes", [])
+                types = h.get("trade_types", [])
+                timestamp = h.get("timestamp", "")
                 text = f"{timestamp}  ·  단지 {len(complexes)}곳  ·  {', '.join(types)}"
                 item = QListWidgetItem(text)
                 item.setData(Qt.ItemDataRole.UserRole, h)

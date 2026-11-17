@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 class PlaywrightResponseTaskRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     @staticmethod
@@ -30,7 +31,9 @@ class PlaywrightResponseTaskRuntimeMixin:
             return 0, False
         if timeout_ms is None:
             try:
-                timeout_ms = int(getattr(self.thread, "playwright_response_drain_timeout_ms", 3000))
+                timeout_ms = int(
+                    getattr(self.thread, "playwright_response_drain_timeout_ms", 3000)
+                )
             except (TypeError, ValueError):
                 timeout_ms = 3000
         self.thread.stats["response_drain_wait_count"] = (
@@ -52,6 +55,8 @@ class PlaywrightResponseTaskRuntimeMixin:
                     task.cancel()
             if pending_tasks:
                 await asyncio.gather(*list(pending_tasks), return_exceptions=True)
-            self.thread.log(f"   타깃 응답 처리 대기 타임아웃 ({label}): {wait_count}", 30)
+            self.thread.log(
+                f"   타깃 응답 처리 대기 타임아웃 ({label}): {wait_count}", 30
+            )
         self.thread.emit_stats()
         return wait_count, timed_out

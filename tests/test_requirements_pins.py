@@ -11,9 +11,13 @@ from pathlib import Path
 
 
 def _parse_requirements():
-    pattern = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*(>=|==|~=|>|<=|<)?\s*([^;\s]*)\s*(?:;.*)?$")
+    pattern = re.compile(
+        r"^\s*([A-Za-z0-9_.\-]+)\s*(>=|==|~=|>|<=|<)?\s*([^;\s]*)\s*(?:;.*)?$"
+    )
     entries = []
-    text = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(encoding="utf-8")
+    text = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(
+        encoding="utf-8"
+    )
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("-"):

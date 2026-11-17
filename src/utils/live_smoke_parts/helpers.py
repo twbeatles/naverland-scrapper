@@ -113,7 +113,9 @@ async def _navigate_probe(page, url: str, timeout_ms: int) -> dict:
     response = None
     navigation_error = ""
     try:
-        response = await page.goto(url, wait_until="domcontentloaded", timeout=max(1000, int(timeout_ms)))
+        response = await page.goto(
+            url, wait_until="domcontentloaded", timeout=max(1000, int(timeout_ms))
+        )
     except Exception as exc:
         navigation_error = f"navigation_exception:{type(exc).__name__}:{exc}"
     try:
@@ -125,7 +127,11 @@ async def _navigate_probe(page, url: str, timeout_ms: int) -> dict:
         title = await page.title()
     except Exception:
         title = ""
-    status = int(response.status) if response is not None and getattr(response, "status", None) is not None else None
+    status = (
+        int(response.status)
+        if response is not None and getattr(response, "status", None) is not None
+        else None
+    )
     ok, reason = _classify_probe(final_url, title, status)
     if navigation_error:
         ok = False
@@ -161,7 +167,9 @@ async def _capture_response_status(page, matcher, timeout_ms: int):
             can_listen = False
     try:
         try:
-            await asyncio.wait_for(matched_event.wait(), timeout=max(0.1, float(timeout_ms) / 1000.0))
+            await asyncio.wait_for(
+                matched_event.wait(), timeout=max(0.1, float(timeout_ms) / 1000.0)
+            )
         except Exception:
             pass
         return bool(matched_event.is_set()), matched_status
@@ -174,13 +182,26 @@ async def _capture_response_status(page, matcher, timeout_ms: int):
 
 
 def _detail_field_presence(detail: dict[str, Any]) -> dict[str, int | str]:
-    meta = dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
-    office = bool(str(detail.get("부동산상호", "") or "").strip()) if isinstance(detail, dict) else False
-    agent = bool(str(detail.get("중개사이름", "") or "").strip()) if isinstance(detail, dict) else False
+    meta = (
+        dict(detail.get("_detail_meta", {}) or {}) if isinstance(detail, dict) else {}
+    )
+    office = (
+        bool(str(detail.get("부동산상호", "") or "").strip())
+        if isinstance(detail, dict)
+        else False
+    )
+    agent = (
+        bool(str(detail.get("중개사이름", "") or "").strip())
+        if isinstance(detail, dict)
+        else False
+    )
     phone = False
     prev_jeonse = False
     if isinstance(detail, dict):
-        phone = bool(str(detail.get("전화1", "") or "").strip() or str(detail.get("전화2", "") or "").strip())
+        phone = bool(
+            str(detail.get("전화1", "") or "").strip()
+            or str(detail.get("전화2", "") or "").strip()
+        )
         try:
             prev_jeonse = int(detail.get("기전세금(원)", 0) or 0) > 0
         except (TypeError, ValueError):

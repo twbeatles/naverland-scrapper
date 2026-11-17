@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabCardSyncMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _toggle_view_mode(self: Any):
@@ -34,7 +35,10 @@ class CrawlerTabCardSyncMixin:
 
     def _schedule_card_view_refresh(self: Any, *, immediate: bool = False):
         self._card_refresh_pending = True
-        if self.view_mode != "card" or self.view_stack.currentWidget() is not self.card_view:
+        if (
+            self.view_mode != "card"
+            or self.view_stack.currentWidget() is not self.card_view
+        ):
             return
         if immediate or not self._compact_updates_should_coalesce():
             if hasattr(self, "_card_refresh_timer"):
@@ -49,6 +53,9 @@ class CrawlerTabCardSyncMixin:
         if not self._card_refresh_pending:
             return
         self._card_refresh_pending = False
-        if self.view_mode != "card" or self.view_stack.currentWidget() is not self.card_view:
+        if (
+            self.view_mode != "card"
+            or self.view_stack.currentWidget() is not self.card_view
+        ):
             return
         self._apply_card_filters(self._pending_search_text)

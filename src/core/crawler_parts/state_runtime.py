@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerStateRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def __init__(
@@ -175,33 +176,45 @@ class CrawlerStateRuntimeMixin:
             self.playwright_detail_workers = 4
         self.block_heavy_resources = bool(block_heavy_resources)
         try:
-            self.playwright_response_drain_timeout_ms = max(100, int(playwright_response_drain_timeout_ms))
+            self.playwright_response_drain_timeout_ms = max(
+                100, int(playwright_response_drain_timeout_ms)
+            )
         except (TypeError, ValueError):
             self.playwright_response_drain_timeout_ms = 3000
         try:
-            self.playwright_navigation_timeout_ms = min(60000, max(1000, int(playwright_navigation_timeout_ms)))
+            self.playwright_navigation_timeout_ms = min(
+                60000, max(1000, int(playwright_navigation_timeout_ms))
+            )
         except (TypeError, ValueError):
             self.playwright_navigation_timeout_ms = 15000
         self.playwright_article_api_fast_path = bool(playwright_article_api_fast_path)
         try:
-            self.playwright_article_api_timeout_ms = min(20000, max(300, int(playwright_article_api_timeout_ms)))
+            self.playwright_article_api_timeout_ms = min(
+                20000, max(300, int(playwright_article_api_timeout_ms))
+            )
         except (TypeError, ValueError):
             self.playwright_article_api_timeout_ms = 2500
         try:
-            self.playwright_article_response_wait_ms = min(20000, max(100, int(playwright_article_response_wait_ms)))
+            self.playwright_article_response_wait_ms = min(
+                20000, max(100, int(playwright_article_response_wait_ms))
+            )
         except (TypeError, ValueError):
             self.playwright_article_response_wait_ms = 1200
         self.geo_incomplete_safety_mode = bool(geo_incomplete_safety_mode)
         self.include_pre_sale_rights = bool(include_pre_sale_rights)
         self.detail_enrichment_enabled = bool(detail_enrichment_enabled)
         try:
-            self.detail_enrichment_max_per_complex = max(0, min(500, int(detail_enrichment_max_per_complex)))
+            self.detail_enrichment_max_per_complex = max(
+                0, min(500, int(detail_enrichment_max_per_complex))
+            )
         except (TypeError, ValueError):
             self.detail_enrichment_max_per_complex = 0
         self.detail_front_api_enabled = bool(detail_front_api_enabled)
         self.detail_front_api_only = bool(detail_front_api_only)
         try:
-            self.article_api_page_delay_ms = max(0, min(2000, int(article_api_page_delay_ms)))
+            self.article_api_page_delay_ms = max(
+                0, min(2000, int(article_api_page_delay_ms))
+            )
         except (TypeError, ValueError):
             self.article_api_page_delay_ms = 150
         self.geo_incomplete = False
@@ -282,12 +295,16 @@ class CrawlerStateRuntimeMixin:
         if isinstance(entry, dict):
             name = str(entry.get("name", "") or "")
             cid = str(entry.get("cid", entry.get("complex_id", "")) or "")
-            asset_type = self._normalize_target_asset_type(entry.get("asset_type", "APT"))
+            asset_type = self._normalize_target_asset_type(
+                entry.get("asset_type", "APT")
+            )
             return name, cid, asset_type
         if isinstance(entry, (list, tuple)):
             name = str(entry[0] if len(entry) >= 1 else "" or "")
             cid = str(entry[1] if len(entry) >= 2 else "" or "")
-            asset_type = self._normalize_target_asset_type(entry[2] if len(entry) >= 3 else "APT")
+            asset_type = self._normalize_target_asset_type(
+                entry[2] if len(entry) >= 3 else "APT"
+            )
             return name, cid, asset_type
         return "", "", "APT"
 
@@ -314,7 +331,9 @@ class CrawlerStateRuntimeMixin:
         return pairs
 
     def _remaining_pairs(self):
-        return [pair for pair in self._pair_sequence if pair not in self._processed_pairs]
+        return [
+            pair for pair in self._pair_sequence if pair not in self._processed_pairs
+        ]
 
     def _mark_pair_processed(self, name, cid, trade_type, asset_type="APT"):
         self._processed_pairs.add(self._pair_key(name, cid, trade_type, asset_type))
@@ -361,7 +380,8 @@ class CrawlerStateRuntimeMixin:
         self.stats["geo_incomplete"] = True
         self.stats["geo_incomplete_count"] = int(self.geo_incomplete_count)
         self.stats["geo_incomplete_reasons"] = [
-            self._geo_incomplete_reason_label(reason) for reason in self.geo_incomplete_reasons
+            self._geo_incomplete_reason_label(reason)
+            for reason in self.geo_incomplete_reasons
         ]
         detail_text = f" ({detail})" if detail else ""
         self.log(f"   geo incomplete flagged: {token}{detail_text}", 30)
@@ -378,16 +398,26 @@ class CrawlerStateRuntimeMixin:
         return mapping.get(token, token or "unknown")
 
     def _geo_incomplete_reason_summary(self) -> str:
-        reasons = [self._geo_incomplete_reason_label(reason) for reason in self.geo_incomplete_reasons]
+        reasons = [
+            self._geo_incomplete_reason_label(reason)
+            for reason in self.geo_incomplete_reasons
+        ]
         return ", ".join(reasons)
 
     def _should_persist_geo_results(self) -> bool:
-        return not (self.crawl_mode == "geo_sweep" and self.geo_incomplete and self.geo_incomplete_safety_mode)
+        return not (
+            self.crawl_mode == "geo_sweep"
+            and self.geo_incomplete
+            and self.geo_incomplete_safety_mode
+        )
 
     def _item_dedupe_key(self, item):
         if not isinstance(item, dict):
             return None
-        asset_type = str(item.get("자산유형", "") or item.get("asset_type", "")).strip().upper() or "APT"
+        asset_type = (
+            str(item.get("자산유형", "") or item.get("asset_type", "")).strip().upper()
+            or "APT"
+        )
         article_id = str(item.get("매물ID", "") or item.get("article_id", "")).strip()
         if not article_id:
             return None
@@ -397,7 +427,8 @@ class CrawlerStateRuntimeMixin:
             return None
         return (asset_type, complex_id, article_id, trade_type)
 
-    def log(self, msg, level=20): self.log_signal.emit(msg, level)
+    def log(self, msg, level=20):
+        self.log_signal.emit(msg, level)
 
     def _push_item(self, item):
         dedupe_key = self._item_dedupe_key(item)
@@ -417,7 +448,11 @@ class CrawlerStateRuntimeMixin:
         if not self.pending_items:
             return
         elapsed_ms = (time.monotonic() - self._last_batch_flush_at) * 1000
-        if force or len(self.pending_items) >= self.ui_batch_size or elapsed_ms >= self.ui_batch_interval_ms:
+        if (
+            force
+            or len(self.pending_items) >= self.ui_batch_size
+            or elapsed_ms >= self.ui_batch_interval_ms
+        ):
             batch = list(self.pending_items)
             self.pending_items.clear()
             self.items_signal.emit(batch)
@@ -434,15 +469,27 @@ class CrawlerStateRuntimeMixin:
             "price_down": self.stats.get("price_down", 0),
             "geo_discovered_count": self.stats.get("geo_discovered_count", 0),
             "geo_dedup_count": self.stats.get("geo_dedup_count", 0),
-            "geo_marker_switch_attempt_count": self.stats.get("geo_marker_switch_attempt_count", 0),
-            "geo_marker_switch_success_count": self.stats.get("geo_marker_switch_success_count", 0),
-            "geo_marker_switch_fail_count": self.stats.get("geo_marker_switch_fail_count", 0),
-            "geo_marker_switch_last_method": self.stats.get("geo_marker_switch_last_method", ""),
+            "geo_marker_switch_attempt_count": self.stats.get(
+                "geo_marker_switch_attempt_count", 0
+            ),
+            "geo_marker_switch_success_count": self.stats.get(
+                "geo_marker_switch_success_count", 0
+            ),
+            "geo_marker_switch_fail_count": self.stats.get(
+                "geo_marker_switch_fail_count", 0
+            ),
+            "geo_marker_switch_last_method": self.stats.get(
+                "geo_marker_switch_last_method", ""
+            ),
             "geo_incomplete": bool(self.stats.get("geo_incomplete", False)),
             "geo_incomplete_count": self.stats.get("geo_incomplete_count", 0),
-            "geo_incomplete_reasons": list(self.stats.get("geo_incomplete_reasons", [])),
+            "geo_incomplete_reasons": list(
+                self.stats.get("geo_incomplete_reasons", [])
+            ),
             "response_drain_wait_count": self.stats.get("response_drain_wait_count", 0),
-            "response_drain_timeout_count": self.stats.get("response_drain_timeout_count", 0),
+            "response_drain_timeout_count": self.stats.get(
+                "response_drain_timeout_count", 0
+            ),
             "response_seen_count": self.stats.get("response_seen_count", 0),
             "parse_success_count": self.stats.get("parse_success_count", 0),
             "parse_fail_count": self.stats.get("parse_fail_count", 0),
@@ -451,30 +498,58 @@ class CrawlerStateRuntimeMixin:
             "detail_success_count": self.stats.get("detail_success_count", 0),
             "detail_fail_count": self.stats.get("detail_fail_count", 0),
             "detail_partial_count": self.stats.get("detail_partial_count", 0),
-            "detail_missing_field_total": self.stats.get("detail_missing_field_total", 0),
-            "detail_fetch_skipped_count": self.stats.get("detail_fetch_skipped_count", 0),
+            "detail_missing_field_total": self.stats.get(
+                "detail_missing_field_total", 0
+            ),
+            "detail_fetch_skipped_count": self.stats.get(
+                "detail_fetch_skipped_count", 0
+            ),
             "blocked_page_count": self.stats.get("blocked_page_count", 0),
             "playwright_recycle_count": self.stats.get("playwright_recycle_count", 0),
-            "playwright_last_recycle_reason": self.stats.get("playwright_last_recycle_reason", ""),
-            "playwright_browser_source": self.stats.get("playwright_browser_source", ""),
+            "playwright_last_recycle_reason": self.stats.get(
+                "playwright_last_recycle_reason", ""
+            ),
+            "playwright_browser_source": self.stats.get(
+                "playwright_browser_source", ""
+            ),
             "playwright_browser_path": self.stats.get("playwright_browser_path", ""),
             "playwright_profile_dir": self.stats.get("playwright_profile_dir", ""),
             "playwright_session_reused": self.stats.get("playwright_session_reused", 0),
-            "playwright_headed_fallback_used": self.stats.get("playwright_headed_fallback_used", 0),
+            "playwright_headed_fallback_used": self.stats.get(
+                "playwright_headed_fallback_used", 0
+            ),
             "playwright_warmup_count": self.stats.get("playwright_warmup_count", 0),
-            "playwright_last_entry_plan": self.stats.get("playwright_last_entry_plan", ""),
-            "playwright_last_final_url": self.stats.get("playwright_last_final_url", ""),
-            "playwright_last_page_title": self.stats.get("playwright_last_page_title", ""),
-            "playwright_last_block_reason": self.stats.get("playwright_last_block_reason", ""),
+            "playwright_last_entry_plan": self.stats.get(
+                "playwright_last_entry_plan", ""
+            ),
+            "playwright_last_final_url": self.stats.get(
+                "playwright_last_final_url", ""
+            ),
+            "playwright_last_page_title": self.stats.get(
+                "playwright_last_page_title", ""
+            ),
+            "playwright_last_block_reason": self.stats.get(
+                "playwright_last_block_reason", ""
+            ),
             "response_match_count": self.stats.get("response_match_count", 0),
             "capture_failed_count": self.stats.get("capture_failed_count", 0),
             "block_like_redirect_count": self.stats.get("block_like_redirect_count", 0),
-            "article_api_fast_path_hit_count": self.stats.get("article_api_fast_path_hit_count", 0),
-            "article_api_fast_path_fail_count": self.stats.get("article_api_fast_path_fail_count", 0),
-            "article_api_fast_path_fallback_count": self.stats.get("article_api_fast_path_fallback_count", 0),
+            "article_api_fast_path_hit_count": self.stats.get(
+                "article_api_fast_path_hit_count", 0
+            ),
+            "article_api_fast_path_fail_count": self.stats.get(
+                "article_api_fast_path_fail_count", 0
+            ),
+            "article_api_fast_path_fallback_count": self.stats.get(
+                "article_api_fast_path_fallback_count", 0
+            ),
             "article_api_last_status": self.stats.get("article_api_last_status", ""),
-            "detail_network_response_total": self.stats.get("detail_network_response_total", 0),
-            "detail_hydration_hit_count": self.stats.get("detail_hydration_hit_count", 0),
+            "detail_network_response_total": self.stats.get(
+                "detail_network_response_total", 0
+            ),
+            "detail_hydration_hit_count": self.stats.get(
+                "detail_hydration_hit_count", 0
+            ),
             "fallback_trigger_count": self.stats.get("fallback_trigger_count", 0),
             "fallback_last_reason": self.stats.get("fallback_last_reason", ""),
             "block_detect_count": self.stats.get("block_detect_count", 0),
@@ -502,7 +577,9 @@ class CrawlerStateRuntimeMixin:
     def _blocked_pair_key(self, name, cid, trade_type, asset_type="APT"):
         return self._pair_key(name, cid, trade_type, asset_type)
 
-    def _get_pair_blocked_cooldown_remaining(self, name, cid, trade_type, asset_type="APT") -> float:
+    def _get_pair_blocked_cooldown_remaining(
+        self, name, cid, trade_type, asset_type="APT"
+    ) -> float:
         key = self._blocked_pair_key(name, cid, trade_type, asset_type)
         cooldown_until = float(self._blocked_pair_cooldown_until.get(key, 0.0) or 0.0)
         if cooldown_until <= 0.0:
@@ -518,17 +595,23 @@ class CrawlerStateRuntimeMixin:
         streak = int(self._blocked_pair_streaks.get(key, 0) or 0) + 1
         self._blocked_pair_streaks[key] = streak
         self._blocked_total_count = int(self._blocked_total_count) + 1
-        self.stats["blocked_page_count"] = int(self.stats.get("blocked_page_count", 0)) + 1
+        self.stats["blocked_page_count"] = (
+            int(self.stats.get("blocked_page_count", 0)) + 1
+        )
 
         pair_cooldown_started = False
         cooldown_seconds = 0
         if streak >= int(self._blocked_pair_streak_threshold):
             self._blocked_pair_streaks[key] = 0
             cooldown_seconds = int(self._blocked_pair_cooldown_sec)
-            self._blocked_pair_cooldown_until[key] = time.monotonic() + float(cooldown_seconds)
+            self._blocked_pair_cooldown_until[key] = time.monotonic() + float(
+                cooldown_seconds
+            )
             pair_cooldown_started = True
 
-        global_abort = int(self._blocked_total_count) >= int(self._blocked_global_threshold)
+        global_abort = int(self._blocked_total_count) >= int(
+            self._blocked_global_threshold
+        )
         return {
             "pair_streak": streak,
             "pair_cooldown_started": pair_cooldown_started,
@@ -561,16 +644,22 @@ class CrawlerStateRuntimeMixin:
         return False
 
     def _register_block_detection(self, reason: str = "") -> bool:
-        self.stats["block_detect_count"] = int(self.stats.get("block_detect_count", 0)) + 1
+        self.stats["block_detect_count"] = (
+            int(self.stats.get("block_detect_count", 0)) + 1
+        )
         self._consecutive_block_detect_count += 1
         if reason:
-            self.log(f"   ⚠️ 차단 신호 누적 {self._consecutive_block_detect_count}/{self._block_cooldown_threshold}: {reason}", 30)
+            self.log(
+                f"   ⚠️ 차단 신호 누적 {self._consecutive_block_detect_count}/{self._block_cooldown_threshold}: {reason}",
+                30,
+            )
         if self._consecutive_block_detect_count < int(self._block_cooldown_threshold):
             return False
         self._consecutive_block_detect_count = 0
-        self.stats["block_cooldown_count"] = int(self.stats.get("block_cooldown_count", 0)) + 1
+        self.stats["block_cooldown_count"] = (
+            int(self.stats.get("block_cooldown_count", 0)) + 1
+        )
         return True
 
     def _reset_block_detection_streak(self):
         self._consecutive_block_detect_count = 0
-

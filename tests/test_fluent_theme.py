@@ -8,7 +8,9 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestFluentTheme(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -132,7 +134,9 @@ def _close_app_window(w, qt_app):
     qt_app.processEvents()
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestNavigationExpanded(unittest.TestCase):
     """Left navigation must start expanded with labels (srtgo parity)."""
 
@@ -175,10 +179,13 @@ class TestNavigationExpanded(unittest.TestCase):
         w = self._make_window("light")
         items = w.navigationInterface.panel.items
         from src.ui.fluent.navigation import ROUTE_CRAWLER, ROUTE_SETTINGS
+
         self.assertIn(ROUTE_CRAWLER, items)
         self.assertIn(ROUTE_SETTINGS, items)
+
         def text_of(w):
             return getattr(w, "text", lambda: "")()
+
         labels = [text_of(entry.widget) for entry in items.values()]
         self.assertIn("매물 수집", labels)
         self.assertIn("설정", labels)

@@ -26,7 +26,9 @@ from src.utils.live_smoke_parts.helpers import (
 )
 
 
-async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool, list[str]]:
+async def _run_home_probes(
+    page, urls: list[str], timeout_ms: int
+) -> tuple[bool, list[str]]:
     overall_ok = True
     messages: list[str] = []
     for url in urls:
@@ -35,7 +37,9 @@ async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool
             final_url = str(result["final_url"] or "")
             # new.land must be healthy; fin/m may 404 (2026-08) — report but don't fail overall smoke.
             is_new = "new.land.naver.com" in (url or "")
-            is_fin_family = "fin.land.naver.com" in (url or "") or "m.land.naver.com" in (url or "")
+            is_fin_family = "fin.land.naver.com" in (
+                url or ""
+            ) or "m.land.naver.com" in (url or "")
             dead = "financial.pstatic.net/404" in final_url.lower()
             ok = bool(result["ok"]) and not (is_new and dead)
             if is_fin_family and dead:
@@ -60,7 +64,8 @@ async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool
                     final_url=final_url,
                     status=result["status"],
                     title=str(result["title"] or ""),
-                    reason=str(result["reason"] or "") + (";fin_html_dead" if dead else ""),
+                    reason=str(result["reason"] or "")
+                    + (";fin_html_dead" if dead else ""),
                 )
             )
             overall_ok = overall_ok and ok
@@ -70,7 +75,9 @@ async def _run_home_probes(page, urls: list[str], timeout_ms: int) -> tuple[bool
     return overall_ok, messages
 
 
-async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> tuple[bool, str, str, int | None]:
+async def _run_article_api_probe(
+    context, complex_id: str, timeout_ms: int
+) -> tuple[bool, str, str, int | None]:
     cid = str(complex_id or "").strip()
     if not cid:
         return False, "[fail] [article-api] missing complex id", "", None
@@ -114,12 +121,18 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                 timeout=max(1000, int(timeout_ms)),
             )
             try:
-                await asyncio.wait_for(captured_event.wait(), timeout=max(0.5, float(timeout_ms) / 1000.0))
+                await asyncio.wait_for(
+                    captured_event.wait(), timeout=max(0.5, float(timeout_ms) / 1000.0)
+                )
             except Exception:
                 pass
             captured_url = str(captured.get("url", "") or "")
             captured_headers = dict(captured.get("headers", {}) or {})
-            auth_header = str(captured_headers.get("authorization", "") or captured_headers.get("Authorization", "") or "")
+            auth_header = str(
+                captured_headers.get("authorization", "")
+                or captured_headers.get("Authorization", "")
+                or ""
+            )
             if captured_url:
                 target_url = captured_url
                 final_url = captured_url
@@ -128,7 +141,9 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
             if captured_headers.get("referer"):
                 headers["referer"] = str(captured_headers.get("referer") or "")
         except Exception as exc:
-            reason = _append_reason(reason, f"article_api_auth_capture:{type(exc).__name__}")
+            reason = _append_reason(
+                reason, f"article_api_auth_capture:{type(exc).__name__}"
+            )
         finally:
             if page is not None:
                 try:
@@ -157,7 +172,9 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
             for article in article_list:
                 if not isinstance(article, dict):
                     continue
-                aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
+                aid = str(
+                    article.get("articleNo") or article.get("atclNo") or ""
+                ).strip()
                 if aid and not sample_article_id:
                     sample_article_id = aid
                 if not sample_realtor:
@@ -169,7 +186,9 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
             elif isinstance(payload, dict) and article_api_has_more_pages(
                 payload, article_api_list_count(payload)
             ):
-                page2_url = build_article_api_url("complexes", cid, trade_type, "APT", page=2)
+                page2_url = build_article_api_url(
+                    "complexes", cid, trade_type, "APT", page=2
+                )
                 try:
                     response2 = await context.request.get(
                         page2_url,
@@ -179,7 +198,11 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                     status2 = int(getattr(response2, "status", 0) or 0)
                     if status2 < 400:
                         payload2 = await response2.json()
-                        list2 = payload2.get("articleList") or payload2.get("articles") or []
+                        list2 = (
+                            payload2.get("articleList")
+                            or payload2.get("articles")
+                            or []
+                        )
                         if isinstance(list2, list):
                             pages_fetched = 2
                             article_count = int(article_count or 0) + len(list2)
@@ -187,21 +210,37 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
                             for article in list2:
                                 if not isinstance(article, dict):
                                     continue
-                                aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
+                                aid = str(
+                                    article.get("articleNo")
+                                    or article.get("atclNo")
+                                    or ""
+                                ).strip()
                                 if aid and not sample_article_id:
                                     sample_article_id = aid
                                 if not sample_realtor:
-                                    sample_realtor = str(article.get("realtorName") or "").strip()
+                                    sample_realtor = str(
+                                        article.get("realtorName") or ""
+                                    ).strip()
                     else:
-                        reason = _append_reason(reason, f"article_api_page2_http_{status2}")
+                        reason = _append_reason(
+                            reason, f"article_api_page2_http_{status2}"
+                        )
                 except Exception as exc:
-                    reason = _append_reason(reason, f"article_api_page2:{type(exc).__name__}")
+                    reason = _append_reason(
+                        reason, f"article_api_page2:{type(exc).__name__}"
+                    )
             if article_count and int(article_count) > 0 and not sample_realtor:
                 reason = _append_reason(reason, "realtorName_missing")
     except Exception as exc:
-        reason = _append_reason(reason, f"article_api_exception:{type(exc).__name__}:{exc}")
+        reason = _append_reason(
+            reason, f"article_api_exception:{type(exc).__name__}:{exc}"
+        )
 
-    ok = bool(status is None or status < 400) and article_count is not None and int(article_count) > 0
+    ok = (
+        bool(status is None or status < 400)
+        and article_count is not None
+        and int(article_count) > 0
+    )
     extra = (
         f"api_articles={status if status is not None else '-'} "
         f"tradeType=A1 "
@@ -210,16 +249,21 @@ async def _run_article_api_probe(context, complex_id: str, timeout_ms: int) -> t
         f"sample_article={sample_article_id or '-'} "
         f"realtorName={'yes' if sample_realtor else 'no'}"
     )
-    return ok, _build_smoke_line(
-        ok=ok,
-        kind="article-api",
-        target=target_url,
-        final_url=final_url,
-        status=status,
-        title="",
-        reason=reason,
-        extra=extra,
-    ), sample_article_id, int(article_count) if article_count is not None else None
+    return (
+        ok,
+        _build_smoke_line(
+            ok=ok,
+            kind="article-api",
+            target=target_url,
+            final_url=final_url,
+            status=status,
+            title="",
+            reason=reason,
+            extra=extra,
+        ),
+        sample_article_id,
+        int(article_count) if article_count is not None else None,
+    )
 
 
 async def _capture_complex_articles(page, complex_id: str, timeout_ms: int) -> dict:
@@ -245,13 +289,17 @@ async def _capture_complex_articles(page, complex_id: str, timeout_ms: int) -> d
             state["status"] = int(raw_status) if raw_status is not None else None
             try:
                 payload = await response.json()
-                article_list = payload.get("articleList") or payload.get("articles") or []
+                article_list = (
+                    payload.get("articleList") or payload.get("articles") or []
+                )
                 if isinstance(article_list, list):
                     state["article_count"] = len(article_list)
                     for article in article_list:
                         if not isinstance(article, dict):
                             continue
-                        aid = str(article.get("articleNo") or article.get("atclNo") or "").strip()
+                        aid = str(
+                            article.get("articleNo") or article.get("atclNo") or ""
+                        ).strip()
                         if aid:
                             state["sample_article_id"] = aid
                             break
@@ -284,7 +332,9 @@ async def _capture_complex_articles(page, complex_id: str, timeout_ms: int) -> d
             can_listen = False
     try:
         try:
-            await asyncio.wait_for(matched_event.wait(), timeout=max(0.1, float(timeout_ms) / 1000.0))
+            await asyncio.wait_for(
+                matched_event.wait(), timeout=max(0.1, float(timeout_ms) / 1000.0)
+            )
         except Exception:
             pass
         if pending_tasks:
@@ -304,7 +354,9 @@ async def _capture_complex_articles(page, complex_id: str, timeout_ms: int) -> d
                 pass
 
 
-async def _run_complex_probe_detail(page, complex_id: str, timeout_ms: int) -> tuple[bool, str, str, int | None]:
+async def _run_complex_probe_detail(
+    page, complex_id: str, timeout_ms: int
+) -> tuple[bool, str, str, int | None]:
     cid = str(complex_id or "").strip()
     if not cid:
         return False, "[fail] [complex] missing complex id", "", None
@@ -342,20 +394,29 @@ async def _run_complex_probe_detail(page, complex_id: str, timeout_ms: int) -> t
         f"article_count={article_count if article_count is not None else '-'} "
         f"sample_article={sample_article_id or '-'}"
     )
-    return ok, _build_smoke_line(
-        ok=ok,
-        kind="complex",
-        target=target_url,
-        final_url=str(result["final_url"] or ""),
-        status=result["status"],
-        title=str(result["title"] or ""),
-        reason=reason,
-        extra=extra,
-    ), sample_article_id, int(article_count) if article_count is not None else None
+    return (
+        ok,
+        _build_smoke_line(
+            ok=ok,
+            kind="complex",
+            target=target_url,
+            final_url=str(result["final_url"] or ""),
+            status=result["status"],
+            title=str(result["title"] or ""),
+            reason=reason,
+            extra=extra,
+        ),
+        sample_article_id,
+        int(article_count) if article_count is not None else None,
+    )
 
 
-async def _run_complex_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
-    ok, line, _sample_article_id, _article_count = await _run_complex_probe_detail(page, complex_id, timeout_ms)
+async def _run_complex_probe(
+    page, complex_id: str, timeout_ms: int
+) -> tuple[bool, str]:
+    ok, line, _sample_article_id, _article_count = await _run_complex_probe_detail(
+        page, complex_id, timeout_ms
+    )
     return ok, line
 
 
@@ -367,7 +428,9 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
     target_url = f"https://fin.land.naver.com/articles/{aid}"
     expected_agent = f"/front-api/v1/article/agent?articleNumber={aid}"
     capture_task = asyncio.create_task(
-        _capture_response_status(page, lambda url: expected_agent in str(url or ""), timeout_ms)
+        _capture_response_status(
+            page, lambda url: expected_agent in str(url or ""), timeout_ms
+        )
     )
     result = await _navigate_probe(page, target_url, timeout_ms)
     reason = str(result["reason"] or "")
@@ -395,7 +458,11 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
             reason = _append_reason(reason, "generic_map_only")
     elif agent_status is not None and int(agent_status) >= 400:
         reason = _append_reason(reason, f"agent_http_{int(agent_status)}")
-    ok = bool(result["ok"]) and agent_seen and (agent_status is None or int(agent_status) < 400)
+    ok = (
+        bool(result["ok"])
+        and agent_seen
+        and (agent_status is None or int(agent_status) < 400)
+    )
     return ok, _build_smoke_line(
         ok=ok,
         kind="detail",
@@ -408,7 +475,9 @@ async def _run_detail_probe(page, article_id: str, timeout_ms: int) -> tuple[boo
     )
 
 
-async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tuple[bool, str]:
+async def _run_detail_field_probe(
+    page, article_id: str, timeout_ms: int
+) -> tuple[bool, str]:
     aid = str(article_id or "").strip()
     if not aid:
         return False, "[fail] [detail-fields] missing article id"
@@ -428,7 +497,9 @@ async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tup
     parse_state = str(presence["parse_state"] or "")
     core_field_count = int(presence["core_field_count"] or 0)
     ok = parse_state in {"partial", "success"} and core_field_count > 0
-    reason = "" if ok else f"parse_state={parse_state},core_field_count={core_field_count}"
+    reason = (
+        "" if ok else f"parse_state={parse_state},core_field_count={core_field_count}"
+    )
     extra = (
         f"parse_state={parse_state} "
         f"source={presence['source']} "
@@ -449,7 +520,9 @@ async def _run_detail_field_probe(page, article_id: str, timeout_ms: int) -> tup
     )
 
 
-async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str, str, int]:
+async def _run_fin_contract_probe(
+    page, complex_id: str, timeout_ms: int
+) -> tuple[bool, str, str, int]:
     """fin.land front-api contract (primary source since 2026-10-22).
 
     In-page fetch from the light fin origin page: keyword autocomplete and the
@@ -483,27 +556,48 @@ async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tup
     geo_count = 0
     status: int | None = None
     try:
-        await page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=timeout_ms)
-        search = await page.evaluate(
-            fetch_js, [build_fin_autocomplete_url("complexes", "헬리오시티"), "GET", None]
+        await page.goto(
+            FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=timeout_ms
         )
-        search_payload = _json.loads(str(search.get("body") or "{}")) if int(search.get("status") or 0) == 200 else {}
-        search_hits = len(((search_payload.get("result") or {}).get("list") or [])) if isinstance(search_payload, dict) else 0
+        search = await page.evaluate(
+            fetch_js,
+            [build_fin_autocomplete_url("complexes", "헬리오시티"), "GET", None],
+        )
+        search_payload = (
+            _json.loads(str(search.get("body") or "{}"))
+            if int(search.get("status") or 0) == 200
+            else {}
+        )
+        search_hits = (
+            len(((search_payload.get("result") or {}).get("list") or []))
+            if isinstance(search_payload, dict)
+            else 0
+        )
         if search_hits <= 0:
             reason = _append_reason(reason, f"fin_search_empty:{search.get('status')}")
         await page.wait_for_timeout(800)
         listing = await page.evaluate(
             fetch_js,
-            [FRONT_API_COMPLEX_ARTICLE_LIST, "POST", build_fin_article_list_body(complex_id, "매매", size=10)],
+            [
+                FRONT_API_COMPLEX_ARTICLE_LIST,
+                "POST",
+                build_fin_article_list_body(complex_id, "매매", size=10),
+            ],
         )
         status = int(listing.get("status") or 0) or None
-        parsed = parse_fin_article_list(_json.loads(str(listing.get("body") or "null"))) if status == 200 else None
+        parsed = (
+            parse_fin_article_list(_json.loads(str(listing.get("body") or "null")))
+            if status == 200
+            else None
+        )
         if parsed is None:
             reason = _append_reason(reason, f"fin_article_list_invalid:{status}")
         else:
             article_count = len(parsed["articles"])
             if parsed["articles"]:
-                sample_article_id = str(parsed["articles"][0].get("articleNo", "") or "")
+                sample_article_id = str(
+                    parsed["articles"][0].get("articleNo", "") or ""
+                )
         # Geo discovery contract: one bbox of the map list panel (default smoke area).
         await page.wait_for_timeout(800)
         bounded = await page.evaluate(
@@ -512,17 +606,24 @@ async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tup
                 FRONT_API_BOUNDED_COMPLEXES,
                 "POST",
                 build_fin_bounded_complexes_body(
-                    asset_type="APT", trade_type="매매", bounds=viewport_bounds(37.5608, 126.9888, 16), zoom=16
+                    asset_type="APT",
+                    trade_type="매매",
+                    bounds=viewport_bounds(37.5608, 126.9888, 16),
+                    zoom=16,
                 ),
             ],
         )
         geo = (
-            parse_fin_bounded_complexes(_json.loads(str(bounded.get("body") or "null")), trade_code="A1")
+            parse_fin_bounded_complexes(
+                _json.loads(str(bounded.get("body") or "null")), trade_code="A1"
+            )
             if int(bounded.get("status") or 0) == 200
             else None
         )
         if geo is None:
-            reason = _append_reason(reason, f"fin_bounded_invalid:{bounded.get('status')}")
+            reason = _append_reason(
+                reason, f"fin_bounded_invalid:{bounded.get('status')}"
+            )
         else:
             geo_count = len(geo["markers"])
             if geo_count <= 0:
@@ -530,16 +631,21 @@ async def _run_fin_contract_probe(page, complex_id: str, timeout_ms: int) -> tup
     except Exception as exc:
         reason = _append_reason(reason, f"exception:{type(exc).__name__}")
     ok = not reason
-    return ok, _build_smoke_line(
-        ok=ok,
-        kind="fin-contract",
-        target=FRONT_API_COMPLEX_ARTICLE_LIST,
-        final_url=str(getattr(page, "url", "") or ""),
-        status=status,
-        title="",
-        reason=reason,
-        extra=f"complex={complex_id} articles={article_count} geo_complexes={geo_count}",
-    ), sample_article_id, article_count
+    return (
+        ok,
+        _build_smoke_line(
+            ok=ok,
+            kind="fin-contract",
+            target=FRONT_API_COMPLEX_ARTICLE_LIST,
+            final_url=str(getattr(page, "url", "") or ""),
+            status=status,
+            title="",
+            reason=reason,
+            extra=f"complex={complex_id} articles={article_count} geo_complexes={geo_count}",
+        ),
+        sample_article_id,
+        article_count,
+    )
 
 
 async def _run_geo_contract_probe(page, timeout_ms: int) -> tuple[bool, str]:
@@ -579,7 +685,9 @@ async def _run_geo_contract_probe(page, timeout_ms: int) -> tuple[bool, str]:
     )
 
 
-async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple[bool, str]:
+async def _run_geo_marker_probe(
+    page, complex_id: str, timeout_ms: int
+) -> tuple[bool, str]:
     cid = str(complex_id or "").strip()
     if not cid:
         return False, "[fail] [geo-marker] missing complex id"
@@ -597,7 +705,10 @@ async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple
     capture_task = asyncio.create_task(
         _capture_response_status(
             page,
-            lambda url: "complexes/single-markers" in str(url or "") or "houses/single-markers" in str(url or ""),
+            lambda url: (
+                "complexes/single-markers" in str(url or "")
+                or "houses/single-markers" in str(url or "")
+            ),
             timeout_ms,
         )
     )
@@ -626,7 +737,11 @@ async def _run_geo_marker_probe(page, complex_id: str, timeout_ms: int) -> tuple
     elif marker_status is not None and int(marker_status) >= 400:
         reason = _append_reason(reason, f"marker_api_http_{int(marker_status)}")
     # Marker API capture alone can pass when DOM switch UI changed (2026-08 audit).
-    ok = bool(result["ok"]) and marker_seen and (marker_status is None or int(marker_status) < 400)
+    ok = (
+        bool(result["ok"])
+        and marker_seen
+        and (marker_status is None or int(marker_status) < 400)
+    )
     if ok and not clicked:
         reason = _append_reason(reason, "dom_switch_skipped_api_ok")
     return ok, _build_smoke_line(
@@ -651,8 +766,12 @@ def _run_article_lookup_probe(article_id: str) -> tuple[bool, str]:
         resolved = NaverURLParser.resolve_article_complex(aid)
     except Exception as exc:
         return False, f"[fail] [article-lookup] {aid} -> exception={exc}"
-    cid = str(resolved.get("complex_id", "") or "") if isinstance(resolved, dict) else ""
-    asset_type = str(resolved.get("asset_type", "") or "") if isinstance(resolved, dict) else ""
+    cid = (
+        str(resolved.get("complex_id", "") or "") if isinstance(resolved, dict) else ""
+    )
+    asset_type = (
+        str(resolved.get("asset_type", "") or "") if isinstance(resolved, dict) else ""
+    )
     source = str(resolved.get("source", "") or "") if isinstance(resolved, dict) else ""
     ok = bool(cid)
     return ok, (

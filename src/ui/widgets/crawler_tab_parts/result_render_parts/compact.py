@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabCompactRenderMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _toggle_compact_duplicates(self: Any, enabled):
@@ -57,7 +58,9 @@ class CrawlerTabCompactRenderMixin:
         else:
             self._merge_compact_item(existing, item)
         if article_key:
-            self._compact_source_keys_by_key.setdefault(compact_key, set()).add(article_key)
+            self._compact_source_keys_by_key.setdefault(compact_key, set()).add(
+                article_key
+            )
             self._compact_key_by_article.setdefault(article_key, set()).add(compact_key)
         return compact_key, existing, created
 
@@ -106,7 +109,9 @@ class CrawlerTabCompactRenderMixin:
             self._compact_row_index_by_key = {}
             start_row = 0
         for row in range(start_row, len(self._compact_rows_data)):
-            self._compact_row_index_by_key[self._get_compact_key(self._compact_rows_data[row])] = row
+            self._compact_row_index_by_key[
+                self._get_compact_key(self._compact_rows_data[row])
+            ] = row
 
     def _compact_updates_should_coalesce(self: Any) -> bool:
         thread = getattr(self, "crawler_thread", None)
@@ -117,7 +122,9 @@ class CrawlerTabCompactRenderMixin:
         except Exception:
             return False
 
-    def _schedule_compact_refresh(self: Any, *, full: bool = False, immediate: bool = False):
+    def _schedule_compact_refresh(
+        self: Any, *, full: bool = False, immediate: bool = False
+    ):
         if full:
             self._compact_full_refresh_pending = True
         if immediate or not self._compact_updates_should_coalesce():
@@ -138,7 +145,8 @@ class CrawlerTabCompactRenderMixin:
         dirty_keys = [
             key
             for key in self._compact_dirty_keys
-            if key in self._compact_items_by_key and key in self._compact_row_index_by_key
+            if key in self._compact_items_by_key
+            and key in self._compact_row_index_by_key
         ]
         if not dirty_keys:
             self._compact_dirty_keys.clear()
@@ -188,9 +196,13 @@ class CrawlerTabCompactRenderMixin:
     def _sort_compact_rows(self: Any, rows):
         sort_key, is_asc = self._compact_sort_descriptor()
         if sort_key == "가격":
-            rows.sort(key=lambda d: self._extract_price_values(d)[2], reverse=not is_asc)
+            rows.sort(
+                key=lambda d: self._extract_price_values(d)[2], reverse=not is_asc
+            )
         elif sort_key == "면적":
-            rows.sort(key=lambda d: self._area_float(d.get("면적(평)", 0)), reverse=not is_asc)
+            rows.sort(
+                key=lambda d: self._area_float(d.get("면적(평)", 0)), reverse=not is_asc
+            )
         elif sort_key in ("거래", "거래유형"):
             rows.sort(key=lambda d: str(d.get("거래유형", "")), reverse=not is_asc)
         elif sort_key in ("평당가", "신규"):

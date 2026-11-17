@@ -60,12 +60,16 @@ NAV_ENTRIES: Sequence[tuple[str, NavEntry | str]] = (
     ),
     (
         ROUTE_FAVORITES,
-        NavEntry(ROUTE_FAVORITES, "즐겨찾기", _icon("HEART"), NavigationItemPosition.TOP),
+        NavEntry(
+            ROUTE_FAVORITES, "즐겨찾기", _icon("HEART"), NavigationItemPosition.TOP
+        ),
     ),
     ("analyze", "separator"),
     (
         ROUTE_DASHBOARD,
-        NavEntry(ROUTE_DASHBOARD, "대시보드", _icon("PIE_SINGLE"), NavigationItemPosition.TOP),
+        NavEntry(
+            ROUTE_DASHBOARD, "대시보드", _icon("PIE_SINGLE"), NavigationItemPosition.TOP
+        ),
     ),
     (
         ROUTE_STATS,
@@ -73,12 +77,16 @@ NAV_ENTRIES: Sequence[tuple[str, NavEntry | str]] = (
     ),
     (
         ROUTE_HISTORY,
-        NavEntry(ROUTE_HISTORY, "수집 기록", _icon("HISTORY"), NavigationItemPosition.TOP),
+        NavEntry(
+            ROUTE_HISTORY, "수집 기록", _icon("HISTORY"), NavigationItemPosition.TOP
+        ),
     ),
     ("auto", "separator"),
     (
         ROUTE_SCHEDULE,
-        NavEntry(ROUTE_SCHEDULE, "예약 수집", _icon("CALENDAR"), NavigationItemPosition.TOP),
+        NavEntry(
+            ROUTE_SCHEDULE, "예약 수집", _icon("CALENDAR"), NavigationItemPosition.TOP
+        ),
     ),
     (
         ROUTE_GUIDE,
@@ -120,6 +128,7 @@ def register_navigation(
         assert isinstance(entry, NavEntry)
         page = pages.get(entry.route_key)
         if entry.route_key == ROUTE_SETTINGS:
+
             def _settings_click(checked=False, _cb=on_settings):
                 if _cb is not None:
                     _cb()

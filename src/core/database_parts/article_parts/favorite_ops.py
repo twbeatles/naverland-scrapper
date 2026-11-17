@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 class ComplexDatabaseFavoriteOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def toggle_favorite(self, article_id, complex_id, asset_type="APT", is_active=True):
@@ -73,8 +74,10 @@ class ComplexDatabaseFavoriteOpsMixin:
     def get_favorites(self):
         conn = self._pool.get_connection()
         try:
-            rows = conn.cursor().execute(
-                """
+            rows = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT h.*, f.is_favorite, f.note,
                        f.created_at AS favorite_created_at,
                        f.updated_at AS favorite_updated_at
@@ -86,7 +89,9 @@ class ComplexDatabaseFavoriteOpsMixin:
                 WHERE f.is_favorite = 1
                 ORDER BY f.updated_at DESC
                 """
-            ).fetchall()
+                )
+                .fetchall()
+            )
             return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"favorite list read failed: {e}")
@@ -97,13 +102,17 @@ class ComplexDatabaseFavoriteOpsMixin:
     def get_favorite_keys(self):
         conn = self._pool.get_connection()
         try:
-            rows = conn.cursor().execute(
-                """
+            rows = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT COALESCE(NULLIF(asset_type, ''), 'APT') AS asset_type, article_id, complex_id
                 FROM article_favorites
                 WHERE is_favorite = 1
                 """
-            ).fetchall()
+                )
+                .fetchall()
+            )
             keys = set()
             for row in rows:
                 article_id = str(row["article_id"] or "")
@@ -122,14 +131,18 @@ class ComplexDatabaseFavoriteOpsMixin:
         asset_token = self._normalize_listing_asset_type(asset_type)
         conn = self._pool.get_connection()
         try:
-            row = conn.cursor().execute(
-                """
+            row = (
+                conn.cursor()
+                .execute(
+                    """
                 SELECT is_favorite, note
                 FROM article_favorites
                 WHERE article_id=? AND complex_id=? AND asset_type=?
                 """,
-                (article_id, complex_id, asset_token),
-            ).fetchone()
+                    (article_id, complex_id, asset_token),
+                )
+                .fetchone()
+            )
             if row:
                 return dict(row)
             return {"is_favorite": 0, "note": ""}

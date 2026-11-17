@@ -24,11 +24,30 @@ except ImportError:
 from src.utils.plot import sanitize_text_for_matplotlib, setup_korean_font
 
 # 시리즈 색: 다크/라이트 양쪽 배경에서 읽히는 중간 채도 팔레트.
-SERIES_COLORS: tuple[str, ...] = ("#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899")
+SERIES_COLORS: tuple[str, ...] = (
+    "#3b82f6",
+    "#f59e0b",
+    "#10b981",
+    "#ef4444",
+    "#8b5cf6",
+    "#ec4899",
+)
 
 _THEME_PALETTE = {
-    "dark": {"bg": "#1e1e28", "text": "#e6e6ee", "muted": "#9a9ab0", "grid": "#3a3a4a", "spine": "#4a4a5a"},
-    "light": {"bg": "#ffffff", "text": "#1f2937", "muted": "#64748b", "grid": "#e2e8f0", "spine": "#cbd5e1"},
+    "dark": {
+        "bg": "#1e1e28",
+        "text": "#e6e6ee",
+        "muted": "#9a9ab0",
+        "grid": "#3a3a4a",
+        "spine": "#4a4a5a",
+    },
+    "light": {
+        "bg": "#ffffff",
+        "text": "#1f2937",
+        "muted": "#64748b",
+        "grid": "#e2e8f0",
+        "spine": "#cbd5e1",
+    },
 }
 
 
@@ -107,7 +126,9 @@ class ChartWidget(QWidget):
             self._apply_axes_style()
             self.clear("차트가 없습니다.")
         else:
-            self.clear("Matplotlib 라이브러리가 설치되지 않았습니다.\n(pip install matplotlib)")
+            self.clear(
+                "Matplotlib 라이브러리가 설치되지 않았습니다.\n(pip install matplotlib)"
+            )
 
     # --- theme -----------------------------------------------------------
     @property
@@ -153,7 +174,9 @@ class ChartWidget(QWidget):
     def _title_text(self, title: str) -> str:
         title_text = str(title or "Price Trend")
         if not self._korean_font_ok:
-            title_text = sanitize_text_for_matplotlib(title_text, fallback="Price Trend")
+            title_text = sanitize_text_for_matplotlib(
+                title_text, fallback="Price Trend"
+            )
         return title_text
 
     def _apply_date_axis(self, xs: list[datetime]) -> None:
@@ -168,7 +191,10 @@ class ChartWidget(QWidget):
             # 하루치 기록이면 x축이 한 점으로 무너지므로 앞뒤로 여유를 준다.
             from datetime import timedelta
 
-            self.ax.set_xlim(cast(Any, xs[0] - timedelta(days=3)), cast(Any, xs[0] + timedelta(days=3)))
+            self.ax.set_xlim(
+                cast(Any, xs[0] - timedelta(days=3)),
+                cast(Any, xs[0] + timedelta(days=3)),
+            )
 
     def _show_canvas(self) -> None:
         if self.canvas is None:
@@ -205,7 +231,15 @@ class ChartWidget(QWidget):
         """여러 시세 시리즈를 그린다. 시리즈가 1개면 최저~최고 범위를 띠로 보여 준다."""
         if not MATPLOTLIB_AVAILABLE or self.ax is None or self.canvas is None:
             return
-        prepared: list[tuple[ChartSeries, list[datetime], list[float], list[Optional[float]], list[Optional[float]]]] = []
+        prepared: list[
+            tuple[
+                ChartSeries,
+                list[datetime],
+                list[float],
+                list[Optional[float]],
+                list[Optional[float]],
+            ]
+        ] = []
         for s in series:
             rows = []
             mins = list(s.min_vals) if s.min_vals is not None else [None] * len(s.dates)
@@ -224,7 +258,13 @@ class ChartWidget(QWidget):
             rows.sort(key=lambda r: r[0])
             if rows:
                 prepared.append(
-                    (s, [r[0] for r in rows], [r[1] for r in rows], [r[2] for r in rows], [r[3] for r in rows])
+                    (
+                        s,
+                        [r[0] for r in rows],
+                        [r[1] for r in rows],
+                        [r[2] for r in rows],
+                        [r[3] for r in rows],
+                    )
                 )
         if not prepared:
             self.clear("차트에 그릴 가격 기록이 없습니다.")
@@ -242,27 +282,49 @@ class ChartWidget(QWidget):
             for idx, (s, xs, ys, mins, maxs) in enumerate(prepared):
                 color = s.color or SERIES_COLORS[idx % len(SERIES_COLORS)]
                 all_x.extend(xs)
-                if single and show_band and all(v is not None for v in mins) and all(v is not None for v in maxs):
+                if (
+                    single
+                    and show_band
+                    and all(v is not None for v in mins)
+                    and all(v is not None for v in maxs)
+                ):
                     ax.fill_between(
-                        cast(Any, xs), cast(Any, mins), cast(Any, maxs),
-                        color=color, alpha=0.15, linewidth=0, label="최저~최고 범위",
+                        cast(Any, xs),
+                        cast(Any, mins),
+                        cast(Any, maxs),
+                        color=color,
+                        alpha=0.15,
+                        linewidth=0,
+                        label="최저~최고 범위",
                     )
                 ax.plot(
-                    cast(Any, xs), cast(Any, ys),
-                    marker="o", markersize=4 if len(xs) > 1 else 6,
-                    linestyle="-", color=color, linewidth=2, label=s.label,
+                    cast(Any, xs),
+                    cast(Any, ys),
+                    marker="o",
+                    markersize=4 if len(xs) > 1 else 6,
+                    linestyle="-",
+                    color=color,
+                    linewidth=2,
+                    label=s.label,
                 )
                 if single:
                     ax.annotate(
                         (point_formatter or format_price_point)(ys[-1]),
                         xy=(cast(Any, xs[-1]), ys[-1]),
-                        xytext=(6, 6), textcoords="offset points",
-                        color=pal["text"], fontsize=9, fontweight="bold",
+                        xytext=(6, 6),
+                        textcoords="offset points",
+                        color=pal["text"],
+                        fontsize=9,
+                        fontweight="bold",
                     )
             if FuncFormatter is not None:
-                ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: value_formatter(v)))
+                ax.yaxis.set_major_formatter(
+                    FuncFormatter(lambda v, _pos: value_formatter(v))
+                )
             self._apply_date_axis(all_x)
-            ax.set_title(self._title_text(title), color=pal["text"], fontsize=11, loc="left")
+            ax.set_title(
+                self._title_text(title), color=pal["text"], fontsize=11, loc="left"
+            )
             if len(prepared) > 1 or (single and show_band):
                 legend = ax.legend(loc="best", fontsize=8, frameon=False)
                 if legend is not None:
@@ -289,8 +351,12 @@ class ChartWidget(QWidget):
             self.clear("차트가 없습니다.")
             return
         if avg is None and isinstance(dates_list[0], (list, tuple)):
-            pairs = [p for p in dates_list if isinstance(p, (list, tuple)) and len(p) >= 2]
-            series = ChartSeries(label="가격", dates=[p[0] for p in pairs], avg=[p[1] for p in pairs])
+            pairs = [
+                p for p in dates_list if isinstance(p, (list, tuple)) and len(p) >= 2
+            ]
+            series = ChartSeries(
+                label="가격", dates=[p[0] for p in pairs], avg=[p[1] for p in pairs]
+            )
             self.update_series([series], title, show_band=False)
             return
         series = ChartSeries(
@@ -300,7 +366,9 @@ class ChartWidget(QWidget):
             min_vals=list(min_vals) if min_vals is not None else None,
             max_vals=list(max_vals) if max_vals is not None else None,
         )
-        self.update_series([series], title, show_band=min_vals is not None and max_vals is not None)
+        self.update_series(
+            [series], title, show_band=min_vals is not None and max_vals is not None
+        )
 
 
 def _as_float(value) -> Optional[float]:

@@ -15,6 +15,7 @@ ResultRow = dict[str, Any]
 
 class CrawlerTabResultAreaSetupMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     #: 메뉴에 보이는 쉬운 이름 → combo_sort 내부 기준 문자열
@@ -46,7 +47,9 @@ class CrawlerTabResultAreaSetupMixin:
 
         self.view_mode = settings.get("view_mode", "table")
         # Label shows the mode you can switch *to*.
-        self.btn_view_mode = QPushButton("카드로 보기" if self.view_mode != "card" else "표로 보기")
+        self.btn_view_mode = QPushButton(
+            "카드로 보기" if self.view_mode != "card" else "표로 보기"
+        )
         self.btn_view_mode.setObjectName("secondaryBtn")
         self.btn_view_mode.setToolTip("결과를 표 또는 카드 모양으로 바꿔 봅니다.")
         self.btn_view_mode.setCheckable(True)
@@ -57,17 +60,23 @@ class CrawlerTabResultAreaSetupMixin:
         # Secondary actions live in one menu to keep the toolbar slim.
         self.btn_result_more = QPushButton("정렬·필터")
         self.btn_result_more.setIcon(FIF.FILTER.icon())
-        self.btn_result_more.setToolTip("정렬, 상세 필터, 같은 매물 묶기, 표에 보일 항목을 바꿉니다.")
+        self.btn_result_more.setToolTip(
+            "정렬, 상세 필터, 같은 매물 묶기, 표에 보일 항목을 바꿉니다."
+        )
         self.btn_result_more.setObjectName("secondaryBtn")
         search_sort.addWidget(self.btn_result_more)
 
         self.check_compact_duplicates = QCheckBox("묶기")
         self.check_compact_duplicates.setChecked(self._compact_duplicates)
-        self.check_compact_duplicates.setToolTip("여러 중개소가 올린 같은 매물을 한 줄로 묶어 보여 줍니다.")
+        self.check_compact_duplicates.setToolTip(
+            "여러 중개소가 올린 같은 매물을 한 줄로 묶어 보여 줍니다."
+        )
         self.check_compact_duplicates.toggled.connect(self._toggle_compact_duplicates)
 
         self.btn_advanced_filter = QPushButton("상세 필터")
-        self.btn_advanced_filter.setToolTip("가격·면적·층·키워드 등 조건으로 결과를 좁혀 봅니다.")
+        self.btn_advanced_filter.setToolTip(
+            "가격·면적·층·키워드 등 조건으로 결과를 좁혀 봅니다."
+        )
         self.btn_advanced_filter.clicked.connect(self.open_advanced_filter_dialog)
 
         self.btn_clear_advanced_filter = QPushButton("필터 해제")
@@ -79,7 +88,9 @@ class CrawlerTabResultAreaSetupMixin:
         self.lbl_advanced_filter.setObjectName("fieldLabel")
 
         self.combo_sort = QComboBox()
-        self.combo_sort.addItems([criterion for _label, criterion in self.SORT_MENU_LABELS])
+        self.combo_sort.addItems(
+            [criterion for _label, criterion in self.SORT_MENU_LABELS]
+        )
         self.combo_sort.setToolTip("결과 정렬 기준을 선택합니다.")
         self.combo_sort.currentTextChanged.connect(self._sort_results)
 
@@ -186,22 +197,49 @@ class CrawlerTabResultAreaSetupMixin:
         # Table View
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(int(getattr(self, "RESULT_COLUMN_COUNT", 25)))
-        self.result_table.setHorizontalHeaderLabels([
-            "단지 이름", "거래 종류", "가격", "면적", "평당가", "층/방향", "특징",
-            "같은 매물", "신규", "가격 변동", "종류", "기존 전세금", "갭 금액", "갭 비율",
-            "수집 시각", "링크", "URL", "가격(숫자)",
-            "확인일", "동", "타입명", "동일주소", "정보제공", "중개소", "전화",
-        ])
+        self.result_table.setHorizontalHeaderLabels(
+            [
+                "단지 이름",
+                "거래 종류",
+                "가격",
+                "면적",
+                "평당가",
+                "층/방향",
+                "특징",
+                "같은 매물",
+                "신규",
+                "가격 변동",
+                "종류",
+                "기존 전세금",
+                "갭 금액",
+                "갭 비율",
+                "수집 시각",
+                "링크",
+                "URL",
+                "가격(숫자)",
+                "확인일",
+                "동",
+                "타입명",
+                "동일주소",
+                "정보제공",
+                "중개소",
+                "전화",
+            ]
+        )
         self.result_table.setColumnHidden(self.COL_URL, True)
         self.result_table.setColumnHidden(self.COL_PRICE_SORT, True)
         self.result_table.setAlternatingRowColors(True)
-        self.result_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.result_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
         self.result_table.setToolTip(
             "두 번 누르면 네이버 부동산 매물 페이지를 엽니다.\n오른쪽 클릭으로 그 단지의 시세 흐름을 볼 수 있습니다."
         )
         self.result_table.doubleClicked.connect(self._open_article_url)
         self.result_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.result_table.customContextMenuRequested.connect(self._show_result_context_menu)
+        self.result_table.customContextMenuRequested.connect(
+            self._show_result_context_menu
+        )
         from src.ui.widgets.components import EmptyStateWidget, install_token_labels
         from src.utils.ui_labels import asset_label
 
@@ -218,12 +256,16 @@ class CrawlerTabResultAreaSetupMixin:
             self.card_view.article_clicked.connect(self.article_open_handler)
         else:
             self.card_view.article_clicked.connect(
-                lambda d: webbrowser.open(get_article_url(d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")))
+                lambda d: webbrowser.open(
+                    get_article_url(
+                        d.get("단지ID"), d.get("매물ID"), d.get("자산유형", "APT")
+                    )
+                )
             )
         self.view_stack.addWidget(self.card_view)
 
         if self.view_mode == "card":
-             self.view_stack.setCurrentWidget(self.card_view)
+            self.view_stack.setCurrentWidget(self.card_view)
 
         self.result_empty = EmptyStateWidget(icon="SEARCH")
         rl.addWidget(self.result_empty, 1)
@@ -240,7 +282,9 @@ class CrawlerTabResultAreaSetupMixin:
         self.log_browser.setMinimumHeight(150)
         self.log_summary = QTextBrowser()
         self.log_summary.setMinimumHeight(150)
-        self.log_summary.setPlaceholderText("수집을 시작하면 진행 과정이 여기에 기록됩니다.")
+        self.log_summary.setPlaceholderText(
+            "수집을 시작하면 진행 과정이 여기에 기록됩니다."
+        )
         self.log_stack = QStackedWidget()
         self.log_stack.addWidget(self.log_summary)
         self.log_stack.addWidget(self.log_browser)
@@ -250,7 +294,9 @@ class CrawlerTabResultAreaSetupMixin:
             "수집이 잘 안 될 때 원인을 찾기 위한 세부 기록까지 보여 줍니다. 문의할 때 이 내용을 함께 보내 주세요."
         )
         self.check_log_details.toggled.connect(
-            lambda on: self.log_stack.setCurrentWidget(self.log_browser if on else self.log_summary)
+            lambda on: self.log_stack.setCurrentWidget(
+                self.log_browser if on else self.log_summary
+            )
         )
         ll.addWidget(self.check_log_details)
         result_tabs.addTab(log_tab, "진행 기록")
@@ -263,14 +309,22 @@ class CrawlerTabResultAreaSetupMixin:
 
         result_model = self.result_table.model()
         if result_model is not None:
-            result_model.rowsInserted.connect(lambda *_: self._update_result_empty_state())
-            result_model.rowsRemoved.connect(lambda *_: self._update_result_empty_state())
-            result_model.modelReset.connect(lambda *_: self._update_result_empty_state())
+            result_model.rowsInserted.connect(
+                lambda *_: self._update_result_empty_state()
+            )
+            result_model.rowsRemoved.connect(
+                lambda *_: self._update_result_empty_state()
+            )
+            result_model.modelReset.connect(
+                lambda *_: self._update_result_empty_state()
+            )
         self._update_result_empty_state()
 
     def _sync_sort_menu_checks(self: Any, *_args):
         current = str(self.combo_sort.currentText() or "")
-        for criterion, action in (getattr(self, "_sort_menu_actions", None) or {}).items():
+        for criterion, action in (
+            getattr(self, "_sort_menu_actions", None) or {}
+        ).items():
             action.setChecked(criterion == current)
 
     #: (제목, 설명) — 서브클래스(지도 탐색)가 첫 안내 문구를 바꿀 수 있다.
@@ -293,7 +347,9 @@ class CrawlerTabResultAreaSetupMixin:
             except Exception:
                 running = False
             if running:
-                empty.set_text("매물을 수집하고 있습니다", "찾는 대로 여기에 바로 표시됩니다.")
+                empty.set_text(
+                    "매물을 수집하고 있습니다", "찾는 대로 여기에 바로 표시됩니다."
+                )
             elif getattr(self, "collected_data", None):
                 empty.set_text(
                     "조건에 맞는 매물이 없습니다",

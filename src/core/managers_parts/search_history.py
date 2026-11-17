@@ -28,7 +28,9 @@ class SearchHistoryManager:
 
     def _save(self):
         try:
-            atomic_write_json(paths_util.get_history_path(), self._history[: self.max_items])
+            atomic_write_json(
+                paths_util.get_history_path(), self._history[: self.max_items]
+            )
         except OSError as e:
             get_logger("SearchHistoryManager").warning(f"검색 기록 저장 실패: {e}")
 
@@ -39,11 +41,16 @@ class SearchHistoryManager:
             if isinstance(item, dict):
                 name = str(item.get("name", "") or "")
                 cid = str(item.get("cid", "") or "")
-                asset_type = str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(item.get("asset_type", "APT") or "APT").strip().upper() or "APT"
+                )
             elif isinstance(item, (list, tuple)) and len(item) >= 2:
                 name = str(item[0] or "")
                 cid = str(item[1] or "")
-                asset_type = str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper() or "APT"
+                asset_type = (
+                    str(item[2] if len(item) >= 3 else "APT" or "APT").strip().upper()
+                    or "APT"
+                )
             else:
                 continue
             normalized.append({"name": name, "cid": cid, "asset_type": asset_type})
@@ -53,7 +60,10 @@ class SearchHistoryManager:
     @staticmethod
     def _canonical_obj(value: Any):
         if isinstance(value, dict):
-            return {str(k): SearchHistoryManager._canonical_obj(value[k]) for k in sorted(value.keys())}
+            return {
+                str(k): SearchHistoryManager._canonical_obj(value[k])
+                for k in sorted(value.keys())
+            }
         if isinstance(value, list):
             return [SearchHistoryManager._canonical_obj(v) for v in value]
         return value
@@ -62,7 +72,9 @@ class SearchHistoryManager:
     def _dedupe_key(cls, search_info: dict) -> str:
         payload = {
             "complexes": cls._normalize_complexes(search_info.get("complexes", [])),
-            "trade_types": sorted([str(t) for t in (search_info.get("trade_types") or [])]),
+            "trade_types": sorted(
+                [str(t) for t in (search_info.get("trade_types") or [])]
+            ),
             "area_filter": cls._canonical_obj(search_info.get("area_filter") or {}),
             "price_filter": cls._canonical_obj(search_info.get("price_filter") or {}),
         }

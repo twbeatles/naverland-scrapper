@@ -13,6 +13,7 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 class PlaywrightComplexLoopMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     async def _run_complex_mode(self):
@@ -23,7 +24,10 @@ class PlaywrightComplexLoopMixin:
         total = len(targets) * len(self.thread.trade_types)
         current = 0
         processed_pairs = set()
-        for pair in set(getattr(self.thread, "_fallback_prefill_processed_target_pairs", set()) or set()):
+        for pair in set(
+            getattr(self.thread, "_fallback_prefill_processed_target_pairs", set())
+            or set()
+        ):
             if not isinstance(pair, tuple) or len(pair) < 2:
                 continue
             if len(pair) >= 3:
@@ -43,7 +47,9 @@ class PlaywrightComplexLoopMixin:
                 if trade_type not in attempted_trade_types:
                     attempted_trade_types.append(trade_type)
                 await self._check_memory_and_recycle_if_needed("complex_loop")
-                self.thread._current_pair = self.thread._pair_key(name, cid, trade_type, asset_type=asset_type)
+                self.thread._current_pair = self.thread._pair_key(
+                    name, cid, trade_type, asset_type=asset_type
+                )
                 current += 1
                 self.thread.progress_signal.emit(
                     int(current / total * 100) if total else 0,
@@ -52,42 +58,67 @@ class PlaywrightComplexLoopMixin:
                 )
                 self.thread.log(f"\n[{current}/{total}] {name} - {trade_type}")
                 try:
-                    result = await self._crawl_target_with_cache(name, cid, trade_type, asset_type=asset_type)
+                    result = await self._crawl_target_with_cache(
+                        name, cid, trade_type, asset_type=asset_type
+                    )
                     if bool(result.get("block_like_redirect", False)):
-                        raise RuntimeError(str(result.get("block_reason", "") or "block-like redirect"))
+                        raise RuntimeError(
+                            str(result.get("block_reason", "") or "block-like redirect")
+                        )
                     if bool(result.get("capture_failed", False)):
-                        raise RuntimeError(str(result.get("failure_reason", "") or "capture failed after navigation"))
+                        raise RuntimeError(
+                            str(
+                                result.get("failure_reason", "")
+                                or "capture failed after navigation"
+                            )
+                        )
                     count = int(result.get("count", 0))
                     complex_count += count
                     if not result_is_complete(result):
                         partial_trade_types.append(trade_type)
-                        self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
-                        self.thread.log(f"   일부만 수집: {count}건. 소멸 판정과 전체 통계 갱신을 생략합니다.", 30)
+                        self.thread.stats["collection_incomplete_count"] = (
+                            int(self.thread.stats.get("collection_incomplete_count", 0))
+                            + 1
+                        )
+                        self.thread.log(
+                            f"   일부만 수집: {count}건. 소멸 판정과 전체 통계 갱신을 생략합니다.",
+                            30,
+                        )
                         continue
                     if trade_type not in complex_trade_types:
                         complex_trade_types.append(trade_type)
                     processed_pair = (str(asset_type), str(cid), str(trade_type))
                     if not result.get("cache_hit", False):
                         processed_pairs.add(processed_pair)
-                        self.thread._fallback_prefill_processed_target_pairs.add(processed_pair)
+                        self.thread._fallback_prefill_processed_target_pairs.add(
+                            processed_pair
+                        )
                     self.thread.stats["by_trade_type"][trade_type] = (
                         self.thread.stats["by_trade_type"].get(trade_type, 0) + count
                     )
-                    self.thread._mark_pair_processed(name, cid, trade_type, asset_type=asset_type)
+                    self.thread._mark_pair_processed(
+                        name, cid, trade_type, asset_type=asset_type
+                    )
                     self.thread._reset_block_detection_streak()
                     self.thread.log(f"   {count}건 수집")
                 except Exception as exc:
-                    self.thread.stats["collection_incomplete_count"] = int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                    self.thread.stats["collection_incomplete_count"] = (
+                        int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
+                    )
                     self.thread.log(f"   오류: {exc}", 40)
                     block_like = self.thread._is_block_like_error(exc)
                     if block_like:
-                        should_cooldown = self.thread._register_block_detection(str(exc))
+                        should_cooldown = self.thread._register_block_detection(
+                            str(exc)
+                        )
                         if should_cooldown:
                             self.thread.log(
                                 f"   ⏸️ 차단 신호 3회 연속 감지, {int(self.thread._block_cooldown_seconds)}초 쿨다운",
                                 30,
                             )
-                            if not await self._sleep_async_interruptible(self.thread._block_cooldown_seconds):
+                            if not await self._sleep_async_interruptible(
+                                self.thread._block_cooldown_seconds
+                            ):
                                 self.thread._current_pair = None
                                 return
                     else:
@@ -144,6 +175,8 @@ class PlaywrightComplexLoopMixin:
                 run_status=run_status,
             )
             if complex_trade_types:
-                self.thread.complex_finished_signal.emit(name, cid, ",".join(complex_trade_types), int(complex_count))
+                self.thread.complex_finished_signal.emit(
+                    name, cid, ",".join(complex_trade_types), int(complex_count)
+                )
         self.thread._current_pair = None
         self.thread._finalize_disappeared_articles(processed_pairs)

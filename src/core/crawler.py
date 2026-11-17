@@ -30,18 +30,21 @@ try:
     from selenium.common.exceptions import NoSuchElementException, TimeoutException  # noqa: F401  # star-carried (do not remove)
     from selenium.webdriver.support import expected_conditions as EC  # noqa: F401  # star-carried (do not remove)
     from selenium.webdriver.support.ui import WebDriverWait  # noqa: F401  # star-carried (do not remove)
+
     UC_AVAILABLE = True
 except ImportError:
     UC_AVAILABLE = False
 
 try:
     from bs4 import BeautifulSoup  # noqa: F401  # star-carried (do not remove)
+
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
 
 try:
     import psutil  # noqa: F401  # star-carried (do not remove)
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -49,8 +52,6 @@ except ImportError:
 
 # 메모리 임계치 (MB) - 초과 시 드라이버 재시작
 MEMORY_THRESHOLD_MB = 500
-
-
 
 
 class CrawlerThread(
@@ -86,7 +87,6 @@ class CrawlerThread(
         "cloudflare",
         "bot detection",
     )
-    
 
 
 rebind_inherited_methods(

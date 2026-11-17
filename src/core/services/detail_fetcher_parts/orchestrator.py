@@ -30,14 +30,21 @@ def _structured_response_fields(artifacts: dict) -> dict:
     Complex-level payloads are skipped (their phone is the management office).
     """
     responses = [
-        item for item in list((artifacts or {}).get("responses", []) or [])
+        item
+        for item in list((artifacts or {}).get("responses", []) or [])
         if isinstance(item, dict) and isinstance(item.get("payload"), dict)
     ]
     ordered = [item for item in responses if _is_agent_response(item)]
-    ordered += [item for item in responses if not _is_agent_response(item) and not _is_complex_level_response(item)]
+    ordered += [
+        item
+        for item in responses
+        if not _is_agent_response(item) and not _is_complex_level_response(item)
+    ]
     fields: dict = {}
     for item in ordered:
-        fields = _merge_detail_field_maps(fields, parse_front_api_agent_payload(item["payload"]))
+        fields = _merge_detail_field_maps(
+            fields, parse_front_api_agent_payload(item["payload"])
+        )
     return fields
 
 
@@ -120,7 +127,9 @@ async def fetch_mobile_article_detail(
             final_url = str(getattr(detail_page, "url", "") or url)
         except Exception:
             final_url = url
-        if is_fin_html_dead_url(final_url, candidate_body) or _is_not_found_body(candidate_body):
+        if is_fin_html_dead_url(final_url, candidate_body) or _is_not_found_body(
+            candidate_body
+        ):
             fin_html_dead = True
             artifacts["detail_host_unreachable"] = True
         # DOM may be 404/map-only; still pull front-api with browser cookies.
@@ -133,7 +142,11 @@ async def fetch_mobile_article_detail(
             )
         candidate_corpus = str(artifacts.get("corpus_text", "") or "")
         has_network = bool(artifacts.get("responses"))
-        if _is_not_found_body(candidate_body) and not candidate_corpus and not has_network:
+        if (
+            _is_not_found_body(candidate_body)
+            and not candidate_corpus
+            and not has_network
+        ):
             if fin_html_dead:
                 break
             continue
@@ -150,7 +163,9 @@ async def fetch_mobile_article_detail(
                 pass
 
         body_text = str(merged_artifacts.get("body_text", "") or candidate_body or "")
-        corpus_text = str(merged_artifacts.get("corpus_text", "") or candidate_corpus or "")
+        corpus_text = str(
+            merged_artifacts.get("corpus_text", "") or candidate_corpus or ""
+        )
         # Structured front-api payloads (broker agent first) win over text parsing:
         # page text also shows the complex management office phone.
         fields = _merge_detail_field_maps(
@@ -173,7 +188,9 @@ async def fetch_mobile_article_detail(
             best_body_text = body_text
             best_score = score
 
-        if _detail_core_field_score(fields) > 0 and str(meta.get("detail_parse_state", "")) in {"partial", "success"}:
+        if _detail_core_field_score(fields) > 0 and str(
+            meta.get("detail_parse_state", "")
+        ) in {"partial", "success"}:
             break
         if fin_html_dead:
             break
@@ -203,7 +220,13 @@ async def fetch_mobile_article_detail(
             best_score = cold_score
 
     final_fields = dict(best_fields)
-    final_meta = dict(best_meta) if best_meta else _build_detail_meta(best_source, best_body_text, final_fields, best_artifacts)
+    final_meta = (
+        dict(best_meta)
+        if best_meta
+        else _build_detail_meta(
+            best_source, best_body_text, final_fields, best_artifacts
+        )
+    )
     if fin_html_dead:
         final_meta["detail_host_unreachable"] = True
     final_fields["_detail_meta"] = final_meta

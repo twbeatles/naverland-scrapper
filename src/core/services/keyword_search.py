@@ -94,7 +94,9 @@ def parse_search_complexes(payload: Any) -> list[dict]:
             results.append(
                 {
                     "complex_id": cid,
-                    "name": str(item.get("complexName", item.get("houseName", "")) or "").strip(),
+                    "name": str(
+                        item.get("complexName", item.get("houseName", "")) or ""
+                    ).strip(),
                     "address": str(item.get("cortarAddress", "") or "").strip(),
                     "asset_type": _complex_asset_type(item),
                     "latitude": item.get("latitude"),
@@ -142,7 +144,14 @@ def parse_search_has_more(payload: Any) -> bool:
     return bool(isinstance(payload, dict) and payload.get("isMoreData"))
 
 
-_FIN_ASSET_BY_TYPE = {"A01": "APT", "A04": "APT", "B01": "APT", "A05": "VL", "A06": "VL", "C02": "VL"}
+_FIN_ASSET_BY_TYPE = {
+    "A01": "APT",
+    "A04": "APT",
+    "B01": "APT",
+    "A05": "VL",
+    "A06": "VL",
+    "C02": "VL",
+}
 
 
 def _fin_result(payload: Any) -> dict | None:
@@ -163,8 +172,16 @@ def _fin_coords(item: dict) -> tuple[float | None, float | None]:
     raw_coords = item.get("coordinates")
     coords: dict = raw_coords if isinstance(raw_coords, dict) else {}
     try:
-        lat = float(coords["yCoordinate"]) if coords.get("yCoordinate") is not None else None
-        lon = float(coords["xCoordinate"]) if coords.get("xCoordinate") is not None else None
+        lat = (
+            float(coords["yCoordinate"])
+            if coords.get("yCoordinate") is not None
+            else None
+        )
+        lon = (
+            float(coords["xCoordinate"])
+            if coords.get("xCoordinate") is not None
+            else None
+        )
     except (TypeError, ValueError):
         return None, None
     return lat, lon
@@ -188,7 +205,9 @@ def parse_fin_complex_candidates(payload: Any) -> list[dict]:
                 "complex_id": cid,
                 "name": str(item.get("complexName", "") or "").strip(),
                 "address": str(item.get("legalDivisionName", "") or "").strip(),
-                "asset_type": _FIN_ASSET_BY_TYPE.get(str(item.get("type", "") or "").upper(), "APT"),
+                "asset_type": _FIN_ASSET_BY_TYPE.get(
+                    str(item.get("type", "") or "").upper(), "APT"
+                ),
                 "latitude": lat,
                 "longitude": lon,
                 "deep_link": f"{HOST_FIN}/complexes/{cid}?tab=article",
@@ -246,7 +265,9 @@ def _is_region_tail(text: str) -> bool:
     return token.endswith(_REGION_TAIL_SUFFIXES)
 
 
-def address_query_variants(keyword: str, *, max_variants: int = _ADDRESS_VARIANT_CAP) -> list[str]:
+def address_query_variants(
+    keyword: str, *, max_variants: int = _ADDRESS_VARIANT_CAP
+) -> list[str]:
     """Build fallback queries so a full real address still resolves.
 
     ``/api/search`` matches short names (``반포동``, ``분당구``) reliably but
@@ -339,12 +360,18 @@ def _fin_get(url: str, keyword: str, page_fetch: PageFetch) -> Any:
     return payload
 
 
-def fetch_fin_suggestions(keyword: str, page_fetch: PageFetch, *, size: int = 10) -> list[str]:
+def fetch_fin_suggestions(
+    keyword: str, page_fetch: PageFetch, *, size: int = 10
+) -> list[str]:
     """Complex-name suggestions from fin autocomplete (errors raise)."""
     keyword = str(keyword or "").strip()
     if not keyword:
         return []
-    payload = _fin_get(build_fin_autocomplete_url("complexes", keyword, page=0, size=size), keyword, page_fetch)
+    payload = _fin_get(
+        build_fin_autocomplete_url("complexes", keyword, page=0, size=size),
+        keyword,
+        page_fetch,
+    )
     names: list[str] = []
     for row in parse_fin_complex_candidates(payload):
         name = row["name"]
@@ -353,7 +380,9 @@ def fetch_fin_suggestions(keyword: str, page_fetch: PageFetch, *, size: int = 10
     return names
 
 
-def fetch_fin_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> dict:
+def fetch_fin_search_page(
+    keyword: str, page_fetch: PageFetch, *, page: int = 1
+) -> dict:
     """One fin search page; ``page`` is 1-based like the legacy API.
 
     Regions are only fetched with the first page (they are few and do not page).
@@ -363,12 +392,16 @@ def fetch_fin_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1)
         return {"complexes": [], "regions": [], "is_more_data": False}
     page_no = max(1, int(page or 1))
     complex_payload = _fin_get(
-        build_fin_autocomplete_url("complexes", keyword, page=page_no - 1), keyword, page_fetch
+        build_fin_autocomplete_url("complexes", keyword, page=page_no - 1),
+        keyword,
+        page_fetch,
     )
     regions: list[dict] = []
     if page_no == 1:
         region_payload = _fin_get(
-            build_fin_autocomplete_url("legalDivisions", keyword, page=0), keyword, page_fetch
+            build_fin_autocomplete_url("legalDivisions", keyword, page=0),
+            keyword,
+            page_fetch,
         )
         regions = parse_fin_region_candidates(region_payload)
     return {
@@ -379,7 +412,9 @@ def fetch_fin_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1)
     }
 
 
-def fetch_complex_search_page(keyword: str, page_fetch: PageFetch, *, page: int = 1) -> dict:
+def fetch_complex_search_page(
+    keyword: str, page_fetch: PageFetch, *, page: int = 1
+) -> dict:
     """fin search first; legacy new.land ``/api/search`` when fin fails.
 
     Rate limits are not retried on the other host (both share bot signals).
@@ -408,7 +443,9 @@ def fetch_complex_suggestions(keyword: str, page_fetch: PageFetch) -> list[str]:
         return fetch_suggestions(keyword, page_fetch)
 
 
-def fetch_fin_complex_info(complex_id: str, page_fetch: PageFetch, *, asset_type: str = "APT") -> dict:
+def fetch_fin_complex_info(
+    complex_id: str, page_fetch: PageFetch, *, asset_type: str = "APT"
+) -> dict:
     """Name/address/coords for a complex number via fin ``/complex`` ({} on failure)."""
     from src.core.services.fin_article_api import parse_fin_complex_info
 
@@ -416,7 +453,9 @@ def fetch_fin_complex_info(complex_id: str, page_fetch: PageFetch, *, asset_type
     if not cid:
         return {}
     try:
-        status, body = page_fetch(build_fin_complex_info_url(cid, asset_type=asset_type))
+        status, body = page_fetch(
+            build_fin_complex_info_url(cid, asset_type=asset_type)
+        )
     except Exception:
         return {}
     if status != 200:
@@ -427,7 +466,9 @@ def fetch_fin_complex_info(complex_id: str, page_fetch: PageFetch, *, asset_type
         return {}
 
 
-def fetch_fin_region_by_coordinate(lat: float, lon: float, page_fetch: PageFetch) -> dict:
+def fetch_fin_region_by_coordinate(
+    lat: float, lon: float, page_fetch: PageFetch
+) -> dict:
     """Legal-division row for a map point ({} on failure); keeps the given point."""
     try:
         status, body = page_fetch(build_fin_region_by_coordinate_url(lat, lon))
@@ -441,7 +482,13 @@ def fetch_fin_region_by_coordinate(lat: float, lon: float, page_fetch: PageFetch
     name = str(result.get("legalDivisionName", "") or "").strip()
     if not number or not name:
         return {}
-    return {"cortar_no": number, "name": name, "latitude": float(lat), "longitude": float(lon), "deep_link": ""}
+    return {
+        "cortar_no": number,
+        "name": name,
+        "latitude": float(lat),
+        "longitude": float(lon),
+        "deep_link": "",
+    }
 
 
 def _is_empty_search_result(result: dict) -> bool:
@@ -467,7 +514,9 @@ def fetch_search_page_with_fallback(
     immediately (rate limits must not burn through variants). The winning
     query is reported as ``effective_query`` so follow-up pages keep it.
     """
-    variants = address_query_variants(keyword, max_variants=max_variants) or [str(keyword or "").strip()]
+    variants = address_query_variants(keyword, max_variants=max_variants) or [
+        str(keyword or "").strip()
+    ]
     last_error: KeywordSearchError | None = None
     empty: dict = {"complexes": [], "regions": [], "is_more_data": False}
     for variant in variants:
@@ -514,7 +563,9 @@ class KeywordBrowserSession:
 
         from src.utils.helpers import ChromeParamHelper
 
-        executable_path = self._executable_path or ChromeParamHelper.get_chrome_executable_path()
+        executable_path = (
+            self._executable_path or ChromeParamHelper.get_chrome_executable_path()
+        )
         self._playwright = sync_playwright().start()
         if executable_path:
             self._browser = self._playwright.chromium.launch(
@@ -522,12 +573,16 @@ class KeywordBrowserSession:
             )
         else:
             self._browser = self._playwright.chromium.launch(headless=True)
-        self._context = self._browser.new_context(locale="ko-KR", user_agent=DESKTOP_USER_AGENT)
+        self._context = self._browser.new_context(
+            locale="ko-KR", user_agent=DESKTOP_USER_AGENT
+        )
         self._context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
         self._page = self._context.new_page()
-        self._page.goto(FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=25000)
+        self._page.goto(
+            FIN_API_ORIGIN_PAGE, wait_until="domcontentloaded", timeout=25000
+        )
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

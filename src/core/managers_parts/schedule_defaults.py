@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 DEFAULT_SETTINGS = {
-    "theme": "dark", "crawl_speed": "보통", "minimize_to_tray": True,
-    "show_notifications": True, "confirm_before_close": True,
-    "play_sound_on_complete": True, "default_sort_column": "가격",
-    "default_sort_order": "asc", "max_search_history": 20,
-    "window_geometry": None, "splitter_sizes": None,
+    "theme": "dark",
+    "crawl_speed": "보통",
+    "minimize_to_tray": True,
+    "show_notifications": True,
+    "confirm_before_close": True,
+    "play_sound_on_complete": True,
+    "default_sort_column": "가격",
+    "default_sort_order": "asc",
+    "max_search_history": 20,
+    "window_geometry": None,
+    "splitter_sizes": None,
     "crawler_main_splitter_sizes": None,
     "crawler_controls_splitter_sizes": None,
     # v7.3 설정

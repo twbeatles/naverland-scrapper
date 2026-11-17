@@ -22,7 +22,9 @@ class TestArticleApiHelpers(unittest.TestCase):
 
     def test_real_estate_type_optional_pre(self):
         self.assertEqual(article_api_real_estate_type("APT"), "APT:ABYG:JGC")
-        self.assertEqual(article_api_real_estate_type("APT", include_pre=True), "APT:ABYG:JGC:PRE")
+        self.assertEqual(
+            article_api_real_estate_type("APT", include_pre=True), "APT:ABYG:JGC:PRE"
+        )
 
     def test_build_url_includes_page_param(self):
         url = build_article_api_url("complexes", "3833", "매매", "APT", page=2)
@@ -32,7 +34,9 @@ class TestArticleApiHelpers(unittest.TestCase):
         self.assertIn("realEstateType=APT%3AABYG%3AJGC", url)
 
     def test_build_url_include_pre(self):
-        url = build_article_api_url("complexes", "3833", "매매", "APT", page=1, include_pre=True)
+        url = build_article_api_url(
+            "complexes", "3833", "매매", "APT", page=1, include_pre=True
+        )
         self.assertIn("realEstateType=APT%3AABYG%3AJGC%3APRE", url)
 
     def test_query_params_default_page_is_one(self):
@@ -41,21 +45,36 @@ class TestArticleApiHelpers(unittest.TestCase):
         self.assertEqual(params["tradeType"], "B1")
 
     def test_has_more_pages_prefers_is_more_data_flag(self):
-        self.assertFalse(article_api_has_more_pages({"isMoreData": False, "articleList": []}, 20))
-        self.assertTrue(article_api_has_more_pages({"isMoreData": True, "articleList": []}, 1))
+        self.assertFalse(
+            article_api_has_more_pages({"isMoreData": False, "articleList": []}, 20)
+        )
+        self.assertTrue(
+            article_api_has_more_pages({"isMoreData": True, "articleList": []}, 1)
+        )
 
     def test_has_more_pages_falls_back_to_page_size(self):
         self.assertTrue(
-            article_api_has_more_pages({"articleList": [{}] * DEFAULT_ARTICLE_API_PAGE_SIZE}, DEFAULT_ARTICLE_API_PAGE_SIZE)
+            article_api_has_more_pages(
+                {"articleList": [{}] * DEFAULT_ARTICLE_API_PAGE_SIZE},
+                DEFAULT_ARTICLE_API_PAGE_SIZE,
+            )
         )
         self.assertFalse(
-            article_api_has_more_pages({"articleList": [{}] * 3}, 3, page_size=DEFAULT_ARTICLE_API_PAGE_SIZE)
+            article_api_has_more_pages(
+                {"articleList": [{}] * 3}, 3, page_size=DEFAULT_ARTICLE_API_PAGE_SIZE
+            )
         )
 
     def test_has_more_pages_uses_pre_filter_list_count_not_normalized_count(self):
-        payload = {"articleList": [{"articleNo": str(i)} for i in range(DEFAULT_ARTICLE_API_PAGE_SIZE)]}
+        payload = {
+            "articleList": [
+                {"articleNo": str(i)} for i in range(DEFAULT_ARTICLE_API_PAGE_SIZE)
+            ]
+        }
         self.assertEqual(article_api_list_count(payload), DEFAULT_ARTICLE_API_PAGE_SIZE)
-        self.assertTrue(article_api_has_more_pages(payload, article_api_list_count(payload)))
+        self.assertTrue(
+            article_api_has_more_pages(payload, article_api_list_count(payload))
+        )
         self.assertFalse(
             article_api_has_more_pages(payload, 1),
             "post-filter normalized count must not drive pagination termination",

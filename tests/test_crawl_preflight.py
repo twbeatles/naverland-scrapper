@@ -9,7 +9,9 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestCrawlPreflight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -149,11 +151,18 @@ class TestCrawlPreflight(unittest.TestCase):
         tab = self.tab
         head, notes = tab._run_summary_texts(
             12,
-            {"new_count": 3, "price_down": 2, "filtered_out": 5, "block_like_redirect_count": 1},
+            {
+                "new_count": 3,
+                "price_down": 2,
+                "filtered_out": 5,
+                "block_like_redirect_count": 1,
+            },
             stopped=False,
             elapsed_text="1분 5초",
         )
-        self.assertEqual(head, "수집 완료 · 매물 12건 · 신규 3건 · 가격 하락 2건 · 소요 1분 5초")
+        self.assertEqual(
+            head, "수집 완료 · 매물 12건 · 신규 3건 · 가격 하락 2건 · 소요 1분 5초"
+        )
         self.assertIn("뺀 매물 5건", notes)
         self.assertIn("접속을 제한", notes)
 
@@ -212,7 +221,9 @@ class TestCrawlPreflight(unittest.TestCase):
         tab = self.tab
         tab.combo_sort.setCurrentText("평당가 ↓")
 
-        checked = [c for c, action in tab._sort_menu_actions.items() if action.isChecked()]
+        checked = [
+            c for c, action in tab._sort_menu_actions.items() if action.isChecked()
+        ]
         self.assertEqual(checked, ["평당가 ↓"])
 
         rows = [{"단지명": "A", "평당가": 1000}, {"단지명": "B", "평당가": 3000}]
@@ -238,7 +249,9 @@ class TestCrawlPreflight(unittest.TestCase):
         dialog.deleteLater()
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestGeoPreflight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -278,7 +291,9 @@ class TestGeoPreflight(unittest.TestCase):
 
             tab._geo_place_name = "반포동"
             with (
-                patch("src.ui.widgets.geo_crawler_tab.QMessageBox.question") as mock_question,
+                patch(
+                    "src.ui.widgets.geo_crawler_tab.QMessageBox.question"
+                ) as mock_question,
                 patch.object(tab, "start_crawling", return_value=True) as mock_start,
             ):
                 self.assertTrue(tab.request_start())

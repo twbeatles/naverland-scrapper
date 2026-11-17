@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabStartStopMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def start_crawling(self: Any) -> bool:
@@ -39,7 +40,11 @@ class CrawlerTabStartStopMixin:
         self._crawl_lock_owner = lock_owner
 
         try:
-            in_maintenance = bool(self._maintenance_guard()) if callable(self._maintenance_guard) else False
+            in_maintenance = (
+                bool(self._maintenance_guard())
+                if callable(self._maintenance_guard)
+                else False
+            )
         except (TypeError, ValueError, AttributeError, RuntimeError):
             in_maintenance = False
         if in_maintenance:
@@ -59,7 +64,7 @@ class CrawlerTabStartStopMixin:
                 "수집할 단지가 없습니다.\n「단지 찾기」로 단지를 검색해 목록에 추가해 주세요.",
             )
             return False
-        
+
         target_list = self._normalize_task_table()
         if not target_list:
             crawl_lock.release(lock_owner)
@@ -70,7 +75,7 @@ class CrawlerTabStartStopMixin:
                 "수집할 단지가 없습니다.\n「단지 찾기」로 단지를 검색해 목록에 추가해 주세요.",
             )
             return False
-             
+
         trade_types = []
         if self.check_trade.isChecked():
             trade_types.append("매매")
@@ -78,14 +83,23 @@ class CrawlerTabStartStopMixin:
             trade_types.append("전세")
         if self.check_monthly.isChecked():
             trade_types.append("월세")
-        
+
         if not trade_types:
             crawl_lock.release(lock_owner)
             self._crawl_lock_owner = None
-            QMessageBox.warning(self, "거래 종류를 선택해 주세요", "매매·전세·월세 중 하나 이상을 선택해 주세요.")
+            QMessageBox.warning(
+                self,
+                "거래 종류를 선택해 주세요",
+                "매매·전세·월세 중 하나 이상을 선택해 주세요.",
+            )
             return False
 
-        engine_name = str(settings.get("crawl_engine", "playwright") or "playwright").strip().lower() or "playwright"
+        engine_name = (
+            str(settings.get("crawl_engine", "playwright") or "playwright")
+            .strip()
+            .lower()
+            or "playwright"
+        )
         unsupported_selenium_targets = [
             (name, cid, asset_type)
             for name, cid, asset_type in target_list
@@ -100,8 +114,12 @@ class CrawlerTabStartStopMixin:
                 "지금 선택된 보조 엔진(Selenium)은 아파트만 수집할 수 있습니다.\n"
                 "설정 → 고급에서 수집 엔진을 기본(Playwright)으로 바꾸거나, 목록에서 빌라를 빼 주세요.",
             )
-            self.append_log("보조 엔진(Selenium)은 빌라를 수집할 수 없어 시작하지 않았습니다.", 30)
-            self.status_message.emit("빌라는 기본 엔진(Playwright)에서만 수집할 수 있습니다.")
+            self.append_log(
+                "보조 엔진(Selenium)은 빌라를 수집할 수 없어 시작하지 않았습니다.", 30
+            )
+            self.status_message.emit(
+                "빌라는 기본 엔진(Playwright)에서만 수집할 수 있습니다."
+            )
             return False
 
         if (
@@ -134,11 +152,21 @@ class CrawlerTabStartStopMixin:
         self._crawl_finished_once = False
         self._begin_crawl_session()
 
-        area_filter = {"enabled": self.check_area_filter.isChecked(), "min": self.spin_area_min.value(), "max": self.spin_area_max.value()}
+        area_filter = {
+            "enabled": self.check_area_filter.isChecked(),
+            "min": self.spin_area_min.value(),
+            "max": self.spin_area_max.value(),
+        }
         price_filter = {
             "enabled": self.check_price_filter.isChecked(),
-            "매매": {"min": self.spin_trade_min.value(), "max": self.spin_trade_max.value()},
-            "전세": {"min": self.spin_jeonse_min.value(), "max": self.spin_jeonse_max.value()},
+            "매매": {
+                "min": self.spin_trade_min.value(),
+                "max": self.spin_trade_max.value(),
+            },
+            "전세": {
+                "min": self.spin_jeonse_min.value(),
+                "max": self.spin_jeonse_max.value(),
+            },
             "월세": {
                 "deposit_min": self.spin_monthly_deposit_min.value(),
                 "deposit_max": self.spin_monthly_deposit_max.value(),
@@ -177,14 +205,20 @@ class CrawlerTabStartStopMixin:
             cache_cls = _get_crawl_cache_cls()
             self.crawl_cache = cache_cls(
                 ttl_minutes=settings.get("cache_ttl_minutes", 30),
-                write_back_interval_sec=settings.get("cache_write_back_interval_sec", 2),
+                write_back_interval_sec=settings.get(
+                    "cache_write_back_interval_sec", 2
+                ),
                 max_entries=settings.get("cache_max_entries", 2000),
             )
-        
+
         # Start Thread
         crawler_thread_cls = _get_crawler_thread_cls()
         self.crawler_thread = crawler_thread_cls(
-            target_list, trade_types, area_filter, price_filter, self.db,
+            target_list,
+            trade_types,
+            area_filter,
+            price_filter,
+            self.db,
             speed=self.speed_slider.current_speed(),
             cache=self.crawl_cache,
             ui_batch_interval_ms=settings.get("ui_batch_interval_ms", 120),
@@ -201,16 +235,30 @@ class CrawlerTabStartStopMixin:
             fallback_engine_enabled=settings.get("fallback_engine_enabled", True),
             playwright_headless=settings.get("playwright_headless", True),
             playwright_detail_workers=settings.get("playwright_detail_workers", 4),
-            block_heavy_resources=settings.get("playwright_block_heavy_resources", True),
-            playwright_response_drain_timeout_ms=settings.get("playwright_response_drain_timeout_ms", 3000),
-            playwright_navigation_timeout_ms=settings.get("playwright_navigation_timeout_ms", 15000),
-            playwright_article_api_fast_path=settings.get("playwright_article_api_fast_path", True),
-            playwright_article_api_timeout_ms=settings.get("playwright_article_api_timeout_ms", 2500),
-            playwright_article_response_wait_ms=settings.get("playwright_article_response_wait_ms", 1200),
+            block_heavy_resources=settings.get(
+                "playwright_block_heavy_resources", True
+            ),
+            playwright_response_drain_timeout_ms=settings.get(
+                "playwright_response_drain_timeout_ms", 3000
+            ),
+            playwright_navigation_timeout_ms=settings.get(
+                "playwright_navigation_timeout_ms", 15000
+            ),
+            playwright_article_api_fast_path=settings.get(
+                "playwright_article_api_fast_path", True
+            ),
+            playwright_article_api_timeout_ms=settings.get(
+                "playwright_article_api_timeout_ms", 2500
+            ),
+            playwright_article_response_wait_ms=settings.get(
+                "playwright_article_response_wait_ms", 1200
+            ),
             **collection_runtime_kwargs(settings),
         )
         self.crawler_thread.log_signal.connect(self.append_log)
-        self.crawler_thread.progress_signal.connect(self.progress_widget.update_progress)
+        self.crawler_thread.progress_signal.connect(
+            self.progress_widget.update_progress
+        )
         self.crawler_thread.items_signal.connect(self._on_items_batch)
         self.crawler_thread.stats_signal.connect(self._update_stats_ui)
         self.crawler_thread.complex_finished_signal.connect(self._on_complex_finished)
@@ -228,10 +276,12 @@ class CrawlerTabStartStopMixin:
             self._set_inputs_locked(False)
             self.append_log(f"수집을 시작하지 못했습니다: {exc}", 40)
             return False
-        
+
         self._update_result_empty_state()
         self.progress_widget.status_label.setText("수집을 준비하고 있습니다…")
-        self.status_message.emit(f"단지 {len(target_list)}곳의 매물 수집을 시작했습니다.")
+        self.status_message.emit(
+            f"단지 {len(target_list)}곳의 매물 수집을 시작했습니다."
+        )
         self.crawling_started.emit()
         return True
 
@@ -320,5 +370,7 @@ class CrawlerTabStartStopMixin:
             self.crawler_thread = None
             self._release_crawl_lock()
             return True
-        self.append_log("수집이 제때 멈추지 않았습니다. 잠시 후 다시 시도해 주세요.", 30)
+        self.append_log(
+            "수집이 제때 멈추지 않았습니다. 잠시 후 다시 시도해 주세요.", 30
+        )
         return False

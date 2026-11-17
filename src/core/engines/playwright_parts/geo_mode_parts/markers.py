@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class PlaywrightGeoMarkerMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def _ingest_marker_payload(
@@ -26,8 +27,13 @@ class PlaywrightGeoMarkerMixin:
         if not isinstance(payload, list):
             return 0
         asset = str(asset_type or "APT").strip().upper() or "APT"
-        markers = [normalize_marker_payload(raw_marker, asset_type=asset) for raw_marker in payload]
-        return self._ingest_normalized_markers(discovered, markers, asset_type=asset, stats=stats)
+        markers = [
+            normalize_marker_payload(raw_marker, asset_type=asset)
+            for raw_marker in payload
+        ]
+        return self._ingest_normalized_markers(
+            discovered, markers, asset_type=asset, stats=stats
+        )
 
     def _ingest_normalized_markers(
         self,
@@ -41,7 +47,10 @@ class PlaywrightGeoMarkerMixin:
         added = 0
         default_asset = str(asset_type or "APT").strip().upper() or "APT"
         for marker in markers:
-            asset = str(marker.get("asset_type", "") or default_asset).strip().upper() or default_asset
+            asset = (
+                str(marker.get("asset_type", "") or default_asset).strip().upper()
+                or default_asset
+            )
             cid = marker.get("complex_id", "")
             if not cid:
                 continue
@@ -58,7 +67,9 @@ class PlaywrightGeoMarkerMixin:
             else:
                 if stats is not None:
                     stats["dedup_skipped"] = int(stats.get("dedup_skipped", 0)) + 1
-                    self.thread.stats["geo_dedup_count"] = int(stats.get("dedup_skipped", 0) or 0)
+                    self.thread.stats["geo_dedup_count"] = int(
+                        stats.get("dedup_skipped", 0) or 0
+                    )
                     self.thread.emit_stats()
         return added
 
@@ -107,12 +118,16 @@ class PlaywrightGeoMarkerMixin:
     ) -> int:
         """Direct single-markers/2.0 request (fallback when DOM marker switch fails)."""
         context = self._desktop_context
-        request_context = getattr(context, "request", None) if context is not None else None
+        request_context = (
+            getattr(context, "request", None) if context is not None else None
+        )
         if request_context is None or not hasattr(request_context, "get"):
             return 0
         bounds = viewport_bounds(lat, lon, zoom)
         include_pre = bool(getattr(self.thread, "include_pre_sale_rights", False))
-        cortar_no = await self._resolve_cortar_no(request_context, lat=lat, lon=lon, zoom=zoom)
+        cortar_no = await self._resolve_cortar_no(
+            request_context, lat=lat, lon=lon, zoom=zoom
+        )
         if cortar_no:
             self.thread.stats["geo_marker_api_cortar_no_count"] = (
                 int(self.thread.stats.get("geo_marker_api_cortar_no_count", 0)) + 1
@@ -166,14 +181,18 @@ class PlaywrightGeoMarkerMixin:
             if self.thread._should_stop():
                 return
             url = response.url
-            if ("complexes/single-markers" not in url) and ("houses/single-markers" not in url):
+            if ("complexes/single-markers" not in url) and (
+                "houses/single-markers" not in url
+            ):
                 return
             try:
                 payload = await response.json()
             except Exception:
                 return
             asset = "VL" if "houses/" in url else "APT"
-            self._ingest_marker_payload(discovered, payload, asset_type=asset, stats=stats)
+            self._ingest_marker_payload(
+                discovered, payload, asset_type=asset, stats=stats
+            )
 
         def _handle(response):
             try:
@@ -191,7 +210,9 @@ class PlaywrightGeoMarkerMixin:
         )
         attempts: list[tuple[str, Any]] = []
         for text in ["상세매물검색", "매물", "매물검색", "매물 보기"]:
-            attempts.append((f"text:{text}", self._desktop_page.locator(f"text={text}").first))
+            attempts.append(
+                (f"text:{text}", self._desktop_page.locator(f"text={text}").first)
+            )
         for selector in [
             'button[aria-label*="매물"]',
             '[role="button"][aria-label*="매물"]',
@@ -201,7 +222,9 @@ class PlaywrightGeoMarkerMixin:
             '[class*="filter"] button:has-text("매물")',
             '[class*="type"] button:has-text("매물")',
         ]:
-            attempts.append((f"selector:{selector}", self._desktop_page.locator(selector).first))
+            attempts.append(
+                (f"selector:{selector}", self._desktop_page.locator(selector).first)
+            )
 
         for label, locator in attempts:
             try:
@@ -216,7 +239,9 @@ class PlaywrightGeoMarkerMixin:
             except Exception:
                 continue
         try:
-            await self._desktop_page.locator('button:has-text("유형")').first.click(timeout=1200)
+            await self._desktop_page.locator('button:has-text("유형")').first.click(
+                timeout=1200
+            )
             await self._desktop_page.wait_for_timeout(300)
             await self._desktop_page.locator("text=매물").first.click(timeout=1200)
             await self._desktop_page.wait_for_timeout(500)

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 class PlaywrightBrowserRuntimeMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self, name: str) -> Any: ...
 
     def __init__(self, thread):
@@ -103,7 +104,9 @@ class PlaywrightBrowserRuntimeMixin:
         stats.setdefault("detail_network_response_total", 0)
         stats.setdefault("detail_hydration_hit_count", 0)
 
-    async def _sleep_async_interruptible(self, seconds: float, chunk: float = 0.1) -> bool:
+    async def _sleep_async_interruptible(
+        self, seconds: float, chunk: float = 0.1
+    ) -> bool:
         remaining = max(0.0, float(seconds or 0.0))
         unit = min(0.2, max(0.05, float(chunk or 0.1)))
         while remaining > 0:
@@ -126,15 +129,28 @@ class PlaywrightBrowserRuntimeMixin:
                 last_exc = exc
                 if attempt >= tries:
                     break
-                self.thread.log(f"   retry in {PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt:.1f}s ({attempt}/{tries - 1}): {label}", 10)
-                if not await self._sleep_async_interruptible(PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt):
+                self.thread.log(
+                    f"   retry in {PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt:.1f}s ({attempt}/{tries - 1}): {label}",
+                    10,
+                )
+                if not await self._sleep_async_interruptible(
+                    PLAYWRIGHT_RETRY_BASE_DELAY_SEC * attempt
+                ):
                     raise RuntimeError(f"{label} aborted during retry backoff") from exc
         self.thread.log(f"   ⚠️ retry exhausted: {label} ({last_exc})", 30)
         raise last_exc if last_exc is not None else RuntimeError(f"{label} failed")
 
     def _navigation_timeout_ms(self) -> int:
         try:
-            return min(60000, max(1000, int(getattr(self.thread, "playwright_navigation_timeout_ms", 15000))))
+            return min(
+                60000,
+                max(
+                    1000,
+                    int(
+                        getattr(self.thread, "playwright_navigation_timeout_ms", 15000)
+                    ),
+                ),
+            )
         except (TypeError, ValueError):
             return 15000
 
@@ -149,8 +165,12 @@ class PlaywrightBrowserRuntimeMixin:
         if memory_mb <= PLAYWRIGHT_MEMORY_THRESHOLD_MB:
             return
 
-        self.thread.stats["playwright_recycle_count"] = int(self.thread.stats.get("playwright_recycle_count", 0)) + 1
-        self.thread.stats["playwright_last_recycle_reason"] = f"{reason}:{memory_mb:.0f}MB"
+        self.thread.stats["playwright_recycle_count"] = (
+            int(self.thread.stats.get("playwright_recycle_count", 0)) + 1
+        )
+        self.thread.stats["playwright_last_recycle_reason"] = (
+            f"{reason}:{memory_mb:.0f}MB"
+        )
         self.thread.log(
             f"⚠️ Playwright memory {memory_mb:.0f}MB > {PLAYWRIGHT_MEMORY_THRESHOLD_MB}MB, recycling browser context...",
             30,
@@ -170,7 +190,12 @@ class PlaywrightBrowserRuntimeMixin:
             if self._launch_headless_override is not None
             else bool(self.thread.playwright_headless)
         )
-        browser, browser_source, browser_path, actual_headless = await self._launch_browser(
+        (
+            browser,
+            browser_source,
+            browser_path,
+            actual_headless,
+        ) = await self._launch_browser(
             playwright,
             preferred_headless=preferred_headless,
         )
@@ -274,7 +299,9 @@ class PlaywrightBrowserRuntimeMixin:
                 except Exception:
                     should_stop = False
                 if should_stop:
-                    raise asyncio.CancelledError("detail page wait interrupted by stop request") from e
+                    raise asyncio.CancelledError(
+                        "detail page wait interrupted by stop request"
+                    ) from e
 
     async def _release_detail_page(self, page) -> None:
         pool = self._page_pool
@@ -296,7 +323,13 @@ class PlaywrightBrowserRuntimeMixin:
                     await page.close()
                 except Exception:
                     pass
-        for obj in [self._fin_api_page, self._desktop_page, self._mobile_context, self._desktop_context, self._browser]:
+        for obj in [
+            self._fin_api_page,
+            self._desktop_page,
+            self._mobile_context,
+            self._desktop_context,
+            self._browser,
+        ]:
             if obj is None:
                 continue
             try:
@@ -323,16 +356,22 @@ class PlaywrightBrowserRuntimeMixin:
     async def _launch_browser(self, playwright, *, preferred_headless: bool):
         launch_kwargs = {"headless": bool(preferred_headless)}
         try:
-            browser, browser_source, browser_path = await self._launch_browser_once(playwright, launch_kwargs)
+            browser, browser_source, browser_path = await self._launch_browser_once(
+                playwright, launch_kwargs
+            )
             return browser, browser_source, browser_path, bool(preferred_headless)
         except Exception as exc:
             if not bool(preferred_headless):
                 raise
-            self.thread.log(f"Playwright headless 실행 실패, headed 재시도합니다: {exc}", 30)
+            self.thread.log(
+                f"Playwright headless 실행 실패, headed 재시도합니다: {exc}", 30
+            )
             self._headed_fallback_used = True
             self.thread.stats["playwright_headed_fallback_used"] = 1
             launch_kwargs["headless"] = False
-            browser, browser_source, browser_path = await self._launch_browser_once(playwright, launch_kwargs)
+            browser, browser_source, browser_path = await self._launch_browser_once(
+                playwright, launch_kwargs
+            )
             return browser, browser_source, browser_path, False
 
     async def _launch_browser_once(self, playwright, launch_kwargs: dict):
@@ -347,8 +386,13 @@ class PlaywrightBrowserRuntimeMixin:
                 )
                 browser_source = "local_chrome"
                 browser_path = chrome_path
-                mode_label = "headless" if bool(launch_kwargs.get("headless")) else "headed"
-                self.thread.log(f"Playwright 브라우저: local Chrome 사용 ({mode_label}, {chrome_path})", 10)
+                mode_label = (
+                    "headless" if bool(launch_kwargs.get("headless")) else "headed"
+                )
+                self.thread.log(
+                    f"Playwright 브라우저: local Chrome 사용 ({mode_label}, {chrome_path})",
+                    10,
+                )
                 return browser, browser_source, browser_path
             except Exception as exc:
                 self.thread.log(
@@ -358,7 +402,9 @@ class PlaywrightBrowserRuntimeMixin:
         browser = await playwright.chromium.launch(**launch_kwargs)
         browser_path = str(getattr(playwright.chromium, "executable_path", "") or "")
         mode_label = "headless" if bool(launch_kwargs.get("headless")) else "headed"
-        self.thread.log(f"Playwright 브라우저: Chromium fallback 사용 ({mode_label})", 10)
+        self.thread.log(
+            f"Playwright 브라우저: Chromium fallback 사용 ({mode_label})", 10
+        )
         return browser, browser_source, browser_path
 
     def _profile_root(self) -> str:

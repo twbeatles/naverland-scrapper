@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 class CrawlerTabFinishMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _format_api_failure_summary(self: Any, final_stats: dict) -> str:
@@ -15,7 +16,9 @@ class CrawlerTabFinishMixin:
         if not isinstance(reasons, dict) or not reasons:
             return ""
         parts = []
-        for key, count in sorted(reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))):
+        for key, count in sorted(
+            reasons.items(), key=lambda item: (-int(item[1] or 0), str(item[0]))
+        ):
             parts.append(f"{key}={int(count or 0)}")
         return ", ".join(parts[:8])
 
@@ -39,36 +42,52 @@ class CrawlerTabFinishMixin:
                 final_stats = {}
         try:
             stopped = bool(getattr(self, "_stop_requested", False))
-            incomplete = bool(final_stats.get("collection_incomplete_count", 0) or final_stats.get("geo_incomplete", False)
-                              or final_stats.get("history_save_failed", False))
+            incomplete = bool(
+                final_stats.get("collection_incomplete_count", 0)
+                or final_stats.get("geo_incomplete", False)
+                or final_stats.get("history_save_failed", False)
+            )
             self.btn_save.setEnabled(True)
             if stopped:
                 # 중간에 멈춘 수집을 100% 완료처럼 보이게 하지 않는다.
                 self.progress_widget.status_label.setText("수집을 중지했습니다.")
                 self.progress_widget.time_label.setText("")
-                self.append_log(f"수집을 중지했습니다. 그때까지 매물 {len(data)}건을 모았습니다.", 30)
+                self.append_log(
+                    f"수집을 중지했습니다. 그때까지 매물 {len(data)}건을 모았습니다.",
+                    30,
+                )
             elif incomplete:
                 self.progress_widget.status_label.setText("일부 매물만 수집했습니다.")
                 self.progress_widget.time_label.setText("")
-                self.append_log(f"일부 매물 {len(data)}건을 모았습니다. 기존 전체 통계는 유지합니다.", 30)
+                self.append_log(
+                    f"일부 매물 {len(data)}건을 모았습니다. 기존 전체 통계는 유지합니다.",
+                    30,
+                )
             else:
                 self.progress_widget.complete()
                 self.append_log(f"수집을 마쳤습니다. 매물 {len(data)}건을 찾았습니다.")
             self._crawl_finished_once = True
             self.status_message.emit(
                 f"일부 매물만 수집했습니다. 현재 결과 {len(data)}건을 저장할 수 있습니다."
-                if incomplete and not stopped else self._finish_status_text(len(data), stopped)
+                if incomplete and not stopped
+                else self._finish_status_text(len(data), stopped)
             )
             self._show_run_summary(len(data), final_stats, stopped=stopped)
             if final_stats:
                 detail_skip = int(final_stats.get("detail_fetch_skipped_count", 0) or 0)
                 detail_cap = int(final_stats.get("detail_cap_truncated", 0) or 0)
-                detail_disabled = int(final_stats.get("detail_enrichment_disabled", 0) or 0)
+                detail_disabled = int(
+                    final_stats.get("detail_enrichment_disabled", 0) or 0
+                )
                 api_last = str(final_stats.get("article_api_last_status", "") or "-")
                 fail_summary = self._format_api_failure_summary(final_stats)
                 list_meta = int(final_stats.get("detail_list_meta_only_count", 0) or 0)
-                host_unreach = int(final_stats.get("detail_host_unreachable_count", 0) or 0)
-                rate_limited = int(final_stats.get("detail_front_api_rate_limited_count", 0) or 0)
+                host_unreach = int(
+                    final_stats.get("detail_host_unreachable_count", 0) or 0
+                )
+                rate_limited = int(
+                    final_stats.get("detail_front_api_rate_limited_count", 0) or 0
+                )
                 self.append_log(
                     "진단 요약: "
                     f"browser={final_stats.get('playwright_browser_source', '-')}, "
@@ -122,12 +141,13 @@ class CrawlerTabFinishMixin:
 
             if self.crawl_cache:
                 self.crawl_cache.flush()
-            
+
             # DB Write (ISSUE-007: synchronous while the crawl lock is held,
             # so the save cannot outlive the finally-block lock release).
             try:
                 reason = snapshot_block_reason(
-                    stopped=stopped, stats=final_stats,
+                    stopped=stopped,
+                    stats=final_stats,
                     area_filter=getattr(thread, "area_filter", {}),
                     price_filter=getattr(thread, "price_filter", {}),
                 )
@@ -155,10 +175,10 @@ class CrawlerTabFinishMixin:
                     QApplication.beep()
                 except RuntimeError as e:
                     logger.debug(f"완료 알림음 재생 실패 (무시): {e}")
-            
-            self.data_collected.emit(data) # Notify App
+
+            self.data_collected.emit(data)  # Notify App
             self.crawling_stopped.emit()
-            
+
         except (RuntimeError, AttributeError, TypeError, ValueError) as e:
             self.append_log(f"수집 결과를 정리하는 중 문제가 생겼습니다: {e}", 40)
             logger.error(f"Crawl finish handler failed: {e}")
@@ -176,7 +196,9 @@ class CrawlerTabFinishMixin:
     def _on_complex_finished(self: Any, name, cid, trade_types, count):
         self.append_log(f"{name}: 매물 {count}건", 20)
 
-    def _on_alert_triggered(self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id):
+    def _on_alert_triggered(
+        self: Any, complex_name, trade_type, price_text, area_pyeong, alert_id
+    ):
         try:
             safe_alert_id = int(alert_id or 0)
         except (TypeError, ValueError):
@@ -192,7 +214,9 @@ class CrawlerTabFinishMixin:
             f"알림 조건에 맞는 매물: {complex_name} {trade_type} {price_text} ({area_text})",
             30,
         )
-        self.alert_triggered.emit(complex_name, trade_type, price_text, safe_area, safe_alert_id)
+        self.alert_triggered.emit(
+            complex_name, trade_type, price_text, safe_area, safe_alert_id
+        )
 
     def _update_stats_ui(self: Any, stats):
         self.summary_card.update_stats(

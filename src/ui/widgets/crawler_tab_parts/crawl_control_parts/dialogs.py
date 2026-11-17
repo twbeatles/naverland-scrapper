@@ -8,12 +8,17 @@ if TYPE_CHECKING:
 
 class CrawlerTabDialogOpsMixin:
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     def _show_db_load_dialog(self: Any):
         complexes = self.db.get_all_complexes()
         if not complexes:
-            QMessageBox.information(self, "내 단지가 비어 있습니다", "아직 저장한 단지가 없습니다.\n단지를 추가한 뒤 「내 단지에 저장」을 눌러 두면 다음부터 여기서 불러올 수 있습니다.")
+            QMessageBox.information(
+                self,
+                "내 단지가 비어 있습니다",
+                "아직 저장한 단지가 없습니다.\n단지를 추가한 뒤 「내 단지에 저장」을 눌러 두면 다음부터 여기서 불러올 수 있습니다.",
+            )
             return
         db_complexes = []
         for _, name, asset_type, cid, _ in complexes:
@@ -39,7 +44,11 @@ class CrawlerTabDialogOpsMixin:
     def _show_group_load_dialog(self: Any):
         groups = self.db.get_all_groups()
         if not groups:
-            QMessageBox.information(self, "단지 묶음이 없습니다", "아직 만든 묶음이 없습니다.\n왼쪽 메뉴 「단지 묶음」에서 자주 보는 단지를 묶어 둘 수 있습니다.")
+            QMessageBox.information(
+                self,
+                "단지 묶음이 없습니다",
+                "아직 만든 묶음이 없습니다.\n왼쪽 메뉴 「단지 묶음」에서 자주 보는 단지를 묶어 둘 수 있습니다.",
+            )
             return
         items = [(name, gid) for gid, name, _ in groups]
         dlg = MultiSelectDialog("단지 묶음 불러오기", items, self)
@@ -51,14 +60,14 @@ class CrawlerTabDialogOpsMixin:
     def _show_recent_search_dialog(self: Any):
         if not self.history_manager:
             return
-        
+
         try:
             dlg = RecentSearchDialog(self, self.history_manager)
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_search:
                 search = dlg.selected_search
                 self.clear_tasks()
-                
-                complexes = search.get('complexes', [])
+
+                complexes = search.get("complexes", [])
                 for item in complexes:
                     if isinstance(item, (list, tuple)) and len(item) >= 3:
                         name, cid, asset_type = item[0], item[1], item[2]
@@ -68,45 +77,85 @@ class CrawlerTabDialogOpsMixin:
                         self.add_task(name, cid, "APT")
                     elif isinstance(item, dict):
                         self.add_task(
-                            item.get('name', ''),
-                            item.get('cid', ''),
-                            item.get('asset_type', 'APT'),
+                            item.get("name", ""),
+                            item.get("cid", ""),
+                            item.get("asset_type", "APT"),
                         )
-                        
+
                 # 거래유형 복원
-                types = search.get('trade_types', [])
+                types = search.get("trade_types", [])
                 self.check_trade.setChecked("매매" in types)
                 self.check_jeonse.setChecked("전세" in types)
                 self.check_monthly.setChecked("월세" in types)
 
                 area_filter = search.get("area_filter") or {}
                 self.check_area_filter.setChecked(bool(area_filter.get("enabled")))
-                self.spin_area_min.setValue(int(area_filter.get("min", self.spin_area_min.value()) or 0))
-                self.spin_area_max.setValue(int(area_filter.get("max", self.spin_area_max.value()) or 0))
+                self.spin_area_min.setValue(
+                    int(area_filter.get("min", self.spin_area_min.value()) or 0)
+                )
+                self.spin_area_max.setValue(
+                    int(area_filter.get("max", self.spin_area_max.value()) or 0)
+                )
 
                 price_filter = search.get("price_filter") or {}
                 self.check_price_filter.setChecked(bool(price_filter.get("enabled")))
                 sale = price_filter.get("매매", {}) or {}
                 jeonse = price_filter.get("전세", {}) or {}
                 monthly = price_filter.get("월세", {}) or {}
-                self.spin_trade_min.setValue(int(sale.get("min", self.spin_trade_min.value()) or 0))
-                self.spin_trade_max.setValue(int(sale.get("max", self.spin_trade_max.value()) or 0))
-                self.spin_jeonse_min.setValue(int(jeonse.get("min", self.spin_jeonse_min.value()) or 0))
-                self.spin_jeonse_max.setValue(int(jeonse.get("max", self.spin_jeonse_max.value()) or 0))
+                self.spin_trade_min.setValue(
+                    int(sale.get("min", self.spin_trade_min.value()) or 0)
+                )
+                self.spin_trade_max.setValue(
+                    int(sale.get("max", self.spin_trade_max.value()) or 0)
+                )
+                self.spin_jeonse_min.setValue(
+                    int(jeonse.get("min", self.spin_jeonse_min.value()) or 0)
+                )
+                self.spin_jeonse_max.setValue(
+                    int(jeonse.get("max", self.spin_jeonse_max.value()) or 0)
+                )
                 self.spin_monthly_deposit_min.setValue(
-                    int(monthly.get("deposit_min", monthly.get("min", self.spin_monthly_deposit_min.value())) or 0)
+                    int(
+                        monthly.get(
+                            "deposit_min",
+                            monthly.get("min", self.spin_monthly_deposit_min.value()),
+                        )
+                        or 0
+                    )
                 )
                 self.spin_monthly_deposit_max.setValue(
-                    int(monthly.get("deposit_max", monthly.get("max", self.spin_monthly_deposit_max.value())) or 0)
+                    int(
+                        monthly.get(
+                            "deposit_max",
+                            monthly.get("max", self.spin_monthly_deposit_max.value()),
+                        )
+                        or 0
+                    )
                 )
                 self.spin_monthly_rent_min.setValue(
-                    int(monthly.get("rent_min", monthly.get("min", self.spin_monthly_rent_min.value())) or 0)
+                    int(
+                        monthly.get(
+                            "rent_min",
+                            monthly.get("min", self.spin_monthly_rent_min.value()),
+                        )
+                        or 0
+                    )
                 )
                 self.spin_monthly_rent_max.setValue(
-                    int(monthly.get("rent_max", monthly.get("max", self.spin_monthly_rent_max.value())) or 0)
+                    int(
+                        monthly.get(
+                            "rent_max",
+                            monthly.get("max", self.spin_monthly_rent_max.value()),
+                        )
+                        or 0
+                    )
                 )
         except Exception as e:
-            QMessageBox.critical(self, "불러오지 못했습니다", f"최근 수집 조건을 불러오는 중 문제가 생겼습니다.\n{e}")
+            QMessageBox.critical(
+                self,
+                "불러오지 못했습니다",
+                f"최근 수집 조건을 불러오는 중 문제가 생겼습니다.\n{e}",
+            )
             logger.error(f"Recent search load failed: {e}")
 
     def _show_url_batch_dialog(self: Any):
@@ -178,7 +227,9 @@ class CrawlerTabDialogOpsMixin:
         cid_item = self.table_list.item(row, 1)
         asset_item = self.table_list.item(row, 2)
         if cid_item:
-            asset_type = self._normalize_task_asset_type(asset_item.text() if asset_item else "APT")
+            asset_type = self._normalize_task_asset_type(
+                asset_item.text() if asset_item else "APT"
+            )
             url = get_complex_url(cid_item.text(), asset_type=asset_type)
             webbrowser.open(url)
 
@@ -190,7 +241,11 @@ class CrawlerTabDialogOpsMixin:
 
     def _result_row_complex(self: Any, row: int) -> tuple[str, str]:
         """결과 표 한 줄의 (주택 종류, 단지 번호). 모르면 ("", "")."""
-        payload = self._row_payload_cache[row] if 0 <= row < len(self._row_payload_cache) else {}
+        payload = (
+            self._row_payload_cache[row]
+            if 0 <= row < len(self._row_payload_cache)
+            else {}
+        )
         cid = str((payload or {}).get("단지ID", "") or "").strip()
         asset = self._normalize_task_asset_type((payload or {}).get("자산유형", "APT"))
         return (asset, cid) if cid else ("", "")
@@ -211,7 +266,9 @@ class CrawlerTabDialogOpsMixin:
         asset, cid = self._result_row_complex(row)
         menu = QMenu(self)
         menu.addAction("매물 페이지 열기", self._open_article_url)
-        action = menu.addAction("이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid))
+        action = menu.addAction(
+            "이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid)
+        )
         if action is not None:
             action.setEnabled(bool(cid))
         viewport = self.result_table.viewport()
@@ -231,7 +288,9 @@ class CrawlerTabDialogOpsMixin:
         asset = asset_item.text() if asset_item is not None else "APT"
         menu = QMenu(self)
         menu.addAction("단지 페이지 열기", self._open_complex_url)
-        action = menu.addAction("이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid))
+        action = menu.addAction(
+            "이 단지 시세 흐름 보기", lambda: self._request_trend(asset, cid)
+        )
         if action is not None:
             action.setEnabled(bool(cid))
         viewport = self.table_list.viewport()
@@ -241,7 +300,9 @@ class CrawlerTabDialogOpsMixin:
         row = self.result_table.currentRow()
         if row < 0:
             return
-        payload = self._row_payload_cache[row] if row < len(self._row_payload_cache) else {}
+        payload = (
+            self._row_payload_cache[row] if row < len(self._row_payload_cache) else {}
+        )
         if payload and callable(getattr(self, "article_open_handler", None)):
             self.article_open_handler(payload)
             return

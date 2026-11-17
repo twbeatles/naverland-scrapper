@@ -168,7 +168,9 @@ def _in_korea(lat: float, lon: float) -> bool:
 def parse_map_center(url_or_text: str) -> tuple[float, float, int] | None:
     """(lat, lon, zoom) from new.land ``ms=`` or fin ``center=``/``zoom=``."""
     raw = str(url_or_text or "")
-    match = re.search(r"[?&]ms=([0-9A-Za-z.\-]+),([0-9A-Za-z.\-]+),(\d+(?:\.\d+)?)", raw)
+    match = re.search(
+        r"[?&]ms=([0-9A-Za-z.\-]+),([0-9A-Za-z.\-]+),(\d+(?:\.\d+)?)", raw
+    )
     lat = lon = None
     zoom: float | None = None
     if match:
@@ -194,7 +196,12 @@ def parse_fin_map_link(url: str) -> dict[str, Any]:
 
     The top-most matching layer wins (the stack is ordered bottom -> top).
     """
-    result: dict[str, Any] = {"complex_id": "", "article_id": "", "asset_type": "", "layers": []}
+    result: dict[str, Any] = {
+        "complex_id": "",
+        "article_id": "",
+        "asset_type": "",
+        "layers": [],
+    }
     try:
         query = parse_qs(urlparse(str(url or "")).query)
     except ValueError:

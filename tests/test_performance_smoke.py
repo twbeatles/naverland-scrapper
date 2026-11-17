@@ -7,7 +7,9 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestPerformanceSmoke(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

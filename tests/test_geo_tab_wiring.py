@@ -15,7 +15,9 @@ def _table_text(table, row: int, column: int) -> str:
     return item.text()
 
 
-@unittest.skipIf(importlib.util.find_spec("PySide6") is None, "PySide6 is not installed")
+@unittest.skipIf(
+    importlib.util.find_spec("PySide6") is None, "PySide6 is not installed"
+)
 class TestGeoTabWiring(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -56,7 +58,10 @@ class TestGeoTabWiring(unittest.TestCase):
                 return default
 
             with (
-                patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get),
+                patch(
+                    "src.ui.widgets.geo_crawler_tab.settings.get",
+                    side_effect=_settings_get,
+                ),
                 patch("src.core.crawler.CrawlerThread.start", return_value=None),
             ):
                 self.assertTrue(tab.start_crawling())
@@ -143,8 +148,13 @@ class TestGeoTabWiring(unittest.TestCase):
                 return overrides.get(key, default)
 
             with (
-                patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get),
-                patch("src.ui.widgets.geo_crawler_tab.CrawlerThread") as mock_thread_cls,
+                patch(
+                    "src.ui.widgets.geo_crawler_tab.settings.get",
+                    side_effect=_settings_get,
+                ),
+                patch(
+                    "src.ui.widgets.geo_crawler_tab.CrawlerThread"
+                ) as mock_thread_cls,
             ):
                 tab.start_crawling()
 
@@ -176,13 +186,25 @@ class TestGeoTabWiring(unittest.TestCase):
             db=db_stub,
         )
         emitted = []
-        thread.discovered_complex_signal.connect(lambda payload: emitted.append(payload))
+        thread.discovered_complex_signal.connect(
+            lambda payload: emitted.append(payload)
+        )
 
         thread.register_discovered_complex(
-            {"asset_type": "APT", "complex_id": "12345", "complex_name": "테스트단지", "count": 5}
+            {
+                "asset_type": "APT",
+                "complex_id": "12345",
+                "complex_name": "테스트단지",
+                "count": 5,
+            }
         )
         thread.register_discovered_complex(
-            {"asset_type": "APT", "complex_id": "12345", "complex_name": "테스트단지", "count": 8}
+            {
+                "asset_type": "APT",
+                "complex_id": "12345",
+                "complex_name": "테스트단지",
+                "count": 8,
+            }
         )
         self.assertEqual(db_stub.calls, 0)
         self.assertEqual(emitted[-1]["db_status"], "pending")
@@ -232,7 +254,9 @@ class TestGeoTabWiring(unittest.TestCase):
             self.assertTrue(any("지도 탐색 중 · 단지 4곳 발견" in m for m in messages))
             self.assertFalse(any("drain" in m or "marker" in m for m in messages))
             diagnostics = tab.last_diagnostic_text
-            self.assertIn("Geo 발견 4 / 중복제거 2 / drain대기 7 / drain타임아웃 1", diagnostics)
+            self.assertIn(
+                "Geo 발견 4 / 중복제거 2 / drain대기 7 / drain타임아웃 1", diagnostics
+            )
             self.assertIn("marker전환 2/3 / marker실패 1", diagnostics)
             self.assertIn("marker방법 text:매물", diagnostics)
             self.assertEqual(tab.progress_widget.toolTip(), diagnostics)
@@ -263,7 +287,9 @@ class TestGeoTabWiring(unittest.TestCase):
                 }
                 return overrides.get(key, default)
 
-            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+            with patch(
+                "src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get
+            ):
                 tab = GeoCrawlerTab(db)
                 self.assertEqual(tab.spin_rings.value(), 0)
                 tab.check_trade.setChecked(True)
@@ -292,7 +318,9 @@ class TestGeoTabWiring(unittest.TestCase):
             def now(cls, tz=None):
                 return cls(2026, 3, 19, 9, 5, 0)
 
-        with patch("src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+        with patch(
+            "src.ui.app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False
+        ):
             app = RealEstateApp()
 
         original_settings = copy.deepcopy(app_settings._settings)
@@ -306,18 +334,24 @@ class TestGeoTabWiring(unittest.TestCase):
                 app_settings._settings["schedule_config"]["last_run_at"] = ""
                 app.check_schedule.setChecked(True)
                 app.time_edit.setTime(QTime(9, 0))
-                app.schedule_mode_combo.setCurrentIndex(app.schedule_mode_combo.findData("geo_sweep"))
+                app.schedule_mode_combo.setCurrentIndex(
+                    app.schedule_mode_combo.findData("geo_sweep")
+                )
                 app.schedule_geo_lat.setValue(37.4321)
                 app.schedule_geo_lon.setValue(127.1234)
 
                 with (
                     patch("src.ui.app.datetime", _FixedDateTime),
-                    patch.object(app.geo_tab, "start_crawling", return_value=False) as mock_start,
+                    patch.object(
+                        app.geo_tab, "start_crawling", return_value=False
+                    ) as mock_start,
                 ):
                     app._check_schedule()
 
                 mock_start.assert_called_once()
-                self.assertEqual(app_settings.get("schedule_config", {}).get("last_run_slot"), "")
+                self.assertEqual(
+                    app_settings.get("schedule_config", {}).get("last_run_slot"), ""
+                )
         finally:
             app_settings._settings = original_settings
             if hasattr(app, "schedule_timer") and app.schedule_timer:
@@ -349,7 +383,9 @@ class TestGeoTabWiring(unittest.TestCase):
                 }
                 return overrides.get(key, default)
 
-            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+            with patch(
+                "src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get
+            ):
                 tab = GeoCrawlerTab(db)
 
             self.assertAlmostEqual(tab.spin_lat.value(), 37.1111, places=4)
@@ -379,7 +415,9 @@ class TestGeoTabWiring(unittest.TestCase):
             tab.deleteLater()
             self._qt_app.processEvents()
 
-    def test_geo_tab_can_apply_scheduled_profile_without_overwriting_last_manual_coords(self):
+    def test_geo_tab_can_apply_scheduled_profile_without_overwriting_last_manual_coords(
+        self,
+    ):
         from src.core.database import ComplexDatabase
 
         try:
@@ -399,7 +437,9 @@ class TestGeoTabWiring(unittest.TestCase):
                 }
                 return overrides.get(key, default)
 
-            with patch("src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get):
+            with patch(
+                "src.ui.widgets.geo_crawler_tab.settings.get", side_effect=_settings_get
+            ):
                 tab = GeoCrawlerTab(db)
 
             tab.check_trade.setChecked(True)
@@ -468,11 +508,20 @@ class TestGeoTabWiring(unittest.TestCase):
             tab._on_crawl_finished([])
 
             text = tab.log_browser.toPlainText()
-            self.assertIn("진단(지도) 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2", text)
-            self.assertIn("marker전환 4/5, marker실패 1, marker방법 selector:button", text)
-            self.assertTrue(any("지도 탐색을 마쳤습니다. 단지 11곳" in m for m in messages))
+            self.assertIn(
+                "진단(지도) 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2", text
+            )
+            self.assertIn(
+                "marker전환 4/5, marker실패 1, marker방법 selector:button", text
+            )
+            self.assertTrue(
+                any("지도 탐색을 마쳤습니다. 단지 11곳" in m for m in messages)
+            )
             self.assertFalse(any("drain" in m or "marker" in m for m in messages))
-            self.assertIn("Geo 완료: 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2", tab.last_diagnostic_text)
+            self.assertIn(
+                "Geo 완료: 발견 11, 중복제거 3, drain대기 19, drain타임아웃 2",
+                tab.last_diagnostic_text,
+            )
 
             db.close()
             tab.deleteLater()

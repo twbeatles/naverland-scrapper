@@ -10,6 +10,7 @@ class CrawlerTabPreflightMixin:
     """수집 시작 전 점검(조건 범위·확인·입력 잠금)과 끝난 뒤 요약."""
 
     if TYPE_CHECKING:
+
         def __getattr__(self: Any, name: str) -> Any: ...
 
     SQM_PER_PYEONG = 3.3058
@@ -31,8 +32,20 @@ class CrawlerTabPreflightMixin:
     # ── 조건 범위: 환산 표시 · 검증 · 접힌 상태 요약 ─────────────────
     def _price_filter_rows(self: Any):
         return (
-            ("매매 가격", "매매", self.check_trade, self.spin_trade_min, self.spin_trade_max),
-            ("전세 가격", "전세", self.check_jeonse, self.spin_jeonse_min, self.spin_jeonse_max),
+            (
+                "매매 가격",
+                "매매",
+                self.check_trade,
+                self.spin_trade_min,
+                self.spin_trade_max,
+            ),
+            (
+                "전세 가격",
+                "전세",
+                self.check_jeonse,
+                self.spin_jeonse_min,
+                self.spin_jeonse_max,
+            ),
             (
                 "월세 보증금",
                 "월세 보증금",
@@ -40,7 +53,13 @@ class CrawlerTabPreflightMixin:
                 self.spin_monthly_deposit_min,
                 self.spin_monthly_deposit_max,
             ),
-            ("월세", "월", self.check_monthly, self.spin_monthly_rent_min, self.spin_monthly_rent_max),
+            (
+                "월세",
+                "월",
+                self.check_monthly,
+                self.spin_monthly_rent_min,
+                self.spin_monthly_rent_max,
+            ),
         )
 
     @staticmethod
@@ -57,7 +76,10 @@ class CrawlerTabPreflightMixin:
     def _filter_range_issues(self: Any):
         """켜져 있는 조건 중 최소가 최대보다 큰 항목을 (이름, 최소 칸)으로 돌려준다."""
         issues = []
-        if self.check_area_filter.isChecked() and self.spin_area_min.value() > self.spin_area_max.value():
+        if (
+            self.check_area_filter.isChecked()
+            and self.spin_area_min.value() > self.spin_area_max.value()
+        ):
             issues.append(("면적", self.spin_area_min))
         if self.check_price_filter.isChecked():
             for label, _short, check, spin_min, spin_max in self._price_filter_rows():
@@ -68,7 +90,9 @@ class CrawlerTabPreflightMixin:
     def _filter_summary_text(self: Any) -> str:
         parts = []
         if self.check_area_filter.isChecked():
-            parts.append(f"면적 {self.spin_area_min.value()}~{self.spin_area_max.value()}㎡")
+            parts.append(
+                f"면적 {self.spin_area_min.value()}~{self.spin_area_max.value()}㎡"
+            )
         if self.check_price_filter.isChecked():
             parts.append("가격 범위 지정")
         slider = getattr(self, "speed_slider", None)
@@ -103,11 +127,15 @@ class CrawlerTabPreflightMixin:
             spin_min.setEnabled(active)
             spin_max.setEnabled(active)
             if active:
-                price_parts.append(f"{short} {self._price_range_text(spin_min.value(), spin_max.value())}")
+                price_parts.append(
+                    f"{short} {self._price_range_text(spin_min.value(), spin_max.value())}"
+                )
         self.lbl_price_hint.setVisible(price_on)
         if price_on:
             self.lbl_price_hint.setText(
-                " · ".join(price_parts) if price_parts else "위에서 거래 종류를 먼저 골라 주세요."
+                " · ".join(price_parts)
+                if price_parts
+                else "위에서 거래 종류를 먼저 골라 주세요."
             )
 
         issues = self._filter_range_issues()
@@ -119,7 +147,9 @@ class CrawlerTabPreflightMixin:
         self.lbl_filter_summary.setText(self._filter_summary_text())
         toggle = getattr(self, "btn_filter_toggle", None)
         # 펼쳐 두었더라도 범위가 잘못됐으면 맨 위에서 바로 보이게 한다.
-        self.lbl_filter_summary.setVisible(bool(issues) or toggle is None or not toggle.isChecked())
+        self.lbl_filter_summary.setVisible(
+            bool(issues) or toggle is None or not toggle.isChecked()
+        )
 
     def _validate_filter_ranges(self: Any) -> bool:
         issues = self._filter_range_issues()
@@ -214,7 +244,9 @@ class CrawlerTabPreflightMixin:
         return f"{minutes}분 {secs}초" if minutes else f"{secs}초"
 
     @staticmethod
-    def _run_summary_texts(count: int, stats: dict, *, stopped: bool, elapsed_text: str = ""):
+    def _run_summary_texts(
+        count: int, stats: dict, *, stopped: bool, elapsed_text: str = ""
+    ):
         """(한 줄 요약, 참고 사항)을 만든다."""
 
         def _n(key):
@@ -225,21 +257,35 @@ class CrawlerTabPreflightMixin:
 
         if stopped:
             head = [f"수집을 중지했습니다 · 그때까지 모은 매물 {count}건"]
-        elif _n("collection_incomplete_count") or stats.get("geo_incomplete") or stats.get("history_save_failed"):
+        elif (
+            _n("collection_incomplete_count")
+            or stats.get("geo_incomplete")
+            or stats.get("history_save_failed")
+        ):
             head = [f"일부 수집 · 현재 매물 {count}건"]
         elif count > 0:
             head = [f"수집 완료 · 매물 {count}건"]
         else:
             head = ["수집 완료 · 조건에 맞는 매물이 없습니다"]
-        for label, key in (("신규", "new_count"), ("가격 상승", "price_up"), ("가격 하락", "price_down")):
+        for label, key in (
+            ("신규", "new_count"),
+            ("가격 상승", "price_up"),
+            ("가격 하락", "price_down"),
+        ):
             if _n(key) > 0:
                 head.append(f"{label} {_n(key)}건")
         if elapsed_text:
             head.append(f"소요 {elapsed_text}")
 
         notes = []
-        if _n("collection_incomplete_count") or stats.get("geo_incomplete") or stats.get("history_save_failed"):
-            notes.append("전체 목록을 확인하지 못했거나 저장에 실패해 기존 전체 가격 통계를 유지했습니다")
+        if (
+            _n("collection_incomplete_count")
+            or stats.get("geo_incomplete")
+            or stats.get("history_save_failed")
+        ):
+            notes.append(
+                "전체 목록을 확인하지 못했거나 저장에 실패해 기존 전체 가격 통계를 유지했습니다"
+            )
         filtered = _n("filtered_out")
         if filtered > 0:
             note = f"조건(면적·가격)에 맞지 않아 뺀 매물 {filtered}건"
@@ -247,10 +293,14 @@ class CrawlerTabPreflightMixin:
                 note += " — 조건을 넓히면 매물이 나올 수 있습니다"
             notes.append(note)
         if _n("block_like_redirect_count") + _n("blocked_page_count") > 0:
-            notes.append("네이버가 접속을 제한한 흔적이 있습니다. 속도를 낮춰 다시 시도해 보세요")
+            notes.append(
+                "네이버가 접속을 제한한 흔적이 있습니다. 속도를 낮춰 다시 시도해 보세요"
+            )
         skipped = _n("detail_fetch_skipped_count") + _n("detail_cap_truncated")
         if skipped > 0:
-            notes.append(f"{skipped}건은 중개소 등 상세 정보 없이 기본 정보만 담았습니다")
+            notes.append(
+                f"{skipped}건은 중개소 등 상세 정보 없이 기본 정보만 담았습니다"
+            )
         return " · ".join(head), " / ".join(notes)
 
     def _show_run_summary(self: Any, count: int, stats: dict, *, stopped: bool) -> None:
@@ -260,8 +310,12 @@ class CrawlerTabPreflightMixin:
         import time
 
         started = getattr(self, "_crawl_started_at", None)
-        elapsed_text = self._format_elapsed(time.monotonic() - started) if started else ""
-        head, notes = self._run_summary_texts(count, stats or {}, stopped=stopped, elapsed_text=elapsed_text)
+        elapsed_text = (
+            self._format_elapsed(time.monotonic() - started) if started else ""
+        )
+        head, notes = self._run_summary_texts(
+            count, stats or {}, stopped=stopped, elapsed_text=elapsed_text
+        )
         self.lbl_run_summary.setText(head)
         self.lbl_run_summary_notes.setText(notes)
         self.lbl_run_summary_notes.setVisible(bool(notes))

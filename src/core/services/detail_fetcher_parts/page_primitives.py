@@ -22,7 +22,9 @@ def _is_meaningful_body(text: str) -> bool:
     return True
 
 
-async def _goto_detail_url(detail_page, url: str, *, navigation_timeout_ms: int | None = None):
+async def _goto_detail_url(
+    detail_page, url: str, *, navigation_timeout_ms: int | None = None
+):
     goto_kwargs: dict[str, object] = {"wait_until": "domcontentloaded"}
     if navigation_timeout_ms is not None:
         goto_kwargs["timeout"] = max(1000, int(navigation_timeout_ms))
@@ -39,7 +41,9 @@ def _spawn_response_task(pending_tasks: set[asyncio.Task], coro) -> None:
     task.add_done_callback(lambda done: pending_tasks.discard(done))
 
 
-async def _drain_pending_tasks(pending_tasks: set[asyncio.Task], timeout_ms: int = 1500) -> None:
+async def _drain_pending_tasks(
+    pending_tasks: set[asyncio.Task], timeout_ms: int = 1500
+) -> None:
     if not pending_tasks:
         return
     try:

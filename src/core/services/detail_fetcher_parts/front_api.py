@@ -13,7 +13,9 @@ def build_front_api_agent_url(article_no: str) -> str:
     return _build(article_no)
 
 
-def build_front_api_basic_info_url(article_no: str, *, real_estate_type: str = "A01", trade_type: str = "A1") -> str:
+def build_front_api_basic_info_url(
+    article_no: str, *, real_estate_type: str = "A01", trade_type: str = "A1"
+) -> str:
     from src.core.services.site_contract import build_front_api_basic_info_url as _build
 
     return _build(article_no, real_estate_type=real_estate_type, trade_type=trade_type)
@@ -33,7 +35,9 @@ def _article_type_codes(payload) -> tuple[str, str]:
     types = result.get("type") if isinstance(result, dict) else None
     if not isinstance(types, dict):
         return "", ""
-    return str(types.get("realEstateType", "") or ""), str(types.get("tradeType", "") or "")
+    return str(types.get("realEstateType", "") or ""), str(
+        types.get("tradeType", "") or ""
+    )
 
 
 def parse_front_api_agent_payload(payload) -> dict:
@@ -98,7 +102,9 @@ _PAGE_FETCH_JS = """async ([url, timeoutMs]) => {
 
 def _page_on_fin_origin(page) -> bool:
     try:
-        return str(getattr(page, "url", "") or "").startswith("https://fin.land.naver.com/")
+        return str(getattr(page, "url", "") or "").startswith(
+            "https://fin.land.naver.com/"
+        )
     except Exception:
         return False
 
@@ -108,7 +114,9 @@ async def _fetch_front_api_json_in_page(page, url: str, *, timeout_ms: int = 800
     import json
 
     try:
-        result = await page.evaluate(_PAGE_FETCH_JS, [url, max(1000, int(timeout_ms or 8000))])
+        result = await page.evaluate(
+            _PAGE_FETCH_JS, [url, max(1000, int(timeout_ms or 8000))]
+        )
     except Exception:
         return None, None
     if not isinstance(result, dict):
@@ -124,7 +132,9 @@ async def _fetch_front_api_json_in_page(page, url: str, *, timeout_ms: int = 800
     return status, payload
 
 
-async def _fetch_front_api_json(request_context, url: str, *, referer: str, timeout_ms: int = 8000):
+async def _fetch_front_api_json(
+    request_context, url: str, *, referer: str, timeout_ms: int = 8000
+):
     if request_context is None or not url:
         return None, None
     headers = {
@@ -133,7 +143,9 @@ async def _fetch_front_api_json(request_context, url: str, *, referer: str, time
         "referer": referer or "https://fin.land.naver.com/",
     }
     try:
-        response = await request_context.get(url, headers=headers, timeout=max(1000, int(timeout_ms or 8000)))
+        response = await request_context.get(
+            url, headers=headers, timeout=max(1000, int(timeout_ms or 8000))
+        )
     except TypeError:
         try:
             response = await request_context.get(url, headers=headers)
@@ -182,7 +194,9 @@ async def _supplement_front_api_artifacts(
     """Explicitly pull fin.land front-api payloads when DOM/detail SPA is empty or 404."""
     artifacts = dict(artifacts or {})
     responses = list(artifacts.get("responses", []) or [])
-    existing_urls = {str(item.get("url", "") or "") for item in responses if isinstance(item, dict)}
+    existing_urls = {
+        str(item.get("url", "") or "") for item in responses if isinstance(item, dict)
+    }
     request_context = _request_context_from_page(detail_page)
     referer = f"https://fin.land.naver.com/articles/{article_no}"
     timeout_ms = 8000
@@ -205,12 +219,19 @@ async def _supplement_front_api_artifacts(
 
     async def _get(url: str):
         if in_page:
-            return await _fetch_front_api_json_in_page(detail_page, url, timeout_ms=timeout_ms)
-        return await _fetch_front_api_json(request_context, url, referer=referer, timeout_ms=timeout_ms)
+            return await _fetch_front_api_json_in_page(
+                detail_page, url, timeout_ms=timeout_ms
+            )
+        return await _fetch_front_api_json(
+            request_context, url, referer=referer, timeout_ms=timeout_ms
+        )
 
     # agent (broker/phones) -> key (exact type codes) -> basicInfo only for sales:
     # basicInfo rejects wrong type codes, and previousDeposit matters for 매매 only.
-    pending = [build_front_api_agent_url(article_no), build_front_api_article_key_url(article_no)]
+    pending = [
+        build_front_api_agent_url(article_no),
+        build_front_api_article_key_url(article_no),
+    ]
     while pending:
         url = pending.pop(0)
         if url in existing_urls:
@@ -228,7 +249,9 @@ async def _supplement_front_api_artifacts(
             if real_estate_type and trade_code == "A1":
                 pending.append(
                     build_front_api_basic_info_url(
-                        article_no, real_estate_type=real_estate_type, trade_type=trade_code
+                        article_no,
+                        real_estate_type=real_estate_type,
+                        trade_type=trade_code,
                     )
                 )
             existing_urls.add(url)
@@ -239,7 +262,12 @@ async def _supplement_front_api_artifacts(
         existing_urls.add(url)
 
     artifacts["responses"] = responses
-    if responses or artifacts.get("hydration_state") or artifacts.get("body_text") or artifacts.get("html_text"):
+    if (
+        responses
+        or artifacts.get("hydration_state")
+        or artifacts.get("body_text")
+        or artifacts.get("html_text")
+    ):
         artifacts["corpus_text"] = _build_detail_corpus(
             str(artifacts.get("body_text", "") or ""),
             str(artifacts.get("html_text", "") or ""),
