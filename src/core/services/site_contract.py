@@ -14,6 +14,10 @@
 - ``single-markers/2.0`` bbox-only form returns ``[]``; the site always sends
   ``cortarNo`` (resolved via ``/api/cortars``) alongside the bbox.
 
+2026-11-25 live re-check notes (docs/NAVER_LAND_SURVEY_2026-11-25.md):
+- fin/new/m entry points and front-api contracts unchanged; live-smoke all green.
+- Desktop UA refreshed to Chrome/158 to match current stable (was 141, 2026-10-22).
+
 2026-10-22 live probe notes (fin.land full switch, docs/NAVER_LAND_SURVEY_2026-10-22.md):
 - fin.land ``/map?layer=`` SPA is the primary site; m.land already redirects there.
 - front-api answers 200 to in-browser ``fetch`` from a fin.land origin page
@@ -60,9 +64,11 @@ FRONT_API_AUTOCOMPLETE = f"{FRONT_API_BASE}/search/autocomplete"
 FIN_API_ORIGIN_PAGE = f"{HOST_FIN}/robots.txt"
 
 # Must not contain "HeadlessChrome": front-api answers 429 to it (2026-10-22).
+# Version tracks current Chrome stable (2026-11-25: local Chrome 158.0.8127.89;
+# outdated claims plus telemetry collection make a stale UA a bot signal).
 DESKTOP_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
 )
 
 FIN_ARTICLE_PAGE_SIZE = 30  # site ARTICLE_PAGINATION_SIZE (schema max 30)

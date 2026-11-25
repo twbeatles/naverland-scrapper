@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![UI Framework](https://img.shields.io/badge/UI-PySide6%20Fluent%20Widgets-0078D4?style=flat-square)](https://github.com/zhiyiYo/PySide6-Fluent-Widgets)
 [![Crawl Engine](https://img.shields.io/badge/Engine-Playwright%20Fast--Path-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Version](https://img.shields.io/badge/Version-v15.10-orange?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/Version-v15.11-orange?style=flat-square)](#)
 
 **네이버 부동산 아파트·빌라 매물 수집, 가격 변동 추적, 예약 수집 및 Excel/CSV 내보내기를 지원하는 Windows 데스크톱 도구입니다.**
 
@@ -150,7 +150,7 @@ python app_entry.py
 단지 번호나 웹 URL을 직접 입력하여 특정 단지들의 매물을 집중적으로 수집하는 화면입니다.
 
 #### ① 단지 추가하기
-- **단지 찾기 (기본 방법)**: `단지 찾기`를 눌러 단지 이름·지역 이름·실제 주소(예: `래미안`, `반포자이`, `반포동`, `서울특별시 서초구 반포동`)로 검색하고, 원하는 단지를 체크해 추가합니다. 네이버 지도 링크(단지를 연 `fin.land` 지도 링크, 지도 화면 위치 링크, `new.land` `ms=` 링크)를 붙여넣어도 됩니다. 단지 검색은 네이버페이 부동산(`fin.land`) 검색을 먼저 쓰고, 안 되면 예전 `new.land` 검색으로 자동 전환합니다. 지역 탭에서 지역을 고르면 **지도로 찾기**의 탐색 위치로 보낼 수 있습니다.
+- **단지 찾기 (기본 방법)**: `단지 찾기`를 눌러 단지 이름·지역 이름·실제 주소(예: `래미안`, `반포자이`, `반포동`, `서울특별시 서초구 반포동`)로 검색하고, 원하는 단지를 체크해 추가합니다. 네이버 지도 링크(단지를 연 `fin.land` 지도 링크, 지도 화면 위치 링크, `new.land` `ms=` 링크)를 붙여넣어도 됩니다. 단지 검색은 Npay 부동산(`fin.land`) 검색을 먼저 쓰고, 안 되면 예전 `new.land` 검색으로 자동 전환합니다. 지역 탭에서 지역을 고르면 **지도로 찾기**의 탐색 위치로 보낼 수 있습니다.
 - **불러오기 메뉴**:
   - `내 단지에서 고르기`: 저장해 둔 단지에서 선택
   - `단지 묶음 불러오기`: 묶음에 든 단지를 한 번에 추가
@@ -161,8 +161,7 @@ python app_entry.py
     - `https://new.land.naver.com/complexes/102378`
     - `https://land.naver.com/complex?complexNo=123456`
     - `https://fin.land.naver.com/articles/2539123450` (매물 주소에서 단지를 찾아 줌)
-    - `https://fin.land.naver.com/complexes/22853`, `https://fin.land.naver.com/houses/654321`
-    - `https://m.land.naver.com/article/info/2513105556`
+    - `https://fin.land.naver.com/complexes/22853`, `https://fin.land.naver.com/complexes/654321?tab=article&isVilla=true` (빌라)
 - **단지 번호로 직접 추가**: 접혀 있는 `단지 번호로 직접 추가`를 펼쳐 번호(예: `3833`)와 주택 종류(아파트/빌라)를 넣고 추가합니다.
 - 목록 아래의 `내 단지에 저장`으로 목록을 저장해 두면 다음부터 불러오기로 바로 가져옵니다.
 
@@ -207,7 +206,7 @@ python app_entry.py
 4. **좌표 직접 입력·세부 설정 (기본 접힘)**: 위도/경도, 지도 확대 단계(12~18), 구역 간격, 구역마다 쉬는 시간. 보통은 기본값 그대로 씁니다.
 5. **탐색 시작**을 누르면 찾은 단지가 왼쪽 `찾은 단지` 표에 쌓이고 매물 수집이 이어집니다.
 
-> 2026-10부터 지도 탐색은 네이버페이 부동산(`fin.land`)의 지도 단지 목록을 구역 단위로 조회합니다. 화면을 끌어 옮기지 않으므로 빠르고, 구역마다 매물이 있는 단지만 매물 많은 순으로 찾습니다(구역당 최대 300곳 — 더 촘촘히 보려면 확대 단계를 높이세요). 빌라·연립도 새 네이버의 빌라 단지 번호로 수집합니다. 예전 버전에서 저장한 빌라 번호는 새 네이버에 없을 수 있으니, 수집 기록에 안내가 뜨면 「지도로 찾기」나 「단지 찾기」로 다시 추가해 주세요.
+> 2026-10부터 지도 탐색은 Npay 부동산(`fin.land`)의 지도 단지 목록을 구역 단위로 조회합니다. 화면을 끌어 옮기지 않으므로 빠르고, 구역마다 매물이 있는 단지만 매물 많은 순으로 찾습니다(구역당 최대 300곳 — 더 촘촘히 보려면 확대 단계를 높이세요). 빌라·연립도 새 네이버의 빌라 단지 번호로 수집합니다. 예전 버전에서 저장한 빌라 번호는 새 네이버에 없을 수 있으니, 수집 기록에 안내가 뜨면 「지도로 찾기」나 「단지 찾기」로 다시 추가해 주세요.
 
 ---
 

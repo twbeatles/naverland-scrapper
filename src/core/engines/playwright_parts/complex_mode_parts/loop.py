@@ -12,6 +12,12 @@ _LEGACY_ARTICLE_ID_KEY = "\uf9cd\u317b\u042aID"
 
 
 class PlaywrightComplexLoopMixin:
+    # Pair gap after a clean fast-path pair (in-page API fetch, no failure,
+    # no new API failure logged). Geo sweeps already run fin pairs back-to-back
+    # without 429s; legacy/DOM paths and failed pairs keep the full UI speed
+    # delay below. Class attribute (facade rebind): not a module global.
+    FIN_FAST_PATH_PAIR_DELAY_SEC = 1.0
+
     if TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any: ...
@@ -57,7 +63,15 @@ class PlaywrightComplexLoopMixin:
                     self.thread._estimate_remaining_seconds(current, total),
                 )
                 self.thread.log(f"\n[{current}/{total}] {name} - {trade_type}")
+                pair_fast_clean = False
                 try:
+                    fin_fails_before = int(
+                        self.thread.stats.get("fin_api_fail_count", 0) or 0
+                    )
+                    article_fails_before = int(
+                        self.thread.stats.get("article_api_fast_path_fail_count", 0)
+                        or 0
+                    )
                     result = await self._crawl_target_with_cache(
                         name, cid, trade_type, asset_type=asset_type
                     )
@@ -101,6 +115,17 @@ class PlaywrightComplexLoopMixin:
                     )
                     self.thread._reset_block_detection_streak()
                     self.thread.log(f"   {count}건 수집")
+                    pair_fast_clean = (
+                        bool(result.get("api_fast_path"))
+                        and not result.get("failure_reason")
+                        and int(self.thread.stats.get("fin_api_fail_count", 0) or 0)
+                        == fin_fails_before
+                        and int(
+                            self.thread.stats.get("article_api_fast_path_fail_count", 0)
+                            or 0
+                        )
+                        == article_fails_before
+                    )
                 except Exception as exc:
                     self.thread.stats["collection_incomplete_count"] = (
                         int(self.thread.stats.get("collection_incomplete_count", 0)) + 1
@@ -151,7 +176,11 @@ class PlaywrightComplexLoopMixin:
                             )
                             self.thread._current_pair = None
                             return
-                if not self.thread._sleep_interruptible(self.thread._get_speed_delay()):
+                if pair_fast_clean:
+                    pair_delay = float(self.FIN_FAST_PATH_PAIR_DELAY_SEC)
+                else:
+                    pair_delay = self.thread._get_speed_delay()
+                if not self.thread._sleep_interruptible(pair_delay):
                     break
             self.thread._flush_history_updates(force=True)
             if not attempted_trade_types:

@@ -2205,6 +2205,54 @@ class TestPlaywrightEngineStabilization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(args[3]), 0)
         self.assertEqual(set(str(args[2]).split(",")), set(thread.trade_types))
 
+    async def test_complex_mode_shortens_gap_after_clean_fast_path(self):
+        thread = _ThreadStub()
+        thread.targets = [("A", "1"), ("B", "2"), ("C", "3")]
+        thread.trade_types = ["매매"]
+        thread._get_speed_delay = lambda: 4.0
+        sleeps: list[float] = []
+        thread._sleep_interruptible = lambda seconds, chunk_seconds=0.2: (
+            sleeps.append(float(seconds or 0.0)),
+            True,
+        )[1]
+        engine = PlaywrightCrawlerEngine(thread)
+
+        async def _noop_started():
+            return None
+
+        async def _noop_memory(reason):
+            return None
+
+        async def _crawl(name, cid, trade_type, *args, **kwargs):
+            if cid == "1":
+                return {
+                    "count": 3,
+                    "collection_status": "complete",
+                    "api_fast_path": True,
+                    "failure_reason": "",
+                }
+            if cid == "2":
+                return {
+                    "count": 0,
+                    "collection_status": "partial",
+                    "api_fast_path": True,
+                    "failure_reason": "page_cap",
+                }
+            raise RuntimeError("boom")
+
+        engine._ensure_started = _noop_started
+        engine._check_memory_and_recycle_if_needed = _noop_memory
+        engine._crawl_target_with_cache = _crawl
+
+        try:
+            await engine._run_complex_mode()
+        finally:
+            engine._loop.close()
+
+        # Clean fast-path pair -> 1s; partial pairs skip the gap (continue);
+        # failed pairs keep the full speed delay.
+        self.assertEqual(sleeps, [1.0, 4.0])
+
     async def test_geo_scan_failure_isolated_per_asset_and_trade_type(self):
         thread = _ThreadStub()
         thread.crawl_mode = "geo_sweep"

@@ -344,6 +344,65 @@ class TestFinKeywordSearch(unittest.TestCase):
         self.assertTrue(result["is_more_data"])
         self.assertIn("page=0", calls[0])
 
+    def test_fin_search_page_maps_all_villa_types_to_vl(self):
+        """Every bundle VILLA_REAL_ESTATE_TYPES code must map to VL.
+
+        A07 (도시형생활주택) was missing from the search mapping, so matching
+        villa complexes were labeled APT and collected through the APT
+        article-list endpoint.
+        """
+        payload = {
+            "isSuccess": True,
+            "detailCode": "success",
+            "result": {
+                "hasNextPage": False,
+                "totalCount": 4,
+                "list": [
+                    {
+                        "complexNumber": 1,
+                        "complexName": "연립",
+                        "type": "A05",
+                        "legalDivisionName": "서울시 마포구 연남동",
+                        "legalDivisionNumber": "1144010800",
+                        "coordinates": {"xCoordinate": 126.9, "yCoordinate": 37.5},
+                    },
+                    {
+                        "complexNumber": 2,
+                        "complexName": "다세대",
+                        "type": "A06",
+                        "legalDivisionName": "서울시 마포구 연남동",
+                        "legalDivisionNumber": "1144010800",
+                        "coordinates": {"xCoordinate": 126.9, "yCoordinate": 37.5},
+                    },
+                    {
+                        "complexNumber": 3,
+                        "complexName": "도생",
+                        "type": "A07",
+                        "legalDivisionName": "서울시 마포구 연남동",
+                        "legalDivisionNumber": "1144010800",
+                        "coordinates": {"xCoordinate": 126.9, "yCoordinate": 37.5},
+                    },
+                    {
+                        "complexNumber": 4,
+                        "complexName": "재건축",
+                        "type": "A04",
+                        "legalDivisionName": "서울시 송파구 가락동",
+                        "legalDivisionNumber": "1171010700",
+                        "coordinates": {"xCoordinate": 127.1, "yCoordinate": 37.5},
+                    },
+                ],
+            },
+        }
+        fetch, _calls = _router(
+            [
+                ("/autocomplete/complexes", (200, json.dumps(payload))),
+                ("/autocomplete/legalDivisions", (200, json.dumps(_FIN_EMPTY))),
+            ]
+        )
+        result = fetch_fin_search_page("연남동", fetch, page=1)
+        assets = {row["complex_id"]: row["asset_type"] for row in result["complexes"]}
+        self.assertEqual(assets, {"1": "VL", "2": "VL", "3": "VL", "4": "APT"})
+
     def test_later_pages_skip_regions(self):
         fetch, calls = _router(
             [("/autocomplete/complexes", (200, json.dumps(_FIN_COMPLEXES)))]

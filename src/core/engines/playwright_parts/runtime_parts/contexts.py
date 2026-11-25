@@ -49,7 +49,9 @@ class PlaywrightContextRuntimeMixin:
 
         desktop_page = self._desktop_page
         if desktop_page is not None:
-            # Prefer new.land only. fin/m HTML often 404s (2026-08-12) and wastes time.
+            # Prefer the light new.land home. fin map SPA is heavy (~20 side
+            # requests per load); fin front-api calls use the robots.txt origin
+            # page instead (2026-10-22; fin HTML itself is fine since then).
             ok = await self._warmup_page(desktop_page, f"{HOST_NEW}/", label="desktop")
             if ok:
                 self.thread.stats["warmup_new_land_ok"] = 1

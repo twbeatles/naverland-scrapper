@@ -150,6 +150,7 @@ _FIN_ASSET_BY_TYPE = {
     "B01": "APT",
     "A05": "VL",
     "A06": "VL",
+    "A07": "VL",  # 도시형생활주택 (bundle VILLA_REAL_ESTATE_TYPES)
     "C02": "VL",
 }
 

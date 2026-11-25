@@ -1,5 +1,6 @@
 # 네이버 부동산 사이트 조사 (2026-10-22) — fin.land 전면 전환 대비
 
+후속 재확인: [`NAVER_LAND_SURVEY_2026-11-25.md`](./NAVER_LAND_SURVEY_2026-11-25.md) (계약 변경 없음, UA만 갱신) ·
 이전 문서: [`NAVER_LAND_SURVEY_2026-08-12.md`](./NAVER_LAND_SURVEY_2026-08-12.md) · 개선 계획: [`FIN_LAND_MIGRATION_PLAN_2026-10-22.md`](./FIN_LAND_MIGRATION_PLAN_2026-10-22.md)
 
 네이버페이 부동산이 `https://fin.land.naver.com/map?layer=...` 지도 화면으로 전면 전환될 예정이라는 전제로, 2026-10-22에 실제 브라우저(Playwright Chromium 156, headless/headed)로 화면을 열고 네트워크 요청을 기록했다. 응답 스키마는 같은 브라우저 세션 안에서 직접 호출해 확인했고, 요청 파라미터는 사이트 JS 번들(`property.pstatic.net/property-web/_next/static/chunks/*.js`)의 API 정의와 대조했다.

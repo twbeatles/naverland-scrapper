@@ -1,5 +1,37 @@
 # Update History
 
+## 2026-11-25: v15.11 릴리즈 준비 (v15.10은 태그 없이 v15.11에 포함)
+
+- `APP_VERSION` v15.11, README 배지, `docs/RELEASE_NOTES_v15.11.md` 신규, `release.yml` 노트 경로 갱신. v15.10 태그가 원격에 없어 미출시분(fin 전환·updater·UA·A07·쌍 대기)을 v15.11 한 릴리스로 묶음. AGENTS/claude 메모 버전 동기화
+
+## 2026-11-25: 수집 병목 — 쌍 사이 대기 단축 (fin fast-path 1초)
+
+- 측정: 오프라인 파이프라인(파싱→정규화→이력→스냅샷→소멸)은 2,700건 0.3초로 병목 아님. 실측 3개 쌍(소형 단지, 보통 속도) wall 30.7초 중 쌍 사이 수면이 12.2초(40%)로 최대 병목 확인
+- 수정: 깨끗한 fast-path 쌍(실패·429 없음)은 쌍 사이 대기를 3~5초 → 1초로 단축 (`loop.py` `FIN_FAST_PATH_PAIR_DELAY_SEC`, `cache_flow` 결과에 `api_fast_path` 전달). 레거시/DOM·실패·차단 신호 쌍은 기존 UI 속도 유지. 지오 탐색은 원래 수면이 없어 변경 없음
+- 검증: 동일 3개 쌍 wall 19.9초(35% 단축), 수집량 동일(1,384건), 429·폴백 0회. 회귀 테스트 `test_complex_mode_shortens_gap_after_clean_fast_path` 추가(수정 없이 실패 확인). 엔진·수집 회귀 118 passed + 18 subtests, ruff 통과
+
+## 2026-11-25: 실제 단지 수집 테스트 + 문서 인덱스 정리
+
+- 실사이트 종단 수집(`CrawlerThread`, 임시 DB, headless): 헬리오시티 매매 2,025건·전세 719건, 골든빌(VL) 매매 47건 모두 complete, new.land 폴백 0회·429 0회. 상세 6/6 성공, 전화 오염 없음. 골든빌 전세 0건은 동일 경로 200·파싱 성공 + APT 전세 정상 수집으로 실제 매물 없음 판정. DB 품질: 가격·면적·층·중개소 100%, 중복 키 0, 전부 active. 상세: `docs/NAVER_LAND_SURVEY_2026-11-25.md` §6
+- 중개소명 괄호 표기는 목록 `brokerageName` 원문 그대로라 수정하지 않음 (사이트 데이터)
+- 문서 정리: `docs/README.md` 인덱스 신설(현재/이력 구분), 10-22 문서에 11-25 후속 링크는 전 턴 반영. 삭제: `build_pyinstaller.log`(8월 빌드 잔재), `logs/`의 10월 이전 스모크·perf 로그 41개. `dist/` 실행 파일 2개(109MB)는 유지, 시점 기록물(`PROJECT_AUDIT.md`·릴리스 노트·과거 실측)은 이력 유지
+- 검증: 수집 3건 전부 complete, 앞 턴 단위·ruff 결과 유지
+
+## 2026-11-25: codegraph 흐름 점검 — A07 매핑 누락 수정 + 오래된 문서 정리
+
+- codegraph로 웹 정보 흐름(목록 파싱→normalize→수집, 상세 API 우선, 지도 구역 조회→마커, 검색→자산 판정→수집, 링크 해석)을 추적해 가공·사용 문제를 점검
+- 수정: fin 자동완성 `type: A07`(도시형생활주택)이 검색 자산 판정에서 빠져 APT로 잘못 분류되던 문제 수정. A07 단지는 APT 목록 엔드포인트로 수집돼 빈 결과가 될 수 있었음. `keyword_search._FIN_ASSET_BY_TYPE`에 `A07→VL` 추가(정본: `fin_article_api`·`site_contract`의 빌라 코드표와 일치). 회귀 테스트 `test_fin_search_page_maps_all_villa_types_to_vl` 추가(수정 없이 실패함 확인)
+- 검증 불필요 판정(코드·실측 대조): B3(단기임대) 미지원은 UI 수집 옵션에 없는 거래라 정상 범위, `sameAddrCnt` 묶음 크기·`tradeTypeCode` 단축 코드(`APT`/`VL`)는 `normalize`·`detect_asset_type`이 그대로 받아들임, 붙여넣기 링크의 `isVilla`/레이어 판정은 정상, 상세 `basicInfo` 매매 한정은 기전세금 용도라 의도된 범위
+- 문서 정리: `AGENTS.md`(버전·fin 1순위·최신 실측일·실측 수치 갱신), `claude.md`·`gemini.md`(Spec Kit 안내 블록 제거 — 2026-10-16 사용자 지시 우선, `claude.md` 링크 오타 수정·버전·최신 실측 갱신), `README.md`(Npay 표기·빌라 링크 예시 `isVilla`형·사망한 m.land 예시를 fin 매물 주소로 교체), 10-22 실측 문서에 11-25 후속 링크 추가. 시점 기록물(`PROJECT_AUDIT.md`·릴리스 노트·과거 실측)은 이력으로 유지
+- 검증: ruff check/format 통과, `test_fin_land` 30 passed 포함 검색·계약 103 passed
+
+## 2026-11-25: 네이버 부동산 재조사 — 계약 변경 없음, UA만 갱신
+
+- 실측: fin/new.land/m.land 진입점·front-api 6종(자동완성·단지 매물 목록·구역 조회·단지 정보·매물 상세·매물 역조회)·new.land Article API 폴백·DOM 폴백 선택자·상세 API 우선 순서를 코드와 대조. 모두 10-22 계약과 일치, 깨진 연결 없음. 상세: `docs/NAVER_LAND_SURVEY_2026-11-25.md`, 원시 로그: `logs/live-smoke-2026-11-25.json`
+- 수정: 데스크톱 UA를 `Chrome/141.0.0.0` → `Chrome/158.0.0.0`으로 갱신(실측 머신 현행 stable 158.0.8127.89, 사이트가 `NAVIGATOR_USER_AGENT` 텔레메트리 수집). 141에서도 200이라 예방 차원. 웜업 주석의 낡은 "fin/m HTML 404" 서술을 현재 상태로 수정 (동작 변경 없음)
+- 수정 불필요 판정: fin `robots.txt`의 `Disallow: /front-api/v1/`(인페이지 fetch와 무관), fin 타이틀의 Npay 표기(앱에 네이버페이 문자열 없음), m.land 정규식(옛 링크 붙여넣기 해석용 유지), new.land 폴백 전체 (모두 200이라 유지)
+- 검증: 단위 104 passed (`test_fin_land`·`test_site_contract`·`test_playwright_engine_globals`·`test_keyword_search*`) + 59 passed (`test_live_smoke`·`test_crawl_preflight`·`test_preflight`·`test_crawler_regressions`), UA 변경 후 live-smoke headless 10개 프로브 전부 `[ok]`
+
 ## 2026-10-22: fin.land 전면 전환 대응 (수집·검색·링크·지도 탐색·빌라, v15.10에 포함)
 
 - 실측: `fin.land.naver.com/map?layer=` SPA가 주 사이트, m.land는 이미 fin으로 리다이렉트, new.land는 아직 동작하지만 `ms=` 좌표가 base62로 바뀜. front-api는 브라우저 내부 `fetch`만 200이고 브라우저 밖 요청과 `HeadlessChrome` UA는 429. 상세: `docs/NAVER_LAND_SURVEY_2026-10-22.md`, 계획: `docs/FIN_LAND_MIGRATION_PLAN_2026-10-22.md`

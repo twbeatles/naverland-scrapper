@@ -211,6 +211,7 @@ class PlaywrightComplexCacheFlowMixin:
             "failure_reason": failure_reason,
             "final_url": final_url,
             "collection_status": collect_result.get("collection_status", "failed"),
+            "api_fast_path": bool(collect_result.get("api_fast_path", False)),
             "last_successful_page": collect_result.get("last_successful_page", 0),
             "failed_page": collect_result.get("failed_page", 0),
         }
